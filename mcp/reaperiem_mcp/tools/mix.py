@@ -49,6 +49,28 @@ async def set_send_pan(
     return f"Send from track {track_index} to send {send_index} pan set to {pan}"
 
 
+async def set_send_mute(
+    client: ReaperHTTPClient,
+    track_index: int,
+    send_index: int,
+    mute: bool,
+) -> str:
+    """Mute or unmute a send from a track to an output bus.
+
+    Allows band members to mute specific input sources in their
+    in-ear mix without changing the send level.
+
+    Args:
+        client: REAPER HTTP client
+        track_index: Source track number (1-based)
+        send_index: Send/output bus number
+        mute: True to mute, False to unmute
+    """
+    await client.set_send_mute(track_index, send_index, mute)
+    state = "muted" if mute else "unmuted"
+    return f"Send from track {track_index} to send {send_index} {state}"
+
+
 async def adjust_send_level(
     client: ReaperHTTPClient,
     track_index: int,

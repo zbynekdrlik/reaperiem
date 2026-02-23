@@ -93,6 +93,15 @@ class ReaperHTTPClient:
             f"SET/TRACK/{track_index}/SEND/{send_index}/PAN/{pan}"
         )
 
+    async def set_send_mute(
+        self, track_index: int, send_index: int, mute: bool
+    ) -> None:
+        """Set send mute state. True = muted, False = unmuted."""
+        value = 1 if mute else 0
+        await self.send_command(
+            f"SET/TRACK/{track_index}/SEND/{send_index}/MUTE/{value}"
+        )
+
     async def set_track_mute(self, index: int, mute: bool) -> None:
         """Set track mute state."""
         value = 1 if mute else 0

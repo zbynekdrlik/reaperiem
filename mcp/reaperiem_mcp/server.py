@@ -172,6 +172,24 @@ async def set_send_pan(
 
 
 @mcp.tool
+async def set_send_mute(
+    track_index: int, send_index: int, mute: bool = True
+) -> str:
+    """Mute or unmute a send from an input track to an output bus.
+
+    Allows band members to mute specific input sources in their IEM mix
+    without changing the send level (so unmuting restores the previous level).
+
+    Args:
+        track_index: Source track number (1-based)
+        send_index: Send/output bus number (1-based)
+        mute: True to mute, False to unmute
+    """
+    client = get_reaper_client()
+    return await mix.set_send_mute(client, track_index, send_index, mute)
+
+
+@mcp.tool
 async def adjust_send_level(
     track_index: int, send_index: int, adjustment_db: float
 ) -> str:
