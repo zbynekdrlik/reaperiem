@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>IEM Mix</title>
+    <style>
+        /* ================================================================
+           CSS Reset and Base
+           ================================================================ */
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --bg-primary: #111119;
+            --bg-secondary: #1a1a28;
+            --bg-channel: #1e1e30;
+            --bg-channel-hover: #252540;
+            --accent: #4ecdc4;
+            --accent-dim: rgba(78, 205, 196, 0.3);
+            --accent-glow: rgba(78, 205, 196, 0.4);
+            --text-primary: #eaeaea;
+            --text-secondary: #888;
+            --text-dim: #555;
+            --mute-red: #e63946;
+            --mute-red-dim: #5a1a1f;
+            --solo-yellow: #f4d35e;
+            --meter-green: #4ecdc4;
+            --meter-yellow: #f4d35e;
+            --meter-red: #e63946;
+            --border-subtle: rgba(78, 205, 196, 0.15);
+            --border-active: rgba(78, 205, 196, 0.5);
+            --more-me-bg: rgba(78, 205, 196, 0.08);
+            --fader-track-bg: #0d0d18;
+            --fader-track-border: #2a2a44;
+            --fader-thumb: linear-gradient(145deg, #4ecdc4, #38a89d);
+            --category-mics: #4ecdc4;
+            --category-stems: #7c6fff;
+            --category-tech: #f4d35e;
+            --touch-min: 44px;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* ================================================================
+           Layout: App Shell
+           ================================================================ */
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh;
+        }
+
+        /* ================================================================
+           Header
+           ================================================================ */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            min-height: 52px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.1em;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
+
+        .member-name {
+            font-size: 1.1em;
+            color: var(--text-primary);
+            font-weight: 300;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            flex-shrink: 0;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        .status-dot.connected {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .status-dot.error {
+            background: var(--mute-red);
+            box-shadow: 0 0 8px rgba(230, 57, 70, 0.5);
+        }
+
+        /* ================================================================
+           Category Tabs
+           ================================================================ */
+        .category-tabs {
+            display: flex;
+            gap: 0;
+            padding: 0 12px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+
+        .category-tab {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.8em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+            text-align: center;
+        }
+
+        .category-tab.active {
+            color: var(--text-primary);
+        }
+
+        .category-tab[data-category="all"].active {
+            border-bottom-color: var(--accent);
+        }
+        .category-tab[data-category="mics"].active {
+            border-bottom-color: var(--category-mics);
+            color: var(--category-mics);
+        }
+        .category-tab[data-category="stems"].active {
+            border-bottom-color: var(--category-stems);
+            color: var(--category-stems);
+        }
+        .category-tab[data-category="tech"].active {
+            border-bottom-color: var(--category-tech);
+            color: var(--category-tech);
+        }
+
+        /* ================================================================
+           Channels Scroll Area
+           ================================================================ */
+        .channels-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            padding: 8px 8px 0 8px;
+        }
+
+        .channels-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-bottom: 8px;
+        }
+
+        /* ================================================================
+           Category Header (within channel list)
+           ================================================================ */
+        .category-header {
+            padding: 8px 12px 4px;
+            font-size: 0.7em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-dim);
+        }
+
+        .category-header.mics { color: var(--category-mics); }
+        .category-header.stems { color: var(--category-stems); }
+        .category-header.tech { color: var(--category-tech); }
+
+        /* ================================================================
+           Channel Strip (Horizontal)
+           ================================================================ */
+        .channel {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg-channel);
+            border-radius: 10px;
+            border: 1px solid transparent;
+            transition: opacity 0.15s, border-color 0.15s;
+            min-height: 56px;
+        }
+
+        .channel.more-me {
+            background: var(--more-me-bg);
+            border-color: var(--border-active);
+        }
+
+        .channel.muted {
+            opacity: 0.4;
+        }
+
+        .channel.hidden {
+            display: none;
+        }
+
+        .channel.stereo-pair {
+            border-left: 3px solid var(--category-stems);
+        }
+
+        /* Channel label */
+        .ch-label {
+            min-width: 72px;
+            max-width: 72px;
+            overflow: hidden;
+        }
+
+        .ch-name {
+            font-weight: 700;
+            font-size: 0.78em;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .ch-type {
+            font-size: 0.65em;
+            color: var(--text-secondary);
+            text-transform: lowercase;
+        }
+
+        /* Meter bar */
+        .meter-container {
+            width: 4px;
+            height: 38px;
+            background: var(--fader-track-bg);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .meter-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: var(--meter-green);
+            border-radius: 2px;
+            transition: height 0.08s linear;
+        }
+
+        .meter-fill.warn {
+            background: var(--meter-yellow);
+        }
+
+        .meter-fill.clip {
+            background: var(--meter-red);
+        }
+
+        /* Fader slider */
+        .fader-area {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .fader {
+            flex: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: var(--touch-min);
+            background: transparent;
+            outline: none;
+            min-width: 0;
+        }
+
+        .fader::-webkit-slider-runnable-track {
+            height: 6px;
+            background: var(--fader-track-bg);
+            border: 1px solid var(--fader-track-border);
+            border-radius: 3px;
+        }
+
+        .fader::-moz-range-track {
+            height: 6px;
+            background: var(--fader-track-bg);
+            border: 1px solid var(--fader-track-border);
+            border-radius: 3px;
+        }
+
+        .fader::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 28px;
+            height: 28px;
+            background: var(--fader-thumb);
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .fader::-moz-range-thumb {
+            width: 28px;
+            height: 28px;
+            background: var(--fader-thumb);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        /* dB display */
+        .db-display {
+            min-width: 42px;
+            text-align: right;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+            font-size: 0.72em;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        /* Pan knob area */
+        .pan-area {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .pan-knob {
+            width: 36px;
+            height: var(--touch-min);
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            outline: none;
+        }
+
+        .pan-knob::-webkit-slider-runnable-track {
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--text-dim) 50%, var(--accent) 100%);
+            border-radius: 2px;
+        }
+
+        .pan-knob::-moz-range-track {
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--text-dim) 50%, var(--accent) 100%);
+            border-radius: 2px;
+        }
+
+        .pan-knob::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            margin-top: -5px;
+        }
+
+        .pan-knob::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: var(--text-primary);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* Mute button */
+        .mute-btn {
+            width: var(--touch-min);
+            height: var(--touch-min);
+            border: none;
+            border-radius: 8px;
+            font-weight: 800;
+            font-size: 0.85em;
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .mute-btn.off {
+            background: var(--mute-red-dim);
+            color: #884048;
+        }
+
+        .mute-btn.on {
+            background: var(--mute-red);
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(230, 57, 70, 0.35);
+        }
+
+        /* ================================================================
+           Bottom Toolbar
+           ================================================================ */
+        .toolbar {
+            display: flex;
+            gap: 6px;
+            padding: 8px 10px;
+            padding-bottom: max(8px, env(safe-area-inset-bottom));
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+        }
+
+        .toolbar-btn {
+            flex: 1;
+            padding: 12px 6px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            background: var(--bg-channel);
+            color: var(--text-primary);
+            font-size: 0.78em;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background 0.12s;
+            text-align: center;
+        }
+
+        .toolbar-btn:active {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .toolbar-btn.more-me-btn {
+            border-color: var(--border-active);
+            color: var(--accent);
+        }
+
+        /* ================================================================
+           Preset Modal
+           ================================================================ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 24px;
+            width: 100%;
+            max-width: 340px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal h2 {
+            margin: 0 0 16px;
+            font-size: 1.1em;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .modal-close {
+            float: right;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5em;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+        }
+
+        .preset-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .preset-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            background: var(--bg-channel);
+            border-radius: 10px;
+            border: 1px solid var(--border-subtle);
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+
+        .preset-item:active {
+            border-color: var(--accent);
+        }
+
+        .preset-item .name {
+            flex: 1;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .preset-item .delete-preset {
+            color: var(--mute-red);
+            font-size: 0.8em;
+            padding: 4px 8px;
+            background: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        .preset-input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .preset-input {
+            flex: 1;
+            padding: 12px;
+            background: var(--bg-channel);
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.95em;
+            outline: none;
+        }
+
+        .preset-input:focus {
+            border-color: var(--accent);
+        }
+
+        .preset-save-btn {
+            padding: 12px 18px;
+            background: var(--accent);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+
+        .no-presets {
+            color: var(--text-dim);
+            font-size: 0.85em;
+            text-align: center;
+            padding: 16px;
+        }
+
+        /* ================================================================
+           Member Select Page
+           ================================================================ */
+        .select-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .select-page h1 {
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 32px;
+            font-size: 1.5em;
+        }
+
+        .member-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            max-width: 360px;
+        }
+
+        .member-link {
+            display: block;
+            padding: 20px 24px;
+            background: var(--bg-channel);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 1.15em;
+            font-weight: 600;
+            text-align: center;
+            border: 1px solid var(--border-subtle);
+            transition: border-color 0.15s, background 0.15s;
+        }
+
+        .member-link:active {
+            background: var(--accent);
+            color: var(--bg-primary);
+        }
+
+        .select-footer {
+            margin-top: 32px;
+            font-size: 0.8em;
+            color: var(--text-dim);
+        }
+
+        /* ================================================================
+           Loading / Error states
+           ================================================================ */
+        .loading-msg {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+            font-size: 0.95em;
+        }
+
+        .error-msg {
+            text-align: center;
+            padding: 20px;
+            color: var(--mute-red);
+            font-size: 0.9em;
+        }
+
+        /* ================================================================
+           Responsive: wider screens get more compact layout
+           ================================================================ */
+        @media (min-width: 600px) {
+            .channels-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .category-header {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (min-width: 900px) {
+            .channels-grid {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================================
+         Member Select Page (shown when no member in URL)
+         ============================================================ -->
+    <div id="selectPage" class="select-page" style="display: none;">
+        <h1>IEM Mixer</h1>
+        <div class="member-grid" id="memberGrid"></div>
+        <div class="select-footer">Select your name to open your mix</div>
+    </div>
+
+    <!-- ============================================================
+         Mixer App (shown for a specific member)
+         ============================================================ -->
+    <div id="mixerApp" class="app" style="display: none;">
+        <div class="header">
+            <div class="header-left">
+                <h1>IEM</h1>
+                <span class="member-name" id="memberNameDisplay">---</span>
+            </div>
+            <div class="status-dot" id="statusDot"></div>
+        </div>
+
+        <div class="category-tabs">
+            <button class="category-tab active" data-category="all" onclick="filterCategory('all')">All</button>
+            <button class="category-tab" data-category="mics" onclick="filterCategory('mics')">Mics</button>
+            <button class="category-tab" data-category="stems" onclick="filterCategory('stems')">Stems</button>
+            <button class="category-tab" data-category="tech" onclick="filterCategory('tech')">Tech</button>
+        </div>
+
+        <div class="channels-scroll" id="channelsScroll">
+            <div class="channels-grid" id="channelsGrid">
+                <div class="loading-msg">Connecting to REAPER...</div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <button class="toolbar-btn" onclick="openPresets()">Presets</button>
+            <button class="toolbar-btn" onclick="resetMix()">Reset</button>
+            <button class="toolbar-btn more-me-btn" onclick="moreMe()">+Me</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         Preset Modal
+         ============================================================ -->
+    <div class="modal-overlay" id="presetModal">
+        <div class="modal">
+            <button class="modal-close" onclick="closePresets()">&times;</button>
+            <h2>Presets</h2>
+            <div class="preset-list" id="presetList">
+                <div class="no-presets">No saved presets</div>
+            </div>
+            <div class="preset-input-row">
+                <input type="text" class="preset-input" id="presetNameInput"
+                       placeholder="Preset name..." maxlength="30">
+                <button class="preset-save-btn" onclick="saveCurrentPreset()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         REAPER Web Interface main.js
+         ============================================================ -->
+    <script src="/main.js"></script>
+
+    <script>
+    /* ==================================================================
+       Configuration: Band members and input tracks
+       ==================================================================
+       This is embedded to avoid extra HTTP requests and keep the page
+       self-contained. It mirrors config/band_members.yaml and
+       config/input_tracks.yaml.
+    */
+
+    var BAND_MEMBERS = [
+        { id: 1,  name: "Petka",    outputTrack: 29, myInput: "PETKA mic" },
+        { id: 2,  name: "Stevo",    outputTrack: 30, myInput: "STEVO mic" },
+        { id: 3,  name: "Marek",    outputTrack: 31, myInput: "MAREK mic" },
+        { id: 4,  name: "Zuzka",    outputTrack: 32, myInput: "ZUZKA mic" },
+        { id: 5,  name: "Tina",     outputTrack: 33, myInput: "TINA mic"  },
+        { id: 6,  name: "Mirec",    outputTrack: 34, myInput: "MIREC mic" },
+        { id: 7,  name: "Alex",     outputTrack: 35, myInput: "ALEX mic"  },
+        { id: 8,  name: "Patrika",  outputTrack: 36, myInput: "PATRIKA mic" },
+        { id: 9,  name: "Ani",      outputTrack: 37, myInput: "ANI mic"   }
+    ];
+
+    /*
+        Input tracks define the 28 source channels. Each one has sends
+        to every band output track. The send index for a band member
+        corresponds to their position in the output track list (0-based).
+
+        For stereo pairs, the L and R tracks are linked together and
+        shown as a single fader controlling both sends in tandem.
+    */
+    var INPUT_TRACKS = [
+        // MICS (10 tracks, indices 1-10)
+        { index: 1,  name: "PETKA mic",    category: "mics" },
+        { index: 2,  name: "STEVO mic",    category: "mics" },
+        { index: 3,  name: "MAREK mic",    category: "mics" },
+        { index: 4,  name: "ZUZKA mic",    category: "mics" },
+        { index: 5,  name: "ZUZKA gtr",    category: "mics" },
+        { index: 6,  name: "TINA mic",     category: "mics" },
+        { index: 7,  name: "MIREC mic",    category: "mics" },
+        { index: 8,  name: "ALEX mic",     category: "mics" },
+        { index: 9,  name: "PATRIKA mic",  category: "mics" },
+        { index: 10, name: "ANI mic",      category: "mics" },
+
+        // STEMS (14 tracks, indices 11-24)
+        // Stereo pairs share a stereoPair key
+        { index: 11, name: "DRUMS L",   category: "stems", stereoPair: "drums",  stereoSide: "L" },
+        { index: 12, name: "DRUMS R",   category: "stems", stereoPair: "drums",  stereoSide: "R" },
+        { index: 13, name: "BASS L",    category: "stems", stereoPair: "bass",   stereoSide: "L" },
+        { index: 14, name: "BASS R",    category: "stems", stereoPair: "bass",   stereoSide: "R" },
+        { index: 15, name: "INST L",    category: "stems", stereoPair: "inst",   stereoSide: "L" },
+        { index: 16, name: "INST R",    category: "stems", stereoPair: "inst",   stereoSide: "R" },
+        { index: 17, name: "OTHER L",   category: "stems", stereoPair: "other",  stereoSide: "L" },
+        { index: 18, name: "OTHER R",   category: "stems", stereoPair: "other",  stereoSide: "R" },
+        { index: 19, name: "BGVS L",    category: "stems", stereoPair: "bgvs",   stereoSide: "L" },
+        { index: 20, name: "BGVS R",    category: "stems", stereoPair: "bgvs",   stereoSide: "R" },
+        { index: 21, name: "CLICK",     category: "stems" },
+        { index: 22, name: "GUIDE",     category: "stems" },
+        { index: 23, name: "IEMONLY L", category: "stems", stereoPair: "iemonly", stereoSide: "L" },
+        { index: 24, name: "IEMONLY R", category: "stems", stereoPair: "iemonly", stereoSide: "R" },
+
+        // TECH (4 tracks, indices 25-28)
+        { index: 25, name: "HAND1 mic",    category: "tech" },
+        { index: 26, name: "HAND2 mic",    category: "tech" },
+        { index: 27, name: "HAND3 mic",    category: "tech" },
+        { index: 28, name: "ENGINEER mic", category: "tech" }
+    ];
+
+    /* ==================================================================
+       State
+       ================================================================== */
+
+    var memberConfig = null;    // Current band member config
+    var sendIndex = 0;          // The send index for this member (0-based)
+    var activeCategory = "all"; // Category filter
+    var sendStates = {};        // trackIndex -> { vol: linear, mute: bool, pan: reaper_pan }
+    var meterLevels = {};       // trackIndex -> linear peak level (0.0-1.0)
+    var pollingActive = false;
+    var pollTimer = null;
+    var connected = false;
+    var faderTouched = {};      // trackIndex -> true if user is dragging
+
+    /* ==================================================================
+       Initialization
+       ================================================================== */
+
+    /**
+     * Determine which member we are from the URL.
+     *
+     * Supported URL formats:
+     *   /mixer/{name}           (design doc standard)
+     *   /mixer.html?member={name}
+     *   /mixer.html#{name}
+     *   /mixer/{name}/          (trailing slash)
+     */
+    function getMemberFromURL() {
+        var path = window.location.pathname.toLowerCase();
+        var name = null;
+
+        // Try path: /mixer/petka or /mixer/petka/
+        var pathMatch = path.match(/\/mixer\/([a-z]+)\/?$/);
+        if (pathMatch) {
+            name = pathMatch[1];
+        }
+
+        // Try query param: ?member=petka
+        if (!name) {
+            var params = new URLSearchParams(window.location.search);
+            var param = params.get("member");
+            if (param) name = param.toLowerCase();
+        }
+
+        // Try hash: #petka
+        if (!name && window.location.hash.length > 1) {
+            name = window.location.hash.substring(1).toLowerCase();
+        }
+
+        if (!name) return null;
+
+        // Find matching band member
+        for (var i = 0; i < BAND_MEMBERS.length; i++) {
+            if (BAND_MEMBERS[i].name.toLowerCase() === name) {
+                return BAND_MEMBERS[i];
+            }
+        }
+        return null;
+    }
+
+    function init() {
+        memberConfig = getMemberFromURL();
+
+        if (!memberConfig) {
+            showMemberSelect();
+            return;
+        }
+
+        // Calculate send index: position in BAND_MEMBERS array (0-based)
+        sendIndex = memberConfig.id - 1;
+
+        // Show mixer
+        document.getElementById("selectPage").style.display = "none";
+        document.getElementById("mixerApp").style.display = "flex";
+        document.getElementById("memberNameDisplay").textContent = memberConfig.name;
+        document.title = "IEM - " + memberConfig.name;
+
+        // Initialize send states for all input tracks
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            sendStates[t.index] = { vol: 1.0, mute: false, pan: 0.5 };
+            meterLevels[t.index] = 0.0;
+        }
+
+        buildChannels();
+        startPolling();
+    }
+
+    function showMemberSelect() {
+        document.getElementById("selectPage").style.display = "flex";
+        document.getElementById("mixerApp").style.display = "none";
+
+        var grid = document.getElementById("memberGrid");
+        grid.innerHTML = "";
+
+        for (var i = 0; i < BAND_MEMBERS.length; i++) {
+            var m = BAND_MEMBERS[i];
+            var link = document.createElement("a");
+            link.className = "member-link";
+            link.textContent = m.name;
+            // Use query param format for maximum REAPER compatibility
+            link.href = "mixer.html?member=" + m.name.toLowerCase();
+            grid.appendChild(link);
+        }
+    }
+
+    /* ==================================================================
+       Build channel strips
+       ==================================================================
+       Stereo pairs (L/R) are merged into a single strip with one fader
+       that controls both sends. The R track is hidden.
+    */
+
+    function buildChannels() {
+        var grid = document.getElementById("channelsGrid");
+        grid.innerHTML = "";
+
+        var seenPairs = {};
+        var currentCategory = "";
+
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+
+            // Skip R side of stereo pairs (controlled by L fader)
+            if (t.stereoSide === "R") continue;
+
+            // Category header
+            if (t.category !== currentCategory) {
+                currentCategory = t.category;
+                var hdr = document.createElement("div");
+                hdr.className = "category-header " + currentCategory;
+                hdr.setAttribute("data-category", currentCategory);
+                hdr.textContent = currentCategory === "mics" ? "Microphones" :
+                                  currentCategory === "stems" ? "Stems" :
+                                  currentCategory === "tech" ? "Tech" : currentCategory;
+                grid.appendChild(hdr);
+            }
+
+            var isStereo = !!t.stereoPair;
+            var partnerIndex = null;
+            if (isStereo) {
+                // Find the R partner
+                for (var j = 0; j < INPUT_TRACKS.length; j++) {
+                    if (INPUT_TRACKS[j].stereoPair === t.stereoPair &&
+                        INPUT_TRACKS[j].stereoSide === "R") {
+                        partnerIndex = INPUT_TRACKS[j].index;
+                        break;
+                    }
+                }
+            }
+
+            var isMyInput = memberConfig.myInput &&
+                            t.name.toLowerCase() === memberConfig.myInput.toLowerCase();
+
+            var displayName = t.name;
+            if (isStereo) {
+                // Show "DRUMS" instead of "DRUMS L"
+                displayName = displayName.replace(/\s+L$/, "");
+            }
+
+            // Parse name into main + type parts
+            var nameParts = parseTrackName(displayName);
+
+            var ch = document.createElement("div");
+            ch.className = "channel" +
+                           (isMyInput ? " more-me" : "") +
+                           (isStereo ? " stereo-pair" : "");
+            ch.setAttribute("data-track", t.index);
+            ch.setAttribute("data-category", t.category);
+            if (partnerIndex !== null) {
+                ch.setAttribute("data-partner", partnerIndex);
+            }
+
+            ch.innerHTML =
+                '<div class="ch-label">' +
+                    '<div class="ch-name">' + nameParts.main + '</div>' +
+                    (nameParts.type ? '<div class="ch-type">' + nameParts.type + (isStereo ? ' (st)' : '') + '</div>' : (isStereo ? '<div class="ch-type">stereo</div>' : '')) +
+                '</div>' +
+                '<div class="meter-container">' +
+                    '<div class="meter-fill" id="meter-' + t.index + '"></div>' +
+                '</div>' +
+                '<div class="fader-area">' +
+                    '<input type="range" class="fader" id="fader-' + t.index + '"' +
+                        ' min="0" max="1000" value="' + volToSlider(1.0) + '"' +
+                        ' data-track="' + t.index + '"' +
+                        (partnerIndex !== null ? ' data-partner="' + partnerIndex + '"' : '') +
+                    '>' +
+                    '<div class="db-display" id="db-' + t.index + '">0.0</div>' +
+                '</div>' +
+                '<input type="range" class="pan-knob" id="pan-' + t.index + '"' +
+                    ' min="0" max="100" value="50"' +
+                    ' data-track="' + t.index + '"' +
+                    (partnerIndex !== null ? ' data-partner="' + partnerIndex + '"' : '') +
+                    ' title="Pan">' +
+                '<button class="mute-btn off" id="mute-' + t.index + '"' +
+                    ' data-track="' + t.index + '"' +
+                    (partnerIndex !== null ? ' data-partner="' + partnerIndex + '"' : '') +
+                    '>M</button>';
+
+            grid.appendChild(ch);
+        }
+
+        // Attach event listeners
+        attachFaderListeners();
+    }
+
+    function parseTrackName(name) {
+        // "PETKA mic" -> { main: "PETKA", type: "mic" }
+        // "CLICK" -> { main: "CLICK", type: "" }
+        // "ENGINEER mic" -> { main: "ENG", type: "mic" }
+        var parts = name.split(/\s+/);
+        if (parts.length >= 2) {
+            var main = parts[0];
+            // Abbreviate long names
+            if (main.length > 7) main = main.substring(0, 6);
+            return { main: main, type: parts.slice(1).join(" ") };
+        }
+        return { main: name, type: "" };
+    }
+
+    /* ==================================================================
+       Event Listeners
+       ================================================================== */
+
+    function attachFaderListeners() {
+        // Faders
+        var faders = document.querySelectorAll(".fader");
+        for (var i = 0; i < faders.length; i++) {
+            (function(fader) {
+                var trackIdx = parseInt(fader.getAttribute("data-track"));
+                var partnerIdx = fader.getAttribute("data-partner");
+                partnerIdx = partnerIdx ? parseInt(partnerIdx) : null;
+
+                fader.addEventListener("input", function() {
+                    var vol = sliderToVol(parseInt(this.value));
+                    updateDbDisplay(trackIdx, vol);
+                    faderTouched[trackIdx] = true;
+                });
+
+                fader.addEventListener("change", function() {
+                    var vol = sliderToVol(parseInt(this.value));
+                    setSendVol(trackIdx, vol);
+                    if (partnerIdx !== null) {
+                        setSendVol(partnerIdx, vol);
+                    }
+                    // Clear touch flag after a short delay
+                    setTimeout(function() { faderTouched[trackIdx] = false; }, 200);
+                });
+
+                // Touch events for smoother interaction
+                fader.addEventListener("touchstart", function() {
+                    faderTouched[trackIdx] = true;
+                }, { passive: true });
+
+                fader.addEventListener("touchend", function() {
+                    var vol = sliderToVol(parseInt(this.value));
+                    setSendVol(trackIdx, vol);
+                    if (partnerIdx !== null) {
+                        setSendVol(partnerIdx, vol);
+                    }
+                    setTimeout(function() { faderTouched[trackIdx] = false; }, 200);
+                }, { passive: true });
+            })(faders[i]);
+        }
+
+        // Pan knobs
+        var pans = document.querySelectorAll(".pan-knob");
+        for (var i = 0; i < pans.length; i++) {
+            (function(pan) {
+                var trackIdx = parseInt(pan.getAttribute("data-track"));
+                var partnerIdx = pan.getAttribute("data-partner");
+                partnerIdx = partnerIdx ? parseInt(partnerIdx) : null;
+
+                pan.addEventListener("change", function() {
+                    var panVal = parseInt(this.value) / 100.0; // 0.0 to 1.0 (REAPER range)
+                    setSendPan(trackIdx, panVal);
+                    if (partnerIdx !== null) {
+                        // For stereo pairs, L goes left, R goes right proportionally
+                        // If user sets pan to 0.3 (left-ish), L = 0.3, R = 0.7
+                        setSendPan(partnerIdx, 1.0 - panVal);
+                    }
+                });
+
+                // Double-tap to center pan
+                pan.addEventListener("dblclick", function() {
+                    this.value = 50;
+                    setSendPan(trackIdx, 0.5);
+                    if (partnerIdx !== null) {
+                        setSendPan(partnerIdx, 0.5);
+                    }
+                });
+            })(pans[i]);
+        }
+
+        // Mute buttons
+        var mutes = document.querySelectorAll(".mute-btn");
+        for (var i = 0; i < mutes.length; i++) {
+            (function(btn) {
+                var trackIdx = parseInt(btn.getAttribute("data-track"));
+                var partnerIdx = btn.getAttribute("data-partner");
+                partnerIdx = partnerIdx ? parseInt(partnerIdx) : null;
+
+                btn.addEventListener("click", function() {
+                    toggleMute(trackIdx, partnerIdx);
+                });
+            })(mutes[i]);
+        }
+    }
+
+    /* ==================================================================
+       REAPER API Communication
+       ==================================================================
+       Uses REAPER's built-in web interface API via main.js which provides:
+         wwr_start()      - Initialize websocket/polling
+         wwr_req(cmd)     - Send one-off request
+         wwr_req_recur(cmd, interval) - Recurring poll
+         wwr_onreply(msg) - Callback for responses
+    */
+
+    function startPolling() {
+        if (typeof wwr_start !== "undefined") {
+            wwr_start();
+        }
+
+        // Build a recurring request for all track data including sends.
+        // REAPER's TRACK command returns tab-separated fields per track.
+        // We also need send info, which requires individual requests.
+        requestTrackData();
+
+        // Periodic full refresh
+        pollTimer = setInterval(function() {
+            requestTrackData();
+        }, 500);
+    }
+
+    function requestTrackData() {
+        if (typeof wwr_req_recur === "undefined") {
+            // main.js not loaded - we are likely not running under REAPER
+            setStatus("error");
+            document.getElementById("channelsGrid").innerHTML =
+                '<div class="error-msg">Cannot connect to REAPER.<br>Ensure this page is served by REAPER\'s web interface on iem.lan:8080</div>';
+            return;
+        }
+
+        // Request all tracks with extended info.
+        // Format: NTRACK;TRACK (returns track count + all track lines)
+        wwr_req_recur("NTRACK;TRACK", 500);
+
+        // Request send levels for each input track to our output.
+        // Send index = our band member position (0-based).
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            wwr_req("GET/TRACK/" + t.index + "/SEND/" + sendIndex + "/VOL;" +
+                     "GET/TRACK/" + t.index + "/SEND/" + sendIndex + "/MUTE;" +
+                     "GET/TRACK/" + t.index + "/SEND/" + sendIndex + "/PAN");
+        }
+    }
+
+    // Stub wwr_onreply - REAPER calls this with responses
+    if (typeof wwr_onreply === "undefined") {
+        var wwr_onreply = null;
+    }
+
+    wwr_onreply = function(response) {
+        if (!response) return;
+
+        var lines = response.split("\n");
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (!line) continue;
+
+            var parts = line.split("\t");
+            var cmd = parts[0];
+
+            // TRACK data: TRACK\tindex\tname\tflags\tvol\tpan\tmute\t...
+            // Index 0=cmd, 1=index, 2=name, 3=flags(?), 4=vol, 5=pan
+            // Fields vary by REAPER version. Peak meters at indices 12-13.
+            if (cmd === "TRACK" && parts.length > 5) {
+                var trackIndex = parseInt(parts[1]);
+                var peakL = parts.length > 12 ? parseFloat(parts[12]) || 0 : 0;
+                meterLevels[trackIndex] = peakL;
+                updateMeter(trackIndex, peakL);
+            }
+
+            // SEND VOL response: SET/TRACK/x/SEND/y/VOL\tvalue
+            // or just the value depending on REAPER version
+            if (cmd.indexOf("SEND") !== -1 && cmd.indexOf("VOL") !== -1) {
+                var sendMatch = cmd.match(/TRACK\/(\d+)\/SEND\/(\d+)\/VOL/);
+                if (sendMatch && parts.length > 1) {
+                    var tIdx = parseInt(sendMatch[1]);
+                    var sIdx = parseInt(sendMatch[2]);
+                    if (sIdx === sendIndex) {
+                        var vol = parseFloat(parts[1]);
+                        if (sendStates[tIdx] && !faderTouched[tIdx]) {
+                            sendStates[tIdx].vol = vol;
+                            updateFaderFromState(tIdx);
+                        }
+                    }
+                }
+            }
+
+            // SEND MUTE response
+            if (cmd.indexOf("SEND") !== -1 && cmd.indexOf("MUTE") !== -1) {
+                var muteMatch = cmd.match(/TRACK\/(\d+)\/SEND\/(\d+)\/MUTE/);
+                if (muteMatch && parts.length > 1) {
+                    var tIdx2 = parseInt(muteMatch[1]);
+                    var sIdx2 = parseInt(muteMatch[2]);
+                    if (sIdx2 === sendIndex && sendStates[tIdx2]) {
+                        sendStates[tIdx2].mute = (parseInt(parts[1]) === 1);
+                        updateMuteFromState(tIdx2);
+                    }
+                }
+            }
+
+            // SEND PAN response
+            if (cmd.indexOf("SEND") !== -1 && cmd.indexOf("PAN") !== -1 &&
+                cmd.indexOf("MUTE") === -1 && cmd.indexOf("VOL") === -1) {
+                var panMatch = cmd.match(/TRACK\/(\d+)\/SEND\/(\d+)\/PAN/);
+                if (panMatch && parts.length > 1) {
+                    var tIdx3 = parseInt(panMatch[1]);
+                    var sIdx3 = parseInt(panMatch[2]);
+                    if (sIdx3 === sendIndex && sendStates[tIdx3]) {
+                        sendStates[tIdx3].pan = parseFloat(parts[1]);
+                        updatePanFromState(tIdx3);
+                    }
+                }
+            }
+        }
+
+        setStatus("connected");
+        connected = true;
+    };
+
+    /* ==================================================================
+       Send Commands to REAPER
+       ================================================================== */
+
+    function setSendVol(trackIndex, vol) {
+        if (sendStates[trackIndex]) {
+            sendStates[trackIndex].vol = vol;
+        }
+        if (typeof wwr_req !== "undefined") {
+            wwr_req("SET/TRACK/" + trackIndex + "/SEND/" + sendIndex + "/VOL/" + vol.toFixed(8));
+        }
+    }
+
+    function setSendPan(trackIndex, panVal) {
+        if (sendStates[trackIndex]) {
+            sendStates[trackIndex].pan = panVal;
+        }
+        if (typeof wwr_req !== "undefined") {
+            wwr_req("SET/TRACK/" + trackIndex + "/SEND/" + sendIndex + "/PAN/" + panVal.toFixed(4));
+        }
+    }
+
+    function setSendMute(trackIndex, mute) {
+        if (sendStates[trackIndex]) {
+            sendStates[trackIndex].mute = mute;
+        }
+        if (typeof wwr_req !== "undefined") {
+            wwr_req("SET/TRACK/" + trackIndex + "/SEND/" + sendIndex + "/MUTE/" + (mute ? 1 : 0));
+        }
+    }
+
+    function toggleMute(trackIndex, partnerIndex) {
+        var state = sendStates[trackIndex];
+        if (!state) return;
+
+        var newMute = !state.mute;
+        setSendMute(trackIndex, newMute);
+        updateMuteFromState(trackIndex);
+
+        if (partnerIndex !== null && partnerIndex !== undefined) {
+            setSendMute(partnerIndex, newMute);
+        }
+
+        // Update channel visual
+        var ch = document.querySelector('.channel[data-track="' + trackIndex + '"]');
+        if (ch) {
+            ch.classList.toggle("muted", newMute);
+        }
+    }
+
+    /* ==================================================================
+       UI Update Functions
+       ================================================================== */
+
+    function updateFaderFromState(trackIndex) {
+        var fader = document.getElementById("fader-" + trackIndex);
+        if (fader && !faderTouched[trackIndex]) {
+            var state = sendStates[trackIndex];
+            fader.value = volToSlider(state.vol);
+            updateDbDisplay(trackIndex, state.vol);
+        }
+    }
+
+    function updateMuteFromState(trackIndex) {
+        var btn = document.getElementById("mute-" + trackIndex);
+        var ch = document.querySelector('.channel[data-track="' + trackIndex + '"]');
+        var state = sendStates[trackIndex];
+        if (!state) return;
+
+        if (btn) {
+            btn.className = "mute-btn " + (state.mute ? "on" : "off");
+        }
+        if (ch) {
+            ch.classList.toggle("muted", state.mute);
+        }
+    }
+
+    function updatePanFromState(trackIndex) {
+        var pan = document.getElementById("pan-" + trackIndex);
+        if (pan) {
+            var state = sendStates[trackIndex];
+            pan.value = Math.round(state.pan * 100);
+        }
+    }
+
+    function updateDbDisplay(trackIndex, vol) {
+        var el = document.getElementById("db-" + trackIndex);
+        if (el) {
+            el.textContent = volToDb(vol);
+        }
+    }
+
+    function updateMeter(trackIndex, linearPeak) {
+        var el = document.getElementById("meter-" + trackIndex);
+        if (!el) return;
+
+        // Convert linear to percentage height (logarithmic scale)
+        var pct = 0;
+        if (linearPeak > 0.0001) {
+            var db = 20 * Math.log10(linearPeak);
+            // Map -60dB..+6dB to 0..100%
+            pct = Math.max(0, Math.min(100, ((db + 60) / 66) * 100));
+        }
+
+        el.style.height = pct + "%";
+
+        // Color based on level
+        el.className = "meter-fill";
+        if (linearPeak > 1.0) {
+            el.className += " clip";
+        } else if (linearPeak > 0.7) {
+            el.className += " warn";
+        }
+    }
+
+    function setStatus(type) {
+        var dot = document.getElementById("statusDot");
+        if (dot) {
+            dot.className = "status-dot " + type;
+        }
+    }
+
+    /* ==================================================================
+       Volume Conversion
+       ==================================================================
+       Fader uses 0-1000 integer range for smooth resolution.
+       Volume is stored as linear (1.0 = 0dB).
+       Scale is logarithmic: maps -60dB to +6dB.
+    */
+
+    function volToSlider(vol) {
+        if (vol <= 0) return 0;
+        var db = 20 * Math.log10(vol);
+        // Map -60..+6 to 0..1000
+        return Math.round(Math.max(0, Math.min(1000, ((db + 60) / 66) * 1000)));
+    }
+
+    function sliderToVol(slider) {
+        if (slider <= 0) return 0;
+        var db = (slider / 1000) * 66 - 60;
+        return Math.pow(10, db / 20);
+    }
+
+    function volToDb(vol) {
+        if (vol <= 0.0001) return "-inf";
+        var db = 20 * Math.log10(vol);
+        if (db < -59) return "-inf";
+        return (db >= 0 ? "+" : "") + db.toFixed(1);
+    }
+
+    /* ==================================================================
+       Category Filter
+       ================================================================== */
+
+    function filterCategory(cat) {
+        activeCategory = cat;
+
+        // Update tab styles
+        var tabs = document.querySelectorAll(".category-tab");
+        for (var i = 0; i < tabs.length; i++) {
+            tabs[i].classList.toggle("active", tabs[i].getAttribute("data-category") === cat);
+        }
+
+        // Show/hide channels and headers
+        var channels = document.querySelectorAll(".channel");
+        for (var i = 0; i < channels.length; i++) {
+            var chCat = channels[i].getAttribute("data-category");
+            channels[i].classList.toggle("hidden", cat !== "all" && chCat !== cat);
+        }
+
+        var headers = document.querySelectorAll(".category-header");
+        for (var i = 0; i < headers.length; i++) {
+            var hCat = headers[i].getAttribute("data-category");
+            headers[i].classList.toggle("hidden", cat !== "all" && hCat !== cat);
+        }
+
+        // Scroll to top when switching
+        var scroll = document.getElementById("channelsScroll");
+        if (scroll) scroll.scrollTop = 0;
+    }
+
+    /* ==================================================================
+       Toolbar Actions
+       ================================================================== */
+
+    function resetMix() {
+        if (!confirm("Reset all channels to 0 dB?")) return;
+
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            setSendVol(t.index, 1.0);  // 0 dB
+            setSendMute(t.index, false);
+            setSendPan(t.index, 0.5);  // Center
+
+            var fader = document.getElementById("fader-" + t.index);
+            if (fader) fader.value = volToSlider(1.0);
+            updateDbDisplay(t.index, 1.0);
+
+            var pan = document.getElementById("pan-" + t.index);
+            if (pan) pan.value = 50;
+
+            var btn = document.getElementById("mute-" + t.index);
+            if (btn) btn.className = "mute-btn off";
+
+            var ch = document.querySelector('.channel[data-track="' + t.index + '"]');
+            if (ch) ch.classList.remove("muted");
+        }
+    }
+
+    function moreMe() {
+        // Boost own mic by +6dB, reduce everything else by -3dB
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            // Skip R side of stereo pairs
+            if (t.stereoSide === "R") continue;
+
+            var state = sendStates[t.index];
+            if (!state) continue;
+
+            var currentDb = (state.vol > 0.0001) ? 20 * Math.log10(state.vol) : -60;
+            var isMe = memberConfig.myInput &&
+                       t.name.toLowerCase() === memberConfig.myInput.toLowerCase();
+
+            var newDb = isMe
+                ? Math.min(6, currentDb + 6)
+                : Math.max(-60, currentDb - 3);
+
+            var newVol = Math.pow(10, newDb / 20);
+
+            setSendVol(t.index, newVol);
+
+            // Also set partner for stereo pairs
+            var ch = document.querySelector('.channel[data-track="' + t.index + '"]');
+            if (ch) {
+                var partner = ch.getAttribute("data-partner");
+                if (partner) setSendVol(parseInt(partner), newVol);
+            }
+
+            var fader = document.getElementById("fader-" + t.index);
+            if (fader) fader.value = volToSlider(newVol);
+            updateDbDisplay(t.index, newVol);
+        }
+    }
+
+    /* ==================================================================
+       Preset System
+       ==================================================================
+       Presets are saved to localStorage keyed by member name.
+       Each preset stores all send levels, mutes, and pans.
+    */
+
+    function getPresetsKey() {
+        return "iem_presets_" + memberConfig.name.toLowerCase();
+    }
+
+    function getSavedPresets() {
+        try {
+            var data = localStorage.getItem(getPresetsKey());
+            return data ? JSON.parse(data) : {};
+        } catch(e) {
+            return {};
+        }
+    }
+
+    function savePresetsToStorage(presets) {
+        localStorage.setItem(getPresetsKey(), JSON.stringify(presets));
+    }
+
+    function openPresets() {
+        var modal = document.getElementById("presetModal");
+        modal.classList.add("visible");
+        renderPresetList();
+    }
+
+    function closePresets() {
+        document.getElementById("presetModal").classList.remove("visible");
+    }
+
+    function renderPresetList() {
+        var list = document.getElementById("presetList");
+        var presets = getSavedPresets();
+        var names = Object.keys(presets);
+
+        if (names.length === 0) {
+            list.innerHTML = '<div class="no-presets">No saved presets yet</div>';
+            return;
+        }
+
+        list.innerHTML = "";
+        for (var i = 0; i < names.length; i++) {
+            (function(name) {
+                var item = document.createElement("div");
+                item.className = "preset-item";
+                item.innerHTML =
+                    '<span class="name">' + escapeHtml(name) + '</span>' +
+                    '<button class="delete-preset">Del</button>';
+
+                // Tap to load
+                item.querySelector(".name").addEventListener("click", function() {
+                    loadPreset(name);
+                    closePresets();
+                });
+
+                // Delete button
+                item.querySelector(".delete-preset").addEventListener("click", function(e) {
+                    e.stopPropagation();
+                    if (confirm("Delete preset '" + name + "'?")) {
+                        deletePreset(name);
+                        renderPresetList();
+                    }
+                });
+
+                list.appendChild(item);
+            })(names[i]);
+        }
+    }
+
+    function saveCurrentPreset() {
+        var nameInput = document.getElementById("presetNameInput");
+        var name = nameInput.value.trim();
+        if (!name) {
+            nameInput.focus();
+            return;
+        }
+
+        // Build preset data
+        var data = {};
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            var state = sendStates[t.index];
+            if (state) {
+                data[t.index] = {
+                    vol: state.vol,
+                    mute: state.mute,
+                    pan: state.pan
+                };
+            }
+        }
+
+        var presets = getSavedPresets();
+        presets[name] = data;
+        savePresetsToStorage(presets);
+
+        nameInput.value = "";
+        renderPresetList();
+    }
+
+    function loadPreset(name) {
+        var presets = getSavedPresets();
+        var data = presets[name];
+        if (!data) return;
+
+        for (var i = 0; i < INPUT_TRACKS.length; i++) {
+            var t = INPUT_TRACKS[i];
+            var saved = data[t.index];
+            if (!saved) continue;
+
+            // Apply volume
+            setSendVol(t.index, saved.vol);
+            var fader = document.getElementById("fader-" + t.index);
+            if (fader) fader.value = volToSlider(saved.vol);
+            updateDbDisplay(t.index, saved.vol);
+
+            // Apply mute
+            setSendMute(t.index, saved.mute);
+            var btn = document.getElementById("mute-" + t.index);
+            if (btn) btn.className = "mute-btn " + (saved.mute ? "on" : "off");
+            var ch = document.querySelector('.channel[data-track="' + t.index + '"]');
+            if (ch) ch.classList.toggle("muted", saved.mute);
+
+            // Apply pan
+            if (saved.pan !== undefined) {
+                setSendPan(t.index, saved.pan);
+                var pan = document.getElementById("pan-" + t.index);
+                if (pan) pan.value = Math.round(saved.pan * 100);
+            }
+        }
+    }
+
+    function deletePreset(name) {
+        var presets = getSavedPresets();
+        delete presets[name];
+        savePresetsToStorage(presets);
+    }
+
+    /* ==================================================================
+       Utilities
+       ================================================================== */
+
+    function escapeHtml(str) {
+        var div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    /* ==================================================================
+       Close modal on overlay click
+       ================================================================== */
+    document.getElementById("presetModal").addEventListener("click", function(e) {
+        if (e.target === this) closePresets();
+    });
+
+    /* ==================================================================
+       Start
+       ================================================================== */
+    init();
+
+    </script>
+</body>
+</html>
