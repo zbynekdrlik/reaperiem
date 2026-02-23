@@ -13,6 +13,12 @@
 --
 -- Timing reference (design doc): 2026-02-23-reaper-iem-system-design.md
 
+-- Auto-mode detection (for HTTP API triggering without dialogs)
+local AUTO_MODE = reaper.GetExtState("reaperiem", "auto_setup") == "1"
+if AUTO_MODE then
+    reaper.SetExtState("reaperiem", "auto_setup", "0", false)  -- Clear flag immediately
+end
+
 -- ============================================================================
 -- CONFIGURATION
 -- ============================================================================
@@ -175,9 +181,7 @@ end
 -- ============================================================================
 
 local function main()
-    -- Check for auto-confirm flag (set via HTTP API before triggering)
-    local auto_confirm = reaper.GetExtState("reaperiem", "auto_setup")
-    if auto_confirm ~= "1" then
+    if not AUTO_MODE then
         -- Confirmation dialog (only when run manually)
         local response = reaper.ShowMessageBox(
             "This will DELETE ALL existing tracks and create the full IEM project structure.\n\n" ..
@@ -193,7 +197,6 @@ local function main()
         end
     else
         log("Auto-confirm mode (triggered via API)")
-        reaper.SetExtState("reaperiem", "auto_setup", "0", false)  -- Clear flag
     end
 
     reaper.Undo_BeginBlock()
@@ -460,20 +463,24 @@ local function main()
     log("  3. Save project: Ctrl+S")
     log("  4. Commit on iem.lan: git add -A && git commit -m 'feat: initial IEM project'")
 
-    reaper.ShowMessageBox(
-        "IEM project setup complete!\n\n" ..
-        "Tracks: " .. idx .. "\n" ..
-        "Sends: " .. send_count .. "\n\n" ..
-        "Check the console for details.\n" ..
-        "Verify routing in the mixer and routing matrix (Ctrl+Alt+R).",
-        "Setup Complete",
-        0  -- OK only
-    )
+    if not AUTO_MODE then
+        reaper.ShowMessageBox(
+            "IEM project setup complete!\n\n" ..
+            "Tracks: " .. idx .. "\n" ..
+            "Sends: " .. send_count .. "\n\n" ..
+            "Check the console for details.\n" ..
+            "Verify routing in the mixer and routing matrix (Ctrl+Alt+R).",
+            "Setup Complete",
+            0  -- OK only
+        )
+    end
 end
 
 -- Run with error handling
 local ok, err = pcall(main)
 if not ok then
     log("FATAL ERROR: " .. tostring(err))
-    reaper.ShowMessageBox("Setup failed!\n\n" .. tostring(err), "Error", 0)
+    if not AUTO_MODE then
+        reaper.ShowMessageBox("Setup failed!\n\n" .. tostring(err), "Error", 0)
+    end
 end
