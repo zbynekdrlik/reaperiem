@@ -8,7 +8,7 @@
 devices:
   iem:
     # Run `netaudio device list` to get current device name
-    current_name: "Y001-Yamaha-DANTE-ACCEL-0821C4" # May change after renaming
+    current_name: "iem-yamaha"
     role: "IEM mixing (Claude controls)"
     channels: 128
     sample_rate: 96000
