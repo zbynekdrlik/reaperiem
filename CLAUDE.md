@@ -109,6 +109,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ### Send Control
 
 - `set_send_level(track_index, send_index, level_db)`
+- `set_send_pan(track_index, send_index, pan)` - Pan position (-1.0 left to 1.0 right)
 - `adjust_send_level(track_index, send_index, adjustment_db)`
 
 ### Hardware Routing (LIVE, no restart)
