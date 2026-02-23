@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "reaperiem": {
+      "command": "/home/newlevel/devel/reaperiem/.venv/bin/python",
+      "args": ["-m", "reaperiem_mcp.server"],
+      "cwd": "/home/newlevel/devel/reaperiem/mcp"
+    }
+  }
+}

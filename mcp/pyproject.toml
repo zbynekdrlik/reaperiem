@@ -20,5 +20,8 @@ dev = [
     "pytest-asyncio>=0.23.0",
 ]
 
+[project.scripts]
+reaperiem-mcp = "reaperiem_mcp.server:mcp.run"
+
 [tool.hatch.build.targets.wheel]
 packages = ["reaperiem_mcp"]
