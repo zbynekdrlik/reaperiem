@@ -53,6 +53,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 - `list_tracks` - List all tracks
 - `get_track(index)` - Get track details
+- `get_track_meter(track_index)` - Get peak/RMS levels in dB
 - `set_track_volume(index, volume_db)`
 - `mute_track(index, mute)`
 - `solo_track(index, solo)`
@@ -60,6 +61,8 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ### Send Control (LIVE)
 
 - `set_send_level(track_index, send_index, level_db)`
+- `set_send_pan(track_index, send_index, pan)` - Pan -1.0 (L) to 1.0 (R)
+- `set_send_mute(track_index, send_index, mute)` - Mute/unmute send
 - `adjust_send_level(track_index, send_index, adjustment_db)`
 
 ### Hardware Routing (LIVE)
@@ -79,6 +82,48 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 - `git_commit(message)`
 - `git_push`
 - `git_log(count)`
+
+## IEM Project Structure (39 tracks)
+
+**Inputs (28 tracks):**
+
+- MICS folder (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
+- STEMS folder (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
+- TECH folder (4): HAND1/HAND2/HAND3/ENGINEER mic
+
+**Outputs (11 tracks):**
+
+- BAND folder (9): One per band member (stereo to Dante TX 3-20)
+- TECH folder (2): ENGINEER inear (solo bus), TRANSLATOR (HAND1 only, mono)
+
+**Routing:**
+
+- 252 sends: All 28 inputs → all 9 band outputs
+- ENGINEER receives REAPER solo bus
+- TRANSLATOR receives only HAND1 mic
+
+## Web Mixer Interface
+
+Band members access their mix at: `http://iem.lan:8080/mixer/{name}`
+
+Examples: `/mixer/petka`, `/mixer/marek`
+
+Controls: Meter, Fader, Pan, Mute per channel. Stereo stems linked.
+
+## Setup New Project
+
+Run `setup_iem_project.lua` ReaScript in REAPER to create full project structure.
+
+**To deploy and register:**
+
+```bash
+./scripts/deploy.sh  # Deploys scripts and web files
+
+# Register in REAPER (one time - needs restart):
+ssh newlevel@iem.lan "echo SCR 4 0 _RS_REAPERIEM_SETUP \"IEM Project Setup\" Scripts/reaperiem/setup_iem_project.lua >> \"C:/Users/newlevel/AppData/Roaming/REAPER/reaper-kb.ini\""
+```
+
+Then run via Actions menu in REAPER.
 
 ## How Hardware Routing Works
 
