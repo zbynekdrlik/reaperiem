@@ -84,6 +84,11 @@ case "${1:-}" in
         log "Deploying web interface..."
         scp web/reaper_interface/iem_mixer.html 'newlevel@iem.lan:C:/Program Files/REAPER (x64)/Plugins/reaper_www_root/iem_mixer.html'
         scp web/reaper_interface/iem.html 'newlevel@iem.lan:C:/Program Files/REAPER (x64)/Plugins/reaper_www_root/iem.html'
+        scp web/mixer.html 'newlevel@iem.lan:C:/Program Files/REAPER (x64)/Plugins/reaper_www_root/mixer.html'
+
+        log "Deploying ReaScripts..."
+        ssh ${REMOTE_USER}@${REMOTE_HOST} "mkdir -p 'C:/Users/newlevel/AppData/Roaming/REAPER/Scripts/reaperiem'" || true
+        scp scripts/reascripts/*.lua 'newlevel@iem.lan:C:/Users/newlevel/AppData/Roaming/REAPER/Scripts/reaperiem/'
 
         log "Verifying..."
         FINAL=$(ssh ${REMOTE_USER}@${REMOTE_HOST} "cd ${REPO_PATH} && git rev-parse --short HEAD")
