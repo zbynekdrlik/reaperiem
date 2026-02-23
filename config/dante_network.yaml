@@ -1,0 +1,58 @@
+# Dante Network Topology
+# ⚠️ SAFETY: Only modify IEM device. Stagebox and FOH serve the main PA.
+#
+# NOTE: Device names are network-assigned and may change.
+# Use `netaudio device list` to get current names.
+# Identify devices by role (IEM, stagebox, FOH) not by name.
+
+devices:
+  iem:
+    # Run `netaudio device list` to get current device name
+    current_name: "Y001-Yamaha-DANTE-ACCEL-0821C4" # May change after renaming
+    role: "IEM mixing (Claude controls)"
+    channels: 128
+    sample_rate: 96000
+    safe_to_modify: true
+    notes: "Connected to REAPER on iem.lan via ASIO. This is YOUR device."
+
+  stagebox:
+    current_name: "ML-32D-1a4430" # May change after renaming
+    role: "Stage inputs (DO NOT MODIFY)"
+    channels: 32
+    safe_to_modify: false
+    notes: "Mics and DI boxes on stage"
+
+  foh:
+    current_name: "foh-abl-yamaha-accelerator" # May change after renaming
+    role: "Front of house (DO NOT MODIFY)"
+    channels: 128
+    safe_to_modify: false
+    notes: "Main PA and house mixing"
+
+# Network topology:
+# - Stagebox TX channels carry individual mics to IEM and FOH
+# - IEM TX channels carry personal mixes back to stagebox RX
+# - FOH TX channels carry house mixes
+# - Subscriptions route audio between devices (DO NOT MODIFY)
+
+# Stagebox inputs: Run `netaudio channel list --device-name <STAGEBOX>` to discover
+# Devices may be powered off. Only online devices appear in netaudio device list.
+
+# Safety boundaries for automation:
+# Identify devices by role before running commands
+safety:
+  allowed_operations:
+    - "netaudio device list"
+    - "netaudio channel list"
+    - "netaudio subscription list"
+    - "netaudio config --identify"
+    - "netaudio config --device-name <IEM_DEVICE> --set-channel-name"
+
+  blocked_operations:
+    - "netaudio subscription add"
+    - "netaudio subscription remove"
+    - "netaudio config --set-sample-rate"
+    - "netaudio config --set-latency"
+    - "netaudio config --set-encoding"
+    - "netaudio config --device-name <STAGEBOX_DEVICE>"
+    - "netaudio config --device-name <FOH_DEVICE>"

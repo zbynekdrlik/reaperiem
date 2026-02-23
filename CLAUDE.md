@@ -135,3 +135,40 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 2. **ReaScript registration** - New scripts need one REAPER restart to load from reaper-kb.ini
 3. **Git on iem.lan** - Repository cloned there, commits track REAPER project changes
 4. **Sample rate** - Currently 44100Hz in config, should be 96000Hz for Dante
+
+---
+
+## ⚠️ DANTE NETWORK SAFETY
+
+The Dante network has 3 devices by role. **Only the IEM Accelerator is safe to modify.**
+Device names may change. Run `netaudio device list` to get current names.
+
+```
+Device Roles:
+  IEM Accelerator (128ch)  ← Claude controls (connected to iem.lan REAPER)
+  Stagebox (32ch)          ← DO NOT MODIFY (mics/DIs)
+  FOH Accelerator (128ch)  ← DO NOT MODIFY (main PA)
+```
+
+**ALLOWED:**
+
+```bash
+netaudio device list                                              # List online devices
+netaudio channel list --device-name <any>                         # Read channels
+netaudio subscription list                                        # Read routing
+netaudio config --device-name <IEM_DEVICE> --set-channel-name <ch> <name>
+```
+
+**NEVER DO:**
+
+```bash
+# ❌ NEVER modify subscriptions (breaks audio routing!)
+netaudio subscription add/remove ...
+
+# ❌ NEVER change device settings
+netaudio config --set-sample-rate/encoding/latency ...
+
+# ❌ NEVER modify stagebox or FOH devices
+```
+
+See `.claude/skills/dante.md` for full Dante documentation and `config/dante_network.yaml` for topology.

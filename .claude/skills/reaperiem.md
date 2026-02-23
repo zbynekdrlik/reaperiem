@@ -37,6 +37,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 4. **NEVER suggest editing RPP files to change routing** - Use MCP tools instead
 5. **NEVER ask user to manually restart REAPER** - Use SSH to restart if needed
 6. **NEVER ask user for manual work** - Automate everything via SSH/MCP
+7. **NEVER modify Dante subscriptions or stagebox/FOH devices** - See `dante` skill
 
 ## ALWAYS Do These
 
@@ -157,6 +158,11 @@ ssh newlevel@iem.lan "schtasks /create /tn StartREAPER /tr \"\\\"C:\\Program Fil
 **Why schtasks?** SSH runs in session 0 (service) which can't launch GUI apps. `schtasks /ru newlevel /it` runs in the desktop session.
 
 See user-wide skill `windows-remote-gui` for full details.
+
+## Related Skills
+
+- **`dante`** - Dante network topology, channel naming, and safety boundaries. Use for netaudio commands.
+- **`windows-remote-gui`** - Running GUI apps over SSH on Windows (schtasks pattern).
 
 ### Take Screenshot of iem.lan Desktop
 
