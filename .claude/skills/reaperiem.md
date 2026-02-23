@@ -83,20 +83,18 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 - `git_push`
 - `git_log(count)`
 
-## IEM Project Structure (46 tracks total)
+## IEM Project Structure (39 tracks, flat with colors)
 
-**Inputs (28 audio tracks + 4 folders):**
+**Inputs (28 tracks):**
 
-- INPUTS folder
-  - MICS folder (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
-  - STEMS folder (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
-  - TECH folder (4): HAND1/HAND2/HAND3/ENGINEER mic
+- MICS (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
+- STEMS (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
+- TECH (4): HAND1/HAND2/HAND3/ENGINEER mic
 
-**Outputs (11 audio tracks + 3 folders):**
+**Outputs (11 tracks):**
 
-- OUTPUTS folder
-  - BAND folder (9): One per band member (stereo to Dante TX 3-20)
-  - TECH folder (2): ENGINEER inear (solo bus), TRANSLATOR (HAND1 only, mono)
+- BAND (9): One per band member (stereo to Dante TX 3-20)
+- TECH (2): ENGINEER inear (solo bus), TRANSLATOR (HAND1 only, mono)
 
 **Routing:**
 
