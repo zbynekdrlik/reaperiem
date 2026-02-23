@@ -224,10 +224,10 @@
     </div>
 
     <div class="presets">
-        <button class="preset-btn" onclick="loadPreset('default')">Reset</button>
-        <button class="preset-btn" onclick="adjustAll(3)">+3dB All</button>
-        <button class="preset-btn" onclick="adjustAll(-3)">-3dB All</button>
-        <button class="preset-btn" onclick="moreMe()">More Me</button>
+        <button class="preset-btn" onclick="savePreset()">Save</button>
+        <button class="preset-btn" onclick="loadSavedPreset()">Load</button>
+        <button class="preset-btn" onclick="resetMix()">Reset</button>
+        <button class="preset-btn" onclick="moreMe()">+Me</button>
     </div>
 
     <script src="/main.js"></script>
@@ -411,26 +411,74 @@
             }
         }
 
-        function loadPreset(name) {
-            if (name === 'default') {
-                // Reset all sends to 0dB
-                const sliders = document.querySelectorAll('.slider');
-                sliders.forEach(slider => {
-                    slider.value = volumeToSlider(1.0);
-                    setSendLevel(parseInt(slider.dataset.track), slider.value);
-                    updateDisplay(parseInt(slider.dataset.track), slider.value);
-                });
+        function savePreset() {
+            // Save current mix to localStorage
+            const preset = {};
+            const sliders = document.querySelectorAll('.slider');
+            sliders.forEach(slider => {
+                const trackIndex = slider.dataset.track;
+                preset[trackIndex] = {
+                    value: slider.value,
+                    muted: sendMutes[trackIndex] || false
+                };
+            });
+
+            const presetName = prompt('Preset name:', 'My Mix');
+            if (presetName) {
+                const key = `iem_preset_${memberId}_${presetName}`;
+                localStorage.setItem(key, JSON.stringify(preset));
+
+                // Also save to list of presets
+                const listKey = `iem_presets_${memberId}`;
+                let presetList = JSON.parse(localStorage.getItem(listKey) || '[]');
+                if (!presetList.includes(presetName)) {
+                    presetList.push(presetName);
+                    localStorage.setItem(listKey, JSON.stringify(presetList));
+                }
+
+                alert(`Saved preset: ${presetName}`);
             }
         }
 
-        function adjustAll(dbChange) {
+        function loadSavedPreset() {
+            // Get list of saved presets
+            const listKey = `iem_presets_${memberId}`;
+            const presetList = JSON.parse(localStorage.getItem(listKey) || '[]');
+
+            if (presetList.length === 0) {
+                alert('No saved presets. Use Save to create one.');
+                return;
+            }
+
+            const presetName = prompt('Load preset:\\n' + presetList.join('\\n'), presetList[0]);
+            if (presetName && presetList.includes(presetName)) {
+                const key = `iem_preset_${memberId}_${presetName}`;
+                const preset = JSON.parse(localStorage.getItem(key) || '{}');
+
+                // Apply preset
+                const sliders = document.querySelectorAll('.slider');
+                sliders.forEach(slider => {
+                    const trackIndex = slider.dataset.track;
+                    if (preset[trackIndex]) {
+                        slider.value = preset[trackIndex].value;
+                        setSendLevel(parseInt(trackIndex), slider.value);
+                        updateDisplay(parseInt(trackIndex), slider.value);
+
+                        if (preset[trackIndex].muted !== sendMutes[trackIndex]) {
+                            toggleMute(parseInt(trackIndex));
+                        }
+                    }
+                });
+
+                alert(`Loaded preset: ${presetName}`);
+            }
+        }
+
+        function resetMix() {
+            // Reset all sends to 0dB
             const sliders = document.querySelectorAll('.slider');
             sliders.forEach(slider => {
-                const currentVol = sliderToVolume(slider.value);
-                const currentDb = 20 * Math.log10(currentVol || 0.001);
-                const newDb = Math.max(-60, Math.min(6, currentDb + dbChange));
-                const newVol = Math.pow(10, newDb / 20);
-                slider.value = volumeToSlider(newVol);
+                slider.value = volumeToSlider(1.0);
                 setSendLevel(parseInt(slider.dataset.track), slider.value);
                 updateDisplay(parseInt(slider.dataset.track), slider.value);
             });
