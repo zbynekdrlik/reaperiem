@@ -102,6 +102,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 - `list_tracks` - List all REAPER tracks
 - `get_track(index)` - Get track details
+- `get_track_meter(track_index)` - Get peak/RMS levels in dB
 - `set_track_volume(index, volume_db)`
 - `mute_track(index, mute)`
 - `solo_track(index, solo)`
