@@ -104,9 +104,12 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 ## Web Mixer Interface
 
-Band members access their mix at: `http://iem.lan:8080/mixer/{name}`
+Band members access their mix at: `http://iem.lan:8080/mixer.html?member={name}`
 
-Examples: `/mixer/petka`, `/mixer/marek`
+Examples:
+
+- `http://iem.lan:8080/mixer.html?member=petka`
+- `http://iem.lan:8080/mixer.html?member=marek`
 
 Controls: Meter, Fader, Pan, Mute per channel. Stereo stems linked.
 
