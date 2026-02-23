@@ -5,8 +5,10 @@ from typing import Any
 
 from .lib.config import load_config, Config
 from .lib.reaper_http import ReaperHTTPClient
+from .lib.ssh_client import SSHGitClient
 from .tools import tracks
 from .tools import mix
+from .tools import git
 
 mcp = FastMCP(
     "REAPER IEM Mixer",
@@ -38,6 +40,25 @@ def get_reaper_client() -> ReaperHTTPClient:
             password=config.reaper_password,
         )
     return _reaper_client
+
+
+_ssh_client: SSHGitClient | None = None
+
+
+def get_ssh_client() -> SSHGitClient:
+    """Get or create SSH client for git operations."""
+    global _ssh_client
+    if _ssh_client is None:
+        config = get_config()
+        _ssh_client = SSHGitClient(
+            host=config.ssh_host,
+            username=config.ssh_username,
+            repo_path=config.ssh_repo_path,
+            key_path=config.ssh_key_path,
+            password=config.ssh_password,
+            port=config.ssh_port,
+        )
+    return _ssh_client
 
 
 @mcp.tool
@@ -136,6 +157,50 @@ async def adjust_send_level(
     return await mix.adjust_send_level(
         client, track_index, send_index, adjustment_db
     )
+
+
+@mcp.tool
+def git_status() -> str:
+    """Show git status of REAPER project on iem.lan.
+
+    Shows which files have changed (e.g., after saving a project in REAPER).
+    """
+    client = get_ssh_client()
+    return git.git_status(client)
+
+
+@mcp.tool
+def git_commit(message: str) -> str:
+    """Commit REAPER project changes on iem.lan.
+
+    Stages all changes and creates a commit with the given message.
+
+    Args:
+        message: Commit message describing the changes
+    """
+    client = get_ssh_client()
+    return git.git_commit(client, message)
+
+
+@mcp.tool
+def git_push() -> str:
+    """Push commits from iem.lan to GitHub.
+
+    Pushes all local commits to the remote repository.
+    """
+    client = get_ssh_client()
+    return git.git_push(client)
+
+
+@mcp.tool
+def git_log(count: int = 5) -> str:
+    """Show recent commit history on iem.lan.
+
+    Args:
+        count: Number of commits to show (default 5)
+    """
+    client = get_ssh_client()
+    return git.git_log(client, count)
 
 
 if __name__ == "__main__":
