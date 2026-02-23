@@ -83,24 +83,35 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 - `git_push`
 - `git_log(count)`
 
-## IEM Project Structure (39 tracks)
+## IEM Project Structure (46 tracks total)
 
-**Inputs (28 tracks):**
+**Inputs (28 audio tracks + 4 folders):**
 
-- MICS folder (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
-- STEMS folder (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
-- TECH folder (4): HAND1/HAND2/HAND3/ENGINEER mic
+- INPUTS folder
+  - MICS folder (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
+  - STEMS folder (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
+  - TECH folder (4): HAND1/HAND2/HAND3/ENGINEER mic
 
-**Outputs (11 tracks):**
+**Outputs (11 audio tracks + 3 folders):**
 
-- BAND folder (9): One per band member (stereo to Dante TX 3-20)
-- TECH folder (2): ENGINEER inear (solo bus), TRANSLATOR (HAND1 only, mono)
+- OUTPUTS folder
+  - BAND folder (9): One per band member (stereo to Dante TX 3-20)
+  - TECH folder (2): ENGINEER inear (solo bus), TRANSLATOR (HAND1 only, mono)
 
 **Routing:**
 
-- 252 sends: All 28 inputs → all 9 band outputs
-- ENGINEER receives REAPER solo bus
+- 253 sends total: 252 band sends (28 inputs × 9 band outputs) + 1 TRANSLATOR send
+- ENGINEER receives REAPER solo bus (master send)
 - TRANSLATOR receives only HAND1 mic
+
+**Track Colors:**
+
+- Gray: Folder tracks
+- Orange: Microphones
+- Green: Stems
+- Purple: Tech inputs (HAND mics)
+- Blue: Band outputs (inear)
+- Red: Tech outputs (ENGINEER, TRANSLATOR)
 
 ## Web Mixer Interface
 
@@ -113,20 +124,32 @@ Examples:
 
 Controls: Meter, Fader, Pan, Mute per channel. Stereo stems linked.
 
-## Setup New Project
+## Adding Tracks/Sends
 
-Run `setup_iem_project.lua` ReaScript in REAPER to create full project structure.
+**PREFERRED METHOD: Edit RPP file directly**
 
-**To deploy and register:**
+The RPP file is plain text. To add tracks without Lua scripts:
 
-```bash
-./scripts/deploy.sh  # Deploys scripts and web files
+1. Save project in REAPER: `curl "http://iem.lan:8080/_/40026"`
+2. Edit RPP via SSH or pull to dev machine
+3. Add `<TRACK>` blocks and `<AUXRECV>` sends
+4. Reload in REAPER: `curl "http://iem.lan:8080/_/40025"` (File: Open project)
 
-# Register in REAPER (one time - needs restart):
-ssh newlevel@iem.lan "echo SCR 4 0 _RS_REAPERIEM_SETUP \"IEM Project Setup\" Scripts/reaperiem/setup_iem_project.lua >> \"C:/Users/newlevel/AppData/Roaming/REAPER/reaper-kb.ini\""
+**Example track block:**
+
+```
+<TRACK {GUID-HERE}
+  NAME "NEW mic"
+  VOLPAN 1 0 -1 -1 1
+  MUTESOLO 0 0 0
+  NCHAN 2
+>
 ```
 
-Then run via Actions menu in REAPER.
+**ALTERNATIVE: Lua ReaScript**
+
+For complex operations (hardware routing, folder hierarchy), use ReaScripts.
+Scripts in `scripts/reascripts/` are deployed via `./scripts/deploy.sh`.
 
 ## How Hardware Routing Works
 
@@ -214,12 +237,12 @@ See user-wide skill `windows-remote-gui` for full details.
 
 ### Take Screenshot of iem.lan Desktop
 
-```bash
-# Create and run screenshot script
-ssh newlevel@iem.lan "mkdir C:\\temp 2>nul & echo Add-Type -AssemblyName System.Windows.Forms,System.Drawing > C:\\temp\\screenshot.ps1 && echo \$b = New-Object System.Drawing.Bitmap([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width,[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height) >> C:\\temp\\screenshot.ps1 && echo [System.Drawing.Graphics]::FromImage(\$b).CopyFromScreen(0,0,0,0,\$b.Size) >> C:\\temp\\screenshot.ps1 && echo \$b.Save('C:\\temp\\screenshot.png') >> C:\\temp\\screenshot.ps1"
+**WARNING:** This method opens a brief terminal window that may appear in the screenshot.
+For clean screenshots, ask the user to take one manually.
 
-ssh newlevel@iem.lan "schtasks /create /tn Screenshot /tr \"powershell -ExecutionPolicy Bypass -File C:\\temp\\screenshot.ps1\" /sc once /st 00:00 /ru newlevel /it /f && schtasks /run /tn Screenshot && schtasks /delete /tn Screenshot /f"
+```bash
+# Screenshot script should already exist from first run
+ssh newlevel@iem.lan "schtasks /create /tn Screenshot /tr \"powershell -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\\temp\\screenshot.ps1\" /sc once /st 00:00 /ru newlevel /it /f && schtasks /run /tn Screenshot && schtasks /delete /tn Screenshot /f"
 
 sleep 2 && scp newlevel@iem.lan:C:/temp/screenshot.png /tmp/iem_screenshot.png
-# Then use Read tool on /tmp/iem_screenshot.png to view
 ```
