@@ -1,0 +1,20 @@
+# REAPER connection configuration
+# Copy to reaper_config.yaml and fill in values
+
+reaper:
+  host: "iem.lan"
+  port: 8080
+  # Optional HTTP Basic Auth (if enabled in REAPER)
+  # username: ""
+  # password: ""
+
+ssh:
+  host: "iem.lan"
+  username: "newlevel"
+  # Use SSH key authentication (recommended)
+  key_path: "~/.ssh/id_rsa"
+  # Or password (not recommended, use key instead)
+  # password: ""
+
+  # Git repository path on Windows
+  repo_path: "C:\\Users\\newlevel\\Documents\\reaperiem"

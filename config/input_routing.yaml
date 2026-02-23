@@ -1,0 +1,7 @@
+# Input track configuration
+# Maps Dante inputs to REAPER tracks
+
+input_tracks:
+  - name: "MAREK mic"
+    dante_input: 9
+    default_level_db: 0.0

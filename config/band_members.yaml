@@ -1,0 +1,9 @@
+# Band member configuration for IEM routing
+# Each member gets a stereo output pair for their in-ears
+
+band_members:
+  - id: 1
+    name: "Marek"
+    output_track_name: "MAREK inear"
+    dante_output_L: 25
+    dante_output_R: 26
