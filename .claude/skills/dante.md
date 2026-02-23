@@ -114,26 +114,26 @@ netaudio config --device-name <FOH_NAME> ...
 
 | Zone   | TX Channels | Purpose                   |
 | ------ | ----------- | ------------------------- |
-| Marker | 1-2         | `01 ---INEARS---`         |
+| Marker | 1-2         | `---INEARS---`            |
 | Band   | 3-20        | Band member inear outputs |
 | Gap    | 21-31       | Future band growth        |
-| Marker | 32          | `32 ---TECH---`           |
+| Marker | 32          | `---TECH---`              |
 | Tech   | 33-35       | ENGINEER, TRANSLATOR      |
 | Spare  | 36-128      | Future expansion          |
 
 | Zone   | RX Channels | Purpose                   |
 | ------ | ----------- | ------------------------- |
-| Marker | 1           | `01 ---MICS---`           |
+| Marker | 1           | `---MICS---`              |
 | Band   | 3-12        | Band member mics          |
 | Gap    | 13-19       | Future band growth        |
-| Marker | 20          | `20 ---STEMS---`          |
+| Marker | 20          | `---STEMS---`             |
 | Stems  | 21-34       | DRUMS, BASS, INST, etc.   |
 | Gap    | 35-47       | Future stems              |
-| Marker | 48          | `48 ---TECH---`           |
+| Marker | 48          | `---TECH---`              |
 | Tech   | 49-55       | HAND mics, ENGINEER, SYNC |
 | Spare  | 56-128      | Future expansion          |
 
-**Zone Markers:** Use `## ---ZONE---` format on spare channels to label zones in Dante Controller.
+**Zone Markers:** Use `---ZONE---` format (no numbers) on spare channels to label zones in Dante Controller.
 
 ## Band Member Channel Mappings
 
