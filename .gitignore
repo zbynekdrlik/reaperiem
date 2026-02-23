@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# REAPER
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.aif
+*.aiff
+peaks/
+*.reapeaks
+*.RPP-bak
+*.RPP-UNDO
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Config with secrets
+config/reaper_config.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
