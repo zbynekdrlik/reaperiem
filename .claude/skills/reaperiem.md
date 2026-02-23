@@ -17,19 +17,34 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
                         → SSH      → Git/file operations on iem.lan
 ```
 
+## ⚠️ CRITICAL: Git Workflow (ENFORCED BY HOOKS)
+
+**YOU ARE ON DEV MACHINE. Git hooks enforce these rules:**
+
+| Action           | Dev Machine | iem.lan    |
+| ---------------- | ----------- | ---------- |
+| Edit/commit CODE | ✅ ALLOWED  | ❌ BLOCKED |
+| Edit/commit RPP  | ❌ BLOCKED  | ✅ ALLOWED |
+
+**Deploy code:** `./scripts/deploy.sh`
+**Check status:** `./scripts/deploy.sh --status`
+
 ## NEVER Do These
 
-1. **NEVER suggest editing RPP files to change routing** - Use MCP tools instead
-2. **NEVER ask user to manually restart REAPER** - Use SSH to restart if needed
-3. **NEVER ask user to manually register scripts** - Edit `reaper-kb.ini` directly
-4. **NEVER ask user for manual work** - Automate everything via SSH/MCP
+1. **NEVER `git add projects/*.RPP`** on dev machine - Hook will reject
+2. **NEVER edit code on iem.lan** - Hook will reject commits
+3. **NEVER use manual SCP/rsync** - Use `./scripts/deploy.sh`
+4. **NEVER suggest editing RPP files to change routing** - Use MCP tools instead
+5. **NEVER ask user to manually restart REAPER** - Use SSH to restart if needed
+6. **NEVER ask user for manual work** - Automate everything via SSH/MCP
 
 ## ALWAYS Do These
 
-1. **Use MCP tools** for all REAPER operations
-2. **Use SSH** for file operations on iem.lan
-3. **Update CLAUDE.md** when adding new features
-4. **Commit changes** to track all modifications
+1. **Use `./scripts/deploy.sh`** to deploy code to iem.lan
+2. **Use MCP tools** for all REAPER operations
+3. **Use SSH** for file operations on iem.lan
+4. **Update CLAUDE.md** when adding new features
+5. **Commit and deploy** to track all modifications
 
 ## Available MCP Tools
 

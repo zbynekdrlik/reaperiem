@@ -1,5 +1,42 @@
 # REAPER IEM Mixing System
 
+## ⚠️ CRITICAL: Git Workflow Rules
+
+**READ THIS FIRST - ENFORCED BY GIT HOOKS**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  THIS IS DEV MACHINE - You can ONLY commit CODE here        │
+│                                                             │
+│  ✅ ALLOWED: mcp/*, web/*, scripts/*, config/*, *.py, *.md  │
+│  ❌ BLOCKED: projects/*.RPP (git hook will reject)          │
+│                                                             │
+│  To deploy code to iem.lan: ./scripts/deploy.sh             │
+│  To check status:           ./scripts/deploy.sh --status    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**File Ownership (ENFORCED):**
+| Files | Edit On | Commit On | Hook Blocks |
+|-------|---------|-----------|-------------|
+| Code (_.py, _.html, _.lua) | Dev machine | Dev machine | iem.lan |
+| REAPER projects (_.RPP) | iem.lan (REAPER) | iem.lan | Dev machine |
+
+**NEVER DO:**
+
+- ❌ `git add projects/*.RPP` on dev machine (hook blocks it)
+- ❌ Edit code files on iem.lan (hook blocks commits)
+- ❌ Manual SCP/rsync to sync files (use deploy.sh)
+- ❌ Direct push from iem.lan for code changes
+
+**ALWAYS DO:**
+
+- ✅ Use `./scripts/deploy.sh` to deploy code
+- ✅ Let REAPER save projects on iem.lan, commit there
+- ✅ Pull on dev machine if you need latest RPP: `git pull`
+
+---
+
 ## Project Overview
 
 MCP server for personal monitor mixing using REAPER's HTTP Web API for a church band.
