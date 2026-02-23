@@ -13,6 +13,7 @@ from .tools import mix
 from .tools import git
 from .tools import band
 from .tools import routing
+from .tools import presets
 
 mcp = FastMCP(
     "REAPER IEM Mixer",
@@ -291,6 +292,49 @@ async def set_hardware_output(
     return await routing.set_hardware_output(
         client, track_index, channel_l, channel_r, config.action_set_hardware_output
     )
+
+
+@mcp.tool
+async def save_preset(member_name: str, preset_name: str) -> dict[str, Any]:
+    """Save current mix state as a preset for a band member.
+
+    Args:
+        member_name: Band member name (e.g., "marek")
+        preset_name: Preset name (e.g., "default", "rehearsal", "live")
+
+    Returns:
+        Status dict with success/error message
+    """
+    client = get_reaper_client()
+    return await presets.save_preset(client, member_name, preset_name)
+
+
+@mcp.tool
+async def load_preset(member_name: str, preset_name: str) -> dict[str, Any]:
+    """Load and apply a saved preset for a band member.
+
+    Args:
+        member_name: Band member name (e.g., "marek")
+        preset_name: Preset name to load
+
+    Returns:
+        Status dict with success/error message
+    """
+    client = get_reaper_client()
+    return await presets.load_preset(client, member_name, preset_name)
+
+
+@mcp.tool
+async def list_presets(member_name: str) -> dict[str, Any]:
+    """List available presets for a band member.
+
+    Args:
+        member_name: Band member name
+
+    Returns:
+        Dict with list of preset names
+    """
+    return await presets.list_presets(member_name)
 
 
 if __name__ == "__main__":
