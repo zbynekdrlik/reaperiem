@@ -207,6 +207,23 @@ async def adjust_send_level(
 
 
 @mcp.tool
+async def get_track_meter(track_index: int) -> dict[str, Any]:
+    """Get real-time meter levels for a track.
+
+    Returns peak and RMS levels in dB for both left and right channels.
+    Useful for displaying input level meters in the web interface.
+
+    Args:
+        track_index: Track number (1-based)
+
+    Returns:
+        Dict with peak_l, peak_r, rms_l, rms_r (dB), and track_index
+    """
+    client = get_reaper_client()
+    return await mix.get_track_meter(client, track_index)
+
+
+@mcp.tool
 def git_status() -> str:
     """Show git status of REAPER project on iem.lan.
 

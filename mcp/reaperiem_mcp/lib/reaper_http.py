@@ -121,6 +121,14 @@ class ReaperHTTPClient:
         result = await self.send_command(f"EXTSTATE/{section}/{key}")
         return result.get("EXTSTATE")
 
+    async def get_track_meter(self, index: int) -> dict[str, Any]:
+        """Get track meter data by index (1-based).
+
+        Returns the full track response which includes meter values
+        at indices 12 (peak_l) and 13 (peak_r) in the TRACK array.
+        """
+        return await self.send_command(f"TRACK/{index}")
+
     async def trigger_action(self, action_id: str | int) -> None:
         """Trigger a REAPER action by command ID.
 

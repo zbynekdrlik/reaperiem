@@ -1,5 +1,6 @@
 """MCP tools for send/mix control - the core of IEM mixing."""
 
+import math
 from typing import Any
 
 from ..lib.reaper_http import ReaperHTTPClient
@@ -89,6 +90,67 @@ async def adjust_send_level(
     return f"Send adjusted by {adjustment_db}dB"
 
 
+async def get_track_meter(
+    client: ReaperHTTPClient,
+    track_index: int,
+) -> dict[str, Any]:
+    """Get real-time meter levels for a track.
+
+    Returns peak and RMS levels in dB for both channels.
+    REAPER's TRACK response includes meter values at indices 12-13
+    of the tab-separated TRACK array (peak_l, peak_r as linear 0.0-1.0).
+
+    Args:
+        client: REAPER HTTP client
+        track_index: Track number (1-based)
+
+    Returns:
+        Dict with peak_l, peak_r, rms_l, rms_r (all in dB), and track_index
+
+    Raises:
+        ValueError: If track does not exist
+    """
+    result = await client.send_command(f"TRACK/{track_index}")
+
+    track_data = result.get("TRACK")
+    if track_data is None:
+        raise ValueError(f"Track {track_index} not found")
+
+    # REAPER TRACK response array indices:
+    # [0]=index, [1]=name, [2]=flags, [3]=vol, [4]=pan, ...
+    # [12]=peak_l (linear), [13]=peak_r (linear)
+    # Meter values are linear 0.0-1.0; convert to dB
+
+    # Extract peak values from the response
+    peak_l_linear = 0.0
+    peak_r_linear = 0.0
+
+    if isinstance(track_data, list) and len(track_data) > 12:
+        peak_l_linear = float(track_data[12])
+        if len(track_data) > 13:
+            peak_r_linear = float(track_data[13])
+        else:
+            # Mono track: use same value for both channels
+            peak_r_linear = peak_l_linear
+
+    peak_l_db = linear_to_db(peak_l_linear)
+    peak_r_db = linear_to_db(peak_r_linear)
+
+    # RMS approximation from peak: RMS ~= peak * 0.707 (-3dB) for typical audio
+    # This is a reasonable approximation when REAPER doesn't expose separate RMS
+    rms_factor = 1.0 / math.sqrt(2)  # 0.7071...
+    rms_l_db = linear_to_db(peak_l_linear * rms_factor)
+    rms_r_db = linear_to_db(peak_r_linear * rms_factor)
+
+    return {
+        "track_index": track_index,
+        "peak_l": peak_l_db,
+        "peak_r": peak_r_db,
+        "rms_l": rms_l_db,
+        "rms_r": rms_r_db,
+    }
+
+
 def db_to_linear(db: float) -> float:
     """Convert dB to linear gain."""
     return 10 ** (db / 20)
@@ -96,7 +158,6 @@ def db_to_linear(db: float) -> float:
 
 def linear_to_db(linear: float) -> float:
     """Convert linear gain to dB."""
-    import math
     if linear <= 0:
         return float("-inf")
     return 20 * math.log10(linear)
