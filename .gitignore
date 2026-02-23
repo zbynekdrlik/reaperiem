@@ -33,5 +33,6 @@ config/reaper_config.yaml
 .DS_Store
 Thumbs.db
 
-# Claude
-.claude/
+# Claude (keep skills, ignore plans and logs)
+.claude/plans/
+.claude/command-history.log

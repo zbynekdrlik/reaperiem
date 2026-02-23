@@ -94,3 +94,21 @@ class ReaperHTTPClient:
         """Set track solo state."""
         value = 1 if solo else 0
         await self.send_command(f"SET/TRACK/{index}/SOLO/{value}")
+
+    async def set_extstate(self, section: str, key: str, value: str) -> None:
+        """Set ExtState value that ReaScripts can read."""
+        await self.send_command(f"SET/EXTSTATE/{section}/{key}/{value}")
+
+    async def get_extstate(self, section: str, key: str) -> str | None:
+        """Get ExtState value."""
+        result = await self.send_command(f"EXTSTATE/{section}/{key}")
+        return result.get("EXTSTATE")
+
+    async def trigger_action(self, action_id: str | int) -> None:
+        """Trigger a REAPER action by command ID.
+
+        action_id can be:
+        - Integer command ID (e.g., 1007 for play)
+        - String command ID for registered scripts (e.g., "_RSxxxx...")
+        """
+        await self.send_command(str(action_id))

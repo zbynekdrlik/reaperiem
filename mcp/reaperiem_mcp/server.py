@@ -12,6 +12,8 @@ from .tools import tracks
 from .tools import mix
 from .tools import git
 from .tools import band
+from .tools import routing
+from .tools import presets
 
 mcp = FastMCP(
     "REAPER IEM Mixer",
@@ -66,8 +68,8 @@ def get_ssh_client() -> SSHGitClient:
 
 def get_config_dir() -> Path:
     """Get config directory path."""
-    # Look relative to this file or use environment
-    return Path(__file__).parent.parent.parent.parent / "config"
+    # Look relative to this file: server.py -> reaperiem_mcp -> mcp -> reaperiem -> config
+    return Path(__file__).parent.parent.parent / "config"
 
 
 @mcp.tool
@@ -263,6 +265,76 @@ def add_input_track(
     return band.add_input_track(
         get_config_dir(), name, dante_input, default_level_db
     )
+
+
+@mcp.tool
+async def set_hardware_output(
+    track_index: int, channel_l: int, channel_r: int
+) -> str:
+    """Set hardware output routing for a track (LIVE, no restart needed).
+
+    Routes a track's output to specific Dante hardware output channels.
+    This runs a ReaScript inside REAPER to configure the routing.
+
+    Args:
+        track_index: Track number (1-based)
+        channel_l: Left Dante output channel (1-based, e.g., 25)
+        channel_r: Right Dante output channel (1-based, e.g., 26)
+
+    Returns:
+        Result message confirming the routing change
+    """
+    config = get_config()
+    if not config.action_set_hardware_output:
+        return "Error: action_set_hardware_output not configured in reaper_config.yaml"
+
+    client = get_reaper_client()
+    return await routing.set_hardware_output(
+        client, track_index, channel_l, channel_r, config.action_set_hardware_output
+    )
+
+
+@mcp.tool
+async def save_preset(member_name: str, preset_name: str) -> dict[str, Any]:
+    """Save current mix state as a preset for a band member.
+
+    Args:
+        member_name: Band member name (e.g., "marek")
+        preset_name: Preset name (e.g., "default", "rehearsal", "live")
+
+    Returns:
+        Status dict with success/error message
+    """
+    client = get_reaper_client()
+    return await presets.save_preset(client, member_name, preset_name)
+
+
+@mcp.tool
+async def load_preset(member_name: str, preset_name: str) -> dict[str, Any]:
+    """Load and apply a saved preset for a band member.
+
+    Args:
+        member_name: Band member name (e.g., "marek")
+        preset_name: Preset name to load
+
+    Returns:
+        Status dict with success/error message
+    """
+    client = get_reaper_client()
+    return await presets.load_preset(client, member_name, preset_name)
+
+
+@mcp.tool
+async def list_presets(member_name: str) -> dict[str, Any]:
+    """List available presets for a band member.
+
+    Args:
+        member_name: Band member name
+
+    Returns:
+        Dict with list of preset names
+    """
+    return await presets.list_presets(member_name)
 
 
 if __name__ == "__main__":

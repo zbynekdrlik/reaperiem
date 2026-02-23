@@ -25,11 +25,15 @@ class Config:
     ssh_password: str | None = None
     ssh_port: int = 22
 
+    # ReaScript action IDs
+    action_set_hardware_output: str = ""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
         """Create Config from dictionary."""
         reaper = data.get("reaper", {})
         ssh = data.get("ssh", {})
+        actions = data.get("actions", {})
 
         return cls(
             reaper_host=reaper.get("host", "localhost"),
@@ -42,6 +46,7 @@ class Config:
             ssh_key_path=ssh.get("key_path"),
             ssh_password=ssh.get("password"),
             ssh_port=ssh.get("port", 22),
+            action_set_hardware_output=actions.get("set_hardware_output", ""),
         )
 
     @classmethod

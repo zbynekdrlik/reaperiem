@@ -11,9 +11,19 @@ async def list_tracks(client: ReaperHTTPClient) -> list[dict[str, Any]]:
     tracks = []
     for i in range(1, count + 1):
         track_data = await client.get_track(i)
+        # Parse TRACK response: [index, name, flags, vol, pan, ...]
+        # Flags: bit 3 (0x08) = muted, bits 4-5 (0x30) = solo
+        track_info = track_data.get("TRACK", [])
+        flags = int(track_info[2]) if len(track_info) > 2 else 0
         tracks.append({
             "index": i,
-            "data": track_data,
+            "name": track_info[1] if len(track_info) > 1 else f"Track {i}",
+            "volume": float(track_info[3]) if len(track_info) > 3 else 1.0,
+            "pan": float(track_info[4]) if len(track_info) > 4 else 0.0,
+            "muted": bool(flags & 0x08),
+            "soloed": bool(flags & 0x30),
+            "send_count": int(track_info[9]) if len(track_info) > 9 else 0,
+            "recv_count": int(track_info[10]) if len(track_info) > 10 else 0,
         })
     return tracks
 
