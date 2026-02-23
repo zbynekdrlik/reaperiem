@@ -85,6 +85,14 @@ class ReaperHTTPClient:
             f"SET/TRACK/{track_index}/SEND/{send_index}/VOL/{volume}"
         )
 
+    async def set_send_pan(
+        self, track_index: int, send_index: int, pan: float
+    ) -> None:
+        """Set send pan position. 0.0 = left, 0.5 = center, 1.0 = right."""
+        await self.send_command(
+            f"SET/TRACK/{track_index}/SEND/{send_index}/PAN/{pan}"
+        )
+
     async def set_track_mute(self, index: int, mute: bool) -> None:
         """Set track mute state."""
         value = 1 if mute else 0

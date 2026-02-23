@@ -154,6 +154,24 @@ async def set_send_level(
 
 
 @mcp.tool
+async def set_send_pan(
+    track_index: int, send_index: int, pan: float
+) -> str:
+    """Set send pan position for stereo IEM mix.
+
+    Controls the left/right position of an input source in a band
+    member's stereo in-ear mix.
+
+    Args:
+        track_index: Source track number (1-based)
+        send_index: Send/output bus number (1-based)
+        pan: Pan position from -1.0 (hard left) to 1.0 (hard right), 0.0 = center
+    """
+    client = get_reaper_client()
+    return await mix.set_send_pan(client, track_index, send_index, pan)
+
+
+@mcp.tool
 async def adjust_send_level(
     track_index: int, send_index: int, adjustment_db: float
 ) -> str:

@@ -22,6 +22,33 @@ async def set_send_level(
     return f"Send from track {track_index} to send {send_index} set to {level_db}dB"
 
 
+async def set_send_pan(
+    client: ReaperHTTPClient,
+    track_index: int,
+    send_index: int,
+    pan: float,
+) -> str:
+    """Set send pan position for stereo IEM mix.
+
+    Allows band members to position audio sources left/right
+    in their stereo in-ear mix.
+
+    Args:
+        client: REAPER HTTP client
+        track_index: Source track number (1-based)
+        send_index: Send/output bus number
+        pan: Pan position from -1.0 (left) to 1.0 (right), 0.0 = center
+    """
+    if pan < -1.0 or pan > 1.0:
+        raise ValueError(f"Pan must be between -1.0 and 1.0, got {pan}")
+
+    # Convert from user range (-1.0 to 1.0) to REAPER range (0.0 to 1.0)
+    reaper_pan = (pan + 1.0) / 2.0
+
+    await client.set_send_pan(track_index, send_index, reaper_pan)
+    return f"Send from track {track_index} to send {send_index} pan set to {pan}"
+
+
 async def adjust_send_level(
     client: ReaperHTTPClient,
     track_index: int,
