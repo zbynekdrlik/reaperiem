@@ -34,6 +34,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ## Available MCP Tools
 
 ### Track Control (LIVE)
+
 - `list_tracks` - List all tracks
 - `get_track(index)` - Get track details
 - `set_track_volume(index, volume_db)`
@@ -41,19 +42,23 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 - `solo_track(index, solo)`
 
 ### Send Control (LIVE)
+
 - `set_send_level(track_index, send_index, level_db)`
 - `adjust_send_level(track_index, send_index, adjustment_db)`
 
 ### Hardware Routing (LIVE)
+
 - `set_hardware_output(track_index, channel_l, channel_r)` - Route to Dante outputs
 
 ### Band Configuration
+
 - `list_band_members`
 - `add_band_member(name, dante_output_l, dante_output_r)`
 - `list_input_tracks`
 - `add_input_track(name, dante_input, default_level_db)`
 
 ### Git Operations (on iem.lan)
+
 - `git_status`
 - `git_commit(message)`
 - `git_push`
@@ -85,12 +90,14 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ## File Locations
 
 ### On Development Machine
+
 - `/home/newlevel/devel/reaperiem/` - Project root
 - `mcp/reaperiem_mcp/` - MCP server
 - `config/` - Configuration YAML files
 - `scripts/reascripts/` - ReaScripts to deploy
 
 ### On iem.lan (Windows)
+
 - `C:\Users\newlevel\Documents\reaperiem\` - Git repo with REAPER project
 - `C:\Users\newlevel\AppData\Roaming\REAPER\` - REAPER config
 - `...\REAPER\Scripts\reaperiem\` - Deployed ReaScripts
@@ -105,20 +112,24 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ## Troubleshooting
 
 ### MCP not responding
+
 ```
 /mcp  # Restart MCP in Claude Code
 ```
 
 ### REAPER not responding
+
 ```bash
 curl http://iem.lan:8080/_/TRANSPORT
 # If fails, restart REAPER via SSH
 ```
 
 ### New action not working
+
 REAPER needs restart to load new `reaper-kb.ini` entries.
 
 ### Start/Restart REAPER (CORRECT method)
+
 ```bash
 # Kill existing
 ssh newlevel@iem.lan "taskkill /IM reaper.exe /F 2>nul"
@@ -131,3 +142,15 @@ ssh newlevel@iem.lan "schtasks /create /tn StartREAPER /tr \"\\\"C:\\Program Fil
 **Why schtasks?** SSH runs in session 0 (service) which can't launch GUI apps. `schtasks /ru newlevel /it` runs in the desktop session.
 
 See user-wide skill `windows-remote-gui` for full details.
+
+### Take Screenshot of iem.lan Desktop
+
+```bash
+# Create and run screenshot script
+ssh newlevel@iem.lan "mkdir C:\\temp 2>nul & echo Add-Type -AssemblyName System.Windows.Forms,System.Drawing > C:\\temp\\screenshot.ps1 && echo \$b = New-Object System.Drawing.Bitmap([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width,[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height) >> C:\\temp\\screenshot.ps1 && echo [System.Drawing.Graphics]::FromImage(\$b).CopyFromScreen(0,0,0,0,\$b.Size) >> C:\\temp\\screenshot.ps1 && echo \$b.Save('C:\\temp\\screenshot.png') >> C:\\temp\\screenshot.ps1"
+
+ssh newlevel@iem.lan "schtasks /create /tn Screenshot /tr \"powershell -ExecutionPolicy Bypass -File C:\\temp\\screenshot.ps1\" /sc once /st 00:00 /ru newlevel /it /f && schtasks /run /tn Screenshot && schtasks /delete /tn Screenshot /f"
+
+sleep 2 && scp newlevel@iem.lan:C:/temp/screenshot.png /tmp/iem_screenshot.png
+# Then use Read tool on /tmp/iem_screenshot.png to view
+```
