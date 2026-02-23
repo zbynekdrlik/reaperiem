@@ -1,9 +1,85 @@
 # Band member configuration for IEM routing
 # Each member gets a stereo output pair for their in-ears
+# Zone: Channels 3-32 (Band), 33-48 (Tech)
 
 band_members:
+  # Stable members (always present)
   - id: 1
+    name: "Petka"
+    output_track_name: "PETKA inear"
+    dante_output_L: 3
+    dante_output_R: 4
+    stable: true
+
+  - id: 2
+    name: "Stevo"
+    output_track_name: "STEVO inear"
+    dante_output_L: 5
+    dante_output_R: 6
+    stable: true
+
+  - id: 3
     name: "Marek"
     output_track_name: "MAREK inear"
-    dante_output_L: 25
-    dante_output_R: 26
+    dante_output_L: 7
+    dante_output_R: 8
+    stable: true
+
+  - id: 4
+    name: "Zuzka"
+    output_track_name: "ZUZKA inear"
+    dante_output_L: 9
+    dante_output_R: 10
+    stable: true
+
+  - id: 5
+    name: "Tina"
+    output_track_name: "TINA inear"
+    dante_output_L: 11
+    dante_output_R: 12
+    stable: true
+
+  - id: 6
+    name: "Mirec"
+    output_track_name: "MIREC inear"
+    dante_output_L: 13
+    dante_output_R: 14
+    stable: true
+
+  - id: 7
+    name: "Alex"
+    output_track_name: "ALEX inear"
+    dante_output_L: 15
+    dante_output_R: 16
+    stable: true
+
+  # Irregular members (sometimes present)
+  - id: 8
+    name: "Patrika"
+    output_track_name: "PATRIKA inear"
+    dante_output_L: 17
+    dante_output_R: 18
+    stable: false
+
+  - id: 9
+    name: "Ani"
+    output_track_name: "ANI inear"
+    dante_output_L: 19
+    dante_output_R: 20
+    stable: false
+
+# Tech roles (separate zone)
+tech_roles:
+  - id: 101
+    name: "Engineer"
+    output_track_name: "ENGINEER inear"
+    dante_output_L: 33
+    dante_output_R: 34
+    mono: false
+
+  - id: 102
+    name: "Translator"
+    output_track_name: "TRANSLATOR inear"
+    dante_output_L: 35
+    dante_output_R: null
+    mono: true
