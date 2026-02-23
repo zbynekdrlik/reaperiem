@@ -93,6 +93,48 @@ netaudio config --device-name <FOH_NAME> ...
 
 **Note:** Only powered-on devices appear in `netaudio device list`. Device availability varies.
 
+## Channel Naming Convention
+
+**CRITICAL: Number placement differs by channel type for Dante Controller matrix alignment!**
+
+| Type         | Format           | Example            | Why             |
+| ------------ | ---------------- | ------------------ | --------------- |
+| TX (outputs) | `NAME type L ##` | `PETKA inear L 03` | Number at END   |
+| RX (inputs)  | `## NAME type`   | `03 ZUZKA mic`     | Number at START |
+
+**Naming Rules:**
+
+- First word UPPERCASE (name/source)
+- Second word lowercase (type: mic, inear, stem)
+- L/R suffix for stereo pairs (L on odd channel for Ableton)
+- Two-digit channel number with space separator
+- Mono channels omit L/R suffix
+
+**Zone Structure (IEM Device):**
+
+| Zone   | TX Channels | Purpose                   |
+| ------ | ----------- | ------------------------- |
+| Marker | 1-2         | `01 ---INEARS---`         |
+| Band   | 3-20        | Band member inear outputs |
+| Gap    | 21-31       | Future band growth        |
+| Marker | 32          | `32 ---TECH---`           |
+| Tech   | 33-35       | ENGINEER, TRANSLATOR      |
+| Spare  | 36-128      | Future expansion          |
+
+| Zone   | RX Channels | Purpose                   |
+| ------ | ----------- | ------------------------- |
+| Marker | 1           | `01 ---MICS---`           |
+| Band   | 3-12        | Band member mics          |
+| Gap    | 13-19       | Future band growth        |
+| Marker | 20          | `20 ---STEMS---`          |
+| Stems  | 21-34       | DRUMS, BASS, INST, etc.   |
+| Gap    | 35-47       | Future stems              |
+| Marker | 48          | `48 ---TECH---`           |
+| Tech   | 49-55       | HAND mics, ENGINEER, SYNC |
+| Spare  | 56-128      | Future expansion          |
+
+**Zone Markers:** Use `## ---ZONE---` format on spare channels to label zones in Dante Controller.
+
 ## Band Member Channel Mappings
 
 See `config/band_members.yaml` for current assignments.
@@ -104,15 +146,17 @@ Run `netaudio channel list --device-name <IEM_DEVICE>` to see actual channel nam
 # List all online Dante devices
 netaudio device list
 
-# List transmit channels from a device
+# List all channels from a device (shows both TX and RX)
 netaudio channel list --device-name <DEVICE_NAME>
 
 # See JSON output for scripting
 netaudio channel list --device-name <DEVICE_NAME> --json
 
-# Rename IEM output channel (SAFE - IEM device only)
-# First get IEM device name from: netaudio device list
-netaudio config --device-name <IEM_DEVICE_NAME> --set-channel-name 25 "MAREK L"
+# Rename TX (output) channel - number at END
+netaudio config --device-name iem-yamaha --channel-type tx --channel-number 7 --set-channel-name "MAREK inear L 07"
+
+# Rename RX (input) channel - number at START
+netaudio config --device-name iem-yamaha --channel-type rx --channel-number 3 --set-channel-name "03 MAREK mic"
 ```
 
 **Workflow:** Always run `netaudio device list` first to get current device names.
