@@ -16,7 +16,7 @@ def load_band_members(config_dir: Path | str) -> list[dict[str, Any]]:
 
 def load_input_tracks(config_dir: Path | str) -> list[dict[str, Any]]:
     """Load input track routing from YAML config."""
-    path = Path(config_dir) / "input_routing.yaml"
+    path = Path(config_dir) / "input_tracks.yaml"
     with path.open() as f:
         data = yaml.safe_load(f)
     return data.get("input_tracks", [])
@@ -35,7 +35,7 @@ def save_input_tracks(
     config_dir: Path | str, tracks: list[dict[str, Any]]
 ) -> None:
     """Save input tracks to YAML config."""
-    path = Path(config_dir) / "input_routing.yaml"
+    path = Path(config_dir) / "input_tracks.yaml"
     with path.open("w") as f:
         yaml.safe_dump({"input_tracks": tracks}, f, default_flow_style=False)
 

@@ -1,0 +1,173 @@
+# Input track configuration for IEM mixing system
+# Maps Dante RX channels to REAPER input tracks
+#
+# Categories:
+#   mics   - Individual microphones and instruments (Dante RX 03-12)
+#   stems  - Stereo submixes from FOH (Dante RX 21-34)
+#   tech   - Handheld mics and engineer (Dante RX 49-52)
+#
+# Dante RX channels are 1-indexed as labeled on the network.
+# REAPER ASIO channels use the same numbering (1:1 mapping via Accelerator).
+
+input_tracks:
+  # ── MICS (10 tracks) ──────────────────────────────────────────────
+  # Individual microphones and instruments from stagebox
+
+  - name: "PETKA mic"
+    dante_input: 3
+    category: mics
+    default_level_db: 0.0
+
+  - name: "STEVO mic"
+    dante_input: 4
+    category: mics
+    default_level_db: 0.0
+
+  - name: "MAREK mic"
+    dante_input: 5
+    category: mics
+    default_level_db: 0.0
+
+  - name: "ZUZKA mic"
+    dante_input: 6
+    category: mics
+    default_level_db: 0.0
+
+  - name: "ZUZKA gtr"
+    dante_input: 7
+    category: mics
+    default_level_db: 0.0
+
+  - name: "TINA mic"
+    dante_input: 8
+    category: mics
+    default_level_db: 0.0
+
+  - name: "MIREC mic"
+    dante_input: 9
+    category: mics
+    default_level_db: 0.0
+
+  - name: "ALEX mic"
+    dante_input: 10
+    category: mics
+    default_level_db: 0.0
+
+  - name: "PATRIKA mic"
+    dante_input: 11
+    category: mics
+    default_level_db: 0.0
+
+  - name: "ANI mic"
+    dante_input: 12
+    category: mics
+    default_level_db: 0.0
+
+  # ── STEMS (14 tracks) ─────────────────────────────────────────────
+  # Stereo submixes from FOH console
+  # Stereo pairs share a stereo_pair key for linked control
+
+  - name: "DRUMS L"
+    dante_input: 21
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "drums"
+
+  - name: "DRUMS R"
+    dante_input: 22
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "drums"
+
+  - name: "BASS L"
+    dante_input: 23
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "bass"
+
+  - name: "BASS R"
+    dante_input: 24
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "bass"
+
+  - name: "INST L"
+    dante_input: 25
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "inst"
+
+  - name: "INST R"
+    dante_input: 26
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "inst"
+
+  - name: "OTHER L"
+    dante_input: 27
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "other"
+
+  - name: "OTHER R"
+    dante_input: 28
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "other"
+
+  - name: "BGVS L"
+    dante_input: 29
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "bgvs"
+
+  - name: "BGVS R"
+    dante_input: 30
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "bgvs"
+
+  - name: "CLICK"
+    dante_input: 31
+    category: stems
+    default_level_db: 0.0
+
+  - name: "GUIDE"
+    dante_input: 32
+    category: stems
+    default_level_db: 0.0
+
+  - name: "IEMONLY L"
+    dante_input: 33
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "iemonly"
+
+  - name: "IEMONLY R"
+    dante_input: 34
+    category: stems
+    default_level_db: 0.0
+    stereo_pair: "iemonly"
+
+  # ── TECH (4 tracks) ───────────────────────────────────────────────
+  # Handheld microphones and engineer communication
+
+  - name: "HAND1 mic"
+    dante_input: 49
+    category: tech
+    default_level_db: 0.0
+
+  - name: "HAND2 mic"
+    dante_input: 50
+    category: tech
+    default_level_db: 0.0
+
+  - name: "HAND3 mic"
+    dante_input: 51
+    category: tech
+    default_level_db: 0.0
+
+  - name: "ENGINEER mic"
+    dante_input: 52
+    category: tech
+    default_level_db: 0.0
