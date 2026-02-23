@@ -175,18 +175,25 @@ end
 -- ============================================================================
 
 local function main()
-    -- Confirmation dialog
-    local response = reaper.ShowMessageBox(
-        "This will DELETE ALL existing tracks and create the full IEM project structure.\n\n" ..
-        "Tracks: 28 inputs + 11 outputs = 39 tracks\n" ..
-        "Sends: 252 (band) + 1 (translator) = 253 sends\n\n" ..
-        "Continue?",
-        "IEM Project Setup",
-        1  -- OK/Cancel
-    )
-    if response ~= 1 then
-        log("Setup cancelled by user.")
-        return
+    -- Check for auto-confirm flag (set via HTTP API before triggering)
+    local auto_confirm = reaper.GetExtState("reaperiem", "auto_setup")
+    if auto_confirm ~= "1" then
+        -- Confirmation dialog (only when run manually)
+        local response = reaper.ShowMessageBox(
+            "This will DELETE ALL existing tracks and create the full IEM project structure.\n\n" ..
+            "Tracks: 28 inputs + 11 outputs = 39 tracks\n" ..
+            "Sends: 252 (band) + 1 (translator) = 253 sends\n\n" ..
+            "Continue?",
+            "IEM Project Setup",
+            1  -- OK/Cancel
+        )
+        if response ~= 1 then
+            log("Setup cancelled by user.")
+            return
+        end
+    else
+        log("Auto-confirm mode (triggered via API)")
+        reaper.SetExtState("reaperiem", "auto_setup", "0", false)  -- Clear flag
     end
 
     reaper.Undo_BeginBlock()
