@@ -1,5 +1,7 @@
 """FastMCP server for REAPER IEM mixing control."""
 
+from pathlib import Path
+
 from fastmcp import FastMCP
 from typing import Any
 
@@ -9,6 +11,7 @@ from .lib.ssh_client import SSHGitClient
 from .tools import tracks
 from .tools import mix
 from .tools import git
+from .tools import band
 
 mcp = FastMCP(
     "REAPER IEM Mixer",
@@ -59,6 +62,12 @@ def get_ssh_client() -> SSHGitClient:
             port=config.ssh_port,
         )
     return _ssh_client
+
+
+def get_config_dir() -> Path:
+    """Get config directory path."""
+    # Look relative to this file or use environment
+    return Path(__file__).parent.parent.parent.parent / "config"
 
 
 @mcp.tool
@@ -201,6 +210,59 @@ def git_log(count: int = 5) -> str:
     """
     client = get_ssh_client()
     return git.git_log(client, count)
+
+
+@mcp.tool
+def list_band_members() -> list[dict[str, Any]]:
+    """List all band members and their output assignments.
+
+    Shows each member's name, output track name, and Dante output channels.
+    """
+    return band.load_band_members(get_config_dir())
+
+
+@mcp.tool
+def list_input_tracks() -> list[dict[str, Any]]:
+    """List all input track configurations.
+
+    Shows each input's name, Dante input channel, and default level.
+    """
+    return band.load_input_tracks(get_config_dir())
+
+
+@mcp.tool
+def add_band_member(
+    name: str, dante_output_l: int, dante_output_r: int
+) -> dict[str, Any]:
+    """Add a new band member to the configuration.
+
+    Creates an output track assignment with stereo Dante outputs
+    for the member's in-ear mix.
+
+    Args:
+        name: Member's name (will be uppercased for track name)
+        dante_output_l: Left channel Dante output number
+        dante_output_r: Right channel Dante output number
+    """
+    return band.add_band_member(
+        get_config_dir(), name, dante_output_l, dante_output_r
+    )
+
+
+@mcp.tool
+def add_input_track(
+    name: str, dante_input: int, default_level_db: float = 0.0
+) -> dict[str, Any]:
+    """Add a new input track to the configuration.
+
+    Args:
+        name: Track name (convention: "NAME type", e.g., "MAREK mic")
+        dante_input: Dante input channel number
+        default_level_db: Default send level for this input (0.0 = unity)
+    """
+    return band.add_input_track(
+        get_config_dir(), name, dante_input, default_level_db
+    )
 
 
 if __name__ == "__main__":
