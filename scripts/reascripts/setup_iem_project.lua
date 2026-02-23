@@ -1,17 +1,17 @@
 -- IEM Project Setup Script
 -- Creates the complete REAPER project structure for IEM mixing.
 --
--- This script is meant to be run manually inside REAPER on iem.lan.
+-- This script can be run manually OR triggered via HTTP API.
+-- When triggered via API with auto_setup=1, all dialogs are skipped.
+--
 -- It will:
---   1. Clear all existing tracks (with user confirmation)
+--   1. Clear all existing tracks (with user confirmation if manual)
 --   2. Create the full folder hierarchy (INPUTS > MICS/STEMS/TECH, OUTPUTS > BAND/TECH)
 --   3. Create all input tracks with hardware (ASIO/Dante) inputs
 --   4. Create all output tracks with hardware outputs
 --   5. Wire 252 sends (28 inputs x 9 band outputs) plus 1 send for TRANSLATOR
 --   6. Configure ENGINEER inear to receive the solo bus
---   7. Disable master send on all output tracks (so solo doesn't bleed to outputs)
---
--- Timing reference (design doc): 2026-02-23-reaper-iem-system-design.md
+--   7. Disable master send on all output tracks
 
 -- Auto-mode detection (for HTTP API triggering without dialogs)
 local AUTO_MODE = reaper.GetExtState("reaperiem", "auto_setup") == "1"
@@ -22,9 +22,6 @@ end
 -- ============================================================================
 -- CONFIGURATION
 -- ============================================================================
-
--- Input tracks: { name, dante_rx_channel (1-based) }
--- Grouped by folder.
 
 local INPUT_MICS = {
     { name = "PETKA mic",    dante_rx = 3 },
@@ -63,8 +60,6 @@ local INPUT_TECH = {
     { name = "ENGINEER mic", dante_rx = 52 },
 }
 
--- Output tracks: { name, dante_tx_l (1-based), dante_tx_r (1-based or nil for mono) }
-
 local OUTPUT_BAND = {
     { name = "PETKA inear",   dante_tx_l = 3,  dante_tx_r = 4 },
     { name = "STEVO inear",   dante_tx_l = 5,  dante_tx_r = 6 },
@@ -86,65 +81,47 @@ local OUTPUT_TECH = {
 -- HELPERS
 -- ============================================================================
 
--- Log a message to the REAPER console.
 local function log(msg)
     reaper.ShowConsoleMsg(msg .. "\n")
 end
 
--- Create a track at a given 0-based index and set its name.
--- Returns the MediaTrack pointer.
 local function create_track(index, name)
-    reaper.InsertTrackAtIndex(index, false) -- false = no defaults
+    reaper.InsertTrackAtIndex(index, false)
     local track = reaper.GetTrack(0, index)
     reaper.GetSetMediaTrackInfo_String(track, "P_NAME", name, true)
-    -- Disarm recording by default
     reaper.SetMediaTrackInfo_Value(track, "I_RECARM", 0)
     return track
 end
 
--- Make a track a folder parent.
--- folder_mode: 1 = folder start, 0 = normal, 2 = end of folder (last child)
 local function set_folder_depth(track, folder_mode)
     reaper.SetMediaTrackInfo_Value(track, "I_FOLDERDEPTH", folder_mode)
 end
 
--- Set mono hardware input on a track.
--- dante_rx is 1-based channel number.
 local function set_hw_input_mono(track, dante_rx)
-    -- I_RECINPUT: (channel index 0-based) | (mode flags)
-    -- Mode 0 = normal mono input, add 1024 for MIDI, etc.
-    -- For mono input: just the 0-based channel index
-    local rec_input = (dante_rx - 1)  -- 0-based, mono
+    local rec_input = (dante_rx - 1)
     reaper.SetMediaTrackInfo_Value(track, "I_RECINPUT", rec_input)
-    -- Enable record monitoring so input can pass through
     reaper.SetMediaTrackInfo_Value(track, "I_RECMON", 1)
 end
 
--- Remove all existing hardware outputs from a track.
 local function clear_hw_outputs(track)
-    local count = reaper.GetTrackNumSends(track, 1) -- category 1 = hw outputs
+    local count = reaper.GetTrackNumSends(track, 1)
     for i = count - 1, 0, -1 do
         reaper.RemoveTrackSend(track, 1, i)
     end
 end
 
--- Add a stereo hardware output pair.
--- ch_l, ch_r are 1-based channel numbers.
 local function add_hw_output_stereo(track, ch_l, ch_r)
     clear_hw_outputs(track)
-    local hw_idx = reaper.CreateTrackSend(track, nil) -- nil = hw output
+    local hw_idx = reaper.CreateTrackSend(track, nil)
     if hw_idx < 0 then
         log("  ERROR: failed to create hw output for track")
         return
     end
-    -- I_DSTCHAN: 0-based left channel. Stereo is default (no &1024 flag).
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "I_DSTCHAN", ch_l - 1)
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "D_VOL", 1.0)
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "D_PAN", 0.0)
 end
 
--- Add a mono hardware output.
--- ch is a 1-based channel number.
 local function add_hw_output_mono(track, ch)
     clear_hw_outputs(track)
     local hw_idx = reaper.CreateTrackSend(track, nil)
@@ -152,14 +129,11 @@ local function add_hw_output_mono(track, ch)
         log("  ERROR: failed to create mono hw output for track")
         return
     end
-    -- For mono output: set I_DSTCHAN with bit 10 set (&1024) to indicate mono
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "I_DSTCHAN", (ch - 1) + 1024)
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "D_VOL", 1.0)
     reaper.SetTrackSendInfo_Value(track, 1, hw_idx, "D_PAN", 0.0)
 end
 
--- Create a send from src track to dst track. Returns the send index.
--- send_vol: linear volume (1.0 = 0dB).
 local function create_send(src, dst, send_vol)
     local send_idx = reaper.CreateTrackSend(src, dst)
     if send_idx < 0 then
@@ -171,34 +145,29 @@ local function create_send(src, dst, send_vol)
     return send_idx
 end
 
--- Disable the master/parent send on a track (direct routing only).
 local function disable_master_send(track)
     reaper.SetMediaTrackInfo_Value(track, "B_MAINSEND", 0)
 end
 
 -- ============================================================================
--- MAIN SETUP
+-- STATE (module level for deferred access)
 -- ============================================================================
 
-local function main()
-    if not AUTO_MODE then
-        -- Confirmation dialog (only when run manually)
-        local response = reaper.ShowMessageBox(
-            "This will DELETE ALL existing tracks and create the full IEM project structure.\n\n" ..
-            "Tracks: 28 inputs + 11 outputs = 39 tracks\n" ..
-            "Sends: 252 (band) + 1 (translator) = 253 sends\n\n" ..
-            "Continue?",
-            "IEM Project Setup",
-            1  -- OK/Cancel
-        )
-        if response ~= 1 then
-            log("Setup cancelled by user.")
-            return
-        end
-    else
-        log("Auto-confirm mode (triggered via API)")
-    end
+local input_tracks = {}
+local band_tracks = {}
+local engineer_track = nil
+local translator_track = nil
+local hand1_track = nil
+local total_track_count = 0
+local send_queue = {}
+local send_index = 1
+local send_count = 0
 
+-- ============================================================================
+-- PHASE 1: Create all tracks
+-- ============================================================================
+
+local function create_all_tracks()
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
 
@@ -206,7 +175,7 @@ local function main()
     log("IEM Project Setup - Starting")
     log("========================================")
 
-    -- Step 1: Remove all existing tracks
+    -- Remove all existing tracks
     local existing = reaper.CountTracks(0)
     log(string.format("Removing %d existing tracks...", existing))
     for i = existing - 1, 0, -1 do
@@ -214,29 +183,18 @@ local function main()
         if t then reaper.DeleteTrack(t) end
     end
 
-    -- Track index counter (0-based, incremented as we create tracks)
     local idx = 0
 
-    -- We will collect references for routing later.
-    local input_tracks = {}   -- all 28 input tracks (MediaTrack pointers)
-    local band_tracks = {}    -- 9 band output tracks
-    local engineer_track = nil
-    local translator_track = nil
-    local hand1_track = nil   -- we need a reference to HAND1 for the translator send
-
-    -- ========================================================================
-    -- Step 2: INPUT tracks
-    -- ========================================================================
+    -- ---- INPUTS folder ----
     log("")
     log("--- Creating INPUT tracks ---")
 
-    -- INPUTS folder parent
     local inputs_folder = create_track(idx, "INPUTS")
-    set_folder_depth(inputs_folder, 1) -- folder start
-    disable_master_send(inputs_folder) -- folder itself does not need master
+    set_folder_depth(inputs_folder, 1)
+    disable_master_send(inputs_folder)
     idx = idx + 1
 
-    -- ---- MICS sub-folder ----
+    -- MICS sub-folder
     log("  MICS folder (" .. #INPUT_MICS .. " tracks)")
     local mics_folder = create_track(idx, "MICS")
     set_folder_depth(mics_folder, 1)
@@ -246,15 +204,14 @@ local function main()
         local t = create_track(idx, mic.name)
         set_hw_input_mono(t, mic.dante_rx)
         input_tracks[#input_tracks + 1] = t
-        -- Last child closes the folder
         if i == #INPUT_MICS then
-            set_folder_depth(t, -1) -- close MICS folder
+            set_folder_depth(t, -1)
         end
         log("    " .. mic.name .. " (Dante RX " .. mic.dante_rx .. ")")
         idx = idx + 1
     end
 
-    -- ---- STEMS sub-folder ----
+    -- STEMS sub-folder
     log("  STEMS folder (" .. #INPUT_STEMS .. " tracks)")
     local stems_folder = create_track(idx, "STEMS")
     set_folder_depth(stems_folder, 1)
@@ -265,13 +222,13 @@ local function main()
         set_hw_input_mono(t, stem.dante_rx)
         input_tracks[#input_tracks + 1] = t
         if i == #INPUT_STEMS then
-            set_folder_depth(t, -1) -- close STEMS folder
+            set_folder_depth(t, -1)
         end
         log("    " .. stem.name .. " (Dante RX " .. stem.dante_rx .. ")")
         idx = idx + 1
     end
 
-    -- ---- TECH (input) sub-folder ----
+    -- TECH input sub-folder
     log("  TECH input folder (" .. #INPUT_TECH .. " tracks)")
     local tech_in_folder = create_track(idx, "TECH")
     set_folder_depth(tech_in_folder, 1)
@@ -281,12 +238,11 @@ local function main()
         local t = create_track(idx, tech.name)
         set_hw_input_mono(t, tech.dante_rx)
         input_tracks[#input_tracks + 1] = t
-        -- Remember HAND1 for translator routing
         if tech.name == "HAND1 mic" then
             hand1_track = t
         end
         if i == #INPUT_TECH then
-            set_folder_depth(t, -2) -- close TECH folder AND INPUTS folder
+            set_folder_depth(t, -2)
         end
         log("    " .. tech.name .. " (Dante RX " .. tech.dante_rx .. ")")
         idx = idx + 1
@@ -294,19 +250,16 @@ local function main()
 
     log(string.format("  Total input tracks: %d", #input_tracks))
 
-    -- ========================================================================
-    -- Step 3: OUTPUT tracks
-    -- ========================================================================
+    -- ---- OUTPUTS folder ----
     log("")
     log("--- Creating OUTPUT tracks ---")
 
-    -- OUTPUTS folder parent
     local outputs_folder = create_track(idx, "OUTPUTS")
     set_folder_depth(outputs_folder, 1)
     disable_master_send(outputs_folder)
     idx = idx + 1
 
-    -- ---- BAND sub-folder ----
+    -- BAND sub-folder
     log("  BAND folder (" .. #OUTPUT_BAND .. " tracks)")
     local band_folder = create_track(idx, "BAND")
     set_folder_depth(band_folder, 1)
@@ -315,19 +268,17 @@ local function main()
 
     for i, member in ipairs(OUTPUT_BAND) do
         local t = create_track(idx, member.name)
-        -- Disable master send so solo routing does not affect band outputs
         disable_master_send(t)
-        -- Set stereo hardware output
         add_hw_output_stereo(t, member.dante_tx_l, member.dante_tx_r)
         band_tracks[#band_tracks + 1] = t
         if i == #OUTPUT_BAND then
-            set_folder_depth(t, -1) -- close BAND folder
+            set_folder_depth(t, -1)
         end
         log("    " .. member.name .. " (Dante TX " .. member.dante_tx_l .. "-" .. member.dante_tx_r .. ")")
         idx = idx + 1
     end
 
-    -- ---- TECH (output) sub-folder ----
+    -- TECH output sub-folder
     log("  TECH output folder (" .. #OUTPUT_TECH .. " tracks)")
     local tech_out_folder = create_track(idx, "TECH")
     set_folder_depth(tech_out_folder, 1)
@@ -353,25 +304,76 @@ local function main()
         end
 
         if i == #OUTPUT_TECH then
-            set_folder_depth(t, -2) -- close TECH folder AND OUTPUTS folder
+            set_folder_depth(t, -2)
         end
         idx = idx + 1
     end
 
-    -- ========================================================================
-    -- Step 4: Create sends (28 inputs -> 9 band outputs = 252 sends)
-    -- ========================================================================
-    log("")
-    log("--- Creating sends ---")
+    total_track_count = idx
 
-    local send_count = 0
+    -- Refresh UI
+    reaper.PreventUIRefresh(-1)
+    reaper.TrackList_AdjustWindows(false)
+    reaper.UpdateArrange()
+
+    log("")
+    log(string.format("Tracks created: %d", total_track_count))
+
+    -- Build send queue
     for _, src in ipairs(input_tracks) do
         for _, dst in ipairs(band_tracks) do
-            create_send(src, dst, 1.0)  -- 0dB default
-            send_count = send_count + 1
+            send_queue[#send_queue + 1] = { src = src, dst = dst }
         end
     end
-    log(string.format("  Band sends created: %d (expected 252)", send_count))
+
+    log(string.format("Queued %d sends for batch creation...", #send_queue))
+    log("")
+
+    -- Start batched send creation
+    reaper.defer(process_send_batch)
+end
+
+-- ============================================================================
+-- PHASE 2: Create sends in batches (deferred)
+-- ============================================================================
+
+local BATCH_SIZE = 25  -- sends per batch
+
+function process_send_batch()
+    local batch_end = math.min(send_index + BATCH_SIZE - 1, #send_queue)
+
+    reaper.PreventUIRefresh(1)
+
+    for i = send_index, batch_end do
+        local pair = send_queue[i]
+        create_send(pair.src, pair.dst, 1.0)
+        send_count = send_count + 1
+    end
+
+    reaper.PreventUIRefresh(-1)
+
+    send_index = batch_end + 1
+
+    if send_index <= #send_queue then
+        -- More to do - log progress and schedule next batch
+        if send_count % 50 == 0 then
+            log(string.format("  ... %d/%d sends created", send_count, #send_queue))
+        end
+        reaper.defer(process_send_batch)
+    else
+        -- All band sends done - continue with finalization
+        log(string.format("  Band sends created: %d (expected 252)", send_count))
+        reaper.defer(finalize_setup)
+    end
+end
+
+-- ============================================================================
+-- PHASE 3: Finalize setup
+-- ============================================================================
+
+function finalize_setup()
+    log("")
+    log("--- Finalizing setup ---")
 
     -- TRANSLATOR: receives only HAND1 mic
     if hand1_track and translator_track then
@@ -384,31 +386,11 @@ local function main()
 
     log(string.format("  Total sends: %d (expected 253)", send_count))
 
-    -- ========================================================================
-    -- Step 5: Configure ENGINEER solo bus
-    -- ========================================================================
+    -- Configure ENGINEER solo bus
     log("")
     log("--- Configuring ENGINEER solo bus ---")
 
     if engineer_track then
-        -- In REAPER, to route the solo bus to a specific track:
-        -- 1. The track must receive the solo-in-place bus
-        -- 2. Set B_SOLO_DEFEAT = 1 so the track itself is not affected by solo
-        -- 3. Enable "Listen to solo in this track" via I_SOLO_FLAGS
-        --
-        -- REAPER's solo routing works through the master/monitor bus.
-        -- The cleanest approach: ENGINEER receives a send from the Master track,
-        -- and we set the master to output to ENGINEER when solo is active.
-        --
-        -- Actually, the simplest approach in REAPER is:
-        -- - Set the project solo mode to "SIP" (solo in place)
-        -- - Route the master/monitor output to ENGINEER
-        -- - ENGINEER hears whatever goes through the master bus (which reflects solo)
-        --
-        -- For now, we set solo defeat on the ENGINEER track and create a send
-        -- from the master track to it. The engineer will hear the master bus content
-        -- which changes based on solo state.
-
         local master = reaper.GetMasterTrack(0)
         if master then
             local send_idx = reaper.CreateTrackSend(master, engineer_track)
@@ -418,18 +400,13 @@ local function main()
                 log("  Master -> ENGINEER inear send created")
             end
         end
-
-        -- Solo defeat: when other tracks are solo'd, ENGINEER track keeps playing
         reaper.SetMediaTrackInfo_Value(engineer_track, "B_SOLO_DEFEAT", 1)
         log("  ENGINEER solo defeat enabled")
     else
         log("  WARNING: ENGINEER track not found, skipping solo bus config")
     end
 
-    -- ========================================================================
-    -- Step 6: Set solo defeat on all output tracks
-    -- ========================================================================
-    -- All output tracks should be unaffected by solo (they have their own sends).
+    -- Set solo defeat on all output tracks
     log("")
     log("--- Setting solo defeat on output tracks ---")
 
@@ -441,42 +418,63 @@ local function main()
     end
     log("  Solo defeat set on all " .. (#band_tracks + 2) .. " output tracks")
 
-    -- ========================================================================
-    -- Done
-    -- ========================================================================
-    reaper.PreventUIRefresh(-1)
+    -- Final UI refresh
     reaper.TrackList_AdjustWindows(false)
     reaper.UpdateArrange()
     reaper.Undo_EndBlock("IEM Project Setup", -1)
 
+    -- Done
     log("")
     log("========================================")
     log("IEM Project Setup - COMPLETE")
     log("========================================")
-    log(string.format("  Tracks: %d total (%d inputs + %d outputs + folder tracks)",
-        idx, #input_tracks, #OUTPUT_BAND + #OUTPUT_TECH))
+    log(string.format("  Tracks: %d", total_track_count))
     log(string.format("  Sends: %d", send_count))
     log("")
     log("Next steps:")
     log("  1. Verify track names and routing in REAPER mixer view")
     log("  2. Check hardware outputs in routing matrix (Ctrl+Alt+R)")
     log("  3. Save project: Ctrl+S")
-    log("  4. Commit on iem.lan: git add -A && git commit -m 'feat: initial IEM project'")
+    log("")
 
     if not AUTO_MODE then
         reaper.ShowMessageBox(
             "IEM project setup complete!\n\n" ..
-            "Tracks: " .. idx .. "\n" ..
+            "Tracks: " .. total_track_count .. "\n" ..
             "Sends: " .. send_count .. "\n\n" ..
-            "Check the console for details.\n" ..
-            "Verify routing in the mixer and routing matrix (Ctrl+Alt+R).",
+            "Check the console for details.",
             "Setup Complete",
-            0  -- OK only
+            0
         )
     end
 end
 
--- Run with error handling
+-- ============================================================================
+-- MAIN ENTRY POINT
+-- ============================================================================
+
+local function main()
+    if not AUTO_MODE then
+        local response = reaper.ShowMessageBox(
+            "This will DELETE ALL existing tracks and create the full IEM project structure.\n\n" ..
+            "Tracks: 28 inputs + 11 outputs = 39 tracks\n" ..
+            "Sends: 252 (band) + 1 (translator) = 253 sends\n\n" ..
+            "Continue?",
+            "IEM Project Setup",
+            1
+        )
+        if response ~= 1 then
+            log("Setup cancelled by user.")
+            return
+        end
+    else
+        log("Auto-confirm mode (triggered via API)")
+    end
+
+    create_all_tracks()
+end
+
+-- Run
 local ok, err = pcall(main)
 if not ok then
     log("FATAL ERROR: " .. tostring(err))
