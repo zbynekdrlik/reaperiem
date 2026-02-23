@@ -82,8 +82,8 @@ case "${1:-}" in
         }
 
         log "Deploying web interface..."
-        scp "web/reaper_interface/iem_mixer.html" "${REMOTE_USER}@${REMOTE_HOST}:\"${WWW_PATH}/iem_mixer.html\""
-        scp "web/reaper_interface/iem.html" "${REMOTE_USER}@${REMOTE_HOST}:\"${WWW_PATH}/iem.html\""
+        scp web/reaper_interface/iem_mixer.html 'newlevel@iem.lan:C:/Program Files/REAPER (x64)/Plugins/reaper_www_root/iem_mixer.html'
+        scp web/reaper_interface/iem.html 'newlevel@iem.lan:C:/Program Files/REAPER (x64)/Plugins/reaper_www_root/iem.html'
 
         log "Verifying..."
         FINAL=$(ssh ${REMOTE_USER}@${REMOTE_HOST} "cd ${REPO_PATH} && git rev-parse --short HEAD")
