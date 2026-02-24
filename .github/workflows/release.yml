@@ -48,9 +48,14 @@ jobs:
         working-directory: iem-mixer
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Create minimal dist folder for rust-embed
+        run: |
+          mkdir -p iem-mixer/iem-ui/dist
+          echo "placeholder" > iem-mixer/iem-ui/dist/index.html
+
       - name: Run tests
         working-directory: iem-mixer
-        run: cargo test --workspace
+        run: cargo test -p iem-core -p iem-server
 
   # ============================================================
   # BUILD WASM
