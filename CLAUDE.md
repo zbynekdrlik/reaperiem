@@ -139,6 +139,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 3. **Git on iem.lan** - Repository cloned there, commits track REAPER project changes
 4. **Sample rate** - Network runs at 96kHz (REAPER follows ASIO driver rate)
 5. **Input metering** - Tracks must be record-armed (I_RECARM=1) to show input levels
+6. **⚠️ ALWAYS SAVE BEFORE RESTART** - Run `curl "http://iem.lan:8080/_/40026"` before any REAPER restart!
 
 ---
 
