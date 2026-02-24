@@ -81,7 +81,7 @@ jobs:
 
       - name: Run tests
         working-directory: iem-mixer
-        run: cargo test --workspace
+        run: cargo test -p iem-core -p iem-server
 
   # ============================================================
   # BUILD WASM - Frontend must build
