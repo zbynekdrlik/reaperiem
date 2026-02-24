@@ -252,15 +252,13 @@ jobs:
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
 
   # ============================================================
-  # DEPLOY TO IEM.LAN - Auto-deploy web assets
+  # DEPLOY TO IEM.LAN - Auto-deploy on local runner
   # ============================================================
   deploy:
     name: Deploy to iem.lan
-    runs-on: ubuntu-latest
-    needs: build-wasm
-    if: |
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
-      (github.event.inputs.deploy != 'false')
+    runs-on: [self-hosted, iem-lan]
+    needs: [build-wasm, build-tauri]
+    if: github.event.inputs.deploy != 'false'
     steps:
       - uses: actions/checkout@v4
 
@@ -268,50 +266,38 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-dist
-          path: dist/
+          path: wasm-dist/
 
-      - name: Setup SSH
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-nsis
+          path: installer/
+
+      - name: Deploy WASM to REAPER www root
+        shell: cmd
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.IEM_LAN_SSH_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H iem.lan >> ~/.ssh/known_hosts 2>/dev/null || true
+          xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
+          echo WASM deployed to REAPER www root
 
-      - name: Deploy to iem.lan
+      - name: Install IEM Mixer app
+        shell: cmd
         run: |
-          # Create deployment package
-          tar -czf deploy.tar.gz -C dist .
-
-          # Deploy via SSH
-          scp -o StrictHostKeyChecking=no deploy.tar.gz deploy@iem.lan:/tmp/
-
-          ssh -o StrictHostKeyChecking=no deploy@iem.lan << 'ENDSSH'
-            # Backup current
-            DEPLOY_DIR="/var/www/iem-mixer"
-            BACKUP_DIR="/var/www/iem-mixer-backup-$(date +%Y%m%d%H%M%S)"
-
-            if [ -d "$DEPLOY_DIR" ]; then
-              sudo mv "$DEPLOY_DIR" "$BACKUP_DIR"
-            fi
-
-            # Deploy new
-            sudo mkdir -p "$DEPLOY_DIR"
-            sudo tar -xzf /tmp/deploy.tar.gz -C "$DEPLOY_DIR"
-            sudo chown -R www-data:www-data "$DEPLOY_DIR"
-
-            # Cleanup
-            rm /tmp/deploy.tar.gz
-
-            # Keep only last 3 backups
-            ls -dt /var/www/iem-mixer-backup-* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
-
-            echo "Deployment complete!"
-          ENDSSH
+          for %%f in (installer\*.exe) do (
+            echo Installing %%f...
+            "%%f" /S
+          )
+          echo Installation complete!
 
       - name: Verify deployment
+        shell: cmd
         run: |
-          curl -sf http://iem.lan/ > /dev/null && echo "Deployment verified!" || echo "Warning: Could not verify deployment"
-        continue-on-error: true
+          if exist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\index.html" (
+            echo WASM deployment verified!
+          ) else (
+            echo ERROR: WASM not found
+            exit /b 1
+          )
 
   # ============================================================
   # NOTIFY - Summary of release
