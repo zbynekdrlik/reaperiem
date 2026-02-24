@@ -83,7 +83,10 @@ jobs:
           key: ${{ runner.os }}-cargo-wasm-release-${{ hashFiles('iem-mixer/iem-ui/Cargo.lock') }}
 
       - name: Install Trunk
-        run: cargo install trunk
+        run: |
+          if ! command -v trunk &> /dev/null; then
+            cargo install trunk
+          fi
 
       - name: Build WASM (release)
         working-directory: iem-mixer/iem-ui
