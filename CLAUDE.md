@@ -244,10 +244,50 @@ gh run view <run-id> --log-failed
 ### CI Must Pass:
 
 - ✅ Lint & Format (cargo fmt, clippy)
-- ✅ Tests (cargo test)
+- ✅ Unit Tests (cargo test)
+- ✅ Integration Tests (API endpoints)
+- ✅ **E2E Tests (Playwright)** - Full browser testing of web UI
 - ✅ Build WASM (trunk build)
 - ✅ Build Tauri (Windows)
 - ✅ CI Success (all jobs)
+
+### ⚠️ MANDATORY: Comprehensive Testing
+
+**Every feature MUST have full test coverage before merging:**
+
+```
+Unit Tests:
+  - All Rust functions in iem-core, iem-server
+  - Edge cases and error handling
+
+Integration Tests:
+  - API endpoints (/api/members, /api/mixer/*, /api/auth)
+  - REAPER proxy functionality
+  - Authentication flow
+
+E2E Tests (Playwright):
+  - Landing page loads with member cards
+  - Login flow (PIN entry, JWT storage)
+  - Mixer page renders with faders
+  - Fader controls actually work
+  - Navigation between pages
+  - Mobile viewport testing
+  - Error states and loading spinners
+```
+
+**Test files location:**
+
+- `iem-mixer/crates/*/src/*.rs` - Unit tests (inline #[cfg(test)])
+- `iem-mixer/tests/` - Integration tests
+- `iem-mixer/e2e/` - Playwright e2e tests
+
+**Run locally before push:**
+
+```bash
+cd iem-mixer
+cargo test --workspace           # Unit + integration
+npx playwright test              # E2E (requires trunk serve)
+```
 
 ### After Release (tags):
 
