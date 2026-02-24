@@ -2,8 +2,8 @@
 
 use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_query_map};
-use wasm_bindgen_futures::spawn_local;
 use std::rc::Rc;
+use wasm_bindgen_futures::spawn_local;
 
 use crate::api;
 use crate::auth::save_auth;
@@ -16,10 +16,18 @@ pub fn LoginPage() -> impl IntoView {
 
     // Get member and next URL from query params
     let member = move || {
-        query.get().get("member").map(|s| s.to_string()).unwrap_or_default()
+        query
+            .get()
+            .get("member")
+            .map(|s| s.to_string())
+            .unwrap_or_default()
     };
     let next = move || {
-        query.get().get("next").map(|s| s.to_string()).unwrap_or_else(|| "/".to_string())
+        query
+            .get()
+            .get("next")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "/".to_string())
     };
 
     // PIN state

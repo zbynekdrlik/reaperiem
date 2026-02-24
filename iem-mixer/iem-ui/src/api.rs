@@ -3,7 +3,7 @@
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{get_token, AuthState};
+use crate::auth::{AuthState, get_token};
 
 /// Base URL for API calls (same origin)
 const API_BASE: &str = "/api";
@@ -56,9 +56,7 @@ pub async fn get_members() -> Result<Vec<MemberInfo>, String> {
         .map_err(|e| format!("Network error: {}", e))?;
 
     if resp.ok() {
-        resp.json()
-            .await
-            .map_err(|e| format!("Parse error: {}", e))
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
     } else {
         Err(format!("Server error: {}", resp.status()))
     }
@@ -111,9 +109,7 @@ pub async fn get_mixer_state(member_id: &str) -> Result<MixerState, String> {
         .map_err(|e| format!("Network error: {}", e))?;
 
     if resp.ok() {
-        resp.json()
-            .await
-            .map_err(|e| format!("Parse error: {}", e))
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
     } else if resp.status() == 401 {
         Err("Unauthorized".to_string())
     } else {
@@ -122,7 +118,11 @@ pub async fn get_mixer_state(member_id: &str) -> Result<MixerState, String> {
 }
 
 /// Set send level for a channel
-pub async fn set_send_level(member_id: &str, track_index: usize, level_db: f32) -> Result<(), String> {
+pub async fn set_send_level(
+    member_id: &str,
+    track_index: usize,
+    level_db: f32,
+) -> Result<(), String> {
     #[derive(Serialize)]
     struct LevelRequest {
         level_db: f32,

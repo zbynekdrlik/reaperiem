@@ -1,11 +1,11 @@
 //! REAPER HTTP API proxy
 
 use axum::{
+    Json,
     body::Body,
     extract::{Path, State},
     http::{Method, Request, StatusCode},
     response::{IntoResponse, Response},
-    Json,
 };
 use iem_core::ApiError;
 
@@ -49,7 +49,10 @@ pub async fn proxy_reaper(
         tracing::error!(error = %e, "REAPER proxy error");
         (
             StatusCode::BAD_GATEWAY,
-            Json(ApiError::new("REAPER_ERROR", format!("REAPER unavailable: {}", e))),
+            Json(ApiError::new(
+                "REAPER_ERROR",
+                format!("REAPER unavailable: {}", e),
+            )),
         )
     })?;
 
@@ -59,7 +62,10 @@ pub async fn proxy_reaper(
         tracing::error!(error = %e, "Failed to read REAPER response");
         (
             StatusCode::BAD_GATEWAY,
-            Json(ApiError::new("REAPER_ERROR", "Failed to read REAPER response")),
+            Json(ApiError::new(
+                "REAPER_ERROR",
+                "Failed to read REAPER response",
+            )),
         )
     })?;
 
@@ -74,9 +80,9 @@ pub async fn get_mixer_state(
     let config = state.config.read().await;
 
     // Verify member exists
-    let member = config.find_member(&member_id).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member")))
-    })?;
+    let member = config
+        .find_member(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let member_index = config.member_index(&member_id).unwrap();
 
@@ -113,9 +119,9 @@ pub async fn set_send_level(
     let config = state.config.read().await;
 
     // Verify member exists
-    let member_index = config.member_index(&member_id).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member")))
-    })?;
+    let member_index = config
+        .member_index(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let reaper_url = config.reaper_url.clone();
     drop(config);
@@ -152,9 +158,9 @@ pub async fn set_send_pan(
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    let member_index = config.member_index(&member_id).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member")))
-    })?;
+    let member_index = config
+        .member_index(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let reaper_url = config.reaper_url.clone();
     drop(config);
@@ -183,9 +189,9 @@ pub async fn set_send_mute(
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    let member_index = config.member_index(&member_id).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member")))
-    })?;
+    let member_index = config
+        .member_index(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let reaper_url = config.reaper_url.clone();
     drop(config);

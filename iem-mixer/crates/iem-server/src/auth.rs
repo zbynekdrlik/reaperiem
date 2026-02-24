@@ -1,14 +1,14 @@
 //! Authentication middleware and JWT handling
 
 use axum::{
+    Json,
     extract::{Request, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
-    Json,
 };
 use iem_core::{ApiError, AuthClaims};
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -52,10 +52,7 @@ pub async fn login(
         iem_core::config::PinValidation::Member(ref member_id) => {
             // Check member exists
             if config.find_member(member_id).is_none() {
-                return Err((
-                    StatusCode::NOT_FOUND,
-                    Json(ApiError::not_found("Member")),
-                ));
+                return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
             }
         }
         iem_core::config::PinValidation::Engineer => {

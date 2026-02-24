@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use wasm_bindgen_futures::spawn_local;
 
-use crate::api::{get_mixer_state, set_send_level, set_send_mute, Channel};
+use crate::api::{Channel, get_mixer_state, set_send_level, set_send_mute};
 use crate::auth::can_access_member;
 use crate::components::fader::Fader;
 
@@ -17,7 +17,11 @@ pub fn MixerPage() -> impl IntoView {
 
     // Get member ID from route params
     let member_id = move || {
-        params.get().get("member").map(|s| s.to_string()).unwrap_or_default()
+        params
+            .get()
+            .get("member")
+            .map(|s| s.to_string())
+            .unwrap_or_default()
     };
 
     // Check auth on mount
@@ -25,7 +29,10 @@ pub fn MixerPage() -> impl IntoView {
         let member = member_id();
         if !can_access_member(&member) {
             let nav = navigate.clone();
-            nav(&format!("/login?member={}&next=/{}", member, member), Default::default());
+            nav(
+                &format!("/login?member={}&next=/{}", member, member),
+                Default::default(),
+            );
         }
     });
 
@@ -72,7 +79,9 @@ pub fn MixerPage() -> impl IntoView {
     // Handle mute toggle
     let on_mute_toggle = move |track_index: usize| {
         let member = member_id();
-        let current_muted = channels.get().iter()
+        let current_muted = channels
+            .get()
+            .iter()
             .find(|c| c.track_index == track_index)
             .map(|c| c.muted)
             .unwrap_or(false);

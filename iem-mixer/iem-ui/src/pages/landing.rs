@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 
-use crate::api::{get_members, MemberInfo};
+use crate::api::{MemberInfo, get_members};
 
 /// Landing page showing all band members
 #[component]

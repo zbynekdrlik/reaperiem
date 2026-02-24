@@ -1,15 +1,15 @@
 //! API and static file routes
 
 use axum::{
+    Router,
     body::Body,
     extract::Path,
-    http::{header, Method, StatusCode, Uri},
+    http::{Method, StatusCode, Uri, header},
     response::{IntoResponse, Response},
     routing::{any, get, post},
-    Router,
 };
 
-use crate::{auth, proxy, AppState, Assets};
+use crate::{AppState, Assets, auth, proxy};
 
 /// API routes (protected by authentication)
 pub fn api_routes() -> Router<AppState> {
