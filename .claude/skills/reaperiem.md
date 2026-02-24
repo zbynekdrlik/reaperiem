@@ -83,12 +83,12 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 - `git_push`
 - `git_log(count)`
 
-## IEM Project Structure (39 tracks, flat with colors)
+## IEM Project Structure (33 tracks, flat with colors)
 
-**Inputs (28 tracks):**
+**Inputs (22 tracks):**
 
 - MICS (10): PETKA/STEVO/MAREK/ZUZKA/TINA/MIREC/ALEX/PATRIKA/ANI mic + ZUZKA gtr
-- STEMS (14): DRUMS/BASS/INST/OTHER/BGVS L/R + CLICK + GUIDE + IEMONLY L/R
+- STEMS (8): DRUMS, BASS, INST, OTHER, BGVS (stereo), CLICK, GUIDE, IEMONLY (stereo)
 - TECH (4): HAND1/HAND2/HAND3/ENGINEER mic
 
 **Outputs (11 tracks):**
@@ -98,9 +98,10 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 **Routing:**
 
-- 253 sends total: 252 band sends (28 inputs × 9 band outputs) + 1 TRANSLATOR send
+- 199 sends total: 198 band sends (22 inputs × 9 band outputs) + 1 TRANSLATOR send
 - ENGINEER receives REAPER solo bus (master send)
 - TRANSLATOR receives only HAND1 mic
+- Stereo stems receive consecutive Dante input pairs as stereo
 
 **Track Colors:**
 
@@ -124,29 +125,28 @@ Controls: Meter, Fader, Pan, Mute per channel. Stereo stems linked.
 
 ## Adding Tracks/Sends
 
-**PREFERRED METHOD: Edit RPP file directly**
+**REQUIRED METHOD: Live ReaScripts (NO restart)**
 
-The RPP file is plain text. To add tracks without Lua scripts:
+All REAPER operations must work live without restarting REAPER. Use ReaScripts triggered via HTTP API.
 
-1. Save project in REAPER: `curl "http://iem.lan:8080/_/40026"`
-2. Edit RPP via SSH or pull to dev machine
-3. Add `<TRACK>` blocks and `<AUXRECV>` sends
-4. Reload in REAPER: `curl "http://iem.lan:8080/_/40025"` (File: Open project)
+**NEVER edit RPP files directly** - this requires reloading the project and can cause conflicts.
 
-**Example track block:**
+**Workflow for new capabilities:**
 
+1. Create/modify ReaScript in `scripts/reascripts/`
+2. Deploy to iem.lan via `./scripts/deploy.sh`
+3. Register in reaper-kb.ini with `_RS_REAPERIEM_*` action ID
+4. ONE restart to register (then works live forever)
+5. Trigger via HTTP: `curl "http://iem.lan:8080/_/_RS_REAPERIEM_ACTION_NAME"`
+
+**Example: merge_stereo_inputs.lua**
+
+```lua
+-- Registered as _RS_REAPERIEM_MERGE_STEREO
+-- Merges L/R track pairs into stereo tracks LIVE
+-- Trigger: curl "http://iem.lan:8080/_/_RS_REAPERIEM_MERGE_STEREO"
 ```
-<TRACK {GUID-HERE}
-  NAME "NEW mic"
-  VOLPAN 1 0 -1 -1 1
-  MUTESOLO 0 0 0
-  NCHAN 2
->
-```
 
-**ALTERNATIVE: Lua ReaScript**
-
-For complex operations (hardware routing, folder hierarchy), use ReaScripts.
 Scripts in `scripts/reascripts/` are deployed via `./scripts/deploy.sh`.
 
 ## How Hardware Routing Works

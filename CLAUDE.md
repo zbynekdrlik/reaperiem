@@ -141,6 +141,50 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 ---
 
+## ⚠️ REAPER Development Rules
+
+### NEVER DO:
+
+```
+❌ Edit .RPP files directly (requires reload, causes conflicts)
+❌ Restart REAPER to apply changes
+❌ Create one-off scripts - improve existing MCP tools instead
+❌ Hardcode track indices or names that may change
+❌ Reinvent functionality that exists in MCP tools
+```
+
+### ALWAYS DO:
+
+```
+✅ Use HTTP API + ReaScripts for ALL REAPER operations (live, no restart)
+✅ Continuously improve scripts/reascripts/*.lua to handle new operations
+✅ Add new MCP tools when needed (mcp/reaperiem_mcp/server.py)
+✅ Use EXTSTATE to pass parameters between HTTP API and ReaScripts
+✅ Track operations by name pattern matching, not hardcoded indices
+```
+
+### Adding New REAPER Capabilities:
+
+1. **Check if MCP tool exists** - Use existing tools first
+2. **If new capability needed:**
+   - Create/modify ReaScript in `scripts/reascripts/`
+   - Register in `reaper-kb.ini` with action ID `_RS_REAPERIEM_*`
+   - Add MCP tool wrapper in `mcp/reaperiem_mcp/server.py`
+   - Add action ID to `config/reaper_config.yaml`
+   - Deploy via `./scripts/deploy.sh`
+   - ONE restart to register new action, then it works live forever
+
+### Stereo Tracks Convention:
+
+```
+Input tracks from FOH: Single stereo track (DRUMS, BASS, INST, OTHER, BGVS)
+  - NOT separate L/R tracks
+  - Use consecutive Dante input channels as stereo pair
+  - NCHAN=2, stereo input mode (channel + 1024)
+```
+
+---
+
 ## ⚠️ DANTE NETWORK SAFETY
 
 The Dante network has 3 devices by role. **Only the IEM Accelerator is safe to modify.**
