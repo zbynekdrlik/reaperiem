@@ -175,7 +175,11 @@ jobs:
           key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli
+        shell: bash
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli
+          fi
 
       - name: Build Tauri (debug - CI validation)
         working-directory: iem-mixer/src-tauri
