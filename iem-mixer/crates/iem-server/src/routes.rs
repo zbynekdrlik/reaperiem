@@ -4,7 +4,7 @@ use axum::{
     Router,
     body::Body,
     extract::Path,
-    http::{Method, StatusCode, Uri, header},
+    http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };

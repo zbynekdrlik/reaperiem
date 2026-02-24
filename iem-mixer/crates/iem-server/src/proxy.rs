@@ -4,7 +4,7 @@ use axum::{
     Json,
     body::Body,
     extract::{Path, State},
-    http::{Method, Request, StatusCode},
+    http::{Method, StatusCode},
     response::{IntoResponse, Response},
 };
 use iem_core::ApiError;

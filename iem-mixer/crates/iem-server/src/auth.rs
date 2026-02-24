@@ -5,7 +5,7 @@ use axum::{
     extract::{Request, State},
     http::{StatusCode, header},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use iem_core::{ApiError, AuthClaims};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
