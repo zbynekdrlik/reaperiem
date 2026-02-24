@@ -221,3 +221,87 @@ netaudio config --set-sample-rate/encoding/latency ...
 ```
 
 See `.claude/skills/dante.md` for full Dante documentation and `config/dante_network.yaml` for topology.
+
+---
+
+## ⚠️ CI/CD MONITORING REQUIREMENTS
+
+**CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
+
+### After Pushing Code:
+
+```bash
+# 1. Check CI status immediately
+gh run list --limit 3
+
+# 2. Watch the run until complete
+gh run watch <run-id>
+
+# 3. If any job fails, check logs and fix
+gh run view <run-id> --log-failed
+```
+
+### CI Must Pass:
+
+- ✅ Lint & Format (cargo fmt, clippy)
+- ✅ Tests (cargo test)
+- ✅ Build WASM (trunk build)
+- ✅ Build Tauri (Windows)
+- ✅ CI Success (all jobs)
+
+### After Release (tags):
+
+```bash
+# Verify deployment to iem.lan
+curl -sf http://iem.lan/ && echo "Deploy OK" || echo "Deploy FAILED"
+
+# Check release artifacts exist
+gh release view <tag>
+```
+
+### NEVER DO:
+
+```
+❌ Push and walk away without checking CI
+❌ Ignore failing CI jobs
+❌ Skip verifying deployment after release
+❌ Merge/release with failing tests
+```
+
+### GitHub Secrets Required:
+
+- `IEM_LAN_SSH_KEY` - SSH key for deploy@iem.lan (set via `gh secret set`)
+- `TAURI_SIGNING_PRIVATE_KEY` - For updater signatures (optional)
+
+---
+
+## IEM Mixer Desktop App
+
+The `iem-mixer/` directory contains the new Tauri + Leptos WASM desktop application.
+
+### Structure:
+
+```
+iem-mixer/
+├── crates/
+│   ├── iem-core/     # Shared types, config
+│   └── iem-server/   # Axum API server
+├── iem-ui/           # Leptos WASM frontend
+└── src-tauri/        # Tauri desktop shell
+```
+
+### Build Commands (run on GitHub Actions, not locally):
+
+```bash
+# WASM frontend
+cd iem-mixer/iem-ui && trunk build --release
+
+# Tauri app
+cd iem-mixer/src-tauri && cargo tauri build
+```
+
+### URLs:
+
+- `http://iem.lan/` - Landing page (member selection)
+- `http://iem.lan/login` - PIN authentication
+- `http://iem.lan/<member>` - Member's mixer (e.g., /petka)
