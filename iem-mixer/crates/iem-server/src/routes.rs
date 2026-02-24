@@ -10,6 +10,7 @@ use axum::{
 };
 
 use crate::{AppState, Assets, auth, proxy};
+use rust_embed::RustEmbed;
 
 /// API routes (protected by authentication)
 pub fn api_routes() -> Router<AppState> {
@@ -75,10 +76,10 @@ pub fn static_routes() -> Router<AppState> {
         // Serve index.html for SPA routes
         .route("/", get(serve_index))
         .route("/login", get(serve_index))
-        .route("/{member}", get(serve_spa_route))
         // Serve static assets
         .route("/assets/{*path}", get(serve_asset))
-        .route("/{*path}", get(serve_file))
+        // Catch-all: serve files or SPA index for member routes
+        .route("/{*path}", get(serve_spa_route))
 }
 
 /// Serve index.html
@@ -86,11 +87,11 @@ async fn serve_index() -> impl IntoResponse {
     serve_embedded_file("index.html")
 }
 
-/// Serve index.html for SPA routes (member pages)
-async fn serve_spa_route(Path(member): Path<String>) -> Response {
-    // Check if it looks like a file request
-    if member.contains('.') {
-        serve_embedded_file(&member)
+/// Serve index.html for SPA routes or static files
+async fn serve_spa_route(Path(path): Path<String>) -> Response {
+    // Check if it looks like a file request (has extension)
+    if path.contains('.') {
+        serve_embedded_file(&path)
     } else {
         // SPA route - serve index.html
         serve_embedded_file("index.html")
@@ -102,15 +103,10 @@ async fn serve_asset(Path(path): Path<String>) -> impl IntoResponse {
     serve_embedded_file(&format!("assets/{}", path))
 }
 
-/// Serve any file
-async fn serve_file(Path(path): Path<String>) -> impl IntoResponse {
-    serve_embedded_file(&path)
-}
-
 /// Serve an embedded file
 fn serve_embedded_file(path: &str) -> Response {
     // Try exact path first
-    if let Some(file) = Assets::get(path) {
+    if let Some(file) = <Assets as RustEmbed>::get(path) {
         let mime = mime_guess::from_path(path)
             .first_or_octet_stream()
             .to_string();
@@ -125,7 +121,7 @@ fn serve_embedded_file(path: &str) -> Response {
 
     // Try with .html extension
     let html_path = format!("{}.html", path);
-    if let Some(file) = Assets::get(&html_path) {
+    if let Some(file) = <Assets as RustEmbed>::get(&html_path) {
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "text/html")
