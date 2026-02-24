@@ -124,11 +124,12 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 **Output Tracks (inear buses):**
 
-| Setting    | Value | Purpose                                      |
-| ---------- | ----- | -------------------------------------------- |
-| I_RECINPUT | -1    | NO hardware input (receives from sends only) |
-| I_RECARM   | 0     | Not needed (shows send levels automatically) |
-| I_RECMON   | 0     | Not needed                                   |
+| Setting    | Value | Purpose                                           |
+| ---------- | ----- | ------------------------------------------------- |
+| I_RECINPUT | -1    | NO hardware input (receives from sends only)      |
+| I_RECARM   | 0     | Not needed (shows send levels automatically)      |
+| I_RECMON   | 0     | Not needed                                        |
+| I_RECMODE  | 2     | "Record: disable" - prevents accidental recording |
 
 **Why this matters:**
 
