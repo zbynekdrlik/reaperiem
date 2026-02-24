@@ -137,7 +137,8 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 1. **No REAPER restarts** - All MCP operations work live via HTTP API + ReaScripts
 2. **ReaScript registration** - New scripts need one REAPER restart to load from reaper-kb.ini
 3. **Git on iem.lan** - Repository cloned there, commits track REAPER project changes
-4. **Sample rate** - Currently 44100Hz in config, should be 96000Hz for Dante
+4. **Sample rate** - Network runs at 96kHz (REAPER follows ASIO driver rate)
+5. **Input metering** - Tracks must be record-armed (I_RECARM=1) to show input levels
 
 ---
 
