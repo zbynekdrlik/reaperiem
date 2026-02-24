@@ -156,22 +156,22 @@ jobs:
         shell: bash
         run: |
           echo "=== NSIS ==="
-          ls -la iem-mixer/src-tauri/target/release/bundle/nsis/ || echo "No NSIS output"
+          ls -la iem-mixer/target/release/bundle/nsis/ || echo "No NSIS output"
           echo "=== MSI ==="
-          ls -la iem-mixer/src-tauri/target/release/bundle/msi/ || echo "No MSI output"
+          ls -la iem-mixer/target/release/bundle/msi/ || echo "No MSI output"
 
       - name: Upload NSIS installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-nsis
-          path: iem-mixer/src-tauri/target/release/bundle/nsis/*.exe
+          path: iem-mixer/target/release/bundle/nsis/*.exe
           retention-days: 7
 
       - name: Upload MSI installer
         uses: actions/upload-artifact@v4
         with:
           name: windows-msi
-          path: iem-mixer/src-tauri/target/release/bundle/msi/*.msi
+          path: iem-mixer/target/release/bundle/msi/*.msi
           retention-days: 7
 
       - name: Upload update artifacts
@@ -179,8 +179,8 @@ jobs:
         with:
           name: update-artifacts
           path: |
-            iem-mixer/src-tauri/target/release/bundle/nsis/*.nsis.zip
-            iem-mixer/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+            iem-mixer/target/release/bundle/nsis/*.nsis.zip
+            iem-mixer/target/release/bundle/nsis/*.nsis.zip.sig
           retention-days: 7
           if-no-files-found: ignore
 
