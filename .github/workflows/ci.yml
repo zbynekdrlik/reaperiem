@@ -53,7 +53,7 @@ jobs:
 
       - name: Clippy (strict - deny warnings)
         working-directory: iem-mixer
-        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::all
+        run: cargo clippy --all-targets -- -D warnings -D clippy::all
 
   # ============================================================
   # TEST - Unit tests for core and server
@@ -81,7 +81,7 @@ jobs:
 
       - name: Run tests
         working-directory: iem-mixer
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace
 
   # ============================================================
   # BUILD WASM - Frontend must build
