@@ -80,11 +80,11 @@ pub async fn get_mixer_state(
     let config = state.config.read().await;
 
     // Verify member exists
-    let member = config
+    let _member = config
         .find_member(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
-    let member_index = config.member_index(&member_id).unwrap();
+    let _member_index = config.member_index(&member_id).unwrap();
 
     // Query REAPER for track states
     // In a real implementation, this would call the REAPER API
@@ -171,7 +171,7 @@ pub async fn set_send_pan(
         reaper_url, track_index, member_index, payload.pan
     );
 
-    state.http_client.get(&url).send().await.map_err(|e| {
+    state.http_client.get(&url).send().await.map_err(|_| {
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError::new("REAPER_ERROR", "REAPER unavailable")),
@@ -202,7 +202,7 @@ pub async fn set_send_mute(
         reaper_url, track_index, member_index, mute_val
     );
 
-    state.http_client.get(&url).send().await.map_err(|e| {
+    state.http_client.get(&url).send().await.map_err(|_| {
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError::new("REAPER_ERROR", "REAPER unavailable")),
