@@ -2,6 +2,7 @@
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::auth::{AuthState, get_token};
 
@@ -23,6 +24,12 @@ pub struct Channel {
     pub level_db: f32,
     pub pan: f32,
     pub muted: bool,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub stereo_pair: Option<String>,
+    #[serde(default)]
+    pub stereo_side: Option<String>,
 }
 
 /// Full mixer state
@@ -30,6 +37,23 @@ pub struct Channel {
 pub struct MixerState {
     pub member_id: String,
     pub channels: Vec<Channel>,
+}
+
+/// Poll response with meters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollResponse {
+    pub member_id: String,
+    pub channels: Vec<Channel>,
+    pub meters: HashMap<usize, f32>,
+    pub connected: bool,
+}
+
+/// Batch operation types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchOperation {
+    MoreMe,
+    Reset,
 }
 
 /// Login response
@@ -199,6 +223,55 @@ pub async fn set_send_mute(member_id: &str, track_index: usize, muted: bool) -> 
 
     let resp = req
         .json(&MuteRequest { muted })
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Poll mixer state with meters (for frequent updates)
+pub async fn poll_mixer_state(member_id: &str) -> Result<PollResponse, String> {
+    let mut req = Request::get(&format!("{}/mixer/{}/poll", API_BASE, member_id));
+
+    if let Some(token) = get_token() {
+        req = req.header("Authorization", &format!("Bearer {}", token));
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
+    } else if resp.status() == 401 {
+        Err("Unauthorized".to_string())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Batch operations (+Me, Reset)
+pub async fn batch_control(member_id: &str, operation: BatchOperation) -> Result<(), String> {
+    #[derive(Serialize)]
+    struct BatchRequest {
+        operation: BatchOperation,
+    }
+
+    let mut req = Request::post(&format!("{}/mixer/{}/batch", API_BASE, member_id));
+
+    if let Some(token) = get_token() {
+        req = req.header("Authorization", &format!("Bearer {}", token));
+    }
+
+    let resp = req
+        .json(&BatchRequest { operation })
         .map_err(|e| format!("Request error: {}", e))?
         .send()
         .await

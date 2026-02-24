@@ -56,6 +56,45 @@ pub struct Channel {
     pub pan: f32,
     /// Muted state
     pub muted: bool,
+    /// Track category (mics, stems, tech)
+    #[serde(default)]
+    pub category: String,
+    /// Stereo pair name (if part of a pair)
+    #[serde(default)]
+    pub stereo_pair: Option<String>,
+    /// Stereo side ("L" or "R")
+    #[serde(default)]
+    pub stereo_side: Option<String>,
+}
+
+/// Polling response with channels and meters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PollResponse {
+    /// Member ID
+    pub member_id: String,
+    /// Channel states
+    pub channels: Vec<Channel>,
+    /// Meter levels (track_index -> peak level 0.0-1.0)
+    pub meters: std::collections::HashMap<usize, f32>,
+    /// Connection status
+    pub connected: bool,
+}
+
+/// Batch control request for +Me or Reset
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchControlRequest {
+    /// Operation type
+    pub operation: BatchOperation,
+}
+
+/// Batch operation types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatchOperation {
+    /// More Me: boost own mic +6dB, reduce others -3dB
+    MoreMe,
+    /// Reset: all to 0dB, unmuted, centered pan
+    Reset,
 }
 
 /// Authentication token payload

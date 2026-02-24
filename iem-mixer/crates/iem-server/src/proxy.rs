@@ -7,7 +7,8 @@ use axum::{
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
 };
-use iem_core::ApiError;
+use iem_core::{ApiError, BatchControlRequest, BatchOperation, PollResponse};
+use std::collections::HashMap;
 
 use crate::AppState;
 
@@ -84,30 +85,352 @@ pub async fn get_mixer_state(
         .find_member(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
-    let _member_index = config.member_index(&member_id).unwrap();
+    let member_index = config.member_index(&member_id).unwrap();
+    let reaper_url = config.reaper_url.clone();
 
-    // Query REAPER for track states
-    // In a real implementation, this would call the REAPER API
-    // For now, return a placeholder
+    // Build channels from inputs with category and stereo info
     let channels: Vec<iem_core::Channel> = config
         .inputs
         .iter()
         .enumerate()
-        .map(|(i, input)| iem_core::Channel {
-            track_index: i + 1,
-            name: input.name.clone(),
-            level_db: input.default_level_db,
-            pan: 0.0,
-            muted: false,
+        .map(|(i, input)| {
+            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
+            iem_core::Channel {
+                track_index: i + 1,
+                name: input.name.clone(),
+                level_db: input.default_level_db,
+                pan: 0.0,
+                muted: false,
+                category,
+                stereo_pair,
+                stereo_side,
+            }
         })
         .collect();
 
     drop(config);
 
+    // Try to get actual levels from REAPER
+    let mut result_channels = channels.clone();
+    for ch in &mut result_channels {
+        if let Ok((level, mute, pan)) = query_send_state(
+            &state.http_client,
+            &reaper_url,
+            ch.track_index,
+            member_index,
+        )
+        .await
+        {
+            ch.level_db = reaper_vol_to_db(level);
+            ch.muted = mute;
+            ch.pan = pan;
+        }
+    }
+
     Ok(Json(iem_core::MixerState {
         member_id: member_id.clone(),
-        channels,
+        channels: result_channels,
     }))
+}
+
+/// Poll current mixer state with meters (optimized for frequent calls)
+pub async fn poll_mixer_state(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+) -> Result<Json<PollResponse>, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+
+    // Verify member exists
+    let _member = config
+        .find_member(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+
+    let member_index = config.member_index(&member_id).unwrap();
+    let reaper_url = config.reaper_url.clone();
+
+    // Build channels from inputs
+    let channels: Vec<iem_core::Channel> = config
+        .inputs
+        .iter()
+        .enumerate()
+        .map(|(i, input)| {
+            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
+            iem_core::Channel {
+                track_index: i + 1,
+                name: input.name.clone(),
+                level_db: input.default_level_db,
+                pan: 0.0,
+                muted: false,
+                category,
+                stereo_pair,
+                stereo_side,
+            }
+        })
+        .collect();
+
+    drop(config);
+
+    let mut result_channels = channels;
+    let mut meters: HashMap<usize, f32> = HashMap::new();
+    let mut connected = false;
+
+    // Query REAPER for all track states in a batch
+    // First try to get all track info
+    let tracks_url = format!("{}/NTRACK;TRACK", reaper_url);
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
+        if let Ok(text) = resp.text().await {
+            connected = true;
+            // Parse track data for meters
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.first() == Some(&"TRACK") && parts.len() > 12 {
+                    if let Ok(track_idx) = parts[1].parse::<usize>() {
+                        // Peak meter is at index 12 (linear 0.0-1.0+)
+                        if let Ok(peak) = parts[12].parse::<f32>() {
+                            meters.insert(track_idx, peak);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Query send states for each channel
+    for ch in &mut result_channels {
+        if let Ok((level, mute, pan)) = query_send_state(
+            &state.http_client,
+            &reaper_url,
+            ch.track_index,
+            member_index,
+        )
+        .await
+        {
+            ch.level_db = reaper_vol_to_db(level);
+            ch.muted = mute;
+            ch.pan = pan;
+            connected = true;
+        }
+    }
+
+    Ok(Json(PollResponse {
+        member_id: member_id.clone(),
+        channels: result_channels,
+        meters,
+        connected,
+    }))
+}
+
+/// Batch control operations (+Me, Reset)
+pub async fn batch_control(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+    Json(payload): Json<BatchControlRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+
+    let member = config
+        .find_member(&member_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+
+    let member_index = config.member_index(&member_id).unwrap();
+    let reaper_url = config.reaper_url.clone();
+    let my_input = format!("{} mic", member.name.to_uppercase());
+    let inputs = config.inputs.clone();
+
+    drop(config);
+
+    match payload.operation {
+        BatchOperation::MoreMe => {
+            // Boost own mic by +6dB, reduce others by -3dB
+            for (i, input) in inputs.iter().enumerate() {
+                let track_index = i + 1;
+
+                // Skip R side of stereo pairs
+                if input.name.ends_with(" R") {
+                    continue;
+                }
+
+                // Get current level
+                let current_vol = if let Ok((vol, _, _)) =
+                    query_send_state(&state.http_client, &reaper_url, track_index, member_index)
+                        .await
+                {
+                    vol
+                } else {
+                    1.0 // Default to 0dB
+                };
+
+                let current_db = reaper_vol_to_db(current_vol);
+                let is_me = input.name.to_uppercase() == my_input;
+
+                let new_db = if is_me {
+                    (current_db + 6.0).min(6.0)
+                } else {
+                    (current_db - 3.0).max(-60.0)
+                };
+
+                let new_vol = db_to_reaper_vol(new_db);
+                let url = format!(
+                    "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                    reaper_url, track_index, member_index, new_vol
+                );
+                let _ = state.http_client.get(&url).send().await;
+
+                // Also set partner for stereo pairs
+                if let Some(partner_idx) = find_stereo_partner(&inputs, &input.name) {
+                    let partner_url = format!(
+                        "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                        reaper_url, partner_idx, member_index, new_vol
+                    );
+                    let _ = state.http_client.get(&partner_url).send().await;
+                }
+            }
+        }
+        BatchOperation::Reset => {
+            // Reset all to 0dB, unmuted, centered pan
+            for (i, _input) in inputs.iter().enumerate() {
+                let track_index = i + 1;
+                let vol = db_to_reaper_vol(0.0);
+
+                // Set volume to 0dB
+                let vol_url = format!(
+                    "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                    reaper_url, track_index, member_index, vol
+                );
+                let _ = state.http_client.get(&vol_url).send().await;
+
+                // Unmute
+                let mute_url = format!(
+                    "{}/SET/TRACK/{}/SEND/{}/MUTE/0",
+                    reaper_url, track_index, member_index
+                );
+                let _ = state.http_client.get(&mute_url).send().await;
+
+                // Center pan
+                let pan_url = format!(
+                    "{}/SET/TRACK/{}/SEND/{}/PAN/0.5",
+                    reaper_url, track_index, member_index
+                );
+                let _ = state.http_client.get(&pan_url).send().await;
+            }
+        }
+    }
+
+    Ok(StatusCode::OK)
+}
+
+/// Query send state from REAPER
+async fn query_send_state(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    track_index: usize,
+    send_index: usize,
+) -> Result<(f32, bool, f32), ()> {
+    // Query volume
+    let vol_url = format!(
+        "{}/GET/TRACK/{}/SEND/{}/VOL",
+        reaper_url, track_index, send_index
+    );
+    let vol = if let Ok(resp) = client.get(&vol_url).send().await {
+        if let Ok(text) = resp.text().await {
+            parse_reaper_value(&text).unwrap_or(1.0)
+        } else {
+            return Err(());
+        }
+    } else {
+        return Err(());
+    };
+
+    // Query mute
+    let mute_url = format!(
+        "{}/GET/TRACK/{}/SEND/{}/MUTE",
+        reaper_url, track_index, send_index
+    );
+    let mute = if let Ok(resp) = client.get(&mute_url).send().await {
+        if let Ok(text) = resp.text().await {
+            parse_reaper_value(&text).unwrap_or(0.0) > 0.5
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    // Query pan
+    let pan_url = format!(
+        "{}/GET/TRACK/{}/SEND/{}/PAN",
+        reaper_url, track_index, send_index
+    );
+    let pan = if let Ok(resp) = client.get(&pan_url).send().await {
+        if let Ok(text) = resp.text().await {
+            parse_reaper_value(&text).unwrap_or(0.5)
+        } else {
+            0.5
+        }
+    } else {
+        0.5
+    };
+
+    Ok((vol, mute, pan))
+}
+
+/// Parse a REAPER response value (format: "COMMAND\tVALUE")
+fn parse_reaper_value(text: &str) -> Option<f32> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 {
+            if let Ok(val) = parts[1].parse::<f32>() {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+/// Categorize a track by name
+fn categorize_track(name: &str) -> (String, Option<String>, Option<String>) {
+    let name_lower = name.to_lowercase();
+
+    // Determine category
+    let category = if name_lower.contains("mic") || name_lower.contains("gtr") {
+        "mics"
+    } else if name_lower.contains("hand") || name_lower.contains("engineer") {
+        "tech"
+    } else {
+        "stems"
+    };
+
+    // Check for stereo pair
+    let (stereo_pair, stereo_side) = if name.ends_with(" L") {
+        let pair_name = name.trim_end_matches(" L").to_string();
+        (Some(pair_name.to_lowercase()), Some("L".to_string()))
+    } else if name.ends_with(" R") {
+        let pair_name = name.trim_end_matches(" R").to_string();
+        (Some(pair_name.to_lowercase()), Some("R".to_string()))
+    } else {
+        (None, None)
+    };
+
+    (category.to_string(), stereo_pair, stereo_side)
+}
+
+/// Find the stereo partner track index
+fn find_stereo_partner(inputs: &[iem_core::InputTrack], name: &str) -> Option<usize> {
+    if name.ends_with(" L") {
+        let partner_name = name.replace(" L", " R");
+        inputs
+            .iter()
+            .position(|i| i.name == partner_name)
+            .map(|p| p + 1)
+    } else if name.ends_with(" R") {
+        let partner_name = name.replace(" R", " L");
+        inputs
+            .iter()
+            .position(|i| i.name == partner_name)
+            .map(|p| p + 1)
+    } else {
+        None
+    }
 }
 
 /// Set send level for a member's mix

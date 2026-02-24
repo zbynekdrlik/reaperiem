@@ -226,6 +226,16 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 ## ⚠️ CI/CD MONITORING REQUIREMENTS
 
+**CRITICAL: Always commit, push, and monitor CI automatically - DO NOT wait for user confirmation.**
+
+When implementation is complete and tests pass locally:
+
+1. Commit immediately with a descriptive message
+2. Push to trigger CI
+3. Monitor CI until all jobs pass
+4. If CI fails, fix and repeat
+5. For releases: verify deployment to iem.lan
+
 **CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
 
 ### After Pushing Code:
