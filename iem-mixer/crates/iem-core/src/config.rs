@@ -87,17 +87,17 @@ impl Config {
     /// Validate a PIN for a member or engineer
     pub fn validate_pin(&self, member_id: &str, pin: &str) -> PinValidation {
         // Check engineer PIN first
-        if let Some(ref eng_pin) = self.engineer_pin {
-            if pin == eng_pin {
-                return PinValidation::Engineer;
-            }
+        if let Some(ref eng_pin) = self.engineer_pin
+            && pin == eng_pin
+        {
+            return PinValidation::Engineer;
         }
 
         // Check member PIN
-        if let Some(expected_pin) = self.pins.get(member_id) {
-            if pin == expected_pin {
-                return PinValidation::Member(member_id.to_string());
-            }
+        if let Some(expected_pin) = self.pins.get(member_id)
+            && pin == expected_pin
+        {
+            return PinValidation::Member(member_id.to_string());
         }
 
         PinValidation::Invalid
