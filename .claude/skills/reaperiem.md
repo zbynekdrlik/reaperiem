@@ -105,12 +105,42 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 **Track Colors:**
 
-- Gray: Folder tracks
 - Orange: Microphones
 - Green: Stems
 - Purple: Tech inputs (HAND mics)
 - Blue: Band outputs (inear)
 - Red: Tech outputs (ENGINEER, TRANSLATOR)
+
+## ⚠️ CRITICAL: Track Configuration
+
+**Input Tracks (mics, stems):**
+
+| Setting    | Value                    | Purpose                                              |
+| ---------- | ------------------------ | ---------------------------------------------------- |
+| I_RECINPUT | ASIO channel (0-indexed) | Hardware input source                                |
+| I_RECARM   | 1                        | Required for API to read input meters                |
+| I_RECMON   | 1                        | Enable input monitoring                              |
+| I_RECMODE  | 2                        | "Monitor only" - won't record even if Record pressed |
+
+**Output Tracks (inear buses):**
+
+| Setting    | Value | Purpose                                      |
+| ---------- | ----- | -------------------------------------------- |
+| I_RECINPUT | -1    | NO hardware input (receives from sends only) |
+| I_RECARM   | 0     | Not needed (shows send levels automatically) |
+| I_RECMON   | 0     | Not needed                                   |
+
+**Why this matters:**
+
+- REAPER's `Track_GetPeakInfo()` API requires `I_RECARM=1` to report input levels
+- Output tracks show levels from sends automatically without record-arm
+- `I_RECMODE=2` prevents accidental recording while allowing input monitoring
+
+**⚠️ ALWAYS SAVE BEFORE RESTARTING REAPER:**
+
+```bash
+curl "http://iem.lan:8080/_/40026"  # Save project
+```
 
 ## Web Mixer Interface
 
