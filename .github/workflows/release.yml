@@ -82,7 +82,7 @@ jobs:
 
       - name: Build WASM (release)
         working-directory: iem-mixer/iem-ui
-        run: trunk build --release --skip-wasm-opt
+        run: trunk build --release
 
       - name: Upload WASM dist
         uses: actions/upload-artifact@v4
