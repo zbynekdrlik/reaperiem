@@ -155,14 +155,13 @@ async fn check_for_updates(app: AppHandle) {
                 iem_core::VERSION
             );
 
-            use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+            use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
             let confirmed = app
                 .dialog()
                 .message(msg)
                 .kind(MessageDialogKind::Info)
                 .title("Update Available")
-                .ok_button_label("Update")
-                .cancel_button_label("Later")
+                .buttons(MessageDialogButtons::OkCancelCustom("Update", "Later"))
                 .blocking_show();
 
             if confirmed {
