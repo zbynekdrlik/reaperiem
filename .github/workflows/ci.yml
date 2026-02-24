@@ -184,7 +184,7 @@ jobs:
       - name: Verify binary exists
         shell: bash
         run: |
-          if [ ! -f iem-mixer/src-tauri/target/debug/iem-mixer-app.exe ]; then
+          if [ ! -f iem-mixer/target/debug/iem-mixer-app.exe ]; then
             echo "ERROR: Binary not found"
             exit 1
           fi
