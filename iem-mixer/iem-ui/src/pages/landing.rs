@@ -44,18 +44,31 @@ pub fn LandingPage() -> impl IntoView {
 /// Grid of member cards
 #[component]
 fn MemberGrid(members: Vec<MemberInfo>) -> impl IntoView {
-    view! {
-        <div class="member-grid">
-            {members.into_iter().map(|member| {
-                let initial = member.name.chars().next().unwrap_or('?').to_uppercase().to_string();
-                let href = format!("/{}", member.id);
-                view! {
-                    <a href=href class="member-card">
-                        <div class="avatar">{initial}</div>
-                        <div class="name">{member.name}</div>
-                    </a>
-                }
-            }).collect::<Vec<_>>()}
-        </div>
+    if members.is_empty() {
+        view! {
+            <div class="empty-state">
+                <div class="empty-icon">"🎧"</div>
+                <h2>"No Members Configured"</h2>
+                <p>"Add band members in config.yaml to get started."</p>
+                <p class="hint">"Config location: %APPDATA%\\iem-mixer\\config.yaml"</p>
+            </div>
+        }
+        .into_any()
+    } else {
+        view! {
+            <div class="member-grid">
+                {members.into_iter().map(|member| {
+                    let initial = member.name.chars().next().unwrap_or('?').to_uppercase().to_string();
+                    let href = format!("/{}", member.id);
+                    view! {
+                        <a href=href class="member-card">
+                            <div class="avatar">{initial}</div>
+                            <div class="name">{member.name}</div>
+                        </a>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+        }
+        .into_any()
     }
 }
