@@ -1,0 +1,36 @@
+# IEM Mixer Configuration
+
+# REAPER HTTP API endpoint
+reaper_url: "http://iem.lan:8080"
+
+# Server port (default 80 for clean URLs)
+port: 80
+
+# JWT secret - set via environment variable IEM_JWT_SECRET
+# jwt_secret: ""
+
+# Band members with their IEM output assignments
+members:
+  - name: Marek
+    dante_output_l: 25
+    dante_output_r: 26
+
+  - name: Petka
+    dante_output_l: 27
+    dante_output_r: 28
+
+# Input tracks from FOH
+inputs:
+  - name: DRUMS
+    dante_input: 1
+    default_level_db: -6
+
+  - name: BASS
+    dante_input: 3
+    default_level_db: -6
+
+# PIN codes - set via environment or separate pins.yaml
+pins: {}
+
+# Engineer PIN - set via environment variable IEM_ENGINEER_PIN
+# engineer_pin: ""

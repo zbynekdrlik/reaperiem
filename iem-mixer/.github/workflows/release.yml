@@ -1,0 +1,330 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag (e.g., v0.1.0) - leave empty for dev build"
+        required: false
+        default: ""
+      deploy:
+        description: "Deploy to iem.lan after build"
+        required: false
+        default: "true"
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+# Only one release at a time
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # ============================================================
+  # VALIDATE - Ensure code passes all checks first
+  # ============================================================
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Check formatting
+        working-directory: iem-mixer
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        working-directory: iem-mixer
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run tests
+        working-directory: iem-mixer
+        run: cargo test --workspace
+
+  # ============================================================
+  # BUILD WASM
+  # ============================================================
+  build-wasm:
+    name: Build WASM Frontend
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-wasm-release-${{ hashFiles('iem-mixer/iem-ui/Cargo.lock') }}
+
+      - name: Install Trunk
+        run: cargo install trunk
+
+      - name: Build WASM (release)
+        working-directory: iem-mixer/iem-ui
+        run: trunk build --release
+
+      - name: Upload WASM dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-dist
+          path: iem-mixer/iem-ui/dist/
+          retention-days: 7
+
+  # ============================================================
+  # BUILD TAURI - Windows installers
+  # ============================================================
+  build-tauri:
+    name: Build Tauri (Windows)
+    runs-on: windows-latest
+    needs: build-wasm
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" == "tag" ]; then
+            VERSION="${{ github.ref_name }}"
+          else
+            VERSION="dev-${{ github.sha }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
+
+      - name: Download WASM dist
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: iem-mixer/iem-ui/dist/
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            iem-mixer/target/
+          key: ${{ runner.os }}-cargo-tauri-release-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
+
+      - name: Build Tauri (release)
+        working-directory: iem-mixer/src-tauri
+        run: cargo tauri build --bundles nsis,msi
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: List build outputs
+        shell: bash
+        run: |
+          echo "=== NSIS ==="
+          ls -la iem-mixer/src-tauri/target/release/bundle/nsis/ || echo "No NSIS output"
+          echo "=== MSI ==="
+          ls -la iem-mixer/src-tauri/target/release/bundle/msi/ || echo "No MSI output"
+
+      - name: Upload NSIS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-nsis
+          path: iem-mixer/src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 7
+
+      - name: Upload MSI installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: iem-mixer/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 7
+
+      - name: Upload update artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-artifacts
+          path: |
+            iem-mixer/src-tauri/target/release/bundle/nsis/*.nsis.zip
+            iem-mixer/src-tauri/target/release/bundle/nsis/*.nsis.zip.sig
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # ============================================================
+  # CREATE RELEASE - GitHub release with all artifacts
+  # ============================================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-tauri
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp artifacts/windows-nsis/*.exe release/ || true
+          cp artifacts/windows-msi/*.msi release/ || true
+          cp artifacts/update-artifacts/*.zip release/ || true
+          cp artifacts/update-artifacts/*.sig release/ || true
+          ls -la release/
+
+      - name: Generate latest.json for updater
+        run: |
+          VERSION="${{ needs.build-tauri.outputs.version }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix
+
+          # Find the NSIS zip file
+          NSIS_ZIP=$(ls release/*.nsis.zip 2>/dev/null | head -1 || echo "")
+          if [ -n "$NSIS_ZIP" ]; then
+            SIG_FILE="${NSIS_ZIP}.sig"
+            if [ -f "$SIG_FILE" ]; then
+              SIGNATURE=$(cat "$SIG_FILE")
+            else
+              SIGNATURE=""
+            fi
+
+            cat > release/latest.json << EOF
+          {
+            "version": "$VERSION",
+            "notes": "See release notes on GitHub",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$SIGNATURE",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$(basename $NSIS_ZIP)"
+              }
+            }
+          }
+          EOF
+            echo "Generated latest.json:"
+            cat release/latest.json
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+
+  # ============================================================
+  # DEPLOY TO IEM.LAN - Auto-deploy web assets
+  # ============================================================
+  deploy:
+    name: Deploy to iem.lan
+    runs-on: ubuntu-latest
+    needs: build-wasm
+    if: |
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) &&
+      (github.event.inputs.deploy != 'false')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM dist
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: dist/
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.IEM_LAN_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H iem.lan >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy to iem.lan
+        run: |
+          # Create deployment package
+          tar -czf deploy.tar.gz -C dist .
+
+          # Deploy via SSH
+          scp -o StrictHostKeyChecking=no deploy.tar.gz deploy@iem.lan:/tmp/
+
+          ssh -o StrictHostKeyChecking=no deploy@iem.lan << 'ENDSSH'
+            # Backup current
+            DEPLOY_DIR="/var/www/iem-mixer"
+            BACKUP_DIR="/var/www/iem-mixer-backup-$(date +%Y%m%d%H%M%S)"
+
+            if [ -d "$DEPLOY_DIR" ]; then
+              sudo mv "$DEPLOY_DIR" "$BACKUP_DIR"
+            fi
+
+            # Deploy new
+            sudo mkdir -p "$DEPLOY_DIR"
+            sudo tar -xzf /tmp/deploy.tar.gz -C "$DEPLOY_DIR"
+            sudo chown -R www-data:www-data "$DEPLOY_DIR"
+
+            # Cleanup
+            rm /tmp/deploy.tar.gz
+
+            # Keep only last 3 backups
+            ls -dt /var/www/iem-mixer-backup-* 2>/dev/null | tail -n +4 | xargs -r sudo rm -rf
+
+            echo "Deployment complete!"
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          curl -sf http://iem.lan/ > /dev/null && echo "Deployment verified!" || echo "Warning: Could not verify deployment"
+        continue-on-error: true
+
+  # ============================================================
+  # NOTIFY - Summary of release
+  # ============================================================
+  notify:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [build-tauri, create-release, deploy]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Summary
+        run: |
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.build-tauri.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build-tauri.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deploy | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,35 @@
+# Build artifacts
+target/
+dist/
+*.wasm
+
+# Trunk
+.trunk/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Config with secrets
+config/config.yaml
+config/pins.yaml
+
+# Tauri build
+src-tauri/target/
+src-tauri/gen/
+
+# Node (if any)
+node_modules/
+
+# Cargo lock for libraries (keep for binaries)
+# Cargo.lock is kept for reproducible builds

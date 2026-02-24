@@ -1,0 +1,29 @@
+[workspace]
+members = [
+    "crates/iem-core",
+    "crates/iem-server",
+    "iem-ui",
+    "src-tauri",
+]
+resolver = "2"
+
+[package]
+name = "iem-mixer"
+version = "0.1.0"
+edition = "2024"
+authors = ["REAPER IEM Team"]
+description = "In-ear monitor mixing system for REAPER"
+license = "MIT"
+
+[dependencies]
+# Core library (re-exported)
+iem-core = { path = "crates/iem-core" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 1
