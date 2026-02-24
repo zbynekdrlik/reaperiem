@@ -179,7 +179,7 @@ jobs:
 
       - name: Build Tauri (debug - CI validation)
         working-directory: iem-mixer/src-tauri
-        run: cargo tauri build --debug --bundles none
+        run: cargo tauri build --debug
 
       - name: Verify binary exists
         shell: bash
