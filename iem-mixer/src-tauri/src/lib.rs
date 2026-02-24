@@ -161,7 +161,10 @@ async fn check_for_updates(app: AppHandle) {
                 .message(msg)
                 .kind(MessageDialogKind::Info)
                 .title("Update Available")
-                .buttons(MessageDialogButtons::OkCancelCustom("Update".to_string(), "Later".to_string()))
+                .buttons(MessageDialogButtons::OkCancelCustom(
+                    "Update".to_string(),
+                    "Later".to_string(),
+                ))
                 .blocking_show();
 
             if confirmed {
