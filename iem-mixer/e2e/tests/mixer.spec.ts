@@ -188,7 +188,8 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const count = await soloBtn.count().catch(() => 0);
     if (count > 0) {
       const initialCalls = apiCalls.length;
-      await soloBtn.click();
+      // Use force:true to bypass grid container intercepting pointer events
+      await soloBtn.click({ force: true });
       await page.waitForTimeout(500);
       // Solo should trigger mute commands for other channels
       expect(apiCalls.length).toBeGreaterThan(initialCalls);
