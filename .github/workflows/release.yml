@@ -307,83 +307,55 @@ jobs:
           echo Installation complete!
 
       - name: Setup auto-start and launch IEM Mixer
-        shell: powershell
+        shell: cmd
         run: |
-          $appPath = "$env:LOCALAPPDATA\IEM Mixer\iem-mixer-app.exe"
-          if (-not (Test-Path $appPath)) {
-            Write-Host "ERROR: IEM Mixer not found at $appPath"
-            exit 1
-          }
+          set APPPATH=%LOCALAPPDATA%\IEM Mixer\iem-mixer-app.exe
+          if not exist "%APPPATH%" (
+            echo ERROR: IEM Mixer not found
+            exit /b 1
+          )
 
-          # Create Windows Startup shortcut for auto-start on login
-          $startupFolder = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
-          $shortcutPath = "$startupFolder\IEM Mixer.lnk"
-          $shell = New-Object -ComObject WScript.Shell
-          $shortcut = $shell.CreateShortcut($shortcutPath)
-          $shortcut.TargetPath = $appPath
-          $shortcut.WorkingDirectory = Split-Path $appPath
-          $shortcut.Save()
-          Write-Host "Created startup shortcut: $shortcutPath"
+          REM Create startup shortcut using VBS
+          echo Set WshShell = CreateObject("WScript.Shell") > %TEMP%\mkshortcut.vbs
+          echo Set oShellLink = WshShell.CreateShortcut("%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\IEM Mixer.lnk") >> %TEMP%\mkshortcut.vbs
+          echo oShellLink.TargetPath = "%LOCALAPPDATA%\IEM Mixer\iem-mixer-app.exe" >> %TEMP%\mkshortcut.vbs
+          echo oShellLink.Save >> %TEMP%\mkshortcut.vbs
+          cscript //nologo %TEMP%\mkshortcut.vbs
+          echo Startup shortcut created
 
-          # Use Task Scheduler to start app in interactive user session
-          $taskName = "IEM Mixer Start"
+          REM Use schtasks to start in interactive session (/IT flag)
+          schtasks /Delete /TN "IEMStart" /F 2>nul
+          schtasks /Create /TN "IEMStart" /TR "\"%LOCALAPPDATA%\IEM Mixer\iem-mixer-app.exe\"" /SC ONCE /ST 00:00 /RU %USERNAME% /IT /F
+          schtasks /Run /TN "IEMStart"
+          echo Scheduled task triggered
 
-          # Remove existing task if present
-          Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-
-          # Create task to run immediately in interactive session
-          $action = New-ScheduledTaskAction -Execute $appPath
-          $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(2)
-          $principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive -RunLevel Limited
-          $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 0)
-
-          Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
-          Write-Host "Registered scheduled task to start IEM Mixer"
-
-          # Start the task now
-          Start-ScheduledTask -TaskName $taskName
-          Write-Host "Started scheduled task"
-          Start-Sleep -Seconds 5
+          REM Wait for app to start
+          timeout /t 5 /nobreak
 
       - name: Verify app is running and port 80 listening
-        shell: powershell
+        shell: cmd
         run: |
-          # Check process is running
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
-          if (-not $proc) {
-            Write-Host "WARNING: IEM Mixer process not found in service session"
-            Write-Host "This is expected - app runs in interactive user session"
-            Write-Host "The startup shortcut will launch it on next login"
-          } else {
-            Write-Host "IEM Mixer process running (PID: $($proc.Id))"
-          }
+          REM Check process is running (may be in different session)
+          tasklist /FI "IMAGENAME eq iem-mixer-app.exe" | findstr /i iem-mixer-app && (
+            echo IEM Mixer process is running
+          ) || (
+            echo WARNING: Process not visible from this session
+          )
 
-          # Verify startup shortcut exists
-          $shortcutPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\IEM Mixer.lnk"
-          if (Test-Path $shortcutPath) {
-            Write-Host "Startup shortcut verified"
-          } else {
-            Write-Host "ERROR: Startup shortcut not found"
-            exit 1
-          }
+          REM Verify startup shortcut exists
+          if exist "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\IEM Mixer.lnk" (
+            echo Startup shortcut verified
+          ) else (
+            echo ERROR: Startup shortcut not found
+            exit /b 1
+          )
 
-          # Check port 80 - may not be available from service session
-          $port80 = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue
-          if ($port80) {
-            Write-Host "Port 80 is listening"
-
-            # Test HTTP response
-            try {
-              $response = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing -TimeoutSec 10
-              if ($response.StatusCode -eq 200) {
-                Write-Host "HTTP OK - IEM Mixer responding on port 80"
-              }
-            } catch {
-              Write-Host "HTTP test failed (expected from service session): $_"
-            }
-          } else {
-            Write-Host "Port 80 not detected from service session (expected)"
-          }
+          REM Test HTTP on port 80
+          curl -sf http://localhost:80/ >nul 2>&1 && (
+            echo HTTP OK - IEM Mixer responding on port 80
+          ) || (
+            echo Port 80 test from service session - may not be visible
+          )
 
       - name: Verify WASM deployment
         shell: cmd
