@@ -19,8 +19,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Starting IEM Mixer Server v{}", iem_core::VERSION);
 
     // Load config from file or environment variable
-    let config_path = std::env::var("IEM_CONFIG_PATH")
-        .unwrap_or_else(|_| "config.yaml".to_string());
+    let config_path =
+        std::env::var("IEM_CONFIG_PATH").unwrap_or_else(|_| "config.yaml".to_string());
 
     let config = match Config::load(&config_path) {
         Ok(cfg) => {

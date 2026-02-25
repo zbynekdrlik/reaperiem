@@ -262,7 +262,9 @@ pub fn MixerPage() -> impl IntoView {
                 }
             }
             if errors > 0 {
-                web_sys::console::warn_1(&format!("Preset loaded with {} API errors", errors).into());
+                web_sys::console::warn_1(
+                    &format!("Preset loaded with {} API errors", errors).into(),
+                );
             }
         });
     });
