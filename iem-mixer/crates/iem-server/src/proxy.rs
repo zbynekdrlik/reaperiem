@@ -176,7 +176,7 @@ pub async fn poll_mixer_state(
 
     // Query REAPER for all track states in a batch
     // First try to get all track info
-    let tracks_url = format!("{}/NTRACK;TRACK", reaper_url);
+    let tracks_url = format!("{}/_/NTRACK;TRACK", reaper_url);
     if let Ok(resp) = state.http_client.get(&tracks_url).send().await
         && let Ok(text) = resp.text().await
     {
@@ -270,7 +270,7 @@ pub async fn batch_control(
 
                 let new_vol = db_to_reaper_vol(new_db);
                 let url = format!(
-                    "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                    "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
                     reaper_url, track_index, member_index, new_vol
                 );
                 let _ = state.http_client.get(&url).send().await;
@@ -278,7 +278,7 @@ pub async fn batch_control(
                 // Also set partner for stereo pairs
                 if let Some(partner_idx) = find_stereo_partner(&inputs, &input.name) {
                     let partner_url = format!(
-                        "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                        "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
                         reaper_url, partner_idx, member_index, new_vol
                     );
                     let _ = state.http_client.get(&partner_url).send().await;
@@ -293,21 +293,21 @@ pub async fn batch_control(
 
                 // Set volume to 0dB
                 let vol_url = format!(
-                    "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+                    "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
                     reaper_url, track_index, member_index, vol
                 );
                 let _ = state.http_client.get(&vol_url).send().await;
 
                 // Unmute
                 let mute_url = format!(
-                    "{}/SET/TRACK/{}/SEND/{}/MUTE/0",
+                    "{}/_/SET/TRACK/{}/SEND/{}/MUTE/0",
                     reaper_url, track_index, member_index
                 );
                 let _ = state.http_client.get(&mute_url).send().await;
 
                 // Center pan
                 let pan_url = format!(
-                    "{}/SET/TRACK/{}/SEND/{}/PAN/0.5",
+                    "{}/_/SET/TRACK/{}/SEND/{}/PAN/0.5",
                     reaper_url, track_index, member_index
                 );
                 let _ = state.http_client.get(&pan_url).send().await;
@@ -327,7 +327,7 @@ async fn query_send_state(
 ) -> Result<(f32, bool, f32), ()> {
     // Query volume
     let vol_url = format!(
-        "{}/GET/TRACK/{}/SEND/{}/VOL",
+        "{}/_/GET/TRACK/{}/SEND/{}/VOL",
         reaper_url, track_index, send_index
     );
     let vol = if let Ok(resp) = client.get(&vol_url).send().await {
@@ -342,7 +342,7 @@ async fn query_send_state(
 
     // Query mute
     let mute_url = format!(
-        "{}/GET/TRACK/{}/SEND/{}/MUTE",
+        "{}/_/GET/TRACK/{}/SEND/{}/MUTE",
         reaper_url, track_index, send_index
     );
     let mute = if let Ok(resp) = client.get(&mute_url).send().await {
@@ -357,7 +357,7 @@ async fn query_send_state(
 
     // Query pan
     let pan_url = format!(
-        "{}/GET/TRACK/{}/SEND/{}/PAN",
+        "{}/_/GET/TRACK/{}/SEND/{}/PAN",
         reaper_url, track_index, send_index
     );
     let pan = if let Ok(resp) = client.get(&pan_url).send().await {
@@ -454,7 +454,7 @@ pub async fn set_send_level(
 
     // Build REAPER API URL for setting send volume
     let url = format!(
-        "{}/SET/TRACK/{}/SEND/{}/VOL/{}",
+        "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
         reaper_url, track_index, member_index, vol
     );
 
@@ -489,7 +489,7 @@ pub async fn set_send_pan(
 
     // REAPER pan is -1.0 to 1.0
     let url = format!(
-        "{}/SET/TRACK/{}/SEND/{}/PAN/{}",
+        "{}/_/SET/TRACK/{}/SEND/{}/PAN/{}",
         reaper_url, track_index, member_index, payload.pan
     );
 
@@ -523,7 +523,7 @@ pub async fn set_send_mute(
 
     let mute_val = if payload.muted { 1 } else { 0 };
     let url = format!(
-        "{}/SET/TRACK/{}/SEND/{}/MUTE/{}",
+        "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
         reaper_url, track_index, member_index, mute_val
     );
 
@@ -581,6 +581,46 @@ fn reaper_vol_to_db(vol: f32) -> f32 {
         -60.0
     } else {
         20.0 * (vol / 0.716).log10()
+    }
+}
+
+/// REAPER HTTP API URL builder
+/// CRITICAL: All REAPER API commands MUST use the `/_/` prefix!
+/// Without this prefix, REAPER returns empty responses.
+mod reaper_api {
+    /// Build URL for setting send volume
+    pub fn set_send_vol(base_url: &str, track: usize, send: usize, vol: f32) -> String {
+        format!("{}/_/SET/TRACK/{}/SEND/{}/VOL/{}", base_url, track, send, vol)
+    }
+
+    /// Build URL for setting send mute
+    pub fn set_send_mute(base_url: &str, track: usize, send: usize, mute: u8) -> String {
+        format!("{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}", base_url, track, send, mute)
+    }
+
+    /// Build URL for setting send pan
+    pub fn set_send_pan(base_url: &str, track: usize, send: usize, pan: f32) -> String {
+        format!("{}/_/SET/TRACK/{}/SEND/{}/PAN/{}", base_url, track, send, pan)
+    }
+
+    /// Build URL for getting send volume
+    pub fn get_send_vol(base_url: &str, track: usize, send: usize) -> String {
+        format!("{}/_/GET/TRACK/{}/SEND/{}/VOL", base_url, track, send)
+    }
+
+    /// Build URL for getting send mute
+    pub fn get_send_mute(base_url: &str, track: usize, send: usize) -> String {
+        format!("{}/_/GET/TRACK/{}/SEND/{}/MUTE", base_url, track, send)
+    }
+
+    /// Build URL for getting send pan
+    pub fn get_send_pan(base_url: &str, track: usize, send: usize) -> String {
+        format!("{}/_/GET/TRACK/{}/SEND/{}/PAN", base_url, track, send)
+    }
+
+    /// Build URL for querying tracks
+    pub fn query_tracks(base_url: &str) -> String {
+        format!("{}/_/NTRACK;TRACK", base_url)
     }
 }
 
@@ -731,5 +771,76 @@ mod tests {
             default_level_db: 0.0,
         }];
         assert_eq!(find_stereo_partner(&inputs, "MAREK mic"), None);
+    }
+
+    // ================================================================
+    // REAPER API URL format tests - CRITICAL for controls to work!
+    // ================================================================
+
+    #[test]
+    fn test_reaper_url_must_have_underscore_prefix() {
+        // CRITICAL: REAPER HTTP API requires /_/ prefix for all commands
+        // Without this, REAPER returns empty responses and controls don't work!
+        let base = "http://iem.lan:8080";
+
+        // All URLs must start with base/_/
+        assert!(
+            reaper_api::set_send_vol(base, 1, 1, 0.5).contains("/_/"),
+            "set_send_vol must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::set_send_mute(base, 1, 1, 0).contains("/_/"),
+            "set_send_mute must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::set_send_pan(base, 1, 1, 0.5).contains("/_/"),
+            "set_send_pan must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::get_send_vol(base, 1, 1).contains("/_/"),
+            "get_send_vol must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::get_send_mute(base, 1, 1).contains("/_/"),
+            "get_send_mute must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::get_send_pan(base, 1, 1).contains("/_/"),
+            "get_send_pan must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::query_tracks(base).contains("/_/"),
+            "query_tracks must use /_/ prefix"
+        );
+    }
+
+    #[test]
+    fn test_reaper_url_set_send_vol_format() {
+        let url = reaper_api::set_send_vol("http://iem.lan:8080", 1, 2, 0.716);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/1/SEND/2/VOL/0.716");
+    }
+
+    #[test]
+    fn test_reaper_url_set_send_mute_format() {
+        let url = reaper_api::set_send_mute("http://iem.lan:8080", 3, 4, 1);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/3/SEND/4/MUTE/1");
+    }
+
+    #[test]
+    fn test_reaper_url_set_send_pan_format() {
+        let url = reaper_api::set_send_pan("http://iem.lan:8080", 5, 6, 0.25);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/5/SEND/6/PAN/0.25");
+    }
+
+    #[test]
+    fn test_reaper_url_get_send_vol_format() {
+        let url = reaper_api::get_send_vol("http://iem.lan:8080", 1, 1);
+        assert_eq!(url, "http://iem.lan:8080/_/GET/TRACK/1/SEND/1/VOL");
+    }
+
+    #[test]
+    fn test_reaper_url_query_tracks_format() {
+        let url = reaper_api::query_tracks("http://iem.lan:8080");
+        assert_eq!(url, "http://iem.lan:8080/_/NTRACK;TRACK");
     }
 }
