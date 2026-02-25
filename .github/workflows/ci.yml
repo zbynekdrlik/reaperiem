@@ -243,20 +243,21 @@ jobs:
         working-directory: iem-mixer/src-tauri
         run: cargo tauri build
 
-      - name: Verify binary exists
+      - name: Verify installer exists
         shell: bash
         run: |
-          if [ ! -f iem-mixer/target/release/iem-mixer-app.exe ]; then
-            echo "ERROR: Binary not found"
+          INSTALLER=$(ls iem-mixer/target/release/bundle/nsis/*.exe 2>/dev/null | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "ERROR: NSIS installer not found"
             exit 1
           fi
-          echo "Build verified"
+          echo "Installer found: $INSTALLER"
 
-      - name: Upload Tauri app
+      - name: Upload Tauri installer
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-app
-          path: iem-mixer/target/release/iem-mixer-app.exe
+          name: tauri-installer
+          path: iem-mixer/target/release/bundle/nsis/*.exe
           retention-days: 1
 
   # ============================================================
@@ -345,45 +346,40 @@ jobs:
           name: wasm-dist
           path: wasm-dist/
 
-      - name: Download Tauri app
+      - name: Download Tauri installer
         uses: actions/download-artifact@v4
         with:
-          name: tauri-app
-          path: tauri-app/
+          name: tauri-installer
+          path: installer/
 
-      - name: Deploy Tauri app and configure startup
+      - name: Install and start IEM Mixer
         shell: powershell
         run: |
-          $dest = "C:\iem-mixer"
-          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
-
           # Stop existing app if running
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          $proc = Get-Process -Name "IEM Mixer" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "Stopping existing IEM Mixer app..."
-            Stop-Process -Name "iem-mixer-app" -Force
+            Write-Host "Stopping existing IEM Mixer..."
+            Stop-Process -Name "IEM Mixer" -Force
             Start-Sleep -Seconds 2
           }
 
-          # Copy new binary and config
-          Copy-Item "tauri-app\iem-mixer-app.exe" "$dest\iem-mixer-app.exe" -Force
-          Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
-          Write-Host "Tauri app and config deployed to $dest"
+          # Find and run the NSIS installer silently
+          $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
+          Write-Host "Running installer: $($installer.FullName)"
+          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+          Write-Host "Installation complete"
 
-          # Create Windows Startup shortcut (runs at user login with tray icon)
-          $startup = [Environment]::GetFolderPath('Startup')
-          $shortcut = "$startup\IEM Mixer.lnk"
-          $WScriptShell = New-Object -ComObject WScript.Shell
-          $link = $WScriptShell.CreateShortcut($shortcut)
-          $link.TargetPath = "$dest\iem-mixer-app.exe"
-          $link.WorkingDirectory = $dest
-          $link.Save()
-          Write-Host "Startup shortcut created at $shortcut"
+          # Copy config to install location
+          $appData = [Environment]::GetFolderPath('LocalApplicationData')
+          $installDir = "$appData\IEM Mixer"
+          Copy-Item "iem-mixer\config\config.production.yaml" "$installDir\config.yaml" -Force
+          Write-Host "Config deployed to $installDir"
 
           # Start app via Task Scheduler (survives CI job cleanup)
+          $exePath = "$installDir\IEM Mixer.exe"
           $taskName = "IEMMixerStart"
           schtasks /Delete /TN $taskName /F 2>$null
-          schtasks /Create /TN $taskName /TR "$dest\iem-mixer-app.exe" /SC ONCE /ST 00:00 /F
+          schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /F
           schtasks /Run /TN $taskName
           Start-Sleep -Seconds 3
           Write-Host "App started via Task Scheduler"
@@ -407,26 +403,27 @@ jobs:
       - name: Verify deployment and app running
         shell: powershell
         run: |
-          $dest = "C:\iem-mixer"
+          $appData = [Environment]::GetFolderPath('LocalApplicationData')
+          $installDir = "$appData\IEM Mixer"
 
-          # Verify binary exists
-          if (Test-Path "$dest\iem-mixer-app.exe") {
-            Write-Host "Binary deployed: $dest\iem-mixer-app.exe"
+          # Verify installation
+          if (Test-Path "$installDir\IEM Mixer.exe") {
+            Write-Host "App installed: $installDir\IEM Mixer.exe"
           } else {
-            Write-Host "::error::Binary not found"
+            Write-Host "::error::App not installed"
             exit 1
           }
 
           # Verify config exists
-          if (Test-Path "$dest\config.yaml") {
-            Write-Host "Config deployed: $dest\config.yaml"
+          if (Test-Path "$installDir\config.yaml") {
+            Write-Host "Config deployed: $installDir\config.yaml"
           } else {
             Write-Host "::error::Config not found"
             exit 1
           }
 
           # Verify app is running
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          $proc = Get-Process -Name "IEM Mixer" -ErrorAction SilentlyContinue
           if ($proc) {
             Write-Host "App running (PID: $($proc.Id))"
           } else {
