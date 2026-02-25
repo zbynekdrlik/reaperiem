@@ -315,7 +315,7 @@ async fn query_send_state(
     let vol_url = reaper_api::get_send_vol(reaper_url, track_index, send_index);
     let vol = if let Ok(resp) = client.get(&vol_url).send().await {
         if let Ok(text) = resp.text().await {
-            parse_reaper_value(&text).unwrap_or(1.0)
+            parse_send_volume(&text).unwrap_or(1.0)
         } else {
             return Err(());
         }
@@ -327,7 +327,7 @@ async fn query_send_state(
     let mute_url = reaper_api::get_send_mute(reaper_url, track_index, send_index);
     let mute = if let Ok(resp) = client.get(&mute_url).send().await {
         if let Ok(text) = resp.text().await {
-            parse_reaper_value(&text).unwrap_or(0.0) > 0.5
+            parse_send_mute(&text).unwrap_or(false)
         } else {
             false
         }
@@ -339,7 +339,7 @@ async fn query_send_state(
     let pan_url = reaper_api::get_send_pan(reaper_url, track_index, send_index);
     let pan = if let Ok(resp) = client.get(&pan_url).send().await {
         if let Ok(text) = resp.text().await {
-            parse_reaper_value(&text).unwrap_or(0.5)
+            parse_send_pan(&text).unwrap_or(0.5)
         } else {
             0.5
         }
@@ -350,7 +350,53 @@ async fn query_send_state(
     Ok((vol, mute, pan))
 }
 
+/// Parse a REAPER SEND response for volume
+/// Response format: SEND\ttrack\tsend\tflag\tVOLUME\tpan\tmode
+fn parse_send_volume(text: &str) -> Option<f32> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() == Some(&"SEND")
+            && parts.len() >= 5
+            && let Ok(val) = parts[4].parse::<f32>()
+        {
+            return Some(val);
+        }
+    }
+    None
+}
+
+/// Parse a REAPER SEND response for mute (flag at position 3)
+/// Response format: SEND\ttrack\tsend\tMUTE\tvolume\tpan\tmode
+fn parse_send_mute(text: &str) -> Option<bool> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() == Some(&"SEND")
+            && parts.len() >= 4
+            && let Ok(val) = parts[3].parse::<i32>()
+        {
+            return Some(val != 0);
+        }
+    }
+    None
+}
+
+/// Parse a REAPER SEND response for pan
+/// Response format: SEND\ttrack\tsend\tflag\tvolume\tPAN\tmode
+fn parse_send_pan(text: &str) -> Option<f32> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() == Some(&"SEND")
+            && parts.len() >= 6
+            && let Ok(val) = parts[5].parse::<f32>()
+        {
+            return Some(val);
+        }
+    }
+    None
+}
+
 /// Parse a REAPER response value (format: "COMMAND\tVALUE")
+/// Used for simple responses like NTRACK
 fn parse_reaper_value(text: &str) -> Option<f32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
@@ -702,6 +748,65 @@ mod tests {
     fn test_parse_reaper_value_invalid() {
         let input = "ERROR";
         assert_eq!(parse_reaper_value(input), None);
+    }
+
+    // ================================================================
+    // REAPER SEND response parsing tests - CRITICAL for reading state!
+    // ================================================================
+
+    #[test]
+    fn test_parse_send_volume() {
+        // Actual REAPER response: SEND\ttrack\tsend\tflag\tVOLUME\tpan\tmode
+        let input = "SEND\t1\t1\t0\t0.300000\t0.000000\t24";
+        assert_eq!(parse_send_volume(input), Some(0.300000));
+    }
+
+    #[test]
+    fn test_parse_send_volume_unity() {
+        let input = "SEND\t1\t2\t0\t0.716000\t0.000000\t24";
+        let vol = parse_send_volume(input).unwrap();
+        assert!((vol - 0.716).abs() < 0.001, "Expected 0.716, got {}", vol);
+    }
+
+    #[test]
+    fn test_parse_send_mute_on() {
+        // Flag at position 3 indicates mute state
+        let input = "SEND\t1\t1\t1\t0.716000\t0.000000\t24";
+        assert_eq!(parse_send_mute(input), Some(true));
+    }
+
+    #[test]
+    fn test_parse_send_mute_off() {
+        let input = "SEND\t1\t1\t0\t0.716000\t0.000000\t24";
+        assert_eq!(parse_send_mute(input), Some(false));
+    }
+
+    #[test]
+    fn test_parse_send_pan_center() {
+        // Pan is at position 5 (0.0 = center in REAPER)
+        let input = "SEND\t1\t1\t0\t0.716000\t0.000000\t24";
+        assert_eq!(parse_send_pan(input), Some(0.0));
+    }
+
+    #[test]
+    fn test_parse_send_pan_left() {
+        let input = "SEND\t1\t1\t0\t0.716000\t-1.000000\t24";
+        assert_eq!(parse_send_pan(input), Some(-1.0));
+    }
+
+    #[test]
+    fn test_parse_send_pan_right() {
+        let input = "SEND\t1\t1\t0\t0.716000\t1.000000\t24";
+        assert_eq!(parse_send_pan(input), Some(1.0));
+    }
+
+    #[test]
+    fn test_parse_send_invalid_response() {
+        // Non-SEND response should return None
+        let input = "TRACK\t1\tname\t0.5";
+        assert_eq!(parse_send_volume(input), None);
+        assert_eq!(parse_send_mute(input), None);
+        assert_eq!(parse_send_pan(input), None);
     }
 
     #[test]
