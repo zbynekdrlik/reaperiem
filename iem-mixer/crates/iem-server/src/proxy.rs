@@ -99,7 +99,7 @@ pub async fn get_mixer_state(
                 track_index: i + 1,
                 name: input.name.clone(),
                 level_db: input.default_level_db,
-                pan: 0.0,
+                pan: 0.5, // Center in UI range (0.0-1.0)
                 muted: false,
                 category,
                 stereo_pair,
@@ -123,7 +123,7 @@ pub async fn get_mixer_state(
         {
             ch.level_db = reaper_vol_to_db(level);
             ch.muted = mute;
-            ch.pan = pan;
+            ch.pan = reaper_pan_to_ui(pan);
         }
     }
 
@@ -159,7 +159,7 @@ pub async fn poll_mixer_state(
                 track_index: i + 1,
                 name: input.name.clone(),
                 level_db: input.default_level_db,
-                pan: 0.0,
+                pan: 0.5, // Center in UI range (0.0-1.0)
                 muted: false,
                 category,
                 stereo_pair,
@@ -206,7 +206,7 @@ pub async fn poll_mixer_state(
         {
             ch.level_db = reaper_vol_to_db(level);
             ch.muted = mute;
-            ch.pan = pan;
+            ch.pan = reaper_pan_to_ui(pan);
             connected = true;
         }
     }
@@ -294,8 +294,8 @@ pub async fn batch_control(
                 let mute_url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, 0);
                 let _ = state.http_client.get(&mute_url).send().await;
 
-                // Center pan
-                let pan_url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.5);
+                // Center pan (REAPER uses 0.0 for center, not 0.5)
+                let pan_url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.0);
                 let _ = state.http_client.get(&pan_url).send().await;
             }
         }
@@ -335,16 +335,16 @@ async fn query_send_state(
         false
     };
 
-    // Query pan
+    // Query pan (REAPER returns -1.0 to 1.0 where 0.0 = center)
     let pan_url = reaper_api::get_send_pan(reaper_url, track_index, send_index);
     let pan = if let Ok(resp) = client.get(&pan_url).send().await {
         if let Ok(text) = resp.text().await {
-            parse_send_pan(&text).unwrap_or(0.5)
+            parse_send_pan(&text).unwrap_or(0.0) // Default to center (REAPER range)
         } else {
-            0.5
+            0.0
         }
     } else {
-        0.5
+        0.0
     };
 
     Ok((vol, mute, pan))
@@ -470,6 +470,14 @@ pub async fn set_send_level(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let reaper_url = config.reaper_url.clone();
+
+    // Get track name for debugging
+    let track_name = config
+        .inputs
+        .get(track_index.saturating_sub(1))
+        .map(|i| i.name.as_str())
+        .unwrap_or("unknown");
+
     drop(config);
 
     // Convert dB to REAPER volume (approximate)
@@ -479,7 +487,16 @@ pub async fn set_send_level(
     // Build REAPER API URL for setting send volume
     let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
 
-    tracing::debug!(url = %url, level_db = payload.level_db, "Setting send level");
+    tracing::info!(
+        member_id = %member_id,
+        member_index = member_index,
+        track_index = track_index,
+        track_name = %track_name,
+        level_db = payload.level_db,
+        reaper_vol = vol,
+        url = %url,
+        "LEVEL REQUEST"
+    );
 
     // Call REAPER
     state.http_client.get(&url).send().await.map_err(|e| {
@@ -508,10 +525,16 @@ pub async fn set_send_pan(
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
-    // REAPER pan is -1.0 to 1.0
-    let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, payload.pan);
+    // Convert UI pan (0.0-1.0) to REAPER pan (-1.0 to 1.0)
+    let reaper_pan = ui_pan_to_reaper(payload.pan);
+    let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, reaper_pan);
 
-    tracing::debug!(url = %url, pan = payload.pan, "Setting send pan");
+    tracing::debug!(
+        url = %url,
+        ui_pan = payload.pan,
+        reaper_pan = reaper_pan,
+        "Setting send pan"
+    );
 
     state.http_client.get(&url).send().await.map_err(|e| {
         tracing::error!(error = %e, "REAPER pan error");
@@ -537,12 +560,28 @@ pub async fn set_send_mute(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let reaper_url = config.reaper_url.clone();
+
+    // Get track name for debugging
+    let track_name = config
+        .inputs
+        .get(track_index.saturating_sub(1))
+        .map(|i| i.name.as_str())
+        .unwrap_or("unknown");
+
     drop(config);
 
     let mute_val = if payload.muted { 1 } else { 0 };
     let url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
 
-    tracing::debug!(url = %url, muted = payload.muted, "Setting send mute");
+    tracing::info!(
+        member_id = %member_id,
+        member_index = member_index,
+        track_index = track_index,
+        track_name = %track_name,
+        muted = payload.muted,
+        url = %url,
+        "MUTE REQUEST"
+    );
 
     state.http_client.get(&url).send().await.map_err(|e| {
         tracing::error!(error = %e, "REAPER mute error");
@@ -597,6 +636,19 @@ fn reaper_vol_to_db(vol: f32) -> f32 {
     } else {
         20.0 * (vol / 0.716).log10()
     }
+}
+
+/// Convert REAPER pan (-1.0 to 1.0) to UI pan (0.0 to 1.0)
+///
+/// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
+/// UI uses:     0.0 = left, 0.5 = center, 1.0 = right
+fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
+    ((reaper_pan + 1.0) / 2.0).clamp(0.0, 1.0)
+}
+
+/// Convert UI pan (0.0 to 1.0) to REAPER pan (-1.0 to 1.0)
+fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
+    ((ui_pan * 2.0) - 1.0).clamp(-1.0, 1.0)
 }
 
 /// REAPER HTTP API URL builder
@@ -925,5 +977,100 @@ mod tests {
     fn test_reaper_url_query_tracks_format() {
         let url = reaper_api::query_tracks("http://iem.lan:8080");
         assert_eq!(url, "http://iem.lan:8080/_/NTRACK;TRACK");
+    }
+
+    // ================================================================
+    // Pan conversion tests - CRITICAL for correct pan display!
+    // ================================================================
+
+    #[test]
+    fn test_reaper_pan_to_ui_center() {
+        // REAPER center (0.0) -> UI center (0.5)
+        let ui_pan = reaper_pan_to_ui(0.0);
+        assert!(
+            (ui_pan - 0.5).abs() < 0.001,
+            "REAPER 0.0 should be UI 0.5, got {}",
+            ui_pan
+        );
+    }
+
+    #[test]
+    fn test_reaper_pan_to_ui_left() {
+        // REAPER left (-1.0) -> UI left (0.0)
+        let ui_pan = reaper_pan_to_ui(-1.0);
+        assert!(
+            ui_pan.abs() < 0.001,
+            "REAPER -1.0 should be UI 0.0, got {}",
+            ui_pan
+        );
+    }
+
+    #[test]
+    fn test_reaper_pan_to_ui_right() {
+        // REAPER right (1.0) -> UI right (1.0)
+        let ui_pan = reaper_pan_to_ui(1.0);
+        assert!(
+            (ui_pan - 1.0).abs() < 0.001,
+            "REAPER 1.0 should be UI 1.0, got {}",
+            ui_pan
+        );
+    }
+
+    #[test]
+    fn test_ui_pan_to_reaper_center() {
+        // UI center (0.5) -> REAPER center (0.0)
+        let reaper_pan = ui_pan_to_reaper(0.5);
+        assert!(
+            reaper_pan.abs() < 0.001,
+            "UI 0.5 should be REAPER 0.0, got {}",
+            reaper_pan
+        );
+    }
+
+    #[test]
+    fn test_ui_pan_to_reaper_left() {
+        // UI left (0.0) -> REAPER left (-1.0)
+        let reaper_pan = ui_pan_to_reaper(0.0);
+        assert!(
+            (reaper_pan - (-1.0)).abs() < 0.001,
+            "UI 0.0 should be REAPER -1.0, got {}",
+            reaper_pan
+        );
+    }
+
+    #[test]
+    fn test_ui_pan_to_reaper_right() {
+        // UI right (1.0) -> REAPER right (1.0)
+        let reaper_pan = ui_pan_to_reaper(1.0);
+        assert!(
+            (reaper_pan - 1.0).abs() < 0.001,
+            "UI 1.0 should be REAPER 1.0, got {}",
+            reaper_pan
+        );
+    }
+
+    #[test]
+    fn test_pan_conversion_roundtrip() {
+        // Test roundtrip conversion at various UI positions
+        for ui_pan in [0.0, 0.25, 0.5, 0.75, 1.0] {
+            let reaper = ui_pan_to_reaper(ui_pan);
+            let back = reaper_pan_to_ui(reaper);
+            assert!(
+                (back - ui_pan).abs() < 0.001,
+                "Roundtrip failed for UI {}: REAPER {} -> UI {}",
+                ui_pan,
+                reaper,
+                back
+            );
+        }
+    }
+
+    #[test]
+    fn test_pan_conversion_clamps() {
+        // Test that out-of-range values are clamped
+        assert!((reaper_pan_to_ui(-2.0) - 0.0).abs() < 0.001);
+        assert!((reaper_pan_to_ui(2.0) - 1.0).abs() < 0.001);
+        assert!((ui_pan_to_reaper(-1.0) - (-1.0)).abs() < 0.001);
+        assert!((ui_pan_to_reaper(2.0) - 1.0).abs() < 0.001);
     }
 }

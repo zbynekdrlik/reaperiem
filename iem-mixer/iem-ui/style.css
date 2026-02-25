@@ -389,16 +389,6 @@ body {
   flex-shrink: 0;
 }
 
-.fader-value {
-  min-width: 55px;
-  text-align: right;
-  font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 1.4em;
-  font-weight: 600;
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-
 /* Pan knob area */
 .pan-container {
   display: flex;

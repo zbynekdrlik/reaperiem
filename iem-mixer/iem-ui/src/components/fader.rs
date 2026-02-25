@@ -4,6 +4,9 @@ use leptos::prelude::*;
 use wasm_bindgen::JsCast;
 
 /// Vertical fader component
+///
+/// Note: dB value display is handled by the parent (mixer.rs) via the
+/// `.db-display` element. The Fader component only renders the slider.
 #[component]
 pub fn Fader(
     /// Current value in dB
@@ -32,18 +35,6 @@ pub fn Fader(
         on_change(new_value);
     };
 
-    // Format dB value for display
-    let format_db = move || {
-        let v = local_value.get();
-        if v <= -60.0 {
-            "-\u{221E}".to_string()
-        } else if v >= 0.0 {
-            format!("+{:.0}", v)
-        } else {
-            format!("{:.0}", v)
-        }
-    };
-
     view! {
         <div class="fader-container">
             <input
@@ -55,7 +46,6 @@ pub fn Fader(
                 value=move || local_value.get()
                 on:input=handle_input
             />
-            <span class="fader-value">{format_db}</span>
         </div>
     }
 }
