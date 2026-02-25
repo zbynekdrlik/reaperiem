@@ -471,12 +471,12 @@ pub async fn set_send_level(
 
     let reaper_url = config.reaper_url.clone();
 
-    // Get track name for debugging
+    // Get track name for debugging (owned String to avoid borrow issues)
     let track_name = config
         .inputs
         .get(track_index.saturating_sub(1))
-        .map(|i| i.name.as_str())
-        .unwrap_or("unknown");
+        .map(|i| i.name.clone())
+        .unwrap_or_else(|| "unknown".to_string());
 
     drop(config);
 
@@ -561,12 +561,12 @@ pub async fn set_send_mute(
 
     let reaper_url = config.reaper_url.clone();
 
-    // Get track name for debugging
+    // Get track name for debugging (owned String to avoid borrow issues)
     let track_name = config
         .inputs
         .get(track_index.saturating_sub(1))
-        .map(|i| i.name.as_str())
-        .unwrap_or("unknown");
+        .map(|i| i.name.clone())
+        .unwrap_or_else(|| "unknown".to_string());
 
     drop(config);
 
