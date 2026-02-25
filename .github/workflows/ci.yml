@@ -338,6 +338,35 @@ jobs:
           name: wasm-dist
           path: wasm-dist/
 
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build server binary
+        shell: bash
+        working-directory: iem-mixer
+        run: cargo build --package iem-server --features standalone --release
+
+      - name: Deploy server binary
+        shell: powershell
+        run: |
+          # Stop the IEM server service if running
+          $service = Get-Service -Name "iem-server" -ErrorAction SilentlyContinue
+          if ($service -and $service.Status -eq "Running") {
+            Write-Host "Stopping iem-server service..."
+            Stop-Service -Name "iem-server" -Force
+            Start-Sleep -Seconds 2
+          }
+          # Copy new binary
+          $dest = "C:\iem-server"
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
+          Copy-Item "iem-mixer\target\release\server.exe" "$dest\iem-server.exe" -Force
+          Write-Host "Server binary deployed to $dest"
+          # Start service if it exists
+          if ($service) {
+            Write-Host "Starting iem-server service..."
+            Start-Service -Name "iem-server"
+          }
+
       - name: Deploy WASM to REAPER www root
         shell: cmd
         run: |
