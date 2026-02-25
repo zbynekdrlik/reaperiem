@@ -489,10 +489,29 @@ jobs:
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Start app directly (Task Scheduler runs in SYSTEM context without GUI)
-          # Use Start-Process to detach from CI process
-          Write-Host "Starting app directly: $exePath"
-          Start-Process -FilePath $exePath -WindowStyle Hidden
+          # Start app via Task Scheduler with /IT (interactive) and /RU (run as user)
+          # This ensures the app runs in the logged-in user's desktop session with tray icon
+          $taskName = "IEMMixerStart"
+          Write-Host "Creating task to start: $exePath"
+
+          # Delete existing task (ignore errors if not exists)
+          cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
+
+          # Create task with interactive flag (/IT) to run in user's desktop session
+          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /F
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to create scheduled task"
+            exit 1
+          }
+
+          # Run the task
+          & schtasks /Run /TN $taskName
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to run scheduled task"
+            exit 1
+          }
+
+          Write-Host "Task started, waiting for app..."
           Start-Sleep -Seconds 5
 
           # Check if process is running
@@ -504,24 +523,12 @@ jobs:
           }
 
           # Check if port is listening
-          $portCheck = netstat -an | Select-String ":80"
+          $portCheck = netstat -an | Select-String "LISTENING" | Select-String ":80 "
           if ($portCheck) {
-            Write-Host "Port 8081 status:"
+            Write-Host "Port 80 listening:"
             $portCheck | ForEach-Object { Write-Host "  $_" }
           } else {
-            Write-Host "::warning::Port 8081 not in use"
-          }
-
-          # Check for app logs
-          $logDir = "$env:APPDATA\iem-mixer\logs"
-          if (Test-Path $logDir) {
-            Write-Host "=== APP LOGS ==="
-            Get-ChildItem $logDir -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object {
-              Write-Host "Log file: $($_.FullName)"
-              Get-Content $_.FullName -Tail 50 | ForEach-Object { Write-Host "  $_" }
-            }
-          } else {
-            Write-Host "No log directory found at $logDir"
+            Write-Host "::warning::Port 80 not listening"
           }
 
           Write-Host "App startup complete"
