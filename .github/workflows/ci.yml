@@ -260,7 +260,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: standalone-server
-          path: iem-mixer/target/release/server.exe
+          path: iem-mixer/target/release/iem-server.exe
           retention-days: 1
 
   # ============================================================
@@ -362,20 +362,20 @@ jobs:
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
           # Stop existing server if running
-          $proc = Get-Process -Name "server" -ErrorAction SilentlyContinue
+          $proc = Get-Process -Name "iem-server" -ErrorAction SilentlyContinue
           if ($proc) {
             Write-Host "Stopping existing IEM Mixer server..."
-            Stop-Process -Name "server" -Force
+            Stop-Process -Name "iem-server" -Force
             Start-Sleep -Seconds 2
           }
 
           # Copy new binary and config
-          Copy-Item "standalone-server\server.exe" "$dest\server.exe" -Force
+          Copy-Item "standalone-server\iem-server.exe" "$dest\iem-server.exe" -Force
           Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
           Write-Host "Standalone server and config deployed to $dest"
 
           # Start server in background (serves API on port 80)
-          Start-Process -FilePath "$dest\server.exe" -WorkingDirectory $dest -WindowStyle Hidden
+          Start-Process -FilePath "$dest\iem-server.exe" -WorkingDirectory $dest -WindowStyle Hidden
           Write-Host "IEM Mixer server started"
 
       - name: Deploy WASM to REAPER www root
@@ -399,7 +399,7 @@ jobs:
         run: |
           Write-Host "Checking IEM Mixer server..."
           Start-Sleep -Seconds 3
-          $proc = Get-Process -Name "server" -ErrorAction SilentlyContinue
+          $proc = Get-Process -Name "iem-server" -ErrorAction SilentlyContinue
           if ($proc) {
             Write-Host "IEM Mixer server is running (PID: $($proc.Id))"
           } else {
