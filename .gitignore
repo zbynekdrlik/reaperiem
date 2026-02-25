@@ -36,3 +36,7 @@ Thumbs.db
 # Claude (keep skills, ignore plans and logs)
 .claude/plans/
 .claude/command-history.log
+
+# Playwright test artifacts
+.playwright-mcp/
+*.png
