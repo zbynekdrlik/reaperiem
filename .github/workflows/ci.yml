@@ -624,26 +624,27 @@ jobs:
         shell: powershell
         run: |
           $appData = [Environment]::GetFolderPath('LocalApplicationData')
+          $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
           $installDir = "$appData\IEM Mixer"
 
-          # Verify installation
-          if (Test-Path "$installDir\IEM Mixer.exe") {
-            Write-Host "App installed: $installDir\IEM Mixer.exe"
+          # Verify installation (binary is iem-mixer-app.exe from Cargo.toml)
+          if (Test-Path "$installDir\iem-mixer-app.exe") {
+            Write-Host "App installed: $installDir\iem-mixer-app.exe"
           } else {
             Write-Host "::error::App not installed"
             exit 1
           }
 
-          # Verify config exists
-          if (Test-Path "$installDir\config.yaml") {
-            Write-Host "Config deployed: $installDir\config.yaml"
+          # Verify config exists (at %APPDATA%\iem-mixer\config.yaml)
+          if (Test-Path "$configDir\config.yaml") {
+            Write-Host "Config deployed: $configDir\config.yaml"
           } else {
-            Write-Host "::error::Config not found"
+            Write-Host "::error::Config not found at $configDir\config.yaml"
             exit 1
           }
 
-          # Verify app is running
-          $proc = Get-Process -Name "IEM Mixer" -ErrorAction SilentlyContinue
+          # Verify app is running (process name is iem-mixer-app)
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
             Write-Host "App running (PID: $($proc.Id))"
           } else {
