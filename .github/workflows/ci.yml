@@ -252,15 +252,11 @@ jobs:
           fi
           echo "Build verified"
 
-      - name: Build standalone server
-        working-directory: iem-mixer
-        run: cargo build --package iem-server --features standalone --release
-
-      - name: Upload standalone server
+      - name: Upload Tauri app
         uses: actions/upload-artifact@v4
         with:
-          name: standalone-server
-          path: iem-mixer/target/release/iem-server.exe
+          name: tauri-app
+          path: iem-mixer/target/debug/iem-mixer-app.exe
           retention-days: 1
 
   # ============================================================
@@ -349,34 +345,44 @@ jobs:
           name: wasm-dist
           path: wasm-dist/
 
-      - name: Download standalone server
+      - name: Download Tauri app
         uses: actions/download-artifact@v4
         with:
-          name: standalone-server
-          path: standalone-server/
+          name: tauri-app
+          path: tauri-app/
 
-      - name: Deploy standalone server and config
+      - name: Deploy Tauri app and configure startup
         shell: powershell
         run: |
           $dest = "C:\iem-mixer"
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
-          # Stop existing server if running
-          $proc = Get-Process -Name "iem-server" -ErrorAction SilentlyContinue
+          # Stop existing app if running
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "Stopping existing IEM Mixer server..."
-            Stop-Process -Name "iem-server" -Force
+            Write-Host "Stopping existing IEM Mixer app..."
+            Stop-Process -Name "iem-mixer-app" -Force
             Start-Sleep -Seconds 2
           }
 
           # Copy new binary and config
-          Copy-Item "standalone-server\iem-server.exe" "$dest\iem-server.exe" -Force
+          Copy-Item "tauri-app\iem-mixer-app.exe" "$dest\iem-mixer-app.exe" -Force
           Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
-          Write-Host "Standalone server and config deployed to $dest"
+          Write-Host "Tauri app and config deployed to $dest"
 
-          # Start server in background (serves API on port 80)
-          Start-Process -FilePath "$dest\iem-server.exe" -WorkingDirectory $dest -WindowStyle Hidden
-          Write-Host "IEM Mixer server started"
+          # Create Windows Startup shortcut (runs at user login)
+          $startup = [Environment]::GetFolderPath('Startup')
+          $shortcut = "$startup\IEM Mixer.lnk"
+          $WScriptShell = New-Object -ComObject WScript.Shell
+          $link = $WScriptShell.CreateShortcut($shortcut)
+          $link.TargetPath = "$dest\iem-mixer-app.exe"
+          $link.WorkingDirectory = $dest
+          $link.Save()
+          Write-Host "Startup shortcut created at $shortcut"
+
+          # Start app now (will show tray icon)
+          Start-Process -FilePath "$dest\iem-mixer-app.exe" -WorkingDirectory $dest
+          Write-Host "IEM Mixer app started"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
@@ -394,16 +400,16 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify server running
+      - name: Verify app running
         shell: powershell
         run: |
-          Write-Host "Checking IEM Mixer server..."
-          Start-Sleep -Seconds 3
-          $proc = Get-Process -Name "iem-server" -ErrorAction SilentlyContinue
+          Write-Host "Checking IEM Mixer app..."
+          Start-Sleep -Seconds 5
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "IEM Mixer server is running (PID: $($proc.Id))"
+            Write-Host "IEM Mixer app is running (PID: $($proc.Id))"
           } else {
-            Write-Host "::warning::IEM Mixer server is not running"
+            Write-Host "::warning::IEM Mixer app is not running (may need interactive desktop session)"
           }
           Write-Host "Deployment complete!"
 
