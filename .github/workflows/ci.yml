@@ -322,12 +322,11 @@ jobs:
 
   # ============================================================
   # DEPLOY TO IEM.LAN - Auto deploy after all checks pass
-  # Requires self-hosted runner on local network with label 'iem-deploy'
-  # Setup: gh runner add --repo zbynekdrlik/reaperiem --labels iem-deploy
+  # Uses existing self-hosted runner on iem.lan (Windows)
   # ============================================================
   deploy:
     name: Deploy to iem.lan
-    runs-on: [self-hosted, iem-deploy]
+    runs-on: [self-hosted, iem-lan]
     needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
@@ -337,22 +336,40 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: wasm-dist
-          path: iem-mixer/iem-ui/dist/
+          path: wasm-dist/
 
-      - name: Deploy via local script
+      - name: Deploy WASM to REAPER www root
+        shell: cmd
         run: |
-          echo "Deploying to iem.lan from local network..."
-          ./scripts/deploy.sh
+          xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
+          echo WASM deployed to REAPER www root
 
-      - name: Verify deployment
+      - name: Verify WASM deployment
+        shell: cmd
         run: |
-          sleep 3
-          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" http://iem.lan/ || echo "000")
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "::error::Deployment verification failed (HTTP $HTTP_CODE)"
+          if exist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\index.html" (
+            echo WASM deployment verified!
+          ) else (
+            echo ERROR: WASM not found
+            exit /b 1
+          )
+
+      - name: Verify app responding
+        shell: powershell
+        run: |
+          Write-Host "Testing deployed app..."
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing -TimeoutSec 10
+            if ($response.StatusCode -ne 200) {
+              Write-Host "::error::Landing page returned $($response.StatusCode)"
+              exit 1
+            }
+            Write-Host "Landing page OK (HTTP 200)"
+          } catch {
+            Write-Host "::error::Landing page failed: $_"
             exit 1
-          fi
-          echo "Deployment verified: http://iem.lan/ returns 200"
+          }
+          Write-Host "Deployment verified!"
 
   # ============================================================
   # ALL CHECKS PASSED
