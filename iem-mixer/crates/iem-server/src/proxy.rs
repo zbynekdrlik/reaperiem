@@ -287,8 +287,7 @@ pub async fn batch_control(
                 let vol = db_to_reaper_vol(0.0);
 
                 // Set volume to 0dB
-                let vol_url =
-                    reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
+                let vol_url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
                 let _ = state.http_client.get(&vol_url).send().await;
 
                 // Unmute
@@ -296,8 +295,7 @@ pub async fn batch_control(
                 let _ = state.http_client.get(&mute_url).send().await;
 
                 // Center pan
-                let pan_url =
-                    reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.5);
+                let pan_url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.5);
                 let _ = state.http_client.get(&pan_url).send().await;
             }
         }
