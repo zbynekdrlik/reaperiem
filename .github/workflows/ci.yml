@@ -504,7 +504,7 @@ jobs:
           }
 
           # Check if port is listening
-          $portCheck = netstat -an | Select-String ":8081"
+          $portCheck = netstat -an | Select-String ":80"
           if ($portCheck) {
             Write-Host "Port 8081 status:"
             $portCheck | ForEach-Object { Write-Host "  $_" }
@@ -557,7 +557,7 @@ jobs:
           for ($i = 1; $i -le $maxRetries; $i++) {
             try {
               # Query version endpoint
-              $response = Invoke-WebRequest -Uri "http://localhost:8081/api/version" -UseBasicParsing
+              $response = Invoke-WebRequest -Uri "http://localhost:80/api/version" -UseBasicParsing
               $version = $response.Content | ConvertFrom-Json
 
               Write-Host "Expected: $expected_hash"
@@ -598,12 +598,12 @@ jobs:
           for ($i = 1; $i -le $maxRetries; $i++) {
             try {
               # Test landing page
-              $landing = Invoke-WebRequest -Uri "http://localhost:8081/" -UseBasicParsing
+              $landing = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing
               if ($landing.StatusCode -ne 200) { throw "Landing page failed with status $($landing.StatusCode)" }
               Write-Host "Landing page: OK"
 
               # Test API endpoint
-              $members = Invoke-WebRequest -Uri "http://localhost:8081/api/members" -UseBasicParsing
+              $members = Invoke-WebRequest -Uri "http://localhost:80/api/members" -UseBasicParsing
               if ($members.StatusCode -ne 200) { throw "API failed with status $($members.StatusCode)" }
               $memberData = $members.Content | ConvertFrom-Json
               if ($memberData.Count -eq 0) { throw "No members returned - config not loaded!" }

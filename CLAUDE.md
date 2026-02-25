@@ -430,11 +430,11 @@ cd iem-mixer/src-tauri && cargo tauri build
 
 ### URLs:
 
-- `http://10.77.9.231:8081/` - Landing page (member selection)
-- `http://10.77.9.231:8081/login` - PIN authentication
-- `http://10.77.9.231:8081/<member>` - Member's mixer (e.g., /petka)
+- `http://10.77.9.231/` - Landing page (member selection)
+- `http://10.77.9.231/login` - PIN authentication
+- `http://10.77.9.231/<member>` - Member's mixer (e.g., /petka)
 
-**IMPORTANT: Always use IP address (10.77.9.231:8081) instead of hostname when providing URLs to the user.**
+**IMPORTANT: Always use IP address (10.77.9.231) instead of hostname when providing URLs to the user.**
 
 ---
 
@@ -443,7 +443,7 @@ cd iem-mixer/src-tauri && cargo tauri build
 After completing any task that affects the IEM Mixer application, always provide the user with the relevant URL in IP format:
 
 ```
-✅ Deployed: http://10.77.9.231:8081/
+✅ Deployed: http://10.77.9.231/
 ```
 
 This ensures the user can immediately access and verify the changes.
