@@ -321,12 +321,46 @@ jobs:
           path: iem-mixer/e2e/test-results/
 
   # ============================================================
+  # DEPLOY TO IEM.LAN - Auto deploy after all checks pass
+  # Requires self-hosted runner on local network with label 'iem-deploy'
+  # Setup: gh runner add --repo zbynekdrlik/reaperiem --labels iem-deploy
+  # ============================================================
+  deploy:
+    name: Deploy to iem.lan
+    runs-on: [self-hosted, iem-deploy]
+    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM dist
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: iem-mixer/iem-ui/dist/
+
+      - name: Deploy via local script
+        run: |
+          echo "Deploying to iem.lan from local network..."
+          ./scripts/deploy.sh
+
+      - name: Verify deployment
+        run: |
+          sleep 3
+          HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" http://iem.lan/ || echo "000")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Deployment verification failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
+          echo "Deployment verified: http://iem.lan/ returns 200"
+
+  # ============================================================
   # ALL CHECKS PASSED
   # ============================================================
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
+    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e, deploy]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -353,6 +387,11 @@ jobs:
           fi
           if [ "${{ needs.e2e.result }}" != "success" ]; then
             echo "::error::E2E tests failed"
+            exit 1
+          fi
+          # Deploy is only for main branch pushes, so check if it was skipped or succeeded
+          if [ "${{ needs.deploy.result }}" != "success" ] && [ "${{ needs.deploy.result }}" != "skipped" ]; then
+            echo "::error::Deploy failed"
             exit 1
           fi
           echo "All CI checks passed!"
