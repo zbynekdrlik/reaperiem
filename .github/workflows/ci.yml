@@ -489,21 +489,24 @@ jobs:
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Reserve port 80 for non-admin use (idempotent, requires admin which CI runner has)
-          Write-Host "Reserving port 80 for user..."
-          & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
+          # Reserve port 80 for non-admin use (persistent, requires admin which CI runner has)
+          # This allows the app to bind to port 80 WITHOUT elevation/UAC
+          Write-Host "Reserving port 80 for user $env:USERNAME..."
+          $netshResult = & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1
+          Write-Host "netsh result: $netshResult"
 
-          # Start app via Task Scheduler with /IT (interactive) and /RL HIGHEST (elevated)
+          # Start app via Task Scheduler with /IT (interactive)
           # /IT: runs in logged-in user's desktop session (for tray icon)
-          # /RL HIGHEST: runs with admin privileges (needed for port 80)
+          # NO /RL HIGHEST - URL ACL above handles port 80 without elevation
+          # (Using HIGHEST triggers UAC prompts that block unattended startup)
           $taskName = "IEMMixerStart"
           Write-Host "Creating task to start: $exePath"
 
           # Delete existing task (ignore errors if not exists)
           cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
 
-          # Create task with interactive + elevated flags
-          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /RL HIGHEST /F
+          # Create task without elevation (URL ACL handles port 80)
+          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /F
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Failed to create scheduled task"
             exit 1
