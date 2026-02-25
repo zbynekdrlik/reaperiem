@@ -239,14 +239,14 @@ jobs:
             cargo install tauri-cli
           fi
 
-      - name: Build Tauri (debug - CI validation)
+      - name: Build Tauri (release)
         working-directory: iem-mixer/src-tauri
-        run: cargo tauri build --debug
+        run: cargo tauri build
 
       - name: Verify binary exists
         shell: bash
         run: |
-          if [ ! -f iem-mixer/target/debug/iem-mixer-app.exe ]; then
+          if [ ! -f iem-mixer/target/release/iem-mixer-app.exe ]; then
             echo "ERROR: Binary not found"
             exit 1
           fi
@@ -256,7 +256,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tauri-app
-          path: iem-mixer/target/debug/iem-mixer-app.exe
+          path: iem-mixer/target/release/iem-mixer-app.exe
           retention-days: 1
 
   # ============================================================
