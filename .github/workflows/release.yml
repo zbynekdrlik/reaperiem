@@ -330,7 +330,7 @@ jobs:
           echo Scheduled task triggered
 
           REM Wait for app to start
-          timeout /t 5 /nobreak
+          ping -n 6 127.0.0.1 >nul
 
       - name: Verify app is running and port 80 listening
         shell: cmd
