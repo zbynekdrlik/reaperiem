@@ -370,7 +370,7 @@ jobs:
           Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
           Write-Host "Tauri app and config deployed to $dest"
 
-          # Create Windows Startup shortcut (runs at user login)
+          # Create Windows Startup shortcut (runs at user login with tray icon)
           $startup = [Environment]::GetFolderPath('Startup')
           $shortcut = "$startup\IEM Mixer.lnk"
           $WScriptShell = New-Object -ComObject WScript.Shell
@@ -379,10 +379,7 @@ jobs:
           $link.WorkingDirectory = $dest
           $link.Save()
           Write-Host "Startup shortcut created at $shortcut"
-
-          # Start app now (will show tray icon)
-          Start-Process -FilePath "$dest\iem-mixer-app.exe" -WorkingDirectory $dest
-          Write-Host "IEM Mixer app started"
+          Write-Host "App will start on next user login (tray icon requires interactive session)"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
@@ -400,18 +397,36 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify app running
+      - name: Verify deployment
         shell: powershell
         run: |
-          Write-Host "Checking IEM Mixer app..."
-          Start-Sleep -Seconds 5
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
-          if ($proc) {
-            Write-Host "IEM Mixer app is running (PID: $($proc.Id))"
+          $dest = "C:\iem-mixer"
+          $startup = [Environment]::GetFolderPath('Startup')
+
+          # Verify binary exists
+          if (Test-Path "$dest\iem-mixer-app.exe") {
+            Write-Host "Binary deployed: $dest\iem-mixer-app.exe"
           } else {
-            Write-Host "::warning::IEM Mixer app is not running (may need interactive desktop session)"
+            Write-Host "::error::Binary not found at $dest"
+            exit 1
           }
-          Write-Host "Deployment complete!"
+
+          # Verify config exists
+          if (Test-Path "$dest\config.yaml") {
+            Write-Host "Config deployed: $dest\config.yaml"
+          } else {
+            Write-Host "::error::Config not found at $dest"
+            exit 1
+          }
+
+          # Verify startup shortcut exists
+          if (Test-Path "$startup\IEM Mixer.lnk") {
+            Write-Host "Startup shortcut: $startup\IEM Mixer.lnk"
+          } else {
+            Write-Host "::warning::Startup shortcut not found"
+          }
+
+          Write-Host "Deployment complete! App will start on next user login."
 
   # ============================================================
   # ALL CHECKS PASSED
