@@ -342,7 +342,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build server binary
-        shell: bash
+        shell: cmd
         working-directory: iem-mixer
         run: cargo build --package iem-server --features standalone --release
 

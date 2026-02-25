@@ -238,6 +238,27 @@ When implementation is complete and tests pass locally:
 
 **CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
 
+### ⚠️ PRE-PUSH VALIDATION CHECKLIST (MANDATORY)
+
+**Before EVERY push, mentally verify:**
+
+1. **Dead code** - Any new function/module used somewhere? If only in tests, mark `#[cfg(test)]`
+2. **Format** - Code must match rustfmt (no trailing whitespace, proper line lengths)
+3. **Platform** - Self-hosted runner is Windows. Never use `shell: bash` for iem-lan jobs!
+4. **REAPER API** - All URLs must have `/_/` prefix. All SEND parsing must use field index 4/3/5 for vol/mute/pan
+5. **Feature flags** - `--features standalone` needed for server binary
+
+**NEVER DO:**
+
+```
+❌ Push code that introduces dead_code warnings (use #[cfg(test)] or call the function)
+❌ Use `shell: bash` on Windows self-hosted runner
+❌ Change REAPER parsing without adding tests that verify real response format
+❌ Push multiple "fix CI" commits in a row - think before pushing!
+```
+
+**THE RULE:** One push should work. If CI fails, the fix should be ONE commit that addresses ALL issues found, not a stream of partial fixes.
+
 ### After Pushing Code:
 
 ```bash
