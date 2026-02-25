@@ -477,13 +477,17 @@ jobs:
             exit 1
           }
 
-          # Copy config
-          Copy-Item "iem-mixer\config\config.production.yaml" "$installDir\config.yaml" -Force
-          if (-not (Test-Path "$installDir\config.yaml")) {
+          # Copy config to the app's expected location (%APPDATA%\iem-mixer\config.yaml)
+          $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
+          if (-not (Test-Path $configDir)) {
+            New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+          }
+          Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
+          if (-not (Test-Path "$configDir\config.yaml")) {
             Write-Host "::error::Config copy failed"
             exit 1
           }
-          Write-Host "Config deployed to $installDir"
+          Write-Host "Config deployed to $configDir\config.yaml"
 
           # Start app via Task Scheduler (proper error handling for schtasks)
           $taskName = "IEMMixerStart"
