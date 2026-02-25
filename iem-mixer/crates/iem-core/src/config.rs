@@ -94,9 +94,17 @@ impl Config {
         }
 
         // Check member PIN
-        if let Some(expected_pin) = self.pins.get(member_id)
-            && pin == expected_pin
-        {
+        if let Some(expected_pin) = self.pins.get(member_id) {
+            // Member has a PIN configured - must match
+            if pin == expected_pin {
+                return PinValidation::Member(member_id.to_string());
+            }
+            return PinValidation::Invalid;
+        }
+
+        // No PIN configured for this member - allow access with any PIN (including empty)
+        // This enables "no PIN required" mode when pins map is empty
+        if self.find_member(member_id).is_some() {
             return PinValidation::Member(member_id.to_string());
         }
 

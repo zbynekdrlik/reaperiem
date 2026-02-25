@@ -1,4 +1,26 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, Page } from "@playwright/test";
+
+// Helper to login and set auth in localStorage
+async function loginAs(page: Page, member: string) {
+  // First, call the login API to get a token
+  const response = await page.request.post("/api/auth", {
+    data: { member, pin: "" }, // Empty PIN when no PIN is configured
+  });
+
+  if (response.status() === 200) {
+    const data = await response.json();
+    // Set auth in localStorage before navigating
+    await page.addInitScript(
+      ({ token, member, engineer }) => {
+        localStorage.setItem(
+          "iem_token",
+          JSON.stringify({ token, member, engineer }),
+        );
+      },
+      { token: data.token, member: data.member, engineer: data.engineer },
+    );
+  }
+}
 
 test.describe("Mixer Features - Must All Pass", () => {
   test("member route redirects or serves content", async ({ page }) => {
@@ -61,6 +83,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("fader actually sends API request", async ({ page }) => {
+    // Login first
+    await loginAs(page, "petka");
+
     // Intercept API calls
     const apiCalls: string[] = [];
     page.on("request", (req) => {
@@ -82,6 +107,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("mute button exists and is clickable", async ({ page }) => {
+    // Login first
+    await loginAs(page, "petka");
+
     await page.goto("/petka");
     await page.waitForLoadState("networkidle");
 
@@ -97,8 +125,14 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("solo button exists (S button next to M)", async ({ page }) => {
+    // Login first
+    await loginAs(page, "petka");
+
     await page.goto("/petka");
     await page.waitForLoadState("networkidle");
+
+    // Wait for channels to load - check for channel grid
+    await page.waitForSelector(".channels-grid, .channel", { timeout: 10000 });
 
     // Solo button should exist - this verifies the new version is deployed
     // Look for S button, solo-btn class, or anything with solo in it
@@ -110,6 +144,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("reset button does NOT exist (removed for safety)", async ({ page }) => {
+    // Login first
+    await loginAs(page, "petka");
+
     await page.goto("/petka");
     await page.waitForLoadState("networkidle");
 
@@ -122,6 +159,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("solo button triggers API calls when clicked", async ({ page }) => {
+    // Login first
+    await loginAs(page, "petka");
+
     const apiCalls: string[] = [];
     page.on("request", (req) => {
       if (req.url().includes("/api/mixer/")) apiCalls.push(req.url());
@@ -129,6 +169,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petka");
     await page.waitForLoadState("networkidle");
+
+    // Wait for channels to load
+    await page.waitForSelector(".channels-grid, .channel", { timeout: 10000 });
 
     const soloBtn = page
       .locator('button:has-text("S"), .solo-btn, [class*="solo"]')
