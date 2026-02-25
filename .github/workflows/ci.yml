@@ -351,7 +351,7 @@ jobs:
           name: tauri-app
           path: tauri-app/
 
-      - name: Deploy Tauri app
+      - name: Deploy Tauri app and config
         shell: powershell
         run: |
           $dest = "C:\iem-mixer"
@@ -365,9 +365,10 @@ jobs:
             Start-Sleep -Seconds 2
           }
 
-          # Copy new binary
+          # Copy new binary and config
           Copy-Item "tauri-app\iem-mixer-app.exe" "$dest\iem-mixer-app.exe" -Force
-          Write-Host "Tauri app deployed to $dest\iem-mixer-app.exe"
+          Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
+          Write-Host "Tauri app and config deployed to $dest"
 
           # Start app in background (it serves both web UI and API)
           Start-Process -FilePath "$dest\iem-mixer-app.exe" -WorkingDirectory $dest -WindowStyle Hidden

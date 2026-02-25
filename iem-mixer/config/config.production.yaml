@@ -1,0 +1,140 @@
+# IEM Mixer Configuration
+# This file is deployed with the app and loaded at startup
+
+# REAPER HTTP API endpoint
+reaper_url: "http://iem.lan:8080"
+
+# Server port
+port: 80
+
+# Band members with their IEM output assignments
+# The index corresponds to the send index in REAPER
+members:
+  - name: Petka
+    dante_output_l: 3
+    dante_output_r: 4
+
+  - name: Stevo
+    dante_output_l: 5
+    dante_output_r: 6
+
+  - name: Marek
+    dante_output_l: 7
+    dante_output_r: 8
+
+  - name: Zuzka
+    dante_output_l: 9
+    dante_output_r: 10
+
+  - name: Tina
+    dante_output_l: 11
+    dante_output_r: 12
+
+  - name: Mirec
+    dante_output_l: 13
+    dante_output_r: 14
+
+  - name: Alex
+    dante_output_l: 15
+    dante_output_r: 16
+
+  - name: Patrika
+    dante_output_l: 17
+    dante_output_r: 18
+
+  - name: Ani
+    dante_output_l: 19
+    dante_output_r: 20
+
+# Input tracks (source tracks for mixing)
+inputs:
+  - name: "PETKA mic"
+    dante_input: 3
+    default_level_db: 0.0
+
+  - name: "STEVO mic"
+    dante_input: 4
+    default_level_db: 0.0
+
+  - name: "MAREK mic"
+    dante_input: 5
+    default_level_db: 0.0
+
+  - name: "ZUZKA mic"
+    dante_input: 6
+    default_level_db: 0.0
+
+  - name: "ZUZKA gtr"
+    dante_input: 7
+    default_level_db: 0.0
+
+  - name: "TINA mic"
+    dante_input: 8
+    default_level_db: 0.0
+
+  - name: "MIREC mic"
+    dante_input: 9
+    default_level_db: 0.0
+
+  - name: "ALEX mic"
+    dante_input: 10
+    default_level_db: 0.0
+
+  - name: "PATRIKA mic"
+    dante_input: 11
+    default_level_db: 0.0
+
+  - name: "ANI mic"
+    dante_input: 12
+    default_level_db: 0.0
+
+  - name: "DRUMS"
+    dante_input: 21
+    default_level_db: 0.0
+
+  - name: "BASS"
+    dante_input: 23
+    default_level_db: 0.0
+
+  - name: "INST"
+    dante_input: 25
+    default_level_db: 0.0
+
+  - name: "OTHER"
+    dante_input: 27
+    default_level_db: 0.0
+
+  - name: "BGVS"
+    dante_input: 29
+    default_level_db: 0.0
+
+  - name: "CLICK"
+    dante_input: 31
+    default_level_db: 0.0
+
+  - name: "GUIDE"
+    dante_input: 32
+    default_level_db: 0.0
+
+  - name: "IEMONLY"
+    dante_input: 33
+    default_level_db: 0.0
+
+  - name: "HAND1 mic"
+    dante_input: 49
+    default_level_db: 0.0
+
+  - name: "HAND2 mic"
+    dante_input: 50
+    default_level_db: 0.0
+
+  - name: "HAND3 mic"
+    dante_input: 51
+    default_level_db: 0.0
+
+  - name: "ENGINEER mic"
+    dante_input: 52
+    default_level_db: 0.0
+
+# PIN codes for authentication (empty = no PIN required)
+pins: {}
