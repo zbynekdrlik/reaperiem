@@ -285,6 +285,28 @@ E2E Tests (Playwright):
   - Error states and loading spinners
 ```
 
+### ⚠️ E2E TESTS ARE HISTORICALLY WEAK - RADICAL IMPROVEMENT REQUIRED
+
+**CRITICAL: E2E tests have repeatedly allowed broken apps to deploy!**
+
+E2E tests MUST verify:
+
+1. **Faders actually change REAPER values** - not just "page loads"
+2. **Mute button state persists** - click mute, verify state after poll refresh
+3. **Pan slider works end-to-end** - move slider, verify REAPER receives command
+4. **Meters show real audio** - if track has audio, meter must be > 0
+5. **Connection status accurate** - disconnected banner when REAPER unreachable
+6. **Presets persist** - save preset, reload page, preset still exists
+
+**After EVERY deploy, manually verify:**
+
+- Open mixer in browser
+- Move a fader → REAPER value changes (check REAPER directly)
+- Click mute → channel mutes in REAPER
+- If controls don't work, CI HAS FAILED even if green!
+
+**E2E tests must be expanded aggressively** - if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
+
 **Test files location:**
 
 - `iem-mixer/crates/*/src/*.rs` - Unit tests (inline #[cfg(test)])
@@ -336,13 +358,13 @@ gh release view <tag>
 
 ### Required Test Coverage:
 
-| Component    | Test Type   | Must Test                                           |
-| ------------ | ----------- | --------------------------------------------------- |
-| API endpoints| Integration | Every endpoint returns expected data                |
-| REAPER proxy | Integration | Commands reach REAPER and return valid responses    |
-| Auth flow    | Integration | Login/logout/token refresh                          |
-| Mixer UI     | E2E         | Page loads, faders work, presets save               |
-| Deploy       | Smoke       | HTTP 200 from http://iem.lan/                       |
+| Component     | Test Type   | Must Test                                        |
+| ------------- | ----------- | ------------------------------------------------ |
+| API endpoints | Integration | Every endpoint returns expected data             |
+| REAPER proxy  | Integration | Commands reach REAPER and return valid responses |
+| Auth flow     | Integration | Login/logout/token refresh                       |
+| Mixer UI      | E2E         | Page loads, faders work, presets save            |
+| Deploy        | Smoke       | HTTP 200 from http://iem.lan/                    |
 
 ### Meta-Test Requirement:
 

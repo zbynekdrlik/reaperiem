@@ -176,7 +176,7 @@ pub async fn poll_mixer_state(
 
     // Query REAPER for all track states in a batch
     // First try to get all track info
-    let tracks_url = format!("{}/_/NTRACK;TRACK", reaper_url);
+    let tracks_url = reaper_api::query_tracks(&reaper_url);
     if let Ok(resp) = state.http_client.get(&tracks_url).send().await
         && let Ok(text) = resp.text().await
     {
@@ -269,18 +269,13 @@ pub async fn batch_control(
                 };
 
                 let new_vol = db_to_reaper_vol(new_db);
-                let url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
-                    reaper_url, track_index, member_index, new_vol
-                );
+                let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, new_vol);
                 let _ = state.http_client.get(&url).send().await;
 
                 // Also set partner for stereo pairs
                 if let Some(partner_idx) = find_stereo_partner(&inputs, &input.name) {
-                    let partner_url = format!(
-                        "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
-                        reaper_url, partner_idx, member_index, new_vol
-                    );
+                    let partner_url =
+                        reaper_api::set_send_vol(&reaper_url, partner_idx, member_index, new_vol);
                     let _ = state.http_client.get(&partner_url).send().await;
                 }
             }
@@ -292,24 +287,17 @@ pub async fn batch_control(
                 let vol = db_to_reaper_vol(0.0);
 
                 // Set volume to 0dB
-                let vol_url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
-                    reaper_url, track_index, member_index, vol
-                );
+                let vol_url =
+                    reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
                 let _ = state.http_client.get(&vol_url).send().await;
 
                 // Unmute
-                let mute_url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/MUTE/0",
-                    reaper_url, track_index, member_index
-                );
+                let mute_url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, 0);
                 let _ = state.http_client.get(&mute_url).send().await;
 
                 // Center pan
-                let pan_url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/PAN/0.5",
-                    reaper_url, track_index, member_index
-                );
+                let pan_url =
+                    reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.5);
                 let _ = state.http_client.get(&pan_url).send().await;
             }
         }
@@ -326,10 +314,7 @@ async fn query_send_state(
     send_index: usize,
 ) -> Result<(f32, bool, f32), ()> {
     // Query volume
-    let vol_url = format!(
-        "{}/_/GET/TRACK/{}/SEND/{}/VOL",
-        reaper_url, track_index, send_index
-    );
+    let vol_url = reaper_api::get_send_vol(reaper_url, track_index, send_index);
     let vol = if let Ok(resp) = client.get(&vol_url).send().await {
         if let Ok(text) = resp.text().await {
             parse_reaper_value(&text).unwrap_or(1.0)
@@ -341,10 +326,7 @@ async fn query_send_state(
     };
 
     // Query mute
-    let mute_url = format!(
-        "{}/_/GET/TRACK/{}/SEND/{}/MUTE",
-        reaper_url, track_index, send_index
-    );
+    let mute_url = reaper_api::get_send_mute(reaper_url, track_index, send_index);
     let mute = if let Ok(resp) = client.get(&mute_url).send().await {
         if let Ok(text) = resp.text().await {
             parse_reaper_value(&text).unwrap_or(0.0) > 0.5
@@ -356,10 +338,7 @@ async fn query_send_state(
     };
 
     // Query pan
-    let pan_url = format!(
-        "{}/_/GET/TRACK/{}/SEND/{}/PAN",
-        reaper_url, track_index, send_index
-    );
+    let pan_url = reaper_api::get_send_pan(reaper_url, track_index, send_index);
     let pan = if let Ok(resp) = client.get(&pan_url).send().await {
         if let Ok(text) = resp.text().await {
             parse_reaper_value(&text).unwrap_or(0.5)
@@ -453,10 +432,7 @@ pub async fn set_send_level(
     let vol = db_to_reaper_vol(payload.level_db);
 
     // Build REAPER API URL for setting send volume
-    let url = format!(
-        "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
-        reaper_url, track_index, member_index, vol
-    );
+    let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
 
     tracing::debug!(url = %url, level_db = payload.level_db, "Setting send level");
 
@@ -488,10 +464,7 @@ pub async fn set_send_pan(
     drop(config);
 
     // REAPER pan is -1.0 to 1.0
-    let url = format!(
-        "{}/_/SET/TRACK/{}/SEND/{}/PAN/{}",
-        reaper_url, track_index, member_index, payload.pan
-    );
+    let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, payload.pan);
 
     tracing::debug!(url = %url, pan = payload.pan, "Setting send pan");
 
@@ -522,10 +495,7 @@ pub async fn set_send_mute(
     drop(config);
 
     let mute_val = if payload.muted { 1 } else { 0 };
-    let url = format!(
-        "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
-        reaper_url, track_index, member_index, mute_val
-    );
+    let url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
 
     tracing::debug!(url = %url, muted = payload.muted, "Setting send mute");
 
