@@ -407,6 +407,8 @@ jobs:
           }
 
           Write-Host "=== CLEANUP COMPLETE ==="
+          # Explicitly exit with 0 - schtasks returns non-zero when task doesn't exist
+          exit 0
 
       - name: Install and start IEM Mixer
         shell: powershell
