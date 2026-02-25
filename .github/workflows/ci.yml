@@ -379,7 +379,14 @@ jobs:
           $link.WorkingDirectory = $dest
           $link.Save()
           Write-Host "Startup shortcut created at $shortcut"
-          Write-Host "App will start on next user login (tray icon requires interactive session)"
+
+          # Start app via Task Scheduler (survives CI job cleanup)
+          $taskName = "IEMMixerStart"
+          schtasks /Delete /TN $taskName /F 2>$null
+          schtasks /Create /TN $taskName /TR "$dest\iem-mixer-app.exe" /SC ONCE /ST 00:00 /F
+          schtasks /Run /TN $taskName
+          Start-Sleep -Seconds 3
+          Write-Host "App started via Task Scheduler"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
@@ -397,17 +404,16 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify deployment
+      - name: Verify deployment and app running
         shell: powershell
         run: |
           $dest = "C:\iem-mixer"
-          $startup = [Environment]::GetFolderPath('Startup')
 
           # Verify binary exists
           if (Test-Path "$dest\iem-mixer-app.exe") {
             Write-Host "Binary deployed: $dest\iem-mixer-app.exe"
           } else {
-            Write-Host "::error::Binary not found at $dest"
+            Write-Host "::error::Binary not found"
             exit 1
           }
 
@@ -415,18 +421,20 @@ jobs:
           if (Test-Path "$dest\config.yaml") {
             Write-Host "Config deployed: $dest\config.yaml"
           } else {
-            Write-Host "::error::Config not found at $dest"
+            Write-Host "::error::Config not found"
             exit 1
           }
 
-          # Verify startup shortcut exists
-          if (Test-Path "$startup\IEM Mixer.lnk") {
-            Write-Host "Startup shortcut: $startup\IEM Mixer.lnk"
+          # Verify app is running
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "App running (PID: $($proc.Id))"
           } else {
-            Write-Host "::warning::Startup shortcut not found"
+            Write-Host "::error::App is not running"
+            exit 1
           }
 
-          Write-Host "Deployment complete! App will start on next user login."
+          Write-Host "Deployment complete!"
 
   # ============================================================
   # ALL CHECKS PASSED
