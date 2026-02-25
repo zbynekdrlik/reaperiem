@@ -429,13 +429,48 @@ jobs:
           }
           Write-Host "Installation complete"
 
-          # Verify installation
+          # Verify installation - find where NSIS actually installed
           $appData = [Environment]::GetFolderPath('LocalApplicationData')
-          $installDir = "$appData\IEM Mixer"
-          $exePath = "$installDir\IEM Mixer.exe"
+          Write-Host "=== DEBUG: Searching for installed app ==="
+          Write-Host "LocalAppData: $appData"
 
-          if (-not (Test-Path $exePath)) {
-            Write-Host "::error::Installation failed - executable not found at $exePath"
+          # List common locations
+          @("$appData\IEM Mixer", "$appData\Programs\IEM Mixer", "$appData\iem-mixer") | ForEach-Object {
+            if (Test-Path $_) {
+              Write-Host "Found: $_"
+              Get-ChildItem $_ -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+            }
+          }
+
+          # Also check what directories exist with "IEM" or "iem" in name
+          Get-ChildItem $appData -Directory | Where-Object { $_.Name -match "iem" } | ForEach-Object {
+            Write-Host "Directory match: $($_.FullName)"
+            Get-ChildItem $_.FullName | ForEach-Object { Write-Host "  $($_.Name)" }
+          }
+
+          # Try multiple possible paths
+          $installDir = $null
+          $exePath = $null
+          $possiblePaths = @(
+            "$appData\IEM Mixer\IEM Mixer.exe",
+            "$appData\IEM Mixer\iem-mixer.exe",
+            "$appData\Programs\IEM Mixer\IEM Mixer.exe",
+            "$appData\iem-mixer\iem-mixer.exe"
+          )
+
+          foreach ($path in $possiblePaths) {
+            if (Test-Path $path) {
+              $exePath = $path
+              $installDir = Split-Path $path
+              Write-Host "Found executable at: $exePath"
+              break
+            }
+          }
+
+          if (-not $exePath) {
+            Write-Host "::error::Installation failed - executable not found in any expected location"
+            Write-Host "Searched paths:"
+            $possiblePaths | ForEach-Object { Write-Host "  $_" }
             exit 1
           }
 
