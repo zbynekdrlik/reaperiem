@@ -396,7 +396,8 @@ fn parse_send_pan(text: &str) -> Option<f32> {
 }
 
 /// Parse a REAPER response value (format: "COMMAND\tVALUE")
-/// Used for simple responses like NTRACK
+/// Used for simple responses like NTRACK (only in tests now)
+#[cfg(test)]
 fn parse_reaper_value(text: &str) -> Option<f32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
