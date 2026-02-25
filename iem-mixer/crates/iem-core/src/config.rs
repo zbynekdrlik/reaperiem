@@ -76,12 +76,12 @@ impl Config {
         self.members.iter().find(|m| m.id() == id)
     }
 
-    /// Get member index (1-based) for REAPER track
+    /// Get member's send index (0-based) for REAPER HTTP API
+    ///
+    /// REAPER HTTP API sends are 0-based: Send 0 = first member, Send 1 = second, etc.
+    /// This matches the position in the config `members` array directly.
     pub fn member_index(&self, id: &str) -> Option<usize> {
-        self.members
-            .iter()
-            .position(|m| m.id() == id)
-            .map(|i| i + 1)
+        self.members.iter().position(|m| m.id() == id)
     }
 
     /// Validate a PIN for a member or engineer

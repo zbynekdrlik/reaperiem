@@ -182,14 +182,23 @@ pub async fn poll_mixer_state(
     {
         connected = true;
         // Parse track data for meters
+        // REAPER TRACK format: TRACK\tindex\tname\tflags\tvol\tpan\tvu_peak_L\tvu_peak_R\t...
+        // Field 6 = VU peak L (integer, centibels relative to 0 dBFS)
         for line in text.lines() {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.first() == Some(&"TRACK")
-                && parts.len() > 12
+                && parts.len() > 7
                 && let Ok(track_idx) = parts[1].parse::<usize>()
-                && let Ok(peak) = parts[12].parse::<f32>()
+                && let Ok(peak_centibels) = parts[6].parse::<f32>()
             {
-                meters.insert(track_idx, peak);
+                // Convert centibels to linear (0.0-1.0 where 1.0 = 0 dBFS)
+                let peak_db = peak_centibels / 100.0;
+                let peak_linear = if peak_db <= -60.0 {
+                    0.0
+                } else {
+                    10.0_f32.powf(peak_db / 20.0)
+                };
+                meters.insert(track_idx, peak_linear);
             }
         }
     }

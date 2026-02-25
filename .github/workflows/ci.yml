@@ -489,16 +489,21 @@ jobs:
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Start app via Task Scheduler with /IT (interactive) and /RU (run as user)
-          # This ensures the app runs in the logged-in user's desktop session with tray icon
+          # Reserve port 80 for non-admin use (idempotent, requires admin which CI runner has)
+          Write-Host "Reserving port 80 for user..."
+          & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
+
+          # Start app via Task Scheduler with /IT (interactive) and /RL HIGHEST (elevated)
+          # /IT: runs in logged-in user's desktop session (for tray icon)
+          # /RL HIGHEST: runs with admin privileges (needed for port 80)
           $taskName = "IEMMixerStart"
           Write-Host "Creating task to start: $exePath"
 
           # Delete existing task (ignore errors if not exists)
           cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
 
-          # Create task with interactive flag (/IT) to run in user's desktop session
-          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /F
+          # Create task with interactive + elevated flags
+          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /RL HIGHEST /F
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::error::Failed to create scheduled task"
             exit 1
@@ -512,14 +517,19 @@ jobs:
           }
 
           Write-Host "Task started, waiting for app..."
-          Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 8
 
           # Check if process is running
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
             Write-Host "Process running: PID $($proc.Id)"
           } else {
-            Write-Host "::warning::Process not found - app may have crashed"
+            Write-Host "::warning::Process not found after 8 seconds"
+            # Try to capture crash info from Event Log
+            Write-Host "=== Recent Application Errors ==="
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Level=2; StartTime=(Get-Date).AddMinutes(-5)} -MaxEvents 5 -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "  $($_.TimeCreated): $($_.Message.Substring(0, [Math]::Min(200, $_.Message.Length)))"
+            }
           }
 
           # Check if port is listening
@@ -529,6 +539,9 @@ jobs:
             $portCheck | ForEach-Object { Write-Host "  $_" }
           } else {
             Write-Host "::warning::Port 80 not listening"
+            # Show what IS listening (for debugging)
+            Write-Host "=== All listening ports ==="
+            netstat -an | Select-String "LISTENING" | Select-String "0.0.0.0:" | Select-Object -First 10 | ForEach-Object { Write-Host "  $_" }
           }
 
           Write-Host "App startup complete"
