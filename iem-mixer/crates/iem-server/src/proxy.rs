@@ -590,17 +590,26 @@ fn reaper_vol_to_db(vol: f32) -> f32 {
 mod reaper_api {
     /// Build URL for setting send volume
     pub fn set_send_vol(base_url: &str, track: usize, send: usize, vol: f32) -> String {
-        format!("{}/_/SET/TRACK/{}/SEND/{}/VOL/{}", base_url, track, send, vol)
+        format!(
+            "{}/_/SET/TRACK/{}/SEND/{}/VOL/{}",
+            base_url, track, send, vol
+        )
     }
 
     /// Build URL for setting send mute
     pub fn set_send_mute(base_url: &str, track: usize, send: usize, mute: u8) -> String {
-        format!("{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}", base_url, track, send, mute)
+        format!(
+            "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
+            base_url, track, send, mute
+        )
     }
 
     /// Build URL for setting send pan
     pub fn set_send_pan(base_url: &str, track: usize, send: usize, pan: f32) -> String {
-        format!("{}/_/SET/TRACK/{}/SEND/{}/PAN/{}", base_url, track, send, pan)
+        format!(
+            "{}/_/SET/TRACK/{}/SEND/{}/PAN/{}",
+            base_url, track, send, pan
+        )
     }
 
     /// Build URL for getting send volume
