@@ -489,24 +489,42 @@ jobs:
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Start app via Task Scheduler (proper error handling for schtasks)
-          $taskName = "IEMMixerStart"
-          # Delete existing task using cmd /c to avoid PowerShell's error handling
-          cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
-          # Create new task
-          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /F
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Failed to create scheduled task"
-            exit 1
+          # Start app directly (Task Scheduler runs in SYSTEM context without GUI)
+          # Use Start-Process to detach from CI process
+          Write-Host "Starting app directly: $exePath"
+          Start-Process -FilePath $exePath -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+
+          # Check if process is running
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "Process running: PID $($proc.Id)"
+          } else {
+            Write-Host "::warning::Process not found - app may have crashed"
           }
-          # Run the task
-          & schtasks /Run /TN $taskName
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Failed to run scheduled task"
-            exit 1
+
+          # Check if port is listening
+          $portCheck = netstat -an | Select-String ":8081"
+          if ($portCheck) {
+            Write-Host "Port 8081 status:"
+            $portCheck | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "::warning::Port 8081 not in use"
           }
-          Start-Sleep -Seconds 3
-          Write-Host "App started via Task Scheduler"
+
+          # Check for app logs
+          $logDir = "$env:APPDATA\iem-mixer\logs"
+          if (Test-Path $logDir) {
+            Write-Host "=== APP LOGS ==="
+            Get-ChildItem $logDir -Filter "*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object {
+              Write-Host "Log file: $($_.FullName)"
+              Get-Content $_.FullName -Tail 50 | ForEach-Object { Write-Host "  $_" }
+            }
+          } else {
+            Write-Host "No log directory found at $logDir"
+          }
+
+          Write-Host "App startup complete"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
