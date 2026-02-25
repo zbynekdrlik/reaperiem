@@ -487,8 +487,8 @@ jobs:
 
           # Start app via Task Scheduler (proper error handling for schtasks)
           $taskName = "IEMMixerStart"
-          # Delete existing task - suppress ALL output including stderr
-          & schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
+          # Delete existing task using cmd /c to avoid PowerShell's error handling
+          cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
           # Create new task
           & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /F
           if ($LASTEXITCODE -ne 0) {
