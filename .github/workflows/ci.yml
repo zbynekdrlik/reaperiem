@@ -305,6 +305,12 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
 
+      - name: Copy config for E2E tests
+        working-directory: iem-mixer
+        run: |
+          cp config/config.production.yaml config.yaml
+          echo "Config copied. Members: $(grep -c 'name:' config.yaml 2>/dev/null || echo 0)"
+
       - name: Start server
         working-directory: iem-mixer
         run: |
