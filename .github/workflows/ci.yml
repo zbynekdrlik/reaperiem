@@ -450,10 +450,11 @@ jobs:
             Get-ChildItem $_.FullName | ForEach-Object { Write-Host "  $($_.Name)" }
           }
 
-          # Try multiple possible paths
+          # Try multiple possible paths (iem-mixer-app.exe is the actual binary name from Cargo.toml)
           $installDir = $null
           $exePath = $null
           $possiblePaths = @(
+            "$appData\IEM Mixer\iem-mixer-app.exe",
             "$appData\IEM Mixer\IEM Mixer.exe",
             "$appData\IEM Mixer\iem-mixer.exe",
             "$appData\Programs\IEM Mixer\IEM Mixer.exe",
