@@ -252,11 +252,15 @@ jobs:
           fi
           echo "Build verified"
 
-      - name: Upload Tauri app
+      - name: Build standalone server
+        working-directory: iem-mixer
+        run: cargo build --package iem-server --features standalone --release
+
+      - name: Upload standalone server
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-app
-          path: iem-mixer/target/debug/iem-mixer-app.exe
+          name: standalone-server
+          path: iem-mixer/target/release/server.exe
           retention-days: 1
 
   # ============================================================
@@ -345,34 +349,34 @@ jobs:
           name: wasm-dist
           path: wasm-dist/
 
-      - name: Download Tauri app
+      - name: Download standalone server
         uses: actions/download-artifact@v4
         with:
-          name: tauri-app
-          path: tauri-app/
+          name: standalone-server
+          path: standalone-server/
 
-      - name: Deploy Tauri app and config
+      - name: Deploy standalone server and config
         shell: powershell
         run: |
           $dest = "C:\iem-mixer"
           if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
 
-          # Stop existing app if running
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          # Stop existing server if running
+          $proc = Get-Process -Name "server" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "Stopping existing IEM Mixer app..."
-            Stop-Process -Name "iem-mixer-app" -Force
+            Write-Host "Stopping existing IEM Mixer server..."
+            Stop-Process -Name "server" -Force
             Start-Sleep -Seconds 2
           }
 
           # Copy new binary and config
-          Copy-Item "tauri-app\iem-mixer-app.exe" "$dest\iem-mixer-app.exe" -Force
+          Copy-Item "standalone-server\server.exe" "$dest\server.exe" -Force
           Copy-Item "iem-mixer\config\config.production.yaml" "$dest\config.yaml" -Force
-          Write-Host "Tauri app and config deployed to $dest"
+          Write-Host "Standalone server and config deployed to $dest"
 
-          # Start app in background (it serves both web UI and API)
-          Start-Process -FilePath "$dest\iem-mixer-app.exe" -WorkingDirectory $dest -WindowStyle Hidden
-          Write-Host "IEM Mixer app started"
+          # Start server in background (serves API on port 80)
+          Start-Process -FilePath "$dest\server.exe" -WorkingDirectory $dest -WindowStyle Hidden
+          Write-Host "IEM Mixer server started"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
@@ -390,16 +394,16 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify Tauri app running
+      - name: Verify server running
         shell: powershell
         run: |
-          Write-Host "Checking Tauri app..."
+          Write-Host "Checking IEM Mixer server..."
           Start-Sleep -Seconds 3
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          $proc = Get-Process -Name "server" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "Tauri app is running (PID: $($proc.Id))"
+            Write-Host "IEM Mixer server is running (PID: $($proc.Id))"
           } else {
-            Write-Host "::warning::Tauri app is not running"
+            Write-Host "::warning::IEM Mixer server is not running"
           }
           Write-Host "Deployment complete!"
 
