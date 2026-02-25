@@ -4,8 +4,8 @@
 # REAPER HTTP API endpoint
 reaper_url: "http://iem.lan:8080"
 
-# Server port
-port: 80
+# Server port (8081 to avoid needing admin privileges; REAPER uses 8080)
+port: 8081
 
 # Band members with their IEM output assignments
 # The index corresponds to the send index in REAPER
