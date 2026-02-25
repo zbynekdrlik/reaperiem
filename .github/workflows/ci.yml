@@ -309,8 +309,16 @@ jobs:
         working-directory: iem-mixer
         run: |
           cargo run --package iem-server --features standalone --release &
-          sleep 5
-          curl -sf http://localhost:8080/ || exit 1
+          # Wait for server to be ready (may take a while if compiling)
+          for i in {1..60}; do
+            if curl -sf http://localhost:8080/ > /dev/null 2>&1; then
+              echo "Server ready after $i seconds"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to start within 60 seconds"
+          exit 1
         env:
           RUST_LOG: info
           PORT: 8080
