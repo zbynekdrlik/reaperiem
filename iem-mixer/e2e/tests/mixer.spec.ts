@@ -154,8 +154,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       timeout: 10000,
     });
 
-    // Reset button must NOT be present anywhere - check toolbar
-    const resetBtn = page.locator('button:has-text("Reset")');
+    // Reset button must NOT be present - use exact text match
+    // Note: "Presets" contains "reset" as substring, so use exact match
+    const resetBtn = page.locator("button", { hasText: /^Reset$/ });
     // Should have zero matches
     await expect(resetBtn).toHaveCount(0);
   });
