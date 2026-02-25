@@ -287,6 +287,16 @@ jobs:
           xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
           echo WASM deployed to REAPER www root
 
+      - name: Stop existing IEM Mixer
+        shell: powershell
+        run: |
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "Stopping existing IEM Mixer..."
+            Stop-Process -Name "iem-mixer-app" -Force
+            Start-Sleep -Seconds 2
+          }
+
       - name: Install IEM Mixer app
         shell: cmd
         run: |
@@ -296,7 +306,50 @@ jobs:
           )
           echo Installation complete!
 
-      - name: Verify deployment
+      - name: Start IEM Mixer app
+        shell: powershell
+        run: |
+          $appPath = "$env:LOCALAPPDATA\IEM Mixer\iem-mixer-app.exe"
+          if (Test-Path $appPath) {
+            Write-Host "Starting IEM Mixer..."
+            Start-Process -FilePath $appPath -WindowStyle Hidden
+            Start-Sleep -Seconds 5
+          } else {
+            Write-Host "ERROR: IEM Mixer not found at $appPath"
+            exit 1
+          }
+
+      - name: Verify app is running and port 80 listening
+        shell: powershell
+        run: |
+          # Check process is running
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if (-not $proc) {
+            Write-Host "ERROR: IEM Mixer process not running"
+            exit 1
+          }
+          Write-Host "IEM Mixer process running (PID: $($proc.Id))"
+
+          # Check port 80 is listening
+          $port80 = Get-NetTCPConnection -LocalPort 80 -State Listen -ErrorAction SilentlyContinue
+          if (-not $port80) {
+            Write-Host "ERROR: Port 80 not listening"
+            exit 1
+          }
+          Write-Host "Port 80 is listening"
+
+          # Test HTTP response
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing -TimeoutSec 10
+            if ($response.StatusCode -eq 200) {
+              Write-Host "HTTP OK - IEM Mixer responding on port 80"
+            }
+          } catch {
+            Write-Host "ERROR: HTTP request failed: $_"
+            exit 1
+          }
+
+      - name: Verify WASM deployment
         shell: cmd
         run: |
           if exist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\index.html" (
