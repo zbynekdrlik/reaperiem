@@ -8,6 +8,12 @@ use wasm_bindgen::JsCast;
 pub struct PresetData {
     /// Track index -> channel state
     pub channels: std::collections::HashMap<usize, ChannelState>,
+    /// Timestamp when preset was created (milliseconds since epoch)
+    #[serde(default)]
+    pub created_at: Option<i64>,
+    /// Timestamp when preset was last updated (milliseconds since epoch)
+    #[serde(default)]
+    pub updated_at: Option<i64>,
 }
 
 /// Channel state in a preset
@@ -16,6 +22,29 @@ pub struct ChannelState {
     pub vol: f32,
     pub mute: bool,
     pub pan: f32,
+}
+
+/// Get current timestamp in milliseconds
+fn now_ms() -> i64 {
+    js_sys::Date::now() as i64
+}
+
+/// Format timestamp for display
+fn format_timestamp(ts: i64) -> String {
+    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ts as f64));
+    let month = date.get_month() + 1;
+    let day = date.get_date();
+    let hours = date.get_hours();
+    let mins = date.get_minutes();
+    let ampm = if hours >= 12 { "PM" } else { "AM" };
+    let hours12 = if hours == 0 {
+        12
+    } else if hours > 12 {
+        hours - 12
+    } else {
+        hours
+    };
+    format!("{}/{} {}:{:02} {}", month, day, hours12, mins, ampm)
 }
 
 /// Get localStorage key for presets
@@ -84,7 +113,11 @@ pub fn PresetModal(
                 return;
             }
 
-            let state = get_current_state.run(());
+            let mut state = get_current_state.run(());
+            let ts = now_ms();
+            state.created_at = Some(ts);
+            state.updated_at = Some(ts);
+
             let mut current_presets = presets.get();
             current_presets.insert(name, state);
             save_presets(&member_id, &current_presets);
@@ -129,15 +162,18 @@ pub fn PresetModal(
                         } else {
                             view! {
                                 <>
-                                    {current_presets.keys().map(|name| {
+                                    {current_presets.iter().map(|(name, data)| {
                                         let name_load = name.clone();
+                                        let name_update = name.clone();
                                         let name_delete = name.clone();
+                                        let member_id_update = member_id_clone.clone();
                                         let member_id_delete = member_id_clone.clone();
+                                        let timestamp = data.updated_at.or(data.created_at);
 
                                         view! {
                                             <div class="preset-item">
-                                                <span
-                                                    class="name"
+                                                <div
+                                                    class="preset-info"
                                                     on:click=move |_| {
                                                         let p = presets.get();
                                                         if let Some(data) = p.get(&name_load) {
@@ -146,19 +182,41 @@ pub fn PresetModal(
                                                         }
                                                     }
                                                 >
-                                                    {name.clone()}
-                                                </span>
-                                                <button
-                                                    class="delete-preset"
-                                                    on:click=move |_| {
-                                                        let mut current = presets.get();
-                                                        current.remove(&name_delete);
-                                                        save_presets(&member_id_delete, &current);
-                                                        set_presets.set(current);
-                                                    }
-                                                >
-                                                    "Del"
-                                                </button>
+                                                    <span class="name">{name.clone()}</span>
+                                                    {timestamp.map(|ts| view! {
+                                                        <span class="preset-timestamp">{format_timestamp(ts)}</span>
+                                                    })}
+                                                </div>
+                                                <div class="preset-actions">
+                                                    <button
+                                                        class="update-preset"
+                                                        on:click=move |_| {
+                                                            let mut state = get_current_state.run(());
+                                                            let mut current = presets.get();
+                                                            // Preserve created_at, update updated_at
+                                                            if let Some(existing) = current.get(&name_update) {
+                                                                state.created_at = existing.created_at;
+                                                            }
+                                                            state.updated_at = Some(now_ms());
+                                                            current.insert(name_update.clone(), state);
+                                                            save_presets(&member_id_update, &current);
+                                                            set_presets.set(current);
+                                                        }
+                                                    >
+                                                        "Upd"
+                                                    </button>
+                                                    <button
+                                                        class="delete-preset"
+                                                        on:click=move |_| {
+                                                            let mut current = presets.get();
+                                                            current.remove(&name_delete);
+                                                            save_presets(&member_id_delete, &current);
+                                                            set_presets.set(current);
+                                                        }
+                                                    >
+                                                        "Del"
+                                                    </button>
+                                                </div>
                                             </div>
                                         }
                                     }).collect::<Vec<_>>()}

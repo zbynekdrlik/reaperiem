@@ -217,6 +217,46 @@ body {
   opacity: 0.4;
 }
 
+/* SAFETY: Disabled state when disconnected from REAPER */
+.channel.disconnected {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.channel.disconnected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: inherit;
+}
+
+/* Disconnected overlay warning */
+.disconnected-warning {
+  position: fixed;
+  top: 52px;
+  left: 0;
+  right: 0;
+  background: var(--mute-red);
+  color: white;
+  text-align: center;
+  padding: 8px;
+  font-size: 0.85em;
+  font-weight: 600;
+  z-index: 50;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .channel.hidden {
   display: none;
 }
@@ -338,22 +378,24 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* dB display */
+/* dB display - larger for stage visibility */
 .db-display {
-  min-width: 42px;
+  min-width: 55px;
   text-align: right;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 0.72em;
-  color: var(--text-secondary);
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
 .fader-value {
-  min-width: 42px;
+  min-width: 55px;
   text-align: right;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 0.72em;
-  color: var(--text-secondary);
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-primary);
   flex-shrink: 0;
 }
 
@@ -438,6 +480,39 @@ body {
   background: var(--mute-red);
   color: #fff;
   box-shadow: 0 2px 10px rgba(230, 57, 70, 0.35);
+}
+
+/* Solo button */
+.solo-btn {
+  width: 32px;
+  height: var(--touch-min);
+  border: none;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.85em;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.solo-btn.off {
+  background: rgba(244, 211, 94, 0.15);
+  color: #887740;
+}
+
+.solo-btn.on {
+  background: var(--solo-yellow);
+  color: #1a1a28;
+  box-shadow: 0 2px 10px rgba(244, 211, 94, 0.35);
+}
+
+/* Channel buttons container */
+.channel-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 /* ================================================================
@@ -537,12 +612,12 @@ body {
 .preset-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding: 12px 14px;
   background: var(--bg-channel);
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
-  cursor: pointer;
   transition: border-color 0.15s;
 }
 
@@ -550,18 +625,47 @@ body {
   border-color: var(--accent);
 }
 
-.preset-item .name {
+.preset-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.preset-item .name {
   font-weight: 600;
   font-size: 0.95em;
 }
 
+.preset-timestamp {
+  font-size: 0.7em;
+  color: var(--text-muted);
+}
+
+.preset-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.preset-item .update-preset {
+  color: var(--accent);
+  font-size: 0.75em;
+  padding: 4px 8px;
+  background: rgba(78, 205, 196, 0.1);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 .preset-item .delete-preset {
   color: var(--mute-red);
-  font-size: 0.8em;
+  font-size: 0.75em;
   padding: 4px 8px;
   background: none;
-  border: none;
+  border: 1px solid var(--mute-red-dim);
+  border-radius: 4px;
   cursor: pointer;
 }
 

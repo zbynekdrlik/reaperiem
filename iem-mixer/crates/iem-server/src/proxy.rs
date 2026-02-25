@@ -493,7 +493,10 @@ pub async fn set_send_pan(
         reaper_url, track_index, member_index, payload.pan
     );
 
-    state.http_client.get(&url).send().await.map_err(|_| {
+    tracing::debug!(url = %url, pan = payload.pan, "Setting send pan");
+
+    state.http_client.get(&url).send().await.map_err(|e| {
+        tracing::error!(error = %e, "REAPER pan error");
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError::new("REAPER_ERROR", "REAPER unavailable")),
@@ -524,7 +527,10 @@ pub async fn set_send_mute(
         reaper_url, track_index, member_index, mute_val
     );
 
-    state.http_client.get(&url).send().await.map_err(|_| {
+    tracing::debug!(url = %url, muted = payload.muted, "Setting send mute");
+
+    state.http_client.get(&url).send().await.map_err(|e| {
+        tracing::error!(error = %e, "REAPER mute error");
         (
             StatusCode::BAD_GATEWAY,
             Json(ApiError::new("REAPER_ERROR", "REAPER unavailable")),

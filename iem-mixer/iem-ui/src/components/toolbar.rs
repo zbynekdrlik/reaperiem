@@ -2,13 +2,12 @@
 
 use leptos::prelude::*;
 
-/// Bottom toolbar with +Me, Reset, and Presets buttons
+/// Bottom toolbar with +Me and Presets buttons
+/// Note: Reset button removed - 0 dB = unity gain = dangerously loud for IEMs
 #[component]
 pub fn Toolbar(
     /// Called when Presets button is clicked
     on_presets: Callback<()>,
-    /// Called when Reset button is clicked
-    on_reset: Callback<()>,
     /// Called when +Me button is clicked
     on_more_me: Callback<()>,
 ) -> impl IntoView {
@@ -19,12 +18,6 @@ pub fn Toolbar(
                 on:click=move |_| on_presets.run(())
             >
                 "Presets"
-            </button>
-            <button
-                class="toolbar-btn"
-                on:click=move |_| on_reset.run(())
-            >
-                "Reset"
             </button>
             <button
                 class="toolbar-btn more-me-btn"
