@@ -252,6 +252,17 @@ jobs:
           fi
           echo "Build verified"
 
+      - name: Build standalone server
+        working-directory: iem-mixer
+        run: cargo build --package iem-server --features standalone --release
+
+      - name: Upload server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binary
+          path: iem-mixer/target/release/server.exe
+          retention-days: 1
+
   # ============================================================
   # E2E TESTS - Browser tests must pass
   # ============================================================
@@ -337,6 +348,34 @@ jobs:
         with:
           name: wasm-dist
           path: wasm-dist/
+
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: server-binary
+          path: server-binary/
+
+      - name: Deploy server binary
+        shell: powershell
+        run: |
+          $dest = "C:\iem-server"
+          if (-not (Test-Path $dest)) { New-Item -ItemType Directory -Path $dest | Out-Null }
+
+          # Stop existing server if running
+          $proc = Get-Process -Name "server" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "Stopping existing server..."
+            Stop-Process -Name "server" -Force
+            Start-Sleep -Seconds 2
+          }
+
+          # Copy new binary
+          Copy-Item "server-binary\server.exe" "$dest\server.exe" -Force
+          Write-Host "Server binary deployed to $dest\server.exe"
+
+          # Start server in background
+          Start-Process -FilePath "$dest\server.exe" -WorkingDirectory $dest -WindowStyle Hidden
+          Write-Host "Server started"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
