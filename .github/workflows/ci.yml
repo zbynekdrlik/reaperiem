@@ -393,8 +393,9 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Testing deployed app..."
+          Start-Sleep -Seconds 3
           try {
-            $response = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing -TimeoutSec 10
+            $response = Invoke-WebRequest -Uri "http://localhost:80/iem-mixer/" -UseBasicParsing -TimeoutSec 10
             if ($response.StatusCode -ne 200) {
               Write-Host "::error::Landing page returned $($response.StatusCode)"
               exit 1
