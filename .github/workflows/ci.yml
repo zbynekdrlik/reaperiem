@@ -493,33 +493,28 @@ jobs:
           Write-Host "Ensuring port 80 URL ACL..."
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
 
-          # Start app via Task Scheduler with /IT flag
-          # /IT = run in the user's interactive desktop session (needed for tray icon)
-          # /RU = the user whose session to use
-          # The CI runner runs as a service in Session 0, but /IT tells Task Scheduler
-          # to launch the process in newlevel's desktop session (where REAPER runs).
-          # If user is not logged in, the task won't start - app will start at next login
-          # via the startup shortcut created by the NSIS installer.
+          # Start app via Task Scheduler using PowerShell cmdlets for reliable path handling
+          # Register-ScheduledTask handles paths with spaces correctly (unlike schtasks.exe)
+          # LogonType Interactive = runs in user's desktop session (needed for tray icon)
           $taskName = "IEMMixerStart"
-          Write-Host "Creating task to start: $exePath"
+          $appDir = Split-Path $exePath
+          Write-Host "Creating scheduled task to start: $exePath"
+          Write-Host "Working directory: $appDir"
 
-          # Delete existing task (ignore errors if not exists)
-          cmd /c "schtasks /Delete /TN $taskName /F 2>nul" | Out-Null
+          # Remove existing task
+          Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
 
-          # Create task with /IT for interactive session (tray icon requires desktop)
-          # No /RL HIGHEST - URL ACL handles port 80 binding without elevation
-          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /RU $env:USERNAME /IT /F
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Failed to create scheduled task"
-            exit 1
-          }
+          # Create task with explicit working directory and interactive logon
+          $action = New-ScheduledTaskAction -Execute $exePath -WorkingDirectory $appDir
+          $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+          $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+          $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 365)
 
-          # Run the task - this starts the app in the user's desktop session
-          & schtasks /Run /TN $taskName
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::warning::Failed to trigger scheduled task - user may not be logged in"
-          }
+          Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+          Write-Host "Task registered successfully"
 
+          # Start the task immediately
+          Start-ScheduledTask -TaskName $taskName
           Write-Host "Task triggered, waiting for app to start..."
           Start-Sleep -Seconds 10
 
@@ -529,14 +524,23 @@ jobs:
             Write-Host "Process running: PID $($proc.Id)"
           } else {
             Write-Host "::warning::Process not found after 10 seconds"
-            Write-Host "This is expected if user is not logged into desktop."
-            Write-Host "App will start at next login via startup shortcut."
-            # Check Windows sessions to debug
+            # Check task status for debugging
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+            if ($taskInfo) {
+              Write-Host "Task last run: $($taskInfo.LastRunTime)"
+              Write-Host "Task last result: $($taskInfo.LastTaskResult)"
+              # 0x80070002 = FILE_NOT_FOUND, 0x41301 = TASK_RUNNING, 0 = SUCCESS
+              if ($taskInfo.LastTaskResult -eq 0) {
+                Write-Host "Task completed successfully but process not found - app may have crashed"
+              } elseif ($taskInfo.LastTaskResult -eq 267009) {
+                Write-Host "Task is still running..."
+              } else {
+                Write-Host "Task failed with error code: 0x$([Convert]::ToString($taskInfo.LastTaskResult, 16))"
+              }
+            }
+            # Show user session info
             Write-Host "=== Active user sessions ==="
             & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
-            # Check task scheduler last run result
-            Write-Host "=== Task status ==="
-            & schtasks /Query /TN $taskName /V /FO LIST 2>&1 | Select-String "Status|Result|Last Run" | ForEach-Object { Write-Host "  $_" }
           }
 
           # Check if port is listening
@@ -640,7 +644,7 @@ jobs:
               Write-Host "Deployment fully verified!"
               exit 0
             } catch {
-              Write-Host "Attempt $i: $_"
+              Write-Host "Attempt ${i}: $_"
               if ($i -eq $maxRetries) {
                 Write-Host "::error::App is running but HTTP endpoints not responding"
                 exit 1
