@@ -284,7 +284,7 @@ jobs:
 
       - name: Build server
         working-directory: iem-mixer
-        run: cargo build --package iem-server --release
+        run: cargo build --package iem-server --features standalone --release
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -300,7 +300,7 @@ jobs:
       - name: Start server
         working-directory: iem-mixer
         run: |
-          cargo run --package iem-server --release &
+          cargo run --package iem-server --features standalone --release &
           sleep 5
           curl -sf http://localhost:80/ || exit 1
         env:
