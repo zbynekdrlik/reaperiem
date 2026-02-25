@@ -177,20 +177,19 @@ pub async fn poll_mixer_state(
     // Query REAPER for all track states in a batch
     // First try to get all track info
     let tracks_url = format!("{}/NTRACK;TRACK", reaper_url);
-    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
-        if let Ok(text) = resp.text().await {
-            connected = true;
-            // Parse track data for meters
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.first() == Some(&"TRACK") && parts.len() > 12 {
-                    if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        // Peak meter is at index 12 (linear 0.0-1.0+)
-                        if let Ok(peak) = parts[12].parse::<f32>() {
-                            meters.insert(track_idx, peak);
-                        }
-                    }
-                }
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await
+        && let Ok(text) = resp.text().await
+    {
+        connected = true;
+        // Parse track data for meters
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK")
+                && parts.len() > 12
+                && let Ok(track_idx) = parts[1].parse::<usize>()
+                && let Ok(peak) = parts[12].parse::<f32>()
+            {
+                meters.insert(track_idx, peak);
             }
         }
     }
@@ -378,10 +377,10 @@ async fn query_send_state(
 fn parse_reaper_value(text: &str) -> Option<f32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 2 {
-            if let Ok(val) = parts[1].parse::<f32>() {
-                return Some(val);
-            }
+        if parts.len() >= 2
+            && let Ok(val) = parts[1].parse::<f32>()
+        {
+            return Some(val);
         }
     }
     None
@@ -571,11 +570,160 @@ fn db_to_reaper_vol(db: f32) -> f32 {
 }
 
 /// Convert REAPER volume to dB
-#[allow(dead_code)]
 fn reaper_vol_to_db(vol: f32) -> f32 {
     if vol <= 0.0 {
         -60.0
     } else {
         20.0 * (vol / 0.716).log10()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_db_to_reaper_vol_unity() {
+        // 0 dB should be approximately 0.716
+        let vol = db_to_reaper_vol(0.0);
+        assert!(
+            (vol - 0.716).abs() < 0.01,
+            "0dB should be ~0.716, got {}",
+            vol
+        );
+    }
+
+    #[test]
+    fn test_db_to_reaper_vol_minus_inf() {
+        // -60 dB and below should be 0
+        assert_eq!(db_to_reaper_vol(-60.0), 0.0);
+        assert_eq!(db_to_reaper_vol(-100.0), 0.0);
+    }
+
+    #[test]
+    fn test_reaper_vol_to_db_unity() {
+        // 0.716 should be approximately 0 dB
+        let db = reaper_vol_to_db(0.716);
+        assert!(db.abs() < 0.1, "0.716 should be ~0dB, got {}", db);
+    }
+
+    #[test]
+    fn test_reaper_vol_to_db_zero() {
+        // 0.0 should be -60 dB (our floor)
+        assert_eq!(reaper_vol_to_db(0.0), -60.0);
+    }
+
+    #[test]
+    fn test_db_conversion_roundtrip() {
+        // Test roundtrip conversion at various levels
+        for db in [-20.0, -10.0, -6.0, 0.0, 6.0] {
+            let vol = db_to_reaper_vol(db);
+            let back = reaper_vol_to_db(vol);
+            assert!(
+                (back - db).abs() < 0.5,
+                "Roundtrip failed for {}dB: got {}dB",
+                db,
+                back
+            );
+        }
+    }
+
+    #[test]
+    fn test_categorize_track_mics() {
+        let (cat, pair, side) = categorize_track("MAREK mic");
+        assert_eq!(cat, "mics");
+        assert!(pair.is_none());
+        assert!(side.is_none());
+    }
+
+    #[test]
+    fn test_categorize_track_stems() {
+        let (cat, _, _) = categorize_track("DRUMS L");
+        assert_eq!(cat, "stems");
+    }
+
+    #[test]
+    fn test_categorize_track_tech() {
+        let (cat, _, _) = categorize_track("ENGINEER hand");
+        assert_eq!(cat, "tech");
+    }
+
+    #[test]
+    fn test_categorize_track_stereo_left() {
+        let (_, pair, side) = categorize_track("DRUMS L");
+        assert_eq!(pair, Some("drums".to_string()));
+        assert_eq!(side, Some("L".to_string()));
+    }
+
+    #[test]
+    fn test_categorize_track_stereo_right() {
+        let (_, pair, side) = categorize_track("DRUMS R");
+        assert_eq!(pair, Some("drums".to_string()));
+        assert_eq!(side, Some("R".to_string()));
+    }
+
+    #[test]
+    fn test_parse_reaper_value_valid() {
+        let input = "VOL\t0.716\n";
+        assert_eq!(parse_reaper_value(input), Some(0.716));
+    }
+
+    #[test]
+    fn test_parse_reaper_value_multiline() {
+        let input = "NTRACK\t10\nTRACK\t1\tname\t0.5";
+        // Should return first parseable value
+        assert_eq!(parse_reaper_value(input), Some(10.0));
+    }
+
+    #[test]
+    fn test_parse_reaper_value_invalid() {
+        let input = "ERROR";
+        assert_eq!(parse_reaper_value(input), None);
+    }
+
+    #[test]
+    fn test_find_stereo_partner_left() {
+        let inputs = vec![
+            iem_core::InputTrack {
+                name: "DRUMS L".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+            },
+            iem_core::InputTrack {
+                name: "DRUMS R".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+            },
+        ];
+        // "DRUMS L" at index 0 should find partner "DRUMS R" at index 1 (returns 1-based: 2)
+        assert_eq!(find_stereo_partner(&inputs, "DRUMS L"), Some(2));
+    }
+
+    #[test]
+    fn test_find_stereo_partner_right() {
+        let inputs = vec![
+            iem_core::InputTrack {
+                name: "DRUMS L".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+            },
+            iem_core::InputTrack {
+                name: "DRUMS R".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+            },
+        ];
+        // "DRUMS R" at index 1 should find partner "DRUMS L" at index 0 (returns 1-based: 1)
+        assert_eq!(find_stereo_partner(&inputs, "DRUMS R"), Some(1));
+    }
+
+    #[test]
+    fn test_find_stereo_partner_none() {
+        let inputs = vec![iem_core::InputTrack {
+            name: "MAREK mic".to_string(),
+            dante_input: 1,
+            default_level_db: 0.0,
+        }];
+        assert_eq!(find_stereo_partner(&inputs, "MAREK mic"), None);
     }
 }

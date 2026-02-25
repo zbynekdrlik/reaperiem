@@ -23,6 +23,64 @@ concurrency:
 
 jobs:
   # ============================================================
+  # TEST INTEGRITY - Ensure tests aren't skipped/ignored
+  # ============================================================
+  test-integrity:
+    name: Test Integrity Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for ignored tests
+        run: |
+          echo "Checking for #[ignore] in Rust tests..."
+          IGNORED=$(grep -r "#\[ignore\]" iem-mixer/crates iem-mixer/src-tauri 2>/dev/null || true)
+          if [ -n "$IGNORED" ]; then
+            echo "::error::Found ignored tests:"
+            echo "$IGNORED"
+            exit 1
+          fi
+          echo "No ignored tests found"
+
+      - name: Check for skip patterns
+        run: |
+          echo "Checking for skip patterns..."
+          SKIPPED=$(grep -rE "(\.skip\(|@skip|#\[ignore)" iem-mixer --include="*.rs" --include="*.ts" 2>/dev/null || true)
+          if [ -n "$SKIPPED" ]; then
+            echo "::error::Found skip patterns:"
+            echo "$SKIPPED"
+            exit 1
+          fi
+          echo "No skip patterns found"
+
+      - name: Verify minimum test count
+        working-directory: iem-mixer
+        run: |
+          echo "Counting tests..."
+          TEST_COUNT=$(grep -r "#\[test\]" crates src-tauri 2>/dev/null | wc -l)
+          echo "Found $TEST_COUNT unit tests"
+
+          MIN_TESTS=10
+          if [ "$TEST_COUNT" -lt "$MIN_TESTS" ]; then
+            echo "::error::Only $TEST_COUNT tests found, minimum required: $MIN_TESTS"
+            exit 1
+          fi
+          echo "Test count OK: $TEST_COUNT >= $MIN_TESTS"
+
+      - name: Check E2E tests exist
+        run: |
+          if [ ! -d "iem-mixer/e2e" ]; then
+            echo "::error::E2E test directory missing"
+            exit 1
+          fi
+          E2E_COUNT=$(find iem-mixer/e2e -name "*.spec.ts" 2>/dev/null | wc -l)
+          if [ "$E2E_COUNT" -lt 1 ]; then
+            echo "::error::No E2E test files found"
+            exit 1
+          fi
+          echo "E2E tests exist: $E2E_COUNT test files"
+
+  # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
   lint:
@@ -195,30 +253,105 @@ jobs:
           echo "Build verified"
 
   # ============================================================
+  # E2E TESTS - Browser tests must pass
+  # ============================================================
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [test-integrity, build-wasm]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM dist
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: iem-mixer/iem-ui/dist/
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            iem-mixer/target/
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+
+      - name: Build server
+        working-directory: iem-mixer
+        run: cargo build --package iem-server --release
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        working-directory: iem-mixer/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start server
+        working-directory: iem-mixer
+        run: |
+          cargo run --package iem-server --release &
+          sleep 5
+          curl -sf http://localhost:80/ || exit 1
+        env:
+          RUST_LOG: info
+
+      - name: Run E2E tests
+        working-directory: iem-mixer/e2e
+        run: npx playwright test --reporter=list
+        env:
+          E2E_BASE_URL: http://localhost:80
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: iem-mixer/e2e/test-results/
+
+  # ============================================================
   # ALL CHECKS PASSED
   # ============================================================
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, test, build-wasm, build-tauri]
+    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
     if: always()
     steps:
       - name: Check all jobs passed
         run: |
+          if [ "${{ needs.test-integrity.result }}" != "success" ]; then
+            echo "::error::Test integrity check failed"
+            exit 1
+          fi
           if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "Lint failed"
+            echo "::error::Lint failed"
             exit 1
           fi
           if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "Tests failed"
+            echo "::error::Tests failed"
             exit 1
           fi
           if [ "${{ needs.build-wasm.result }}" != "success" ]; then
-            echo "WASM build failed"
+            echo "::error::WASM build failed"
             exit 1
           fi
           if [ "${{ needs.build-tauri.result }}" != "success" ]; then
-            echo "Tauri build failed"
+            echo "::error::Tauri build failed"
+            exit 1
+          fi
+          if [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "::error::E2E tests failed"
             exit 1
           fi
           echo "All CI checks passed!"

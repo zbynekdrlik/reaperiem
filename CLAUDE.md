@@ -318,6 +318,41 @@ gh release view <tag>
 ❌ Merge/release with failing tests
 ```
 
+---
+
+## ⚠️ ZERO TOLERANCE CI POLICY
+
+**FUNDAMENTAL RULE: If it's not tested, it's broken.**
+
+### CI MUST:
+
+- ❌ NEVER skip tests (no `#[ignore]`, no `skip`, no conditional `if`)
+- ❌ NEVER have conditional test execution (no `if: always()` bypass)
+- ❌ NEVER pass with 0 tests (must verify test count > 0)
+- ❌ NEVER deploy without E2E verification
+- ✅ ALWAYS run ALL tests on EVERY push
+- ✅ ALWAYS verify deployed app responds correctly
+- ✅ ALWAYS fail if any test is skipped or ignored
+
+### Required Test Coverage:
+
+| Component    | Test Type   | Must Test                                           |
+| ------------ | ----------- | --------------------------------------------------- |
+| API endpoints| Integration | Every endpoint returns expected data                |
+| REAPER proxy | Integration | Commands reach REAPER and return valid responses    |
+| Auth flow    | Integration | Login/logout/token refresh                          |
+| Mixer UI     | E2E         | Page loads, faders work, presets save               |
+| Deploy       | Smoke       | HTTP 200 from http://iem.lan/                       |
+
+### Meta-Test Requirement:
+
+CI must include a "test-integrity" job that:
+
+1. Counts total tests and fails if < minimum threshold
+2. Scans for `#[ignore]` and fails if any found
+3. Scans for `skip` patterns and fails if any found
+4. Verifies no `if:` conditions bypass test execution
+
 ### GitHub Secrets Required:
 
 - `IEM_LAN_SSH_KEY` - SSH key for deploy@iem.lan (set via `gh secret set`)

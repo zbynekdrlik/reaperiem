@@ -367,6 +367,52 @@ jobs:
             exit /b 1
           )
 
+      - name: Verify deployed app functionality
+        shell: powershell
+        run: |
+          Write-Host "Testing deployed app..."
+
+          # Test landing page
+          try {
+            $response = Invoke-WebRequest -Uri "http://localhost:80/" -UseBasicParsing -TimeoutSec 10
+            if ($response.StatusCode -ne 200) {
+              Write-Host "::error::Landing page returned $($response.StatusCode)"
+              exit 1
+            }
+            Write-Host "Landing page OK (HTTP 200)"
+          } catch {
+            Write-Host "::error::Landing page failed: $_"
+            exit 1
+          }
+
+          # Test API endpoint
+          try {
+            $api = Invoke-WebRequest -Uri "http://localhost:80/api/members" -UseBasicParsing -TimeoutSec 10
+            if ($api.StatusCode -ne 200) {
+              Write-Host "::error::API returned $($api.StatusCode)"
+              exit 1
+            }
+            Write-Host "API endpoint OK (HTTP 200)"
+          } catch {
+            Write-Host "::error::API failed: $_"
+            exit 1
+          }
+
+          # Test login page
+          try {
+            $login = Invoke-WebRequest -Uri "http://localhost:80/login" -UseBasicParsing -TimeoutSec 10
+            if ($login.StatusCode -ne 200) {
+              Write-Host "::error::Login page returned $($login.StatusCode)"
+              exit 1
+            }
+            Write-Host "Login page OK (HTTP 200)"
+          } catch {
+            Write-Host "::error::Login page failed: $_"
+            exit 1
+          }
+
+          Write-Host "All deployment verification passed!"
+
   # ============================================================
   # NOTIFY - Summary of release
   # ============================================================

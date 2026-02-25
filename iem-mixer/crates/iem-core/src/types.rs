@@ -139,3 +139,83 @@ impl ApiError {
         Self::new("NOT_FOUND", format!("{} not found", what))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_api_error_new() {
+        let err = ApiError::new("TEST_CODE", "Test message");
+        assert_eq!(err.code, "TEST_CODE");
+        assert_eq!(err.message, "Test message");
+    }
+
+    #[test]
+    fn test_api_error_unauthorized() {
+        let err = ApiError::unauthorized();
+        assert_eq!(err.code, "UNAUTHORIZED");
+    }
+
+    #[test]
+    fn test_api_error_forbidden() {
+        let err = ApiError::forbidden();
+        assert_eq!(err.code, "FORBIDDEN");
+    }
+
+    #[test]
+    fn test_api_error_not_found() {
+        let err = ApiError::not_found("Member");
+        assert_eq!(err.code, "NOT_FOUND");
+        assert!(err.message.contains("Member"));
+    }
+
+    #[test]
+    fn test_channel_default_values() {
+        let channel = Channel {
+            track_index: 1,
+            name: "Test".to_string(),
+            level_db: 0.0,
+            pan: 0.0,
+            muted: false,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        };
+        assert_eq!(channel.track_index, 1);
+        assert!(!channel.muted);
+    }
+
+    #[test]
+    fn test_batch_operation_serialization() {
+        // Test that BatchOperation serializes correctly
+        let op = BatchOperation::MoreMe;
+        let json = serde_json::to_string(&op).unwrap();
+        assert_eq!(json, "\"more_me\"");
+
+        let op = BatchOperation::Reset;
+        let json = serde_json::to_string(&op).unwrap();
+        assert_eq!(json, "\"reset\"");
+    }
+
+    #[test]
+    fn test_batch_operation_deserialization() {
+        let op: BatchOperation = serde_json::from_str("\"more_me\"").unwrap();
+        assert!(matches!(op, BatchOperation::MoreMe));
+
+        let op: BatchOperation = serde_json::from_str("\"reset\"").unwrap();
+        assert!(matches!(op, BatchOperation::Reset));
+    }
+
+    #[test]
+    fn test_auth_claims() {
+        let claims = AuthClaims {
+            sub: "marek".to_string(),
+            engineer: false,
+            exp: 1234567890,
+            iat: 1234567800,
+        };
+        assert_eq!(claims.sub, "marek");
+        assert!(!claims.engineer);
+    }
+}
