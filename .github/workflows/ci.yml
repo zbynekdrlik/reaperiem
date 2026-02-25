@@ -352,35 +352,103 @@ jobs:
           name: tauri-installer
           path: installer/
 
+      - name: Clean ALL old installations
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Continue"  # Don't fail on cleanup errors
+
+          Write-Host "=== KILLING ALL IEM PROCESSES ==="
+          # Kill by multiple name patterns to catch everything
+          @("IEM Mixer", "iem-mixer", "iem-mixer-app", "iem-server") | ForEach-Object {
+            Get-Process -Name $_ -ErrorAction SilentlyContinue | Stop-Process -Force
+          }
+          # Also kill by path pattern
+          Get-Process | Where-Object { $_.Path -match "iem" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 3
+
+          Write-Host "=== REMOVING ALL OLD INSTALLATIONS ==="
+          # ALL known mess locations
+          $oldPaths = @(
+            "C:\iem-mixer",
+            "C:\Program Files\IEM Mixer",
+            "C:\Program Files (x86)\IEM Mixer",
+            "$env:USERPROFILE\iem-mixer",
+            "$env:USERPROFILE\AppData\Local\IEM Mixer",
+            "$env:LOCALAPPDATA\IEM Mixer"
+          )
+
+          foreach ($path in $oldPaths) {
+            if (Test-Path $path) {
+              Write-Host "REMOVING: $path"
+              Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+              if (Test-Path $path) {
+                Write-Host "::warning::Could not fully remove $path - may have locked files"
+              }
+            }
+          }
+
+          # Clean any Task Scheduler tasks (suppress errors properly)
+          @("IEMMixerStart", "IEMStart") | ForEach-Object {
+            & schtasks /Delete /TN $_ /F 2>&1 | Out-Null
+          }
+
+          Write-Host "=== CLEANUP COMPLETE ==="
+
       - name: Install and start IEM Mixer
         shell: powershell
         run: |
-          # Stop existing app if running
-          $proc = Get-Process -Name "IEM Mixer" -ErrorAction SilentlyContinue
-          if ($proc) {
-            Write-Host "Stopping existing IEM Mixer..."
-            Stop-Process -Name "IEM Mixer" -Force
-            Start-Sleep -Seconds 2
-          }
+          $ErrorActionPreference = "Stop"  # Fail on ANY error
 
-          # Find and run the NSIS installer silently
+          # Verify installer exists
           $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Write-Host "::error::No installer found in artifact!"
+            exit 1
+          }
           Write-Host "Running installer: $($installer.FullName)"
-          Start-Process -FilePath $installer.FullName -ArgumentList "/S" -Wait
+
+          # Run installer with timeout
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru -Wait
+          if ($process.ExitCode -ne 0) {
+            Write-Host "::error::Installer failed with exit code $($process.ExitCode)"
+            exit 1
+          }
           Write-Host "Installation complete"
 
-          # Copy config to install location
+          # Verify installation
           $appData = [Environment]::GetFolderPath('LocalApplicationData')
           $installDir = "$appData\IEM Mixer"
+          $exePath = "$installDir\IEM Mixer.exe"
+
+          if (-not (Test-Path $exePath)) {
+            Write-Host "::error::Installation failed - executable not found at $exePath"
+            exit 1
+          }
+
+          # Copy config
           Copy-Item "iem-mixer\config\config.production.yaml" "$installDir\config.yaml" -Force
+          if (-not (Test-Path "$installDir\config.yaml")) {
+            Write-Host "::error::Config copy failed"
+            exit 1
+          }
           Write-Host "Config deployed to $installDir"
 
-          # Start app via Task Scheduler (survives CI job cleanup)
-          $exePath = "$installDir\IEM Mixer.exe"
+          # Start app via Task Scheduler (proper error handling for schtasks)
           $taskName = "IEMMixerStart"
-          schtasks /Delete /TN $taskName /F 2>$null
-          schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /F
-          schtasks /Run /TN $taskName
+          # Delete existing task - suppress ALL output including stderr
+          & schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
+          # Create new task
+          & schtasks /Create /TN $taskName /TR "`"$exePath`"" /SC ONCE /ST 00:00 /F
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to create scheduled task"
+            exit 1
+          }
+          # Run the task
+          & schtasks /Run /TN $taskName
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to run scheduled task"
+            exit 1
+          }
           Start-Sleep -Seconds 3
           Write-Host "App started via Task Scheduler"
 
@@ -400,7 +468,85 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify deployment and app running
+      - name: Verify deployed version matches build
+        shell: powershell
+        run: |
+          # Get git hash from current commit
+          $expected_hash = (git rev-parse --short HEAD).Trim()
+
+          # Wait for app to be fully ready
+          Start-Sleep -Seconds 5
+
+          $maxRetries = 10
+          $retryDelay = 3
+
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            try {
+              # Query version endpoint
+              $response = Invoke-WebRequest -Uri "http://localhost/api/version" -UseBasicParsing
+              $version = $response.Content | ConvertFrom-Json
+
+              Write-Host "Expected: $expected_hash"
+              Write-Host "Deployed: $($version.git_hash)"
+              Write-Host "Full version: $($version.full_version)"
+
+              # CRITICAL: Version must not be "unknown" - means build.rs didn't run
+              if ($version.git_hash -eq "unknown") {
+                Write-Host "::error::GIT_HASH is 'unknown' - build.rs did not set version info!"
+                Write-Host "::error::This means the tray menu will show wrong version."
+                exit 1
+              }
+
+              if ($version.git_hash -ne $expected_hash) {
+                Write-Host "::error::VERSION MISMATCH! Old version still running."
+                Write-Host "::error::Expected $expected_hash but got $($version.git_hash)"
+                exit 1
+              }
+
+              Write-Host "Version verified: $($version.full_version)"
+              break
+            } catch {
+              Write-Host "Attempt $i failed: $_"
+              if ($i -eq $maxRetries) {
+                Write-Host "::error::Version endpoint not responding after $maxRetries attempts"
+                exit 1
+              }
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
+
+      - name: HTTP smoke test deployed app
+        shell: powershell
+        run: |
+          $maxRetries = 10
+          $retryDelay = 3
+
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            try {
+              # Test landing page
+              $landing = Invoke-WebRequest -Uri "http://localhost/" -UseBasicParsing
+              if ($landing.StatusCode -ne 200) { throw "Landing page failed with status $($landing.StatusCode)" }
+              Write-Host "Landing page: OK"
+
+              # Test API endpoint
+              $members = Invoke-WebRequest -Uri "http://localhost/api/members" -UseBasicParsing
+              if ($members.StatusCode -ne 200) { throw "API failed with status $($members.StatusCode)" }
+              $memberData = $members.Content | ConvertFrom-Json
+              if ($memberData.Count -eq 0) { throw "No members returned - config not loaded!" }
+              Write-Host "API members: $($memberData.Count) members loaded"
+
+              Write-Host "Smoke test PASSED"
+              exit 0
+            } catch {
+              Write-Host "Attempt $i failed: $_"
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
+
+          Write-Host "::error::Smoke test FAILED after $maxRetries attempts"
+          exit 1
+
+      - name: Verify deployment files and process
         shell: powershell
         run: |
           $appData = [Environment]::GetFolderPath('LocalApplicationData')

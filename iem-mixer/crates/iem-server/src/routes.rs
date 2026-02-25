@@ -1,20 +1,42 @@
 //! API and static file routes
 
 use axum::{
-    Router,
+    Json, Router,
     body::Body,
     extract::Path,
     http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{any, get, post},
 };
+use serde::Serialize;
 
 use crate::{AppState, Assets, auth, proxy};
 use rust_embed::RustEmbed;
 
+/// Version information for deployment verification
+#[derive(Serialize)]
+pub struct VersionInfo {
+    pub version: &'static str,
+    pub git_hash: &'static str,
+    pub build_time: &'static str,
+    pub full_version: String,
+}
+
+/// Get build version info - used by CI to verify correct version is deployed
+async fn get_version() -> Json<VersionInfo> {
+    Json(VersionInfo {
+        version: iem_core::VERSION,
+        git_hash: iem_core::GIT_HASH,
+        build_time: iem_core::BUILD_TIME,
+        full_version: iem_core::full_version(),
+    })
+}
+
 /// API routes (protected by authentication)
 pub fn api_routes() -> Router<AppState> {
     Router::new()
+        // Version endpoint (public, used by CI for deployment verification)
+        .route("/api/version", get(get_version))
         // Auth (public)
         .route("/api/auth", post(auth::login))
         // Member list (public)

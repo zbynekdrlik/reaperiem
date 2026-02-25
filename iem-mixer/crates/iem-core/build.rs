@@ -7,7 +7,7 @@ fn main() {
     let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
     println!("cargo:rustc-env=GIT_HASH={}", hash);
 
-    // Pass build time
+    // Pass build time as unix timestamp
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("time went backwards")
@@ -16,6 +16,4 @@ fn main() {
 
     // Rebuild if git HEAD changes
     println!("cargo:rerun-if-changed=.git/HEAD");
-
-    tauri_build::build()
 }

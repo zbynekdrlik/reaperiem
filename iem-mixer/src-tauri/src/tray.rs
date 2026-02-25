@@ -15,7 +15,8 @@ pub fn setup_tray(
     port: u16,
     members: &[BandMember],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let version_label = format!("IEM Mixer v{}", iem_core::VERSION);
+    // Display full version with git hash for unique deploy identification
+    let version_label = format!("IEM Mixer v{}", iem_core::full_version());
     let version_item = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)?;
 
     let separator1 = PredefinedMenuItem::separator(app)?;
