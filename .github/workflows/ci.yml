@@ -289,7 +289,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "20"
 
       - name: Install Playwright
         working-directory: iem-mixer/e2e
@@ -302,15 +302,16 @@ jobs:
         run: |
           cargo run --package iem-server --features standalone --release &
           sleep 5
-          curl -sf http://localhost:80/ || exit 1
+          curl -sf http://localhost:8080/ || exit 1
         env:
           RUST_LOG: info
+          PORT: 8080
 
       - name: Run E2E tests
         working-directory: iem-mixer/e2e
         run: npx playwright test --reporter=list
         env:
-          E2E_BASE_URL: http://localhost:80
+          E2E_BASE_URL: http://localhost:8080
 
       - name: Upload test results
         if: failure()

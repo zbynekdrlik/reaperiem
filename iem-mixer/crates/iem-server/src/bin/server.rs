@@ -19,7 +19,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Use default config (or load from env/file if needed)
     let config = Config::default();
-    let port = config.port;
+
+    // Allow PORT env var to override config (useful for CI where port 80 requires root)
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(config.port);
 
     let server_config = ServerConfig { port, config };
 
