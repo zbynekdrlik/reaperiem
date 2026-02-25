@@ -338,8 +338,11 @@ jobs:
           name: wasm-dist
           path: wasm-dist/
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Verify Rust available
+        shell: cmd
+        run: |
+          cargo --version
+          rustc --version
 
       - name: Build server binary
         shell: cmd
