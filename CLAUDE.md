@@ -228,13 +228,17 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 **CRITICAL: Always commit, push, and monitor CI automatically - DO NOT wait for user confirmation.**
 
-When implementation is complete and tests pass locally:
+**FULL CYCLE REQUIREMENT: You MUST complete the ENTIRE pipeline before reporting to the user:**
 
 1. Commit immediately with a descriptive message
 2. Push to trigger CI
 3. Monitor CI until all jobs pass
 4. If CI fails, fix and repeat
-5. For releases: verify deployment to iem.lan
+5. After merge to main: **monitor the deploy CI run** until Deploy job completes
+6. After deploy: **verify the live app** at http://10.77.9.231/ responds correctly
+7. **Only THEN** report success to the user
+
+**DO NOT interrupt the user mid-pipeline.** The full cycle is: code → commit → push → CI green → merge → deploy CI green → verify live app. Complete all steps autonomously.
 
 **CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
 
