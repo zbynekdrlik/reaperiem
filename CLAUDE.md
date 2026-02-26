@@ -246,7 +246,7 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 **Before EVERY push, mentally verify:**
 
-1. **Dead code** - Any new function/module used somewhere? If only in tests, mark `#[cfg(test)]`
+1. **Dead code** - Any new function/module used somewhere? If only in tests, mark `#[cfg(test)]`. **NEVER use `#[allow(dead_code)]`** — if code isn't used, remove it entirely.
 2. **Format** - Code must match rustfmt (no trailing whitespace, proper line lengths)
 3. **Platform** - Self-hosted runner is Windows. Never use `shell: bash` for iem-lan jobs!
 4. **REAPER API** - All URLs must have `/_/` prefix. All SEND parsing must use field index 4/3/5 for vol/mute/pan
@@ -255,7 +255,8 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 **NEVER DO:**
 
 ```
-❌ Push code that introduces dead_code warnings (use #[cfg(test)] or call the function)
+❌ Push code that introduces dead_code warnings (remove unused code, don't suppress with #[allow(dead_code)])
+❌ Use `#[allow(dead_code)]` to suppress warnings — remove the unused code instead
 ❌ Use `shell: bash` on Windows self-hosted runner
 ❌ Change REAPER parsing without adding tests that verify real response format
 ❌ Push multiple "fix CI" commits in a row - think before pushing!

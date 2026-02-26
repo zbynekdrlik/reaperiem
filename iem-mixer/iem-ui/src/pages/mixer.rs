@@ -18,18 +18,11 @@ use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::toolbar::Toolbar;
 
 /// Processed channel for display (handles stereo pairs)
+/// Note: level_db, pan, muted are read via derived signals from channels
 #[derive(Debug, Clone)]
 struct DisplayChannel {
     track_index: usize,
     display_name: String,
-    #[allow(dead_code)]
-    level_db: f32,
-    #[allow(dead_code)]
-    pan: f32,
-    #[allow(dead_code)]
-    muted: bool,
-    #[allow(dead_code)]
-    category: String,
     is_stereo: bool,
     partner_index: Option<usize>,
     is_my_input: bool,
@@ -316,10 +309,6 @@ pub fn MixerPage() -> impl IntoView {
             result.push(DisplayChannel {
                 track_index: ch.track_index,
                 display_name,
-                level_db: ch.level_db,
-                pan: ch.pan,
-                muted: ch.muted,
-                category: ch.category.clone(),
                 is_stereo,
                 partner_index,
                 is_my_input,
