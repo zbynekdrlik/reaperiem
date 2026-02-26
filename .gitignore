@@ -40,3 +40,4 @@ Thumbs.db
 # Playwright test artifacts
 .playwright-mcp/
 *.png
+.worktrees/

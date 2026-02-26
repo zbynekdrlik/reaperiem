@@ -110,20 +110,32 @@ pub async fn get_mixer_state(
 
     drop(config);
 
-    // Try to get actual levels from REAPER
+    // Try to get actual levels from REAPER (all channels in parallel)
     let mut result_channels = channels.clone();
-    for ch in &mut result_channels {
-        if let Ok((level, mute, pan)) = query_send_state(
-            &state.http_client,
-            &reaper_url,
-            ch.track_index,
-            member_index,
-        )
-        .await
-        {
-            ch.level_db = reaper_vol_to_db(level);
-            ch.muted = mute;
-            ch.pan = reaper_pan_to_ui(pan);
+    let send_futures: Vec<_> = result_channels
+        .iter()
+        .map(|ch| {
+            let client = state.http_client.clone();
+            let url = reaper_url.clone();
+            let track_index = ch.track_index;
+            async move {
+                let result = query_send_state(&client, &url, track_index, member_index).await;
+                (track_index, result)
+            }
+        })
+        .collect();
+
+    let send_results = futures::future::join_all(send_futures).await;
+    for (track_index, result) in send_results {
+        if let Ok((level, mute, pan)) = result {
+            if let Some(ch) = result_channels
+                .iter_mut()
+                .find(|c| c.track_index == track_index)
+            {
+                ch.level_db = reaper_vol_to_db(level);
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
+            }
         }
     }
 
@@ -203,19 +215,31 @@ pub async fn poll_mixer_state(
         }
     }
 
-    // Query send states for each channel
-    for ch in &mut result_channels {
-        if let Ok((level, mute, pan)) = query_send_state(
-            &state.http_client,
-            &reaper_url,
-            ch.track_index,
-            member_index,
-        )
-        .await
-        {
-            ch.level_db = reaper_vol_to_db(level);
-            ch.muted = mute;
-            ch.pan = reaper_pan_to_ui(pan);
+    // Query send states for all channels in parallel
+    let send_futures: Vec<_> = result_channels
+        .iter()
+        .map(|ch| {
+            let client = state.http_client.clone();
+            let url = reaper_url.clone();
+            let track_index = ch.track_index;
+            async move {
+                let result = query_send_state(&client, &url, track_index, member_index).await;
+                (track_index, result)
+            }
+        })
+        .collect();
+
+    let send_results = futures::future::join_all(send_futures).await;
+    for (track_index, result) in send_results {
+        if let Ok((level, mute, pan)) = result {
+            if let Some(ch) = result_channels
+                .iter_mut()
+                .find(|c| c.track_index == track_index)
+            {
+                ch.level_db = reaper_vol_to_db(level);
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
+            }
             connected = true;
         }
     }
@@ -313,54 +337,22 @@ pub async fn batch_control(
     Ok(StatusCode::OK)
 }
 
-/// Query send state from REAPER
-async fn query_send_state(
+/// Query send state from REAPER (single HTTP call for all fields)
+pub(crate) async fn query_send_state(
     client: &reqwest::Client,
     reaper_url: &str,
     track_index: usize,
     send_index: usize,
 ) -> Result<(f32, bool, f32), ()> {
-    // Query volume
-    let vol_url = reaper_api::get_send_vol(reaper_url, track_index, send_index);
-    let vol = if let Ok(resp) = client.get(&vol_url).send().await {
-        if let Ok(text) = resp.text().await {
-            parse_send_volume(&text).unwrap_or(1.0)
-        } else {
-            return Err(());
-        }
-    } else {
-        return Err(());
-    };
-
-    // Query mute
-    let mute_url = reaper_api::get_send_mute(reaper_url, track_index, send_index);
-    let mute = if let Ok(resp) = client.get(&mute_url).send().await {
-        if let Ok(text) = resp.text().await {
-            parse_send_mute(&text).unwrap_or(false)
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-
-    // Query pan (REAPER returns -1.0 to 1.0 where 0.0 = center)
-    let pan_url = reaper_api::get_send_pan(reaper_url, track_index, send_index);
-    let pan = if let Ok(resp) = client.get(&pan_url).send().await {
-        if let Ok(text) = resp.text().await {
-            parse_send_pan(&text).unwrap_or(0.0) // Default to center (REAPER range)
-        } else {
-            0.0
-        }
-    } else {
-        0.0
-    };
-
-    Ok((vol, mute, pan))
+    let url = reaper_api::get_send_state(reaper_url, track_index, send_index);
+    let resp = client.get(&url).send().await.map_err(|_| ())?;
+    let text = resp.text().await.map_err(|_| ())?;
+    parse_send_state(&text).ok_or(())
 }
 
 /// Parse a REAPER SEND response for volume
 /// Response format: SEND\ttrack\tsend\tflag\tVOLUME\tpan\tmode
+#[cfg(test)]
 fn parse_send_volume(text: &str) -> Option<f32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
@@ -376,6 +368,7 @@ fn parse_send_volume(text: &str) -> Option<f32> {
 
 /// Parse a REAPER SEND response for mute (flag at position 3)
 /// Response format: SEND\ttrack\tsend\tMUTE\tvolume\tpan\tmode
+#[cfg(test)]
 fn parse_send_mute(text: &str) -> Option<bool> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
@@ -391,6 +384,7 @@ fn parse_send_mute(text: &str) -> Option<bool> {
 
 /// Parse a REAPER SEND response for pan
 /// Response format: SEND\ttrack\tsend\tflag\tvolume\tPAN\tmode
+#[cfg(test)]
 fn parse_send_pan(text: &str) -> Option<f32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
@@ -399,6 +393,21 @@ fn parse_send_pan(text: &str) -> Option<f32> {
             && let Ok(val) = parts[5].parse::<f32>()
         {
             return Some(val);
+        }
+    }
+    None
+}
+
+/// Parse a full REAPER SEND response for vol, mute, and pan in one call
+/// Response format: SEND\ttrack\tsend\tMUTE_FLAG\tVOLUME\tPAN\tmode
+fn parse_send_state(text: &str) -> Option<(f32, bool, f32)> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() == Some(&"SEND") && parts.len() >= 6 {
+            let vol = parts[4].parse::<f32>().ok()?;
+            let mute_flag = parts[3].parse::<i32>().ok()?;
+            let pan = parts[5].parse::<f32>().ok()?;
+            return Some((vol, mute_flag != 0, pan));
         }
     }
     None
@@ -420,7 +429,7 @@ fn parse_reaper_value(text: &str) -> Option<f32> {
 }
 
 /// Categorize a track by name
-fn categorize_track(name: &str) -> (String, Option<String>, Option<String>) {
+pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<String>) {
     let name_lower = name.to_lowercase();
 
     // Determine category
@@ -627,7 +636,7 @@ pub struct SetMuteRequest {
 /// - 0.0 = -inf dB
 /// - 0.716 ≈ 0 dB (unity)
 /// - 1.0 ≈ +6 dB
-fn db_to_reaper_vol(db: f32) -> f32 {
+pub(crate) fn db_to_reaper_vol(db: f32) -> f32 {
     if db <= -60.0 {
         0.0
     } else {
@@ -639,7 +648,7 @@ fn db_to_reaper_vol(db: f32) -> f32 {
 }
 
 /// Convert REAPER volume to dB
-fn reaper_vol_to_db(vol: f32) -> f32 {
+pub(crate) fn reaper_vol_to_db(vol: f32) -> f32 {
     if vol <= 0.0 {
         -60.0
     } else {
@@ -651,19 +660,202 @@ fn reaper_vol_to_db(vol: f32) -> f32 {
 ///
 /// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
 /// UI uses:     0.0 = left, 0.5 = center, 1.0 = right
-fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
+pub(crate) fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
     ((reaper_pan + 1.0) / 2.0).clamp(0.0, 1.0)
 }
 
 /// Convert UI pan (0.0 to 1.0) to REAPER pan (-1.0 to 1.0)
-fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
+pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
     ((ui_pan * 2.0) - 1.0).clamp(-1.0, 1.0)
+}
+
+// =============================================================================
+// WebSocket handler
+// =============================================================================
+
+/// WebSocket mixer endpoint - upgrades HTTP to WebSocket
+pub async fn ws_mixer(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_ws(socket, state, member_id))
+}
+
+/// Handle a WebSocket connection for a member
+async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, member_id: String) {
+    use axum::extract::ws::Message;
+    use iem_core::{ClientMsg, ServerMsg};
+
+    tracing::info!(member_id = %member_id, "WebSocket connected");
+
+    // Register this member as active (so poller queries their state)
+    {
+        let mut cache = state.mixer_cache.write().await;
+        cache.active_members.insert(member_id.clone());
+    }
+
+    // Subscribe to broadcast channel
+    let mut rx = state.event_tx.subscribe();
+
+    // Send initial full state
+    if let Ok(initial_state) = build_full_state(&state, &member_id).await {
+        let json = serde_json::to_string(&initial_state).unwrap_or_default();
+        let _ = socket.send(Message::Text(json.into())).await;
+    }
+
+    loop {
+        tokio::select! {
+            // Client → Server: process commands
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
+                            execute_command(&state, &member_id, cmd).await;
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {} // Ignore ping/pong/binary
+                }
+            }
+            // Server → Client: forward relevant broadcasts
+            event = rx.recv() => {
+                match event {
+                    Ok((mid, server_msg)) => {
+                        // Send meters and connection changes to all;
+                        // send state/channel updates only to the relevant member
+                        let should_send = match &server_msg {
+                            ServerMsg::Meters { .. } => true,
+                            ServerMsg::ConnectionChanged { .. } => true,
+                            _ => mid == member_id || mid.is_empty(),
+                        };
+                        if should_send {
+                            let json = serde_json::to_string(&server_msg).unwrap_or_default();
+                            if socket.send(Message::Text(json.into())).await.is_err() {
+                                break; // Client disconnected
+                            }
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(member_id = %member_id, skipped = n, "WS broadcast lagged");
+                        // Continue - we'll get the next update
+                    }
+                    Err(_) => break, // Channel closed
+                }
+            }
+        }
+    }
+
+    tracing::info!(member_id = %member_id, "WebSocket disconnected");
+
+    // Cleanup: remove from active members
+    let mut cache = state.mixer_cache.write().await;
+    cache.active_members.remove(&member_id);
+    cache.member_states.remove(&member_id);
+}
+
+/// Build full state message for initial WebSocket connection
+async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core::ServerMsg, ()> {
+    let config = state.config.read().await;
+
+    let member_index = config.member_index(member_id).ok_or(())?;
+    let reaper_url = config.reaper_url.clone();
+
+    let channels: Vec<iem_core::Channel> = config
+        .inputs
+        .iter()
+        .enumerate()
+        .map(|(i, input)| {
+            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
+            iem_core::Channel {
+                track_index: i + 1,
+                name: input.name.clone(),
+                level_db: 0.0,
+                pan: 0.5,
+                muted: false,
+                category,
+                stereo_pair,
+                stereo_side,
+            }
+        })
+        .collect();
+
+    drop(config);
+
+    // Query all send states in parallel
+    let send_futures: Vec<_> = channels
+        .iter()
+        .map(|ch| {
+            let client = state.http_client.clone();
+            let url = reaper_url.clone();
+            let track_index = ch.track_index;
+            async move {
+                let result = query_send_state(&client, &url, track_index, member_index).await;
+                (track_index, result)
+            }
+        })
+        .collect();
+
+    let send_results = futures::future::join_all(send_futures).await;
+    let mut result_channels = channels;
+    let mut connected = false;
+
+    for (track_index, result) in send_results {
+        if let Ok((level, mute, pan)) = result {
+            if let Some(ch) = result_channels
+                .iter_mut()
+                .find(|c| c.track_index == track_index)
+            {
+                ch.level_db = reaper_vol_to_db(level);
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
+            }
+            connected = true;
+        }
+    }
+
+    Ok(iem_core::ServerMsg::State {
+        channels: result_channels,
+        connected,
+    })
+}
+
+/// Execute a client command by forwarding to REAPER
+async fn execute_command(state: &AppState, member_id: &str, cmd: iem_core::ClientMsg) {
+    let config = state.config.read().await;
+    let member_index = match config.member_index(member_id) {
+        Some(idx) => idx,
+        None => return,
+    };
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    match cmd {
+        iem_core::ClientMsg::SetLevel {
+            track_index,
+            level_db,
+        } => {
+            let vol = db_to_reaper_vol(level_db);
+            let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
+            let _ = state.http_client.get(&url).send().await;
+        }
+        iem_core::ClientMsg::SetMute { track_index, muted } => {
+            let mute_val: u8 = if muted { 1 } else { 0 };
+            let url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
+            let _ = state.http_client.get(&url).send().await;
+        }
+        iem_core::ClientMsg::SetPan { track_index, pan } => {
+            let reaper_pan = ui_pan_to_reaper(pan);
+            let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, reaper_pan);
+            let _ = state.http_client.get(&url).send().await;
+        }
+    }
 }
 
 /// REAPER HTTP API URL builder
 /// CRITICAL: All REAPER API commands MUST use the `/_/` prefix!
 /// Without this prefix, REAPER returns empty responses.
-mod reaper_api {
+pub(crate) mod reaper_api {
     /// Build URL for setting send volume
     pub fn set_send_vol(base_url: &str, track: usize, send: usize, vol: f32) -> String {
         format!(
@@ -688,17 +880,20 @@ mod reaper_api {
         )
     }
 
-    /// Build URL for getting send volume
+    /// Build URL for getting send volume (retained for test coverage of /_/ prefix)
+    #[cfg(test)]
     pub fn get_send_vol(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}/VOL", base_url, track, send)
     }
 
-    /// Build URL for getting send mute
+    /// Build URL for getting send mute (retained for test coverage of /_/ prefix)
+    #[cfg(test)]
     pub fn get_send_mute(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}/MUTE", base_url, track, send)
     }
 
-    /// Build URL for getting send pan
+    /// Build URL for getting send pan (retained for test coverage of /_/ prefix)
+    #[cfg(test)]
     pub fn get_send_pan(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}/PAN", base_url, track, send)
     }
@@ -706,6 +901,11 @@ mod reaper_api {
     /// Build URL for querying tracks
     pub fn query_tracks(base_url: &str) -> String {
         format!("{}/_/NTRACK;TRACK", base_url)
+    }
+
+    /// Build URL for getting full send state (returns vol, mute, pan in one call)
+    pub fn get_send_state(base_url: &str, track: usize, send: usize) -> String {
+        format!("{}/_/GET/TRACK/{}/SEND/{}", base_url, track, send)
     }
 }
 
@@ -1081,5 +1281,36 @@ mod tests {
         assert!((reaper_pan_to_ui(2.0) - 1.0).abs() < 0.001);
         assert!((ui_pan_to_reaper(-1.0) - (-1.0)).abs() < 0.001);
         assert!((ui_pan_to_reaper(2.0) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_parse_send_state_full() {
+        let input = "SEND\t1\t0\t0\t0.716000\t0.000000\t24";
+        let (vol, mute, pan) = parse_send_state(input).unwrap();
+        assert!((vol - 0.716).abs() < 0.001);
+        assert!(!mute);
+        assert!((pan - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_parse_send_state_muted() {
+        let input = "SEND\t1\t0\t1\t0.300000\t-0.500000\t24";
+        let (vol, mute, pan) = parse_send_state(input).unwrap();
+        assert!((vol - 0.3).abs() < 0.001);
+        assert!(mute);
+        assert!((pan - (-0.5)).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_parse_send_state_invalid() {
+        assert!(parse_send_state("TRACK\t1\tname").is_none());
+        assert!(parse_send_state("").is_none());
+    }
+
+    #[test]
+    fn test_reaper_url_get_send_state_format() {
+        let url = reaper_api::get_send_state("http://iem.lan:8080", 1, 2);
+        assert_eq!(url, "http://iem.lan:8080/_/GET/TRACK/1/SEND/2");
+        assert!(url.contains("/_/"), "get_send_state must use /_/ prefix");
     }
 }

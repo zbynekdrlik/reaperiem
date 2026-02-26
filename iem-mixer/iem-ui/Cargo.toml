@@ -10,6 +10,9 @@ license = "MIT"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Core library (WASM-safe: no config/serde_yaml)
+iem-core = { path = "../crates/iem-core", default-features = false }
+
 # Leptos with CSR (client-side rendering)
 leptos = { version = "0.7", features = ["csr"] }
 leptos_router = "0.7"
@@ -29,6 +32,10 @@ web-sys = { version = "0.3", features = [
     "HtmlInputElement",
     "Location",
     "console",
+    "WebSocket",
+    "MessageEvent",
+    "CloseEvent",
+    "ErrorEvent",
 ] }
 js-sys = "0.3"
 

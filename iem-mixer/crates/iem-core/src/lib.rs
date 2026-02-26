@@ -2,11 +2,15 @@
 //!
 //! Shared types, configuration, and constants for the IEM mixing system.
 
+#[cfg(feature = "config")]
 pub mod config;
 pub mod types;
+pub mod ws;
 
+#[cfg(feature = "config")]
 pub use config::{BandMember, Config, InputTrack};
 pub use types::*;
+pub use ws::{ClientMsg, ServerMsg};
 
 /// Application version (from Cargo.toml)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

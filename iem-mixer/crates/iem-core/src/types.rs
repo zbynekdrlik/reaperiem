@@ -44,7 +44,7 @@ pub struct MixerState {
 }
 
 /// A single channel in the mixer
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Channel {
     /// Input track index (1-based)
     pub track_index: usize,

@@ -1,14 +1,14 @@
 //! Mixer page with faders, meters, categories, and presets
+//!
+//! Uses WebSocket for real-time bidirectional communication with REAPER.
 
 use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use std::collections::HashMap;
+use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 
-use crate::api::{
-    BatchOperation, Channel, batch_control, poll_mixer_state, set_send_level, set_send_mute,
-    set_send_pan,
-};
+use crate::api::{BatchOperation, Channel, batch_control};
 use crate::auth::can_access_member;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::fader::Fader;
@@ -30,6 +30,132 @@ struct DisplayChannel {
     is_stereo: bool,
     partner_index: Option<usize>,
     is_my_input: bool,
+}
+
+/// Send a command via WebSocket (synchronous, non-blocking)
+fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg) {
+    if let Some(ws) = ws.get_untracked() {
+        if ws.ready_state() == web_sys::WebSocket::OPEN {
+            if let Ok(json) = serde_json::to_string(cmd) {
+                let _ = ws.send_with_str(&json);
+            }
+        }
+    }
+}
+
+/// Convert iem_core::Channel to crate::api::Channel
+fn convert_channel(ch: iem_core::Channel) -> Channel {
+    Channel {
+        track_index: ch.track_index,
+        name: ch.name,
+        level_db: ch.level_db,
+        pan: ch.pan,
+        muted: ch.muted,
+        category: ch.category,
+        stereo_pair: ch.stereo_pair,
+        stereo_side: ch.stereo_side,
+    }
+}
+
+/// Create and connect a WebSocket, wiring up message handlers to signals
+fn connect_websocket(
+    member: &str,
+    set_ws: WriteSignal<Option<web_sys::WebSocket>>,
+    set_channels: WriteSignal<Vec<Channel>>,
+    set_meters: WriteSignal<HashMap<usize, f32>>,
+    set_connected: WriteSignal<bool>,
+    set_loading: WriteSignal<bool>,
+    fader_touched: ReadSignal<HashMap<usize, bool>>,
+) {
+    let location = web_sys::window().unwrap().location();
+    let host = location.host().unwrap_or_default();
+    let protocol = if location.protocol().unwrap_or_default() == "https:" {
+        "wss"
+    } else {
+        "ws"
+    };
+    let ws_url = format!("{}://{}/ws/{}", protocol, host, member);
+
+    let ws = match web_sys::WebSocket::new(&ws_url) {
+        Ok(ws) => ws,
+        Err(e) => {
+            web_sys::console::error_1(&format!("WS connect error: {:?}", e).into());
+            return;
+        }
+    };
+
+    set_ws.set(Some(ws.clone()));
+
+    // Handle incoming messages
+    let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+        if let Some(text) = e.data().as_string() {
+            if let Ok(msg) = serde_json::from_str::<iem_core::ServerMsg>(&text) {
+                let touched = fader_touched.get_untracked();
+                match msg {
+                    iem_core::ServerMsg::State {
+                        channels: new_chs,
+                        connected: conn,
+                    } => {
+                        set_channels.update(|chs| {
+                            if chs.is_empty() {
+                                // First state — populate
+                                *chs = new_chs.into_iter().map(convert_channel).collect();
+                            } else {
+                                // Update non-touched channels
+                                for new_ch in &new_chs {
+                                    if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
+                                        if let Some(ch) = chs
+                                            .iter_mut()
+                                            .find(|c| c.track_index == new_ch.track_index)
+                                        {
+                                            ch.level_db = new_ch.level_db;
+                                            ch.muted = new_ch.muted;
+                                            ch.pan = new_ch.pan;
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                        set_connected.set(conn);
+                        set_loading.set(false);
+                    }
+                    iem_core::ServerMsg::Meters { meters: m } => {
+                        set_meters.set(m);
+                    }
+                    iem_core::ServerMsg::ChannelUpdate {
+                        track_index,
+                        level_db,
+                        muted,
+                        pan,
+                    } => {
+                        if !touched.get(&track_index).copied().unwrap_or(false) {
+                            set_channels.update(|chs| {
+                                if let Some(ch) =
+                                    chs.iter_mut().find(|c| c.track_index == track_index)
+                                {
+                                    ch.level_db = level_db;
+                                    ch.muted = muted;
+                                    ch.pan = pan;
+                                }
+                            });
+                        }
+                    }
+                    iem_core::ServerMsg::ConnectionChanged { connected: conn } => {
+                        set_connected.set(conn);
+                    }
+                }
+            }
+        }
+    }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+    ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+    onmessage.forget();
+
+    // Handle close — mark disconnected (reconnect interval will handle retry)
+    let onclose = Closure::wrap(Box::new(move |_: web_sys::CloseEvent| {
+        set_connected.set(false);
+    }) as Box<dyn FnMut(web_sys::CloseEvent)>);
+    ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
+    onclose.forget();
 }
 
 /// Mixer page for a specific member
@@ -68,63 +194,54 @@ pub fn MixerPage() -> impl IntoView {
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
     let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
     let (loading, set_loading) = signal(true);
-    // Solo state: track indices that are currently soloed
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
-    // Pre-solo mute states: saved when first solo is engaged
     let (pre_solo_mutes, set_pre_solo_mutes) = signal(HashMap::<usize, bool>::new());
 
-    // Poll for updates
-    let poll_member_id = member_id.clone();
+    // WebSocket connection
+    let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
+
+    // Connect WebSocket when member is known
+    let ws_member_id = member_id.clone();
     Effect::new(move |_| {
-        let member = poll_member_id();
+        let member = ws_member_id();
         if member.is_empty() {
             return;
         }
 
-        // Initial fetch
-        let member_clone = member.clone();
-        spawn_local(async move {
-            if let Ok(resp) = poll_mixer_state(&member_clone).await {
-                set_channels.set(resp.channels);
-                set_meters.set(resp.meters);
-                set_connected.set(resp.connected);
-                set_loading.set(false);
-            } else {
-                set_loading.set(false);
-            }
-        });
-
-        // Set up polling interval
-        let member_for_interval = member.clone();
-        let interval_handle = gloo_timers::callback::Interval::new(500, move || {
-            let member = member_for_interval.clone();
-            let touched = fader_touched.get_untracked();
-
-            spawn_local(async move {
-                if let Ok(resp) = poll_mixer_state(&member).await {
-                    // Only update channels that aren't being touched
-                    set_channels.update(|chs| {
-                        for new_ch in &resp.channels {
-                            if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
-                                if let Some(ch) =
-                                    chs.iter_mut().find(|c| c.track_index == new_ch.track_index)
-                                {
-                                    ch.level_db = new_ch.level_db;
-                                    ch.muted = new_ch.muted;
-                                    ch.pan = new_ch.pan;
-                                }
-                            }
-                        }
-                    });
-                    set_meters.set(resp.meters);
-                    set_connected.set(resp.connected);
-                }
-            });
-        });
-
-        // Keep interval alive
-        std::mem::forget(interval_handle);
+        connect_websocket(
+            &member,
+            set_ws,
+            set_channels,
+            set_meters,
+            set_connected,
+            set_loading,
+            fader_touched,
+        );
     });
+
+    // Auto-reconnect: check every 2s if WebSocket is closed
+    let reconnect_member_id = member_id.clone();
+    let reconnect_handle = gloo_timers::callback::Interval::new(2000, move || {
+        let needs_reconnect = match ws.get_untracked() {
+            Some(ref w) => w.ready_state() == web_sys::WebSocket::CLOSED,
+            None => false,
+        };
+        if needs_reconnect {
+            let member = reconnect_member_id();
+            if !member.is_empty() {
+                connect_websocket(
+                    &member,
+                    set_ws,
+                    set_channels,
+                    set_meters,
+                    set_connected,
+                    set_loading,
+                    fader_touched,
+                );
+            }
+        }
+    });
+    std::mem::forget(reconnect_handle);
 
     // Handle back button
     let on_back = move |_| {
@@ -142,25 +259,19 @@ pub fn MixerPage() -> impl IntoView {
         let mut seen_pairs: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         for ch in &chs {
-            // Skip R side of stereo pairs
             if ch.stereo_side.as_deref() == Some("R") {
                 continue;
             }
-
-            // Skip if category doesn't match
             if !active_cat.matches(&ch.category) {
                 continue;
             }
 
-            // Check if this is L side of a stereo pair
             let (is_stereo, partner_index) = if ch.stereo_side.as_deref() == Some("L") {
                 if let Some(ref pair_name) = ch.stereo_pair {
                     if seen_pairs.contains(pair_name) {
                         continue;
                     }
                     seen_pairs.insert(pair_name.clone());
-
-                    // Find R partner
                     let partner = chs
                         .iter()
                         .find(|c| {
@@ -176,13 +287,11 @@ pub fn MixerPage() -> impl IntoView {
                 (false, None)
             };
 
-            // Create display name (strip " L" suffix for stereo)
             let display_name = if is_stereo {
                 ch.name.trim_end_matches(" L").to_string()
             } else {
                 ch.name.clone()
             };
-
             let is_my_input = ch.name.to_uppercase() == my_input;
 
             result.push(DisplayChannel {
@@ -201,7 +310,7 @@ pub fn MixerPage() -> impl IntoView {
         result
     };
 
-    // Preset handlers - use Callback
+    // Preset handlers
     let get_current_state = Callback::new(move |_: ()| {
         let chs = channels.get();
         let mut channel_states = HashMap::new();
@@ -222,15 +331,11 @@ pub fn MixerPage() -> impl IntoView {
         }
     });
 
-    let load_preset_member_id = member_id.clone();
     let on_load_preset = Callback::new(move |preset: PresetData| {
-        // CRITICAL SAFETY: Block preset loading when disconnected
         if !connected.get() {
             web_sys::console::warn_1(&"Preset loading blocked: not connected to REAPER".into());
             return;
         }
-
-        let member = load_preset_member_id();
 
         // Update local state
         set_channels.update(|chs| {
@@ -243,30 +348,30 @@ pub fn MixerPage() -> impl IntoView {
             }
         });
 
-        // Send all changes to server with error handling
-        let preset_clone = preset.clone();
-        spawn_local(async move {
-            let mut errors = 0;
-            for (track_index, state) in preset_clone.channels {
-                if let Err(e) = set_send_level(&member, track_index, state.vol).await {
-                    web_sys::console::error_1(&format!("Preset level error: {:?}", e).into());
-                    errors += 1;
-                }
-                if let Err(e) = set_send_mute(&member, track_index, state.mute).await {
-                    web_sys::console::error_1(&format!("Preset mute error: {:?}", e).into());
-                    errors += 1;
-                }
-                if let Err(e) = set_send_pan(&member, track_index, state.pan).await {
-                    web_sys::console::error_1(&format!("Preset pan error: {:?}", e).into());
-                    errors += 1;
-                }
-            }
-            if errors > 0 {
-                web_sys::console::warn_1(
-                    &format!("Preset loaded with {} API errors", errors).into(),
-                );
-            }
-        });
+        // Send all changes via WebSocket
+        for (track_index, state) in &preset.channels {
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetLevel {
+                    track_index: *track_index,
+                    level_db: state.vol,
+                },
+            );
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetMute {
+                    track_index: *track_index,
+                    muted: state.mute,
+                },
+            );
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetPan {
+                    track_index: *track_index,
+                    pan: state.pan,
+                },
+            );
+        }
     });
 
     // Toolbar callbacks
@@ -276,7 +381,6 @@ pub fn MixerPage() -> impl IntoView {
 
     let more_me_member_id = member_id.clone();
     let on_more_me = Callback::new(move |_: ()| {
-        // CRITICAL SAFETY: Block when disconnected
         if !connected.get() {
             web_sys::console::warn_1(&"+Me blocked: not connected to REAPER".into());
             return;
@@ -300,7 +404,6 @@ pub fn MixerPage() -> impl IntoView {
                     "\u{2190}"
                 </button>
                 <h1>{move || {
-                    // Capitalize member name
                     let m = member_id();
                     let mut chars = m.chars();
                     match chars.next() {
@@ -322,7 +425,6 @@ pub fn MixerPage() -> impl IntoView {
                 on_select=move |cat| set_active_category.set(cat)
             />
 
-            // SAFETY: Show warning when disconnected from REAPER
             <Show
                 when=move || !connected.get() && !loading.get()
                 fallback=|| ()
@@ -345,16 +447,15 @@ pub fn MixerPage() -> impl IntoView {
                         <ChannelList
                             display_channels=Signal::derive(display_channels)
                             meters=meters.into()
-                            member_id=Signal::derive(member_id.clone())
                             channels=channels
                             set_channels=set_channels
-                            _fader_touched=fader_touched
                             set_fader_touched=set_fader_touched
                             soloed=soloed
                             set_soloed=set_soloed
                             pre_solo_mutes=pre_solo_mutes
                             set_pre_solo_mutes=set_pre_solo_mutes
                             connected=connected
+                            ws=ws
                         />
                     </div>
                 </div>
@@ -381,17 +482,15 @@ pub fn MixerPage() -> impl IntoView {
 fn ChannelList(
     display_channels: Signal<Vec<DisplayChannel>>,
     meters: ReadSignal<HashMap<usize, f32>>,
-    member_id: Signal<String>,
     channels: ReadSignal<Vec<Channel>>,
     set_channels: WriteSignal<Vec<Channel>>,
-    _fader_touched: ReadSignal<HashMap<usize, bool>>,
     set_fader_touched: WriteSignal<HashMap<usize, bool>>,
     soloed: ReadSignal<std::collections::HashSet<usize>>,
     set_soloed: WriteSignal<std::collections::HashSet<usize>>,
     pre_solo_mutes: ReadSignal<HashMap<usize, bool>>,
     set_pre_solo_mutes: WriteSignal<HashMap<usize, bool>>,
-    /// Connection state - controls are disabled when not connected (SAFETY)
     connected: ReadSignal<bool>,
+    ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
     move || {
         let chs = display_channels.get();
@@ -413,20 +512,15 @@ fn ChannelList(
                         let is_my = ch.is_my_input;
                         let is_stereo = ch.is_stereo;
 
-                        // Get meter level for this track
                         let meter_level = Signal::derive(move || {
                             meters.get().get(&track_idx).copied().unwrap_or(0.0)
                         });
 
-                        // Level change handler - SAFETY: Only allow when connected to REAPER
+                        // Level change handler
                         let on_level_change = Callback::new(move |new_level: f32| {
-                            // CRITICAL SAFETY: Block changes when disconnected from REAPER
                             if !connected.get() {
-                                web_sys::console::warn_1(&"Level change blocked: not connected to REAPER".into());
                                 return;
                             }
-
-                            let member = member_id.get();
 
                             // Mark as touched
                             set_fader_touched.update(|t| {
@@ -436,14 +530,7 @@ fn ChannelList(
                                 }
                             });
 
-                            // Store old level for rollback on error
-                            let old_level = channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.level_db)
-                                .unwrap_or(new_level);
-
-                            // Update local state optimistically
+                            // Optimistic update
                             set_channels.update(|chs| {
                                 if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
                                     ch.level_db = new_level;
@@ -455,23 +542,17 @@ fn ChannelList(
                                 }
                             });
 
-                            // Send to server with error handling
-                            spawn_local(async move {
-                                if let Err(e) = set_send_level(&member, track_idx, new_level).await {
-                                    web_sys::console::error_1(&format!("Level API error: {:?}", e).into());
-                                    // Rollback on error
-                                    set_channels.update(|chs| {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                            ch.level_db = old_level;
-                                        }
-                                    });
-                                }
-                                if let Some(partner) = partner_idx {
-                                    if let Err(e) = set_send_level(&member, partner, new_level).await {
-                                        web_sys::console::error_1(&format!("Level API error (partner): {:?}", e).into());
-                                    }
-                                }
+                            // Send via WebSocket (instant, no async)
+                            ws_send(ws, &iem_core::ClientMsg::SetLevel {
+                                track_index: track_idx,
+                                level_db: new_level,
                             });
+                            if let Some(partner) = partner_idx {
+                                ws_send(ws, &iem_core::ClientMsg::SetLevel {
+                                    track_index: partner,
+                                    level_db: new_level,
+                                });
+                            }
 
                             // Clear touched flag after delay
                             gloo_timers::callback::Timeout::new(200, move || {
@@ -484,22 +565,18 @@ fn ChannelList(
                             }).forget();
                         });
 
-                        // Pan change handler - SAFETY: Only allow when connected to REAPER
+                        // Pan change handler
                         let on_pan_change = Callback::new(move |new_pan: f32| {
-                            // CRITICAL SAFETY: Block changes when disconnected from REAPER
                             if !connected.get() {
-                                web_sys::console::warn_1(&"Pan change blocked: not connected to REAPER".into());
                                 return;
                             }
 
-                            let member = member_id.get();
-
-                            // Store old pan for rollback
-                            let old_pan = channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.pan)
-                                .unwrap_or(new_pan);
+                            set_fader_touched.update(|t| {
+                                t.insert(track_idx, true);
+                                if let Some(partner) = partner_idx {
+                                    t.insert(partner, true);
+                                }
+                            });
 
                             set_channels.update(|chs| {
                                 if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
@@ -512,33 +589,33 @@ fn ChannelList(
                                 }
                             });
 
-                            spawn_local(async move {
-                                if let Err(e) = set_send_pan(&member, track_idx, new_pan).await {
-                                    web_sys::console::error_1(&format!("Pan API error: {:?}", e).into());
-                                    // Rollback on error
-                                    set_channels.update(|chs| {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                            ch.pan = old_pan;
-                                        }
-                                    });
-                                }
-                                if let Some(partner) = partner_idx {
-                                    if let Err(e) = set_send_pan(&member, partner, 1.0 - new_pan).await {
-                                        web_sys::console::error_1(&format!("Pan API error (partner): {:?}", e).into());
-                                    }
-                                }
+                            ws_send(ws, &iem_core::ClientMsg::SetPan {
+                                track_index: track_idx,
+                                pan: new_pan,
                             });
+                            if let Some(partner) = partner_idx {
+                                ws_send(ws, &iem_core::ClientMsg::SetPan {
+                                    track_index: partner,
+                                    pan: 1.0 - new_pan,
+                                });
+                            }
+
+                            gloo_timers::callback::Timeout::new(1000, move || {
+                                set_fader_touched.update(|t| {
+                                    t.remove(&track_idx);
+                                    if let Some(p) = partner_idx {
+                                        t.remove(&p);
+                                    }
+                                });
+                            }).forget();
                         });
 
-                        // Mute toggle handler - SAFETY: Only allow when connected to REAPER
+                        // Mute toggle handler
                         let on_mute_click = move |_| {
-                            // CRITICAL SAFETY: Block changes when disconnected from REAPER
                             if !connected.get() {
-                                web_sys::console::warn_1(&"Mute change blocked: not connected to REAPER".into());
                                 return;
                             }
 
-                            let member = member_id.get();
                             let current_muted = channels.get()
                                 .iter()
                                 .find(|c| c.track_index == track_idx)
@@ -546,7 +623,13 @@ fn ChannelList(
                                 .unwrap_or(false);
                             let new_muted = !current_muted;
 
-                            // Optimistically update local state
+                            set_fader_touched.update(|t| {
+                                t.insert(track_idx, true);
+                                if let Some(partner) = partner_idx {
+                                    t.insert(partner, true);
+                                }
+                            });
+
                             set_channels.update(|chs| {
                                 if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
                                     ch.muted = new_muted;
@@ -558,39 +641,38 @@ fn ChannelList(
                                 }
                             });
 
-                            spawn_local(async move {
-                                if let Err(e) = set_send_mute(&member, track_idx, new_muted).await {
-                                    web_sys::console::error_1(&format!("Mute API error: {:?}", e).into());
-                                    // Rollback on error
-                                    set_channels.update(|chs| {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                            ch.muted = current_muted;
-                                        }
-                                    });
-                                }
-                                if let Some(partner) = partner_idx {
-                                    if let Err(e) = set_send_mute(&member, partner, new_muted).await {
-                                        web_sys::console::error_1(&format!("Mute API error (partner): {:?}", e).into());
-                                    }
-                                }
+                            ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                track_index: track_idx,
+                                muted: new_muted,
                             });
+                            if let Some(partner) = partner_idx {
+                                ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                    track_index: partner,
+                                    muted: new_muted,
+                                });
+                            }
+
+                            gloo_timers::callback::Timeout::new(1000, move || {
+                                set_fader_touched.update(|t| {
+                                    t.remove(&track_idx);
+                                    if let Some(p) = partner_idx {
+                                        t.remove(&p);
+                                    }
+                                });
+                            }).forget();
                         };
 
-                        // Solo toggle handler - SAFETY: Only allow when connected to REAPER
+                        // Solo toggle handler
                         let on_solo_click = move |_| {
-                            // CRITICAL SAFETY: Block changes when disconnected from REAPER
                             if !connected.get() {
-                                web_sys::console::warn_1(&"Solo change blocked: not connected to REAPER".into());
                                 return;
                             }
 
-                            let member = member_id.get();
                             let all_channels = channels.get();
                             let current_soloed = soloed.get();
                             let is_currently_soloed = current_soloed.contains(&track_idx);
 
                             if is_currently_soloed {
-                                // Removing solo from this channel
                                 let mut new_soloed = current_soloed.clone();
                                 new_soloed.remove(&track_idx);
                                 if let Some(partner) = partner_idx {
@@ -598,24 +680,22 @@ fn ChannelList(
                                 }
 
                                 if new_soloed.is_empty() {
-                                    // All solos cleared - restore pre-solo mute states
                                     let saved = pre_solo_mutes.get();
                                     for ch in &all_channels {
                                         let should_be_muted = saved.get(&ch.track_index).copied().unwrap_or(false);
                                         let idx = ch.track_index;
-                                        let member_clone = member.clone();
                                         set_channels.update(|chs| {
                                             if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
                                                 c.muted = should_be_muted;
                                             }
                                         });
-                                        spawn_local(async move {
-                                            let _ = set_send_mute(&member_clone, idx, should_be_muted).await;
+                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                            track_index: idx,
+                                            muted: should_be_muted,
                                         });
                                     }
                                     set_pre_solo_mutes.set(HashMap::new());
                                 } else {
-                                    // Other channels still soloed - mute this one
                                     set_channels.update(|chs| {
                                         if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
                                             ch.muted = true;
@@ -626,43 +706,42 @@ fn ChannelList(
                                             }
                                         }
                                     });
-                                    let member_clone = member.clone();
-                                    spawn_local(async move {
-                                        let _ = set_send_mute(&member_clone, track_idx, true).await;
-                                        if let Some(partner) = partner_idx {
-                                            let _ = set_send_mute(&member_clone, partner, true).await;
-                                        }
+                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                        track_index: track_idx,
+                                        muted: true,
                                     });
+                                    if let Some(partner) = partner_idx {
+                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                            track_index: partner,
+                                            muted: true,
+                                        });
+                                    }
                                 }
                                 set_soloed.set(new_soloed);
                             } else {
-                                // Adding solo to this channel
                                 let was_empty = current_soloed.is_empty();
 
                                 if was_empty {
-                                    // First solo - save current mute states
                                     let mut saved_mutes = HashMap::new();
                                     for ch in &all_channels {
                                         saved_mutes.insert(ch.track_index, ch.muted);
                                     }
                                     set_pre_solo_mutes.set(saved_mutes);
 
-                                    // Mute all except this one
                                     for ch in &all_channels {
                                         let should_mute = ch.track_index != track_idx && partner_idx != Some(ch.track_index);
                                         let idx = ch.track_index;
-                                        let member_clone = member.clone();
                                         set_channels.update(|chs| {
                                             if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
                                                 c.muted = should_mute;
                                             }
                                         });
-                                        spawn_local(async move {
-                                            let _ = set_send_mute(&member_clone, idx, should_mute).await;
+                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                            track_index: idx,
+                                            muted: should_mute,
                                         });
                                     }
                                 } else {
-                                    // Additional solo - unmute this channel
                                     set_channels.update(|chs| {
                                         if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
                                             ch.muted = false;
@@ -673,13 +752,16 @@ fn ChannelList(
                                             }
                                         }
                                     });
-                                    let member_clone = member.clone();
-                                    spawn_local(async move {
-                                        let _ = set_send_mute(&member_clone, track_idx, false).await;
-                                        if let Some(partner) = partner_idx {
-                                            let _ = set_send_mute(&member_clone, partner, false).await;
-                                        }
+                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                        track_index: track_idx,
+                                        muted: false,
                                     });
+                                    if let Some(partner) = partner_idx {
+                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                            track_index: partner,
+                                            muted: false,
+                                        });
+                                    }
                                 }
 
                                 let mut new_soloed = current_soloed.clone();
@@ -691,10 +773,7 @@ fn ChannelList(
                             }
                         };
 
-                        // Check if this track is soloed
                         let is_soloed = move || soloed.get().contains(&track_idx);
-
-                        // Check if connected for visual state
                         let is_connected = move || connected.get();
 
                         view! {
@@ -703,7 +782,6 @@ fn ChannelList(
                                 if muted { classes.push("muted"); }
                                 if is_my { classes.push("more-me"); }
                                 if is_stereo { classes.push("stereo-pair"); }
-                                // SAFETY: Add disconnected class when not connected
                                 if !is_connected() { classes.push("disconnected"); }
                                 classes.join(" ")
                             }>
