@@ -1,8 +1,9 @@
 //! Custom div-based fader component with touch-safe activation delay
 //!
 //! Replaces native `<input type="range">` to eliminate browser jump-to-click
-//! behavior and enable fill-bar visualization. Implements a 300ms touch-and-hold
-//! activation pattern used by professional audio apps (Soundcraft Ui, Mixing Station).
+//! behavior and enable fill-bar visualization. Implements a 300ms activation
+//! pattern for BOTH touch AND mouse — ALL movement is relative-only.
+//! No absolute positioning jumps on any platform.
 
 use leptos::prelude::*;
 use std::cell::RefCell;
@@ -12,6 +13,9 @@ use web_sys::TouchEvent;
 
 /// Activation delay in milliseconds (SOTA: 250-350ms)
 const ACTIVATION_DELAY_MS: u32 = 300;
+
+/// Time window to ignore synthesized mouse events after touch (ms)
+const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
 
 /// Convert a dB value to a percentage position on the fader track
 fn value_to_percent(value: f32, min: f32, max: f32) -> f32 {
@@ -25,12 +29,10 @@ fn quantize(value: f32) -> f32 {
 
 /// Horizontal fader component with touch-safe activation
 ///
-/// Touch behavior:
-/// - Touch and release before 300ms: NO change (user was scrolling)
-/// - Touch and hold 300ms+: Fader activates with haptic feedback, relative movement
-/// - Mouse/desktop: Immediate response (no delay needed)
-///
-/// Visual: Rendered as a fill-bar (left-to-right) with a thin handle indicator.
+/// Both touch and mouse use the same interaction model:
+/// - Press and release before 300ms: NO change (prevents accidental jumps)
+/// - Press and hold 300ms+: Fader activates with visual feedback, relative movement
+/// - All movement is relative — fader never jumps to click/tap position
 #[component]
 pub fn Fader(
     /// Current value in dB (reactive signal)
@@ -60,9 +62,16 @@ pub fn Fader(
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
         Rc::new(RefCell::new(None));
 
-    // Store initial touch position for move detection
+    // Original touch position for vertical-scroll detection
     let touch_start_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
     let touch_start_y: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
+
+    // Latest pointer position — baseline for relative movement after activation.
+    // Updated continuously during pre-activation to eliminate accumulated drift.
+    let move_base_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
+
+    // Timestamp of last touch event — guards against synthesized mouse events
+    let last_touch_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
     // Node ref for measuring track dimensions
     let track_ref = NodeRef::<leptos::html::Div>::new();
@@ -74,34 +83,60 @@ pub fn Fader(
         }
     });
 
+    // --- Rc clones for each closure ---
+
+    let timeout_handle_ts = timeout_handle.clone();
+    let timeout_handle_tm = timeout_handle.clone();
+    let timeout_handle_te = timeout_handle.clone();
+    let timeout_handle_tc = timeout_handle.clone();
+    let timeout_handle_md = timeout_handle.clone();
+    let timeout_handle_mu = timeout_handle; // mouseup inner (last user)
+
+    let touch_start_x_ts = touch_start_x.clone();
+    let touch_start_x_tm = touch_start_x.clone();
+    // touch_start_x consumed by touchend
+
+    let touch_start_y_ts = touch_start_y.clone();
+    let touch_start_y_tm = touch_start_y.clone();
+    // touch_start_y consumed by touchend
+
+    let move_base_x_ts = move_base_x.clone();
+    let move_base_x_tm = move_base_x.clone();
+    let move_base_x_te = move_base_x.clone();
+    let move_base_x_md = move_base_x.clone();
+    let move_base_x_mm = move_base_x.clone(); // mousemove inner
+    let move_base_x_mu = move_base_x; // mouseup inner (last user)
+
+    let last_touch_time_ts = last_touch_time.clone();
+    let last_touch_time_te = last_touch_time.clone();
+    let last_touch_time_tc = last_touch_time.clone();
+    let last_touch_time_md = last_touch_time; // mousedown (last user)
+
     // --- Touch handlers ---
 
-    let timeout_handle_start = timeout_handle.clone();
-    let touch_start_x_start = touch_start_x.clone();
-    let touch_start_y_start = touch_start_y.clone();
-    let on_activate_start = on_activate;
-    let on_touch_state_start = on_touch_state;
-
     let handle_touchstart = move |ev: TouchEvent| {
+        *last_touch_time_ts.borrow_mut() = js_sys::Date::now();
+
         if let Some(touch) = ev.touches().get(0) {
-            *touch_start_x_start.borrow_mut() = Some(touch.client_x() as f64);
-            *touch_start_y_start.borrow_mut() = Some(touch.client_y() as f64);
+            let x = touch.client_x() as f64;
+            *touch_start_x_ts.borrow_mut() = Some(x);
+            *touch_start_y_ts.borrow_mut() = Some(touch.client_y() as f64);
+            *move_base_x_ts.borrow_mut() = Some(x);
         }
 
         set_is_touch_interaction.set(true);
         set_saved_value.set(local_value.get_untracked());
         set_is_pending.set(true);
 
-        if let Some(cb) = on_touch_state_start {
+        if let Some(cb) = on_touch_state {
             cb.run(true);
         }
 
-        let on_activate_timer = on_activate_start;
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
             set_is_activated.set(true);
             set_is_pending.set(false);
 
-            if let Some(cb) = on_activate_timer {
+            if let Some(cb) = on_activate {
                 cb.run(true);
             }
 
@@ -112,12 +147,8 @@ pub fn Fader(
             }
         });
 
-        *timeout_handle_start.borrow_mut() = Some(timeout);
+        *timeout_handle_ts.borrow_mut() = Some(timeout);
     };
-
-    let timeout_handle_move = timeout_handle.clone();
-    let touch_start_x_move = touch_start_x.clone();
-    let touch_start_y_move = touch_start_y.clone();
 
     let handle_touchmove = move |ev: TouchEvent| {
         if let Some(touch) = ev.touches().get(0) {
@@ -126,33 +157,32 @@ pub fn Fader(
 
             // Check if movement is mostly vertical (scrolling intent)
             if let (Some(start_x), Some(start_y)) =
-                (*touch_start_x_move.borrow(), *touch_start_y_move.borrow())
+                (*touch_start_x_tm.borrow(), *touch_start_y_tm.borrow())
             {
                 let dx = (current_x - start_x).abs();
                 let dy = (current_y - start_y).abs();
 
                 if dy > dx + 10.0 && !is_activated.get() {
-                    *timeout_handle_move.borrow_mut() = None;
+                    *timeout_handle_tm.borrow_mut() = None;
                     set_is_pending.set(false);
                     return;
                 }
             }
-        }
 
-        if !is_activated.get() {
-            return;
-        }
+            if !is_activated.get() {
+                // Pre-activation: track latest position for clean baseline
+                *move_base_x_tm.borrow_mut() = Some(current_x);
+                return;
+            }
 
-        // Activated — prevent scroll and use relative positioning
-        ev.prevent_default();
+            // Activated — prevent scroll and use relative positioning
+            ev.prevent_default();
 
-        if let Some(touch) = ev.touches().get(0) {
             if let Some(el) = track_ref.get() {
                 let rect = el.get_bounding_client_rect();
-                let current_x = touch.client_x() as f64;
 
-                if let Some(start_x) = *touch_start_x_move.borrow() {
-                    let delta_x = current_x - start_x;
+                if let Some(base_x) = *move_base_x_tm.borrow() {
+                    let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
                     let base = saved_value.get_untracked();
                     let new_value =
@@ -164,16 +194,13 @@ pub fn Fader(
         }
     };
 
-    let timeout_handle_end = timeout_handle.clone();
-    let on_activate_end = on_activate;
-    let on_touch_state_end = on_touch_state;
-
     let handle_touchend = move |_ev: TouchEvent| {
-        *timeout_handle_end.borrow_mut() = None;
+        *last_touch_time_te.borrow_mut() = js_sys::Date::now();
+        *timeout_handle_te.borrow_mut() = None;
         set_is_pending.set(false);
 
         if is_activated.get_untracked() {
-            if let Some(cb) = on_activate_end {
+            if let Some(cb) = on_activate {
                 cb.run(false);
             }
         }
@@ -182,23 +209,20 @@ pub fn Fader(
         set_is_touch_interaction.set(false);
         *touch_start_x.borrow_mut() = None;
         *touch_start_y.borrow_mut() = None;
+        *move_base_x_te.borrow_mut() = None;
 
-        if let Some(cb) = on_touch_state_end {
+        if let Some(cb) = on_touch_state {
             cb.run(false);
         }
     };
 
-    // Touchcancel
-    let timeout_handle_cancel = timeout_handle.clone();
-    let on_activate_cancel = on_activate;
-    let on_touch_state_cancel = on_touch_state;
-
     let handle_touchcancel = move |_ev: TouchEvent| {
-        *timeout_handle_cancel.borrow_mut() = None;
+        *last_touch_time_tc.borrow_mut() = js_sys::Date::now();
+        *timeout_handle_tc.borrow_mut() = None;
         set_is_pending.set(false);
 
         if is_activated.get_untracked() {
-            if let Some(cb) = on_activate_cancel {
+            if let Some(cb) = on_activate {
                 cb.run(false);
             }
         }
@@ -206,14 +230,12 @@ pub fn Fader(
         set_is_activated.set(false);
         set_is_touch_interaction.set(false);
 
-        if let Some(cb) = on_touch_state_cancel {
+        if let Some(cb) = on_touch_state {
             cb.run(false);
         }
     };
 
-    // --- Mouse handler (immediate, no delay) ---
-    let on_activate_mouse = on_activate;
-    let on_touch_state_mouse = on_touch_state;
+    // --- Mouse handler (300ms activation, relative movement — same as touch) ---
 
     let handle_mousedown = move |ev: web_sys::MouseEvent| {
         // Only handle left button, skip if touch interaction is active
@@ -221,27 +243,35 @@ pub fn Fader(
             return;
         }
 
+        // Guard against synthesized mouse events from touch
+        if js_sys::Date::now() - *last_touch_time_md.borrow() < TOUCH_MOUSE_GUARD_MS {
+            return;
+        }
+
         ev.prevent_default();
 
-        if let Some(el) = track_ref.get() {
-            let rect = el.get_bounding_client_rect();
-            let x = ev.client_x() as f64 - rect.left();
-            let pct = (x / rect.width()).clamp(0.0, 1.0) as f32;
-            let new_value = quantize(min + pct * (max - min));
-            set_local_value.set(new_value);
-            on_change.run(new_value);
-        }
+        // Save current value and mouse position — NO JUMP, relative only
+        set_saved_value.set(local_value.get_untracked());
+        *move_base_x_md.borrow_mut() = Some(ev.client_x() as f64);
+        set_is_pending.set(true);
 
-        set_is_activated.set(true);
-
-        if let Some(cb) = on_activate_mouse {
-            cb.run(true);
-        }
-        if let Some(cb) = on_touch_state_mouse {
+        if let Some(cb) = on_touch_state {
             cb.run(true);
         }
 
-        // Register window-level mousemove + mouseup
+        // Start 300ms activation timer (same as touch)
+        let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
+            set_is_activated.set(true);
+            set_is_pending.set(false);
+
+            if let Some(cb) = on_activate {
+                cb.run(true);
+            }
+        });
+
+        *timeout_handle_md.borrow_mut() = Some(timeout);
+
+        // Register window-level mousemove + mouseup for drag tracking
         let document = web_sys::window().unwrap().document().unwrap();
         let doc_target: web_sys::EventTarget = document.into();
 
@@ -256,19 +286,29 @@ pub fn Fader(
         let doc_for_move = doc_target.clone();
         let doc_for_up = doc_target.clone();
 
-        let on_activate_up = on_activate;
-        let on_touch_state_up = on_touch_state;
-
-        // mousemove: update value from mouse X
+        // mousemove: RELATIVE movement from move_base_x (no absolute positioning)
         let track_ref_move = track_ref;
         let mc = Closure::wrap(Box::new(move |ev: web_sys::MouseEvent| {
+            let current_x = ev.client_x() as f64;
+
+            if !is_activated.get() {
+                // Pre-activation: track position for clean baseline
+                *move_base_x_mm.borrow_mut() = Some(current_x);
+                return;
+            }
+
+            // Activated: relative delta from move_base_x
             if let Some(el) = track_ref_move.get() {
-                let rect = el.get_bounding_client_rect();
-                let x = ev.client_x() as f64 - rect.left();
-                let pct = (x / rect.width()).clamp(0.0, 1.0) as f32;
-                let new_value = quantize(min + pct * (max - min));
-                set_local_value.set(new_value);
-                on_change.run(new_value);
+                if let Some(base_x) = *move_base_x_mm.borrow() {
+                    let rect = el.get_bounding_client_rect();
+                    let delta_x = current_x - base_x;
+                    let delta_ratio = delta_x / rect.width();
+                    let base = saved_value.get_untracked();
+                    let new_value =
+                        quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
+                    set_local_value.set(new_value);
+                    on_change.run(new_value);
+                }
             }
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
 
@@ -276,28 +316,31 @@ pub fn Fader(
             doc_for_move.add_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
         *move_closure.borrow_mut() = Some(mc);
 
-        // mouseup: cleanup
+        // mouseup: cleanup all state and listeners
         let uc = Closure::wrap(Box::new(move |_ev: web_sys::MouseEvent| {
+            // Cancel activation timer if still pending
+            *timeout_handle_mu.borrow_mut() = None;
+            set_is_pending.set(false);
+
+            if is_activated.get_untracked() {
+                if let Some(cb) = on_activate {
+                    cb.run(false);
+                }
+            }
+
             set_is_activated.set(false);
+            *move_base_x_mu.borrow_mut() = None;
 
-            if let Some(cb) = on_activate_up {
-                cb.run(false);
-            }
-            if let Some(cb) = on_touch_state_up {
+            if let Some(cb) = on_touch_state {
                 cb.run(false);
             }
 
-            // Remove listeners
+            // Remove mousemove listener
             if let Some(ref mc) = *move_closure_for_up.borrow() {
                 let _ = doc_for_up
                     .remove_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
             }
             *move_closure_for_up.borrow_mut() = None;
-
-            // Remove self — we need doc_target again
-            // The closure removes itself by dropping the Rc reference
-            // This is handled by the forget() below — the closure lives until page unload
-            // which is fine for occasional mouse interactions
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
 
         let _ = doc_target.add_event_listener_with_callback("mouseup", uc.as_ref().unchecked_ref());

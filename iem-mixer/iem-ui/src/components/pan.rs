@@ -16,10 +16,13 @@ use web_sys::{HtmlInputElement, TouchEvent};
 const ACTIVATION_DELAY_MS: u32 = 300;
 
 /// Maximum time between taps for double-tap detection (ms)
-const DOUBLE_TAP_MS: f64 = 300.0;
+const DOUBLE_TAP_MS: f64 = 500.0;
 
 /// Maximum distance between taps for double-tap detection (px)
 const DOUBLE_TAP_DISTANCE_PX: f64 = 30.0;
+
+/// Time window to ignore synthesized mouse events after touch (ms)
+const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
 
 /// Horizontal pan slider component with touch-safe activation
 ///
@@ -51,6 +54,12 @@ pub fn PanKnob(
     let touch_start_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
     let touch_start_y: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
 
+    // Latest finger position — baseline for relative movement after activation
+    let move_base_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
+
+    // Timestamp of last touch event — guards against synthesized mouse events
+    let last_touch_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
     // Double-tap detection state
     let last_tap_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
     let last_tap_x: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
@@ -65,14 +74,35 @@ pub fn PanKnob(
     let on_change_touch = on_change;
     let on_change_input = on_change;
 
-    // Touch start: check for double-tap, then begin activation countdown
-    let timeout_handle_start = timeout_handle.clone();
-    let touch_start_x_start = touch_start_x.clone();
-    let touch_start_y_start = touch_start_y.clone();
+    // --- Rc clones for each closure ---
+
+    let timeout_handle_ts = timeout_handle.clone();
+    let timeout_handle_tm = timeout_handle.clone();
+    let timeout_handle_te = timeout_handle;
+
+    let touch_start_x_ts = touch_start_x.clone();
+    let touch_start_x_tm = touch_start_x.clone();
+    // touch_start_x consumed by touchend
+
+    let touch_start_y_ts = touch_start_y.clone();
+    let touch_start_y_tm = touch_start_y.clone();
+    // touch_start_y consumed by touchend
+
+    let move_base_x_ts = move_base_x.clone();
+    let move_base_x_tm = move_base_x.clone();
+    let move_base_x_te = move_base_x; // consumed by touchend (last user)
+
+    let last_touch_time_ts = last_touch_time.clone();
+    let last_touch_time_te = last_touch_time.clone();
+    let last_touch_time_input = last_touch_time; // consumed by handle_input (last user)
+
     let last_tap_time_start = last_tap_time.clone();
     let last_tap_x_start = last_tap_x.clone();
+
+    // Touch start: check for double-tap, then begin activation countdown
     let handle_touchstart = move |ev: TouchEvent| {
         let now = js_sys::Date::now();
+        *last_touch_time_ts.borrow_mut() = now;
 
         if let Some(touch) = ev.touches().get(0) {
             let x = touch.client_x() as f64;
@@ -99,8 +129,9 @@ pub fn PanKnob(
             *last_tap_x_start.borrow_mut() = x;
 
             // Store initial touch position for relative movement
-            *touch_start_x_start.borrow_mut() = Some(x);
-            *touch_start_y_start.borrow_mut() = Some(y);
+            *touch_start_x_ts.borrow_mut() = Some(x);
+            *touch_start_y_ts.borrow_mut() = Some(y);
+            *move_base_x_ts.borrow_mut() = Some(x);
         }
 
         // Mark as touch interaction and save current value
@@ -121,13 +152,10 @@ pub fn PanKnob(
             }
         });
 
-        *timeout_handle_start.borrow_mut() = Some(timeout);
+        *timeout_handle_ts.borrow_mut() = Some(timeout);
     };
 
     // Touch move: relative positioning after activation
-    let timeout_handle_move = timeout_handle.clone();
-    let touch_start_x_move = touch_start_x.clone();
-    let touch_start_y_move = touch_start_y.clone();
     let handle_touchmove = move |ev: TouchEvent| {
         if let Some(touch) = ev.touches().get(0) {
             let current_x = touch.client_x() as f64;
@@ -135,34 +163,33 @@ pub fn PanKnob(
 
             // Check if movement is mostly vertical (scrolling intent)
             if let (Some(start_x), Some(start_y)) =
-                (*touch_start_x_move.borrow(), *touch_start_y_move.borrow())
+                (*touch_start_x_tm.borrow(), *touch_start_y_tm.borrow())
             {
                 let dx = (current_x - start_x).abs();
                 let dy = (current_y - start_y).abs();
 
                 if dy > dx + 10.0 && !is_activated.get() {
-                    *timeout_handle_move.borrow_mut() = None;
+                    *timeout_handle_tm.borrow_mut() = None;
                     set_is_pending.set(false);
                     return;
                 }
             }
-        }
 
-        if !is_activated.get() {
-            return;
-        }
+            if !is_activated.get() {
+                // Pre-activation: track latest position for clean baseline
+                *move_base_x_tm.borrow_mut() = Some(current_x);
+                return;
+            }
 
-        // Pan is activated - prevent scroll and use RELATIVE positioning
-        ev.prevent_default();
+            // Pan is activated - prevent scroll and use RELATIVE positioning
+            ev.prevent_default();
 
-        if let Some(touch) = ev.touches().get(0) {
             if let Some(target) = ev.target() {
                 if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
                     let rect = input.get_bounding_client_rect();
-                    let current_x = touch.client_x() as f64;
 
-                    if let Some(start_x) = *touch_start_x_move.borrow() {
-                        let delta_x = current_x - start_x;
+                    if let Some(base_x) = *move_base_x_tm.borrow() {
+                        let delta_x = current_x - base_x;
                         // Pan range is 0.0-1.0, slider width maps to full range
                         let delta_ratio = delta_x / rect.width();
                         let base = saved_value.get_untracked();
@@ -182,6 +209,14 @@ pub fn PanKnob(
         let target = ev.target().unwrap();
         let input = target.dyn_into::<HtmlInputElement>().unwrap();
 
+        // Guard against synthesized events from touch (mobile browsers fire mouse
+        // events ~300ms after touchend, which change the native input value)
+        if js_sys::Date::now() - *last_touch_time_input.borrow() < TOUCH_MOUSE_GUARD_MS {
+            let restore = saved_value.get_untracked();
+            input.set_value(&format!("{}", (restore * 100.0) as i32));
+            return;
+        }
+
         // During ANY touch interaction, block native input — touchmove handles positioning
         if is_touch_interaction.get_untracked() {
             let restore = saved_value.get_untracked();
@@ -197,14 +232,15 @@ pub fn PanKnob(
     };
 
     // Touch end: reset state
-    let timeout_handle_end = timeout_handle.clone();
     let handle_touchend = move |_ev: TouchEvent| {
-        *timeout_handle_end.borrow_mut() = None;
+        *last_touch_time_te.borrow_mut() = js_sys::Date::now();
+        *timeout_handle_te.borrow_mut() = None;
         set_is_pending.set(false);
         set_is_activated.set(false);
         set_is_touch_interaction.set(false);
         *touch_start_x.borrow_mut() = None;
         *touch_start_y.borrow_mut() = None;
+        *move_base_x_te.borrow_mut() = None;
     };
 
     // Desktop double-click to center
@@ -231,7 +267,6 @@ pub fn PanKnob(
                 on:touchmove=handle_touchmove
                 on:touchend=handle_touchend
                 on:touchcancel=move |_| {
-                    *timeout_handle.borrow_mut() = None;
                     set_is_pending.set(false);
                     set_is_activated.set(false);
                     set_is_touch_interaction.set(false);

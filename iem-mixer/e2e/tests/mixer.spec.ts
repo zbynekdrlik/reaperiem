@@ -141,8 +141,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(handleBox!.height).toBeGreaterThan(0);
   });
 
-  test("fader click changes fill width on desktop", async ({ page }) => {
-    // Verifies that clicking the fader actually changes the visual state
+  test("fader single click does NOT jump (safety)", async ({ page }) => {
+    // CRITICAL SAFETY: Clicking anywhere on fader must NOT cause absolute jump.
+    // All movement is relative-only with 300ms activation delay.
     await page.goto("/");
     await loginAs(page, "petka");
 
@@ -156,26 +157,97 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     if (!channelLoaded) return;
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return; // Guard against layout issues
+    if (!box || box.width < 50) return;
 
     // Get initial fill width
     const fillBefore = await fader
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    // Click at 75% of the fader track (right side = louder)
+    // Click at 75% of the fader track — should NOT jump (300ms activation required)
     await page.mouse.click(box.x + box.width * 0.75, box.y + box.height / 2);
-    await page.waitForTimeout(100); // Allow reactive update
+    await page.waitForTimeout(100);
 
-    // Fill width should have changed (moved toward 75%)
+    // Fill width must NOT have changed (no absolute jump)
     const fillAfter = await fader
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    // If connected to REAPER, the fill should change. Even without REAPER,
-    // the mousedown handler sets local value immediately.
-    // The fill width should be roughly 75% of track width
-    expect(fillAfter).toBeGreaterThan(box.width * 0.5);
+    expect(Math.abs(fillAfter - fillBefore)).toBeLessThan(2);
+  });
+
+  test("fader hold-and-drag activates then moves", async ({ page }) => {
+    // Verifies 300ms activation delay + relative drag movement
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Mouse down at center of fader
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.down();
+
+    // Wait for 300ms activation delay
+    await page.waitForTimeout(350);
+
+    // Verify .active class appears after activation
+    await expect(fader).toHaveClass(/active/);
+
+    // Get fill width at activation point
+    const fillAtActivation = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Drag right by 30% of track width (relative movement)
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+    await page.waitForTimeout(50);
+
+    // Fill should have grown (moved right via relative delta)
+    const fillAfterDrag = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    expect(fillAfterDrag).toBeGreaterThan(fillAtActivation);
+
+    // Release
+    await page.mouse.up();
+
+    // Active class should be removed after release
+    await page.waitForTimeout(50);
+    const classAfter = await fader.getAttribute("class");
+    expect(classAfter).not.toContain("active");
+  });
+
+  test("fader handle is visible with proper width", async ({ page }) => {
+    // Verifies the handle thumb is wide enough to be a visible grab target
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const handle = fader.locator(".fader-handle");
+    await expect(handle).toBeAttached();
+    const handleBox = await handle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    // Handle must be at least 12px wide (visible thumb, not a thin line)
+    expect(handleBox!.width).toBeGreaterThanOrEqual(12);
   });
 
   test("channel layout has controls above fader", async ({ page }) => {

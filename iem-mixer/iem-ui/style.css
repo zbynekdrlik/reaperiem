@@ -347,7 +347,6 @@ body {
   background: var(--fader-track-bg);
   border: 1px solid var(--fader-track-border);
   border-radius: 6px;
-  overflow: hidden;
   touch-action: pan-y;
   cursor: pointer;
 }
@@ -364,11 +363,12 @@ body {
 
 .fader-handle {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 3px;
+  top: 2px;
+  bottom: 2px;
+  width: 14px;
   background: var(--accent);
-  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
   transform: translateX(-50%);
   pointer-events: none;
   box-shadow: 0 0 6px var(--accent-glow);
@@ -388,7 +388,8 @@ body {
 }
 
 .fader-track.active .fader-handle {
-  width: 4px;
+  width: 16px;
+  border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 12px var(--accent-glow);
 }
 
