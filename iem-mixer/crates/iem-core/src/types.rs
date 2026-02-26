@@ -80,7 +80,7 @@ pub struct PollResponse {
     pub connected: bool,
 }
 
-/// Batch control request for +Me or Reset
+/// Batch control request for Reset
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchControlRequest {
     /// Operation type
@@ -91,8 +91,6 @@ pub struct BatchControlRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BatchOperation {
-    /// More Me: boost own mic +6dB, reduce others -3dB
-    MoreMe,
     /// Reset: all to 0dB, unmuted, centered pan
     Reset,
 }
@@ -188,11 +186,6 @@ mod tests {
 
     #[test]
     fn test_batch_operation_serialization() {
-        // Test that BatchOperation serializes correctly
-        let op = BatchOperation::MoreMe;
-        let json = serde_json::to_string(&op).unwrap();
-        assert_eq!(json, "\"more_me\"");
-
         let op = BatchOperation::Reset;
         let json = serde_json::to_string(&op).unwrap();
         assert_eq!(json, "\"reset\"");
@@ -200,9 +193,6 @@ mod tests {
 
     #[test]
     fn test_batch_operation_deserialization() {
-        let op: BatchOperation = serde_json::from_str("\"more_me\"").unwrap();
-        assert!(matches!(op, BatchOperation::MoreMe));
-
         let op: BatchOperation = serde_json::from_str("\"reset\"").unwrap();
         assert!(matches!(op, BatchOperation::Reset));
     }

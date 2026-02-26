@@ -47,7 +47,7 @@ pub fn api_routes() -> Router<AppState> {
         .route("/api/mixer/{member_id}", get(proxy::get_mixer_state))
         // Polling endpoint (optimized for frequent calls)
         .route("/api/mixer/{member_id}/poll", get(proxy::poll_mixer_state))
-        // Batch operations (+Me, Reset)
+        // Batch operations (Reset)
         .route("/api/mixer/{member_id}/batch", post(proxy::batch_control))
         // Mixer controls (should be protected)
         .route(

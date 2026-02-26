@@ -162,7 +162,14 @@ pub fn PresetModal(
                         } else {
                             view! {
                                 <>
-                                    {current_presets.iter().map(|(name, data)| {
+                                    {
+                                    let mut sorted: Vec<_> = current_presets.iter().collect();
+                                    sorted.sort_by(|a, b| {
+                                        let ts_a = a.1.created_at.unwrap_or(0);
+                                        let ts_b = b.1.created_at.unwrap_or(0);
+                                        ts_b.cmp(&ts_a)
+                                    });
+                                    sorted.iter().map(|(name, data)| {
                                         let name_load = name.clone();
                                         let name_update = name.clone();
                                         let name_delete = name.clone();
@@ -219,7 +226,8 @@ pub fn PresetModal(
                                                 </div>
                                             </div>
                                         }
-                                    }).collect::<Vec<_>>()}
+                                    }).collect::<Vec<_>>()
+                                    }
                                 </>
                             }.into_any()
                         }

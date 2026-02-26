@@ -252,7 +252,7 @@ pub async fn poll_mixer_state(
     }))
 }
 
-/// Batch control operations (+Me, Reset)
+/// Batch control operations (Reset)
 pub async fn batch_control(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
@@ -260,59 +260,17 @@ pub async fn batch_control(
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    let member = config
+    let _member = config
         .find_member(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
     let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
-    let my_input = format!("{} mic", member.name.to_uppercase());
     let inputs = config.inputs.clone();
 
     drop(config);
 
     match payload.operation {
-        BatchOperation::MoreMe => {
-            // Boost own mic by +6dB, reduce others by -3dB
-            for (i, input) in inputs.iter().enumerate() {
-                let track_index = i + 1;
-
-                // Skip R side of stereo pairs
-                if input.name.ends_with(" R") {
-                    continue;
-                }
-
-                // Get current level
-                let current_vol = if let Ok((vol, _, _)) =
-                    query_send_state(&state.http_client, &reaper_url, track_index, member_index)
-                        .await
-                {
-                    vol
-                } else {
-                    1.0 // Default to 0dB
-                };
-
-                let current_db = reaper_vol_to_db(current_vol);
-                let is_me = input.name.to_uppercase() == my_input;
-
-                let new_db = if is_me {
-                    (current_db + 6.0).min(6.0)
-                } else {
-                    (current_db - 3.0).max(-60.0)
-                };
-
-                let new_vol = db_to_reaper_vol(new_db);
-                let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, new_vol);
-                let _ = state.http_client.get(&url).send().await;
-
-                // Also set partner for stereo pairs
-                if let Some(partner_idx) = find_stereo_partner(&inputs, &input.name) {
-                    let partner_url =
-                        reaper_api::set_send_vol(&reaper_url, partner_idx, member_index, new_vol);
-                    let _ = state.http_client.get(&partner_url).send().await;
-                }
-            }
-        }
         BatchOperation::Reset => {
             // Reset all to 0dB, unmuted, centered pan
             for (i, _input) in inputs.iter().enumerate() {

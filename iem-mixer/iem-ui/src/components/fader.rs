@@ -38,6 +38,8 @@ pub fn Fader(
     let (local_value, set_local_value) = signal(value.get_untracked());
     let (is_activated, set_is_activated) = signal(false);
     let (is_pending, set_is_pending) = signal(false);
+    let (is_touch_interaction, set_is_touch_interaction) = signal(false);
+    let (saved_value, set_saved_value) = signal(0.0f32);
 
     // Store the timeout handle so we can cancel it
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
@@ -69,6 +71,10 @@ pub fn Fader(
             *touch_start_x_start.borrow_mut() = Some(touch.client_x() as f64);
             *touch_start_y_start.borrow_mut() = Some(touch.client_y() as f64);
         }
+
+        // Mark as touch interaction and save current value for restoration
+        set_is_touch_interaction.set(true);
+        set_saved_value.set(local_value.get_untracked());
 
         set_is_pending.set(true);
 
@@ -143,14 +149,25 @@ pub fn Fader(
         *timeout_handle_end.borrow_mut() = None;
         set_is_pending.set(false);
         set_is_activated.set(false);
+        set_is_touch_interaction.set(false);
         *touch_start_x.borrow_mut() = None;
         *touch_start_y.borrow_mut() = None;
     };
 
-    // Mouse/desktop input: immediate response (no delay needed)
+    // Input handler: blocks value changes during touch until activated
     let handle_input = move |ev: web_sys::Event| {
         let target = ev.target().unwrap();
         let input = target.dyn_into::<HtmlInputElement>().unwrap();
+
+        // During touch interaction, block input until activation delay passes
+        if is_touch_interaction.get_untracked() && !is_activated.get_untracked() {
+            // Restore the saved value — prevent the native input from changing it
+            let restore = saved_value.get_untracked();
+            input.set_value(&format!("{}", restore));
+            set_local_value.set(restore);
+            return;
+        }
+
         let new_value: f32 = input.value().parse().unwrap_or(0.0);
         set_local_value.set(new_value);
         on_change_input(new_value);
@@ -178,6 +195,7 @@ pub fn Fader(
                     *timeout_handle.borrow_mut() = None;
                     set_is_pending.set(false);
                     set_is_activated.set(false);
+                    set_is_touch_interaction.set(false);
                 }
             />
         </div>

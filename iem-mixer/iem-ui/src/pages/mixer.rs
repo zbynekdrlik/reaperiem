@@ -6,9 +6,8 @@ use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
 use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::spawn_local;
 
-use crate::api::{BatchOperation, Channel, batch_control};
+use crate::api::Channel;
 use crate::auth::can_access_member;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::fader::Fader;
@@ -387,20 +386,6 @@ pub fn MixerPage() -> impl IntoView {
         set_preset_modal_visible.set(true);
     });
 
-    let more_me_member_id = member_id.clone();
-    let on_more_me = Callback::new(move |_: ()| {
-        if !connected.get() {
-            web_sys::console::warn_1(&"+Me blocked: not connected to REAPER".into());
-            return;
-        }
-        let member = more_me_member_id();
-        spawn_local(async move {
-            if let Err(e) = batch_control(&member, BatchOperation::MoreMe).await {
-                web_sys::console::error_1(&format!("+Me API error: {:?}", e).into());
-            }
-        });
-    });
-
     let on_close_modal = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(false);
     });
@@ -471,7 +456,6 @@ pub fn MixerPage() -> impl IntoView {
 
             <Toolbar
                 on_presets=on_presets
-                on_more_me=on_more_me
             />
 
             <PresetModal

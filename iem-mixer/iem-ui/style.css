@@ -575,9 +575,31 @@ body {
   color: var(--bg-primary);
 }
 
-.toolbar-btn.more-me-btn {
-  border-color: var(--border-active);
-  color: var(--accent);
+/* Pan slider touch-safe activation states */
+.pan-slider.activating::-webkit-slider-thumb {
+  box-shadow: 0 0 8px var(--accent-glow);
+  transform: scale(1.2);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.pan-slider.activating::-moz-range-thumb {
+  box-shadow: 0 0 8px var(--accent-glow);
+  transform: scale(1.2);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.pan-slider.active::-webkit-slider-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.pan-slider.active::-moz-range-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* ================================================================

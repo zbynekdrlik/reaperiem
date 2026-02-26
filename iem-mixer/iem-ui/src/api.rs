@@ -52,7 +52,6 @@ pub struct PollResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BatchOperation {
-    MoreMe,
     Reset,
 }
 
@@ -257,7 +256,7 @@ pub async fn poll_mixer_state(member_id: &str) -> Result<PollResponse, String> {
     }
 }
 
-/// Batch operations (+Me, Reset)
+/// Batch operations (Reset)
 pub async fn batch_control(member_id: &str, operation: BatchOperation) -> Result<(), String> {
     #[derive(Serialize)]
     struct BatchRequest {
