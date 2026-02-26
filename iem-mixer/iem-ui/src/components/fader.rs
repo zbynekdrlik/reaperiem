@@ -9,8 +9,8 @@ use wasm_bindgen::JsCast;
 /// `.db-display` element. The Fader component only renders the slider.
 #[component]
 pub fn Fader(
-    /// Current value in dB
-    value: f32,
+    /// Current value in dB (reactive signal)
+    value: Signal<f32>,
     /// Minimum value (default -60)
     #[prop(default = -60.0)]
     min: f32,
@@ -20,11 +20,11 @@ pub fn Fader(
     /// Called when value changes
     on_change: impl Fn(f32) + 'static,
 ) -> impl IntoView {
-    let (local_value, set_local_value) = signal(value);
+    let (local_value, set_local_value) = signal(value.get_untracked());
 
-    // Update local value when prop changes
+    // Update local value when signal changes (now properly tracks!)
     Effect::new(move |_| {
-        set_local_value.set(value);
+        set_local_value.set(value.get());
     });
 
     let handle_input = move |ev: web_sys::Event| {

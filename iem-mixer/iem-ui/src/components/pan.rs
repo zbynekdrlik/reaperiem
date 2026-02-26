@@ -6,16 +6,16 @@ use wasm_bindgen::JsCast;
 /// Horizontal pan slider component
 #[component]
 pub fn PanKnob(
-    /// Current pan value (0.0 = left, 0.5 = center, 1.0 = right)
-    value: f32,
+    /// Current pan value (0.0 = left, 0.5 = center, 1.0 = right) - reactive signal
+    value: Signal<f32>,
     /// Called when pan changes
     on_change: Callback<f32>,
 ) -> impl IntoView {
-    let (local_value, set_local_value) = signal(value);
+    let (local_value, set_local_value) = signal(value.get_untracked());
 
-    // Update local value when prop changes
+    // Update local value when signal changes (now properly tracks!)
     Effect::new(move |_| {
-        set_local_value.set(value);
+        set_local_value.set(value.get());
     });
 
     let handle_input = move |ev: web_sys::Event| {

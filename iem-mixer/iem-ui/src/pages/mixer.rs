@@ -120,6 +120,22 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
+                        // Debug: log meter summary occasionally
+                        static mut LOG_COUNT: u32 = 0;
+                        unsafe {
+                            LOG_COUNT += 1;
+                            if LOG_COUNT % 66 == 1 {
+                                let non_zero = m.iter().filter(|(_, v)| **v > 0.001).count();
+                                web_sys::console::log_1(
+                                    &format!(
+                                        "Meters: {} entries, {} with signal",
+                                        m.len(),
+                                        non_zero
+                                    )
+                                    .into(),
+                                );
+                            }
+                        }
                         set_meters.set(m);
                     }
                     iem_core::ServerMsg::ChannelUpdate {
@@ -506,11 +522,33 @@ fn ChannelList(
                         let track_idx = ch.track_index;
                         let partner_idx = ch.partner_index;
                         let name = ch.display_name.clone();
-                        let level = ch.level_db;
-                        let muted = ch.muted;
-                        let pan = ch.pan;
                         let is_my = ch.is_my_input;
                         let is_stereo = ch.is_stereo;
+
+                        // Derived signals that properly track channel updates from WebSocket
+                        let level_signal = Signal::derive(move || {
+                            channels.get()
+                                .iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.level_db)
+                                .unwrap_or(-60.0)
+                        });
+
+                        let muted_signal = Signal::derive(move || {
+                            channels.get()
+                                .iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.muted)
+                                .unwrap_or(false)
+                        });
+
+                        let pan_signal = Signal::derive(move || {
+                            channels.get()
+                                .iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.pan)
+                                .unwrap_or(0.5)
+                        });
 
                         let meter_level = Signal::derive(move || {
                             meters.get().get(&track_idx).copied().unwrap_or(0.0)
@@ -779,7 +817,7 @@ fn ChannelList(
                         view! {
                             <div class=move || {
                                 let mut classes = vec!["channel"];
-                                if muted { classes.push("muted"); }
+                                if muted_signal.get() { classes.push("muted"); }
                                 if is_my { classes.push("more-me"); }
                                 if is_stereo { classes.push("stereo-pair"); }
                                 if !is_connected() { classes.push("disconnected"); }
@@ -797,16 +835,16 @@ fn ChannelList(
 
                                 <div class="fader-area">
                                     <Fader
-                                        value=level
+                                        value=level_signal
                                         min=-60.0
                                         max=12.0
                                         on_change=move |v| on_level_change.run(v)
                                     />
-                                    <div class="db-display">{format_db(level)}</div>
+                                    <div class="db-display">{move || format_db(level_signal.get())}</div>
                                 </div>
 
                                 <PanKnob
-                                    value=pan
+                                    value=pan_signal
                                     on_change=on_pan_change
                                 />
 
@@ -818,7 +856,7 @@ fn ChannelList(
                                         "S"
                                     </button>
                                     <button
-                                        class=move || if muted { "mute-btn on" } else { "mute-btn off" }
+                                        class=move || if muted_signal.get() { "mute-btn on" } else { "mute-btn off" }
                                         on:click=on_mute_click
                                     >
                                         "M"

@@ -65,6 +65,22 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     meters.insert(track_idx, peak_linear);
                 }
             }
+            // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
+            static POLL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let count = POLL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count % 66 == 0 {
+                let non_zero: Vec<_> = meters
+                    .iter()
+                    .filter(|(_, v)| **v > 0.001)
+                    .take(5)
+                    .collect();
+                tracing::debug!(
+                    meter_count = meters.len(),
+                    non_zero_count = non_zero.len(),
+                    sample = ?non_zero,
+                    "Meter poll summary"
+                );
+            }
         }
     }
 

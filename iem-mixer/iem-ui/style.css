@@ -192,12 +192,18 @@ body {
 }
 
 /* ================================================================
-   Channel Strip (Horizontal)
+   Channel Strip: Two-row layout (ALL screen sizes)
+   Row 1: Full-width fader + dB (maximum precision)
+   Row 2: Label | Meter | Solo | Mute | Pan
    ================================================================ */
 .channel {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 64px 6px 36px 44px 1fr;
+  grid-template-rows: 44px 36px;
+  grid-template-areas:
+    "fader  fader  fader  fader  db"
+    "label  meter  solo   mute   pan";
+  gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
   border-radius: 10px;
@@ -205,7 +211,7 @@ body {
   transition:
     opacity 0.15s,
     border-color 0.15s;
-  min-height: 56px;
+  align-items: center;
 }
 
 .channel.more-me {
@@ -267,8 +273,9 @@ body {
 
 /* Channel label */
 .ch-label {
-  min-width: 72px;
-  max-width: 72px;
+  grid-area: label;
+  min-width: unset;
+  max-width: unset;
   overflow: hidden;
 }
 
@@ -291,13 +298,13 @@ body {
 
 /* Meter bar */
 .meter-container {
-  width: 4px;
-  height: 38px;
+  grid-area: meter;
+  width: 6px;
+  height: 32px;
   background: var(--fader-track-bg);
   border-radius: 2px;
   position: relative;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
 .meter-fill {
@@ -318,13 +325,12 @@ body {
   background: var(--meter-red);
 }
 
-/* Fader area */
+/* Fader area - Row 1: spans full width */
 .fader-area {
-  flex: 1;
+  grid-area: fader;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
 }
 
 .fader-container {
@@ -380,25 +386,26 @@ body {
 
 /* dB display - larger for stage visibility */
 .db-display {
-  min-width: 55px;
+  grid-area: db;
+  min-width: 44px;
   text-align: right;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 1.4em;
+  font-size: 1.1em;
   font-weight: 600;
   color: var(--text-primary);
-  flex-shrink: 0;
 }
 
 /* Pan knob area */
 .pan-container {
+  grid-area: pan;
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  justify-self: end;
 }
 
 .pan-slider {
-  width: 36px;
-  height: var(--touch-min);
+  width: 80px;
+  height: 36px;
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
@@ -448,14 +455,14 @@ body {
 
 /* Mute button */
 .mute-btn {
-  width: var(--touch-min);
-  height: var(--touch-min);
+  grid-area: mute;
+  width: 44px;
+  height: 36px;
   border: none;
   border-radius: 8px;
   font-weight: 800;
   font-size: 0.85em;
   cursor: pointer;
-  flex-shrink: 0;
   transition:
     background 0.12s,
     color 0.12s;
@@ -474,14 +481,14 @@ body {
 
 /* Solo button */
 .solo-btn {
-  width: 32px;
-  height: var(--touch-min);
+  grid-area: solo;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 8px;
   font-weight: 800;
   font-size: 0.85em;
   cursor: pointer;
-  flex-shrink: 0;
   transition:
     background 0.12s,
     color 0.12s;
@@ -498,11 +505,9 @@ body {
   box-shadow: 0 2px 10px rgba(244, 211, 94, 0.35);
 }
 
-/* Channel buttons container */
+/* Channel buttons container - children participate directly in grid */
 .channel-btns {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
+  display: contents;
 }
 
 /* ================================================================
@@ -991,12 +996,31 @@ body {
 
 /* Mobile optimizations */
 @media (max-width: 480px) {
-  .channel {
-    min-height: 52px;
+  .ch-name {
+    font-size: 0.72em;
   }
-
+  .ch-type {
+    font-size: 0.6em;
+  }
+  .db-display {
+    font-size: 0.95em;
+  }
+  .pan-slider {
+    width: 60px;
+  }
   .numpad-btn {
     width: 56px;
     height: 56px;
+  }
+}
+
+/* Desktop: Wider pan slider */
+@media (min-width: 600px) {
+  .pan-slider {
+    width: 100px;
+  }
+  .db-display {
+    font-size: 1.2em;
+    min-width: 52px;
   }
 }
