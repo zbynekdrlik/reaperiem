@@ -343,13 +343,72 @@ jobs:
           path: iem-mixer/e2e/test-results/
 
   # ============================================================
+  # CHECK VERSION BUMP - Prevent deploying same version twice
+  # ============================================================
+  check-version-bump:
+    name: Verify Version Bump
+    runs-on: ubuntu-latest
+    needs: [build-tauri]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get Cargo.toml version
+        id: cargo_version
+        run: |
+          VERSION=$(grep -m1 '^version' iem-mixer/src-tauri/Cargo.toml | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Cargo.toml version: $VERSION"
+
+      - name: Get deployed version
+        id: deployed_version
+        continue-on-error: true
+        run: |
+          DEPLOYED=$(curl -sf --connect-timeout 5 http://10.77.9.231/api/version | jq -r '.version' || echo "0.0.0")
+          echo "version=$DEPLOYED" >> $GITHUB_OUTPUT
+          echo "Deployed version: $DEPLOYED"
+
+      - name: Compare versions
+        run: |
+          CARGO_VER="${{ steps.cargo_version.outputs.version }}"
+          DEPLOYED_VER="${{ steps.deployed_version.outputs.version }}"
+
+          # Skip check if deployed version couldn't be retrieved (first deploy or app down)
+          if [ "$DEPLOYED_VER" = "0.0.0" ] || [ -z "$DEPLOYED_VER" ]; then
+            echo "::notice::Could not retrieve deployed version (first deploy or app unreachable)"
+            echo "Proceeding with deployment of version $CARGO_VER"
+            exit 0
+          fi
+
+          if [ "$CARGO_VER" = "$DEPLOYED_VER" ]; then
+            echo "::error::Version $CARGO_VER already deployed!"
+            echo "::error::Bump version in iem-mixer/src-tauri/Cargo.toml before deploying."
+            echo ""
+            echo "Current: $DEPLOYED_VER"
+            echo "New:     $CARGO_VER"
+            echo ""
+            echo "To fix: Update version in iem-mixer/src-tauri/Cargo.toml"
+            exit 1
+          fi
+          echo "Version bump verified: $DEPLOYED_VER -> $CARGO_VER"
+
+  # ============================================================
   # DEPLOY TO IEM.LAN - Auto deploy after all checks pass
   # Uses existing self-hosted runner on iem.lan (Windows)
   # ============================================================
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
+    needs:
+      [
+        test-integrity,
+        lint,
+        test,
+        build-wasm,
+        build-tauri,
+        e2e,
+        check-version-bump,
+      ]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
@@ -659,7 +718,17 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e, deploy]
+    needs:
+      [
+        test-integrity,
+        lint,
+        test,
+        build-wasm,
+        build-tauri,
+        e2e,
+        check-version-bump,
+        deploy,
+      ]
     if: always()
     steps:
       - name: Check all jobs passed
@@ -688,7 +757,11 @@ jobs:
             echo "::error::E2E tests failed"
             exit 1
           fi
-          # Deploy is only for main branch pushes, so check if it was skipped or succeeded
+          # Version check and deploy are only for main branch pushes
+          if [ "${{ needs.check-version-bump.result }}" != "success" ] && [ "${{ needs.check-version-bump.result }}" != "skipped" ]; then
+            echo "::error::Version bump check failed"
+            exit 1
+          fi
           if [ "${{ needs.deploy.result }}" != "success" ] && [ "${{ needs.deploy.result }}" != "skipped" ]; then
             echo "::error::Deploy failed"
             exit 1

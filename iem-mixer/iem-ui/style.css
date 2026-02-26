@@ -193,16 +193,16 @@ body {
 
 /* ================================================================
    Channel Strip: Two-row layout (ALL screen sizes)
-   Row 1: Full-width fader + dB (maximum precision)
-   Row 2: Label | Meter | Solo | Mute | Pan
+   Row 1: FULL-WIDTH FADER ONLY (maximum precision)
+   Row 2: Label | Meter | Solo | Mute | dB | Pan
    ================================================================ */
 .channel {
   display: grid;
-  grid-template-columns: 64px 6px 36px 44px 1fr;
+  grid-template-columns: 56px 8px 36px 40px 52px 1fr;
   grid-template-rows: 44px 36px;
   grid-template-areas:
-    "fader  fader  fader  fader  db"
-    "label  meter  solo   mute   pan";
+    "fader  fader  fader  fader  fader  fader"
+    "label  meter  solo   mute   db     pan";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -325,12 +325,11 @@ body {
   background: var(--meter-red);
 }
 
-/* Fader area - Row 1: spans full width */
+/* Fader area - Row 1: spans ALL columns for maximum precision */
 .fader-area {
   grid-area: fader;
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
 .fader-container {
@@ -341,6 +340,7 @@ body {
 
 .fader {
   flex: 1;
+  width: 100%;
   -webkit-appearance: none;
   appearance: none;
   height: var(--touch-min);
@@ -384,13 +384,44 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-/* dB display - larger for stage visibility */
+/* Fader touch-safe activation states */
+.fader.activating {
+  filter: brightness(1.15);
+}
+
+.fader.activating::-webkit-slider-thumb {
+  box-shadow: 0 0 12px var(--accent-glow);
+  transform: scale(1.1);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.fader.activating::-moz-range-thumb {
+  box-shadow: 0 0 12px var(--accent-glow);
+  transform: scale(1.1);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.fader.active::-webkit-slider-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.fader.active::-moz-range-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+/* dB display - Row 2, centered for stage visibility */
 .db-display {
   grid-area: db;
-  min-width: 44px;
-  text-align: right;
+  min-width: 52px;
+  text-align: center;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 1.1em;
+  font-size: 0.9em;
   font-weight: 600;
   color: var(--text-primary);
 }

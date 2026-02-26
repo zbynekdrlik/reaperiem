@@ -832,8 +832,9 @@ fn ChannelList(
                                         max=12.0
                                         on_change=move |v| on_level_change.run(v)
                                     />
-                                    <div class="db-display">{move || format_db(level_signal.get())}</div>
                                 </div>
+
+                                <div class="db-display">{move || format_db(level_signal.get())}</div>
 
                                 <PanKnob
                                     value=pan_signal
@@ -878,13 +879,13 @@ fn parse_track_name(name: &str) -> (String, String) {
     }
 }
 
-/// Format dB value for display
+/// Format dB value for display with unit suffix
 fn format_db(db: f32) -> String {
     if db <= -60.0 {
-        "-\u{221E}".to_string()
+        "-\u{221E}db".to_string()
     } else if db >= 0.0 {
-        format!("+{:.1}", db)
+        format!("+{:.1}db", db)
     } else {
-        format!("{:.1}", db)
+        format!("{:.1}db", db)
     }
 }

@@ -19,6 +19,7 @@ pub struct VersionInfo {
     pub version: &'static str,
     pub git_hash: &'static str,
     pub build_time: &'static str,
+    pub deployed_at: String,
     pub full_version: String,
 }
 
@@ -28,6 +29,7 @@ async fn get_version() -> Json<VersionInfo> {
         version: iem_core::VERSION,
         git_hash: iem_core::git_hash(),
         build_time: iem_core::build_time(),
+        deployed_at: iem_core::deployed_at(),
         full_version: iem_core::full_version(),
     })
 }
