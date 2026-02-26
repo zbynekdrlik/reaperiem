@@ -60,6 +60,8 @@ pub fn api_routes() -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
+        // WebSocket for real-time mixer updates
+        .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Raw REAPER proxy (engineer only)
         .route("/api/reaper/{*path}", any(reaper_proxy))
 }

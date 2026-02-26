@@ -4,16 +4,19 @@
 //! - Serves embedded WASM frontend assets
 //! - Provides authentication (PIN → JWT)
 //! - Proxies requests to REAPER HTTP API
+//! - Provides real-time WebSocket updates
 
 pub mod auth;
+pub mod poller;
 pub mod proxy;
 pub mod routes;
 
 use axum::Router;
-use iem_core::Config;
+use iem_core::{Config, ServerMsg};
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::{Any, CorsLayer};
 
 /// Shared application state
@@ -23,13 +26,43 @@ pub struct AppState {
     pub config: Arc<RwLock<Config>>,
     /// HTTP client for REAPER proxy
     pub http_client: reqwest::Client,
+    /// Broadcast channel for WebSocket state updates (member_id, event)
+    pub event_tx: broadcast::Sender<(String, ServerMsg)>,
+    /// Cache of last-known state per member (for diff detection)
+    pub mixer_cache: Arc<RwLock<MixerCache>>,
+}
+
+/// Cached mixer state for change detection
+pub struct MixerCache {
+    /// Last known channel states per member (member_id -> channels)
+    pub member_states: HashMap<String, Vec<iem_core::Channel>>,
+    /// Last known meter values (track_index -> peak_linear)
+    pub meters: HashMap<usize, f32>,
+    /// Whether REAPER is currently reachable
+    pub connected: bool,
+    /// Members with active WebSocket connections
+    pub active_members: HashSet<String>,
+}
+
+impl MixerCache {
+    pub fn new() -> Self {
+        Self {
+            member_states: HashMap::new(),
+            meters: HashMap::new(),
+            connected: false,
+            active_members: HashSet::new(),
+        }
+    }
 }
 
 impl AppState {
     pub fn new(config: Config) -> Self {
+        let (event_tx, _) = broadcast::channel(256);
         Self {
             config: Arc::new(RwLock::new(config)),
             http_client: reqwest::Client::new(),
+            event_tx,
+            mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
         }
     }
 }
@@ -57,6 +90,9 @@ pub struct Assets;
 /// Start the server
 pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     let state = AppState::new(server_config.config);
+
+    // Spawn background REAPER poller
+    poller::spawn_poller(state.clone());
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

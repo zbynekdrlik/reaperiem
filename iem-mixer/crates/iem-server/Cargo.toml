@@ -11,7 +11,7 @@ license = "MIT"
 iem-core = { path = "../iem-core" }
 
 # Web framework
-axum = { version = "0.8", features = ["macros", "json"] }
+axum = { version = "0.8", features = ["macros", "json", "ws"] }
 
 # Tower middleware
 tower-http = { version = "0.6", features = ["fs", "cors", "set-header"] }
@@ -21,6 +21,9 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 
 # HTTP client for REAPER proxy
 reqwest = { version = "0.12", features = ["json"] }
+
+# Async combinators (parallel futures)
+futures = "0.3"
 
 # JWT authentication
 jsonwebtoken = "9"
