@@ -186,6 +186,9 @@ pub fn Fader(
                         quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
                     set_local_value.set(new_value);
                     on_change.run(new_value);
+                    // Update base for next incremental move
+                    *move_base_x_tm.borrow_mut() = Some(current_x);
+                    set_saved_value.set(new_value);
                 }
             }
         }
@@ -270,18 +273,7 @@ pub fn Fader(
 
         // Register window-level mousemove + mouseup for drag tracking
         let document = web_sys::window().unwrap().document().unwrap();
-        let doc_target: web_sys::EventTarget = document.into();
-
-        // Shared closures stored in Rc<RefCell> for cleanup
-        let move_closure: Rc<RefCell<Option<Closure<dyn FnMut(web_sys::MouseEvent)>>>> =
-            Rc::new(RefCell::new(None));
-        let up_closure: Rc<RefCell<Option<Closure<dyn FnMut(web_sys::MouseEvent)>>>> =
-            Rc::new(RefCell::new(None));
-
-        let move_closure_for_up = move_closure.clone();
-        let up_closure_for_up = up_closure.clone();
-        let doc_for_move = doc_target.clone();
-        let doc_for_up = doc_target.clone();
+        let doc_target: web_sys::EventTarget = document.clone().into();
 
         // Clone Rcs inside body for inner closures (avoids moving out of FnMut)
         let move_base_x_mm = move_base_x_md.clone();
@@ -310,15 +302,18 @@ pub fn Fader(
                         quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
                     set_local_value.set(new_value);
                     on_change.run(new_value);
+                    // Update base for next incremental move
+                    *move_base_x_mm.borrow_mut() = Some(current_x);
+                    set_saved_value.set(new_value);
                 }
             }
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
 
         let _ =
-            doc_for_move.add_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
-        *move_closure.borrow_mut() = Some(mc);
+            doc_target.add_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
+        mc.forget(); // Prevent closure from being dropped when mousedown returns
 
-        // mouseup: cleanup all state and listeners
+        // mouseup: cleanup all state (listeners leak but this is standard wasm-bindgen pattern)
         let uc = Closure::wrap(Box::new(move |_ev: web_sys::MouseEvent| {
             // Cancel activation timer if still pending
             *timeout_handle_mu.borrow_mut() = None;
@@ -336,17 +331,10 @@ pub fn Fader(
             if let Some(cb) = on_touch_state {
                 cb.run(false);
             }
-
-            // Remove mousemove listener
-            if let Some(ref mc) = *move_closure_for_up.borrow() {
-                let _ = doc_for_up
-                    .remove_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
-            }
-            *move_closure_for_up.borrow_mut() = None;
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
 
         let _ = doc_target.add_event_listener_with_callback("mouseup", uc.as_ref().unchecked_ref());
-        *up_closure_for_up.borrow_mut() = Some(uc);
+        uc.forget(); // Prevent closure from being dropped when mousedown returns
     };
 
     // Compute percentage for rendering
