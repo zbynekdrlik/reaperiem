@@ -534,11 +534,19 @@ fn ChannelList(
                     // Fader activation state for channel glow
                     let (is_fader_active, set_is_fader_active) = signal(false);
 
-                    // Level change handler (no touch guard here — managed by callbacks)
+                    // Level change handler
                     let on_level_change = Callback::new(move |new_level: f32| {
                         if !connected.get() {
                             return;
                         }
+
+                        // Set guard to block stale WebSocket echoes
+                        set_fader_touched.update(|t| {
+                            t.insert(track_idx, true);
+                            if let Some(partner) = partner_idx {
+                                t.insert(partner, true);
+                            }
+                        });
 
                         // Optimistic update
                         set_channels.update(|chs| {
@@ -563,6 +571,16 @@ fn ChannelList(
                                 level_db: new_level,
                             });
                         }
+
+                        // Remove guard after 1000ms timeout
+                        gloo_timers::callback::Timeout::new(1000, move || {
+                            set_fader_touched.update(|t| {
+                                t.remove(&track_idx);
+                                if let Some(p) = partner_idx {
+                                    t.remove(&p);
+                                }
+                            });
+                        }).forget();
                     });
 
                     // Pan change handler

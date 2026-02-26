@@ -1,6 +1,6 @@
 [package]
 name = "iem-server"
-version = "1.4.3"
+version = "1.4.4"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Axum API server for IEM mixer"
