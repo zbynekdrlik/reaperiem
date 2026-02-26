@@ -178,7 +178,10 @@ pub fn Fader(
             if let Some(el) = track_ref.get() {
                 let rect = el.get_bounding_client_rect();
 
-                if let Some(base_x) = *move_base_x_tm.borrow() {
+                // Extract value BEFORE if let to release immutable borrow
+                // (avoids RefCell panic when we borrow_mut inside the block)
+                let base_x_opt = *move_base_x_tm.borrow();
+                if let Some(base_x) = base_x_opt {
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
                     let base = saved_value.get_untracked();
@@ -293,7 +296,10 @@ pub fn Fader(
 
             // Activated: relative delta from move_base_x
             if let Some(el) = track_ref_move.get() {
-                if let Some(base_x) = *move_base_x_mm.borrow() {
+                // Extract value BEFORE if let to release immutable borrow
+                // (avoids RefCell panic when we borrow_mut inside the block)
+                let base_x_opt = *move_base_x_mm.borrow();
+                if let Some(base_x) = base_x_opt {
                     let rect = el.get_bounding_client_rect();
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
