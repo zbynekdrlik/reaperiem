@@ -61,6 +61,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(version).toHaveProperty("version");
     expect(version).toHaveProperty("git_hash");
     expect(version).toHaveProperty("build_time");
+    expect(version).toHaveProperty("deployed_at");
     expect(version).toHaveProperty("full_version");
     // Version should be a valid semver-ish string
     expect(version.version).toMatch(/^\d+\.\d+\.\d+/);
@@ -68,9 +69,14 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(version.git_hash).not.toBe("unknown");
     // Git hash should be a 7-character hex string
     expect(version.git_hash).toMatch(/^[a-f0-9]{7}$/);
-    // Full version should combine both
+    // Full version shows "version (date time)" format, e.g., "1.1.0 (2026-02-26 14:30)"
     expect(version.full_version).toContain(version.version);
-    expect(version.full_version).toContain(version.git_hash);
+    // Full version should contain a date pattern (YYYY-MM-DD HH:MM) not git hash
+    expect(version.full_version).toMatch(/\(\d{4}-\d{2}-\d{2} \d{2}:\d{2}\)/);
+    // deployed_at should be a full timestamp with UTC
+    expect(version.deployed_at).toMatch(
+      /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/,
+    );
   });
 
   test("fader exists and is interactive", async ({ page }) => {
