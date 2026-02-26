@@ -66,14 +66,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 }
             }
             // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
-            static POLL_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-            let count = POLL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
+            let count = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
             if count % 66 == 0 {
-                let non_zero: Vec<_> = meters
-                    .iter()
-                    .filter(|(_, v)| **v > 0.001)
-                    .take(5)
-                    .collect();
+                let non_zero: Vec<_> = meters.iter().filter(|(_, v)| **v > 0.001).take(5).collect();
                 tracing::debug!(
                     meter_count = meters.len(),
                     non_zero_count = non_zero.len(),

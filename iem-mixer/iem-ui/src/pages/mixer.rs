@@ -22,8 +22,11 @@ use crate::components::toolbar::Toolbar;
 struct DisplayChannel {
     track_index: usize,
     display_name: String,
+    #[allow(dead_code)]
     level_db: f32,
+    #[allow(dead_code)]
     pan: f32,
+    #[allow(dead_code)]
     muted: bool,
     #[allow(dead_code)]
     category: String,
