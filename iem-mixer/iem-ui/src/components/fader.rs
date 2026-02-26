@@ -89,8 +89,7 @@ pub fn Fader(
     let timeout_handle_tm = timeout_handle.clone();
     let timeout_handle_te = timeout_handle.clone();
     let timeout_handle_tc = timeout_handle.clone();
-    let timeout_handle_md = timeout_handle.clone();
-    let timeout_handle_mu = timeout_handle; // mouseup inner (last user)
+    let timeout_handle_md = timeout_handle; // mousedown (cloned inside for inner closures)
 
     let touch_start_x_ts = touch_start_x.clone();
     let touch_start_x_tm = touch_start_x.clone();
@@ -103,9 +102,7 @@ pub fn Fader(
     let move_base_x_ts = move_base_x.clone();
     let move_base_x_tm = move_base_x.clone();
     let move_base_x_te = move_base_x.clone();
-    let move_base_x_md = move_base_x.clone();
-    let move_base_x_mm = move_base_x.clone(); // mousemove inner
-    let move_base_x_mu = move_base_x; // mouseup inner (last user)
+    let move_base_x_md = move_base_x; // mousedown (cloned inside for inner closures)
 
     let last_touch_time_ts = last_touch_time.clone();
     let last_touch_time_te = last_touch_time.clone();
@@ -285,6 +282,11 @@ pub fn Fader(
         let up_closure_for_up = up_closure.clone();
         let doc_for_move = doc_target.clone();
         let doc_for_up = doc_target.clone();
+
+        // Clone Rcs inside body for inner closures (avoids moving out of FnMut)
+        let move_base_x_mm = move_base_x_md.clone();
+        let move_base_x_mu = move_base_x_md.clone();
+        let timeout_handle_mu = timeout_handle_md.clone();
 
         // mousemove: RELATIVE movement from move_base_x (no absolute positioning)
         let track_ref_move = track_ref;
