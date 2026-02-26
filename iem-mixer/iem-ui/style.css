@@ -22,7 +22,6 @@
   --more-me-bg: rgba(78, 205, 196, 0.08);
   --fader-track-bg: #0d0d18;
   --fader-track-border: #2a2a44;
-  --fader-thumb: linear-gradient(145deg, #4ecdc4, #38a89d);
   --category-mics: #4ecdc4;
   --category-stems: #7c6fff;
   --category-tech: #f4d35e;
@@ -193,16 +192,16 @@ body {
 
 /* ================================================================
    Channel Strip: Two-row layout (ALL screen sizes)
-   Row 1: FULL-WIDTH FADER ONLY (maximum precision)
-   Row 2: Label | Meter | Solo | Mute | dB | Pan
+   Row 1: Label | Meter | Solo | Mute | dB | Pan (controls visible above fader)
+   Row 2: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
   display: grid;
   grid-template-columns: 56px 8px 36px 40px 52px 1fr;
-  grid-template-rows: 44px 36px;
+  grid-template-rows: 36px 44px;
   grid-template-areas:
-    "fader  fader  fader  fader  fader  fader"
-    "label  meter  solo   mute   db     pan";
+    "label  meter  solo   mute   db     pan"
+    "fader  fader  fader  fader  fader  fader";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -210,8 +209,16 @@ body {
   border: 1px solid transparent;
   transition:
     opacity 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s;
   align-items: center;
+}
+
+/* Channel activation glow when fader is active */
+.channel.fader-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  background: var(--bg-channel-hover);
 }
 
 .channel.more-me {
@@ -332,87 +339,56 @@ body {
   align-items: center;
 }
 
-.fader-container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.fader {
-  flex: 1;
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-  height: var(--touch-min);
-  background: transparent;
-  outline: none;
-  min-width: 0;
-}
-
-.fader::-webkit-slider-runnable-track {
-  height: 6px;
+/* Custom div-based fader — fill-bar visualization */
+.fader-track {
+  position: relative;
+  height: 44px;
   background: var(--fader-track-bg);
   border: 1px solid var(--fader-track-border);
-  border-radius: 3px;
-}
-
-.fader::-moz-range-track {
-  height: 6px;
-  background: var(--fader-track-bg);
-  border: 1px solid var(--fader-track-border);
-  border-radius: 3px;
-}
-
-.fader::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 28px;
-  height: 28px;
-  background: var(--fader-thumb);
-  border-radius: 50%;
+  border-radius: 6px;
+  overflow: hidden;
+  touch-action: pan-y;
   cursor: pointer;
-  margin-top: -12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.fader::-moz-range-thumb {
-  width: 28px;
-  height: 28px;
-  background: var(--fader-thumb);
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+.fader-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, var(--accent-dim), var(--accent));
+  border-radius: 6px 0 0 6px;
+  pointer-events: none;
 }
 
-/* Fader touch-safe activation states */
-.fader.activating {
-  filter: brightness(1.15);
-}
-
-.fader.activating::-webkit-slider-thumb {
-  box-shadow: 0 0 12px var(--accent-glow);
-  transform: scale(1.1);
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s;
-}
-
-.fader.activating::-moz-range-thumb {
-  box-shadow: 0 0 12px var(--accent-glow);
-  transform: scale(1.1);
-  transition:
-    transform 0.15s,
-    box-shadow 0.15s;
-}
-
-.fader.active::-webkit-slider-thumb {
+.fader-handle {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
   background: var(--accent);
-  box-shadow: 0 0 16px var(--accent-glow);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  box-shadow: 0 0 6px var(--accent-glow);
 }
 
-.fader.active::-moz-range-thumb {
-  background: var(--accent);
-  box-shadow: 0 0 16px var(--accent-glow);
+.fader-track.activating {
+  border-color: var(--accent-dim);
+}
+
+.fader-track.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 8px var(--accent-glow);
+}
+
+.fader-track.active .fader-fill {
+  background: linear-gradient(90deg, rgba(78, 205, 196, 0.5), var(--accent));
+}
+
+.fader-track.active .fader-handle {
+  width: 4px;
+  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 /* dB display - Row 2, centered for stage visibility */

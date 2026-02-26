@@ -89,11 +89,14 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Wait for app to initialize - look for mixer-specific elements
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Look for any slider/fader input
-    const fader = page.locator('input[type="range"]').first();
+    // Look for custom div fader (fill-bar, not native input)
+    const fader = page.locator(".fader-track").first();
     if ((await fader.count()) > 0) {
       // Fader should be visible and interactive
       await expect(fader).toBeVisible();
+      // Verify fill-bar and handle children exist
+      await expect(fader.locator(".fader-fill")).toBeAttached();
+      await expect(fader.locator(".fader-handle")).toBeAttached();
       // Controls are sent via WebSocket, not REST API
       await fader.click({ force: true });
     }

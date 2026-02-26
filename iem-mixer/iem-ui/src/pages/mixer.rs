@@ -530,19 +530,14 @@ fn ChannelList(
                             meters.get().get(&track_idx).copied().unwrap_or(0.0)
                         });
 
-                        // Level change handler
+                        // Fader activation state for channel glow
+                        let (is_fader_active, set_is_fader_active) = signal(false);
+
+                        // Level change handler (no touch guard here — managed by callbacks)
                         let on_level_change = Callback::new(move |new_level: f32| {
                             if !connected.get() {
                                 return;
                             }
-
-                            // Mark as touched
-                            set_fader_touched.update(|t| {
-                                t.insert(track_idx, true);
-                                if let Some(partner) = partner_idx {
-                                    t.insert(partner, true);
-                                }
-                            });
 
                             // Optimistic update
                             set_channels.update(|chs| {
@@ -567,16 +562,6 @@ fn ChannelList(
                                     level_db: new_level,
                                 });
                             }
-
-                            // Clear touched flag after delay
-                            gloo_timers::callback::Timeout::new(200, move || {
-                                set_fader_touched.update(|t| {
-                                    t.remove(&track_idx);
-                                    if let Some(p) = partner_idx {
-                                        t.remove(&p);
-                                    }
-                                });
-                            }).forget();
                         });
 
                         // Pan change handler
@@ -797,6 +782,7 @@ fn ChannelList(
                                 if is_my { classes.push("more-me"); }
                                 if is_stereo { classes.push("stereo-pair"); }
                                 if !is_connected() { classes.push("disconnected"); }
+                                if is_fader_active.get() { classes.push("fader-active"); }
                                 classes.join(" ")
                             }>
                                 <div class="ch-label">
@@ -814,7 +800,28 @@ fn ChannelList(
                                         value=level_signal
                                         min=-60.0
                                         max=12.0
-                                        on_change=move |v| on_level_change.run(v)
+                                        on_change=on_level_change
+                                        on_activate=Callback::new(move |active| set_is_fader_active.set(active))
+                                        on_touch_state=Callback::new(move |touching: bool| {
+                                            if touching {
+                                                set_fader_touched.update(|t| {
+                                                    t.insert(track_idx, true);
+                                                    if let Some(partner) = partner_idx {
+                                                        t.insert(partner, true);
+                                                    }
+                                                });
+                                            } else {
+                                                // 300ms post-release guard for server catch-up
+                                                gloo_timers::callback::Timeout::new(300, move || {
+                                                    set_fader_touched.update(|t| {
+                                                        t.remove(&track_idx);
+                                                        if let Some(p) = partner_idx {
+                                                            t.remove(&p);
+                                                        }
+                                                    });
+                                                }).forget();
+                                            }
+                                        })
                                     />
                                 </div>
 
