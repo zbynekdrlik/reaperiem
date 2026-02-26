@@ -413,25 +413,6 @@ pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<St
     (category.to_string(), stereo_pair, stereo_side)
 }
 
-/// Find the stereo partner track index
-fn find_stereo_partner(inputs: &[iem_core::InputTrack], name: &str) -> Option<usize> {
-    if name.ends_with(" L") {
-        let partner_name = name.replace(" L", " R");
-        inputs
-            .iter()
-            .position(|i| i.name == partner_name)
-            .map(|p| p + 1)
-    } else if name.ends_with(" R") {
-        let partner_name = name.replace(" R", " L");
-        inputs
-            .iter()
-            .position(|i| i.name == partner_name)
-            .map(|p| p + 1)
-    } else {
-        None
-    }
-}
-
 /// Set send level for a member's mix
 pub async fn set_send_level(
     State(state): State<AppState>,
@@ -1027,52 +1008,6 @@ mod tests {
         assert_eq!(parse_send_volume(input), None);
         assert_eq!(parse_send_mute(input), None);
         assert_eq!(parse_send_pan(input), None);
-    }
-
-    #[test]
-    fn test_find_stereo_partner_left() {
-        let inputs = vec![
-            iem_core::InputTrack {
-                name: "DRUMS L".to_string(),
-                dante_input: 1,
-                default_level_db: 0.0,
-            },
-            iem_core::InputTrack {
-                name: "DRUMS R".to_string(),
-                dante_input: 2,
-                default_level_db: 0.0,
-            },
-        ];
-        // "DRUMS L" at index 0 should find partner "DRUMS R" at index 1 (returns 1-based: 2)
-        assert_eq!(find_stereo_partner(&inputs, "DRUMS L"), Some(2));
-    }
-
-    #[test]
-    fn test_find_stereo_partner_right() {
-        let inputs = vec![
-            iem_core::InputTrack {
-                name: "DRUMS L".to_string(),
-                dante_input: 1,
-                default_level_db: 0.0,
-            },
-            iem_core::InputTrack {
-                name: "DRUMS R".to_string(),
-                dante_input: 2,
-                default_level_db: 0.0,
-            },
-        ];
-        // "DRUMS R" at index 1 should find partner "DRUMS L" at index 0 (returns 1-based: 1)
-        assert_eq!(find_stereo_partner(&inputs, "DRUMS R"), Some(1));
-    }
-
-    #[test]
-    fn test_find_stereo_partner_none() {
-        let inputs = vec![iem_core::InputTrack {
-            name: "MAREK mic".to_string(),
-            dante_input: 1,
-            default_level_db: 0.0,
-        }];
-        assert_eq!(find_stereo_partner(&inputs, "MAREK mic"), None);
     }
 
     // ================================================================

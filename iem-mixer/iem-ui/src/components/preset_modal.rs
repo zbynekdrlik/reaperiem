@@ -169,7 +169,7 @@ pub fn PresetModal(
                                         let ts_b = b.1.created_at.unwrap_or(0);
                                         ts_b.cmp(&ts_a)
                                     });
-                                    sorted.iter().map(|(name, data)| {
+                                    sorted.into_iter().map(|(name, data)| {
                                         let name_load = name.clone();
                                         let name_update = name.clone();
                                         let name_delete = name.clone();
