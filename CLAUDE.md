@@ -242,6 +242,28 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 **CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
 
+### ⚠️ VERSION BUMP REQUIREMENT
+
+**BUMP VERSION AT THE START OF EVERY DEVELOPMENT SESSION that will deploy to production.**
+
+The CI version check runs FIRST to fail fast (within seconds) rather than after expensive builds.
+
+**Version file:** `iem-mixer/crates/iem-core/Cargo.toml` (this is where VERSION constant comes from)
+
+**Also update for consistency:**
+
+- `iem-mixer/Cargo.toml`
+- `iem-mixer/crates/iem-server/Cargo.toml`
+- `iem-mixer/iem-ui/Cargo.toml`
+- `iem-mixer/src-tauri/Cargo.toml`
+
+**Example version bump:**
+
+```bash
+# Bump all Cargo.toml files from 1.1.0 to 1.2.0
+sed -i 's/version = "1.1.0"/version = "1.2.0"/' iem-mixer/crates/iem-core/Cargo.toml iem-mixer/Cargo.toml iem-mixer/crates/iem-server/Cargo.toml iem-mixer/iem-ui/Cargo.toml iem-mixer/src-tauri/Cargo.toml
+```
+
 ### ⚠️ PRE-PUSH VALIDATION CHECKLIST (MANDATORY)
 
 **Before EVERY push, mentally verify:**
