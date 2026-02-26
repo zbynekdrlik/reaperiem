@@ -7,8 +7,7 @@
 use leptos::prelude::*;
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{HtmlInputElement, TouchEvent};
 
 /// Activation delay in milliseconds (SOTA: 250-350ms)
