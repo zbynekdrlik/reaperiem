@@ -484,374 +484,374 @@ fn ChannelList(
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
-    move || {
-        let chs = display_channels.get();
-        if chs.is_empty() {
-            view! {
-                <div class="no-channels">"No channels in this category"</div>
-            }
-            .into_any()
-        } else {
-            view! {
-                <>
-                    {chs.iter().map(|ch| {
-                        let track_idx = ch.track_index;
-                        let partner_idx = ch.partner_index;
-                        let name = ch.display_name.clone();
-                        let is_my = ch.is_my_input;
-                        let is_stereo = ch.is_stereo;
+    // CRITICAL: Use <For> with stable key to preserve Fader component identity
+    // across re-renders. Without this, optimistic updates cause all Faders to
+    // remount, losing their is_activated state (the "glow disappears" bug).
+    view! {
+        <Show
+            when=move || !display_channels.get().is_empty()
+            fallback=|| view! { <div class="no-channels">"No channels in this category"</div> }
+        >
+            <For
+                each=move || display_channels.get()
+                key=|ch| ch.track_index
+                children=move |ch| {
+                    let track_idx = ch.track_index;
+                    let partner_idx = ch.partner_index;
+                    let name = ch.display_name.clone();
+                    let is_my = ch.is_my_input;
+                    let is_stereo = ch.is_stereo;
 
-                        // Derived signals that properly track channel updates from WebSocket
-                        let level_signal = Signal::derive(move || {
-                            channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.level_db)
-                                .unwrap_or(-60.0)
-                        });
+                    // Derived signals that properly track channel updates from WebSocket
+                    let level_signal = Signal::derive(move || {
+                        channels.get()
+                            .iter()
+                            .find(|c| c.track_index == track_idx)
+                            .map(|c| c.level_db)
+                            .unwrap_or(-60.0)
+                    });
 
-                        let muted_signal = Signal::derive(move || {
-                            channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.muted)
-                                .unwrap_or(false)
-                        });
+                    let muted_signal = Signal::derive(move || {
+                        channels.get()
+                            .iter()
+                            .find(|c| c.track_index == track_idx)
+                            .map(|c| c.muted)
+                            .unwrap_or(false)
+                    });
 
-                        let pan_signal = Signal::derive(move || {
-                            channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.pan)
-                                .unwrap_or(0.5)
-                        });
+                    let pan_signal = Signal::derive(move || {
+                        channels.get()
+                            .iter()
+                            .find(|c| c.track_index == track_idx)
+                            .map(|c| c.pan)
+                            .unwrap_or(0.5)
+                    });
 
-                        let meter_level = Signal::derive(move || {
-                            meters.get().get(&track_idx).copied().unwrap_or(0.0)
-                        });
+                    let meter_level = Signal::derive(move || {
+                        meters.get().get(&track_idx).copied().unwrap_or(0.0)
+                    });
 
-                        // Fader activation state for channel glow
-                        let (is_fader_active, set_is_fader_active) = signal(false);
+                    // Fader activation state for channel glow
+                    let (is_fader_active, set_is_fader_active) = signal(false);
 
-                        // Level change handler (no touch guard here — managed by callbacks)
-                        let on_level_change = Callback::new(move |new_level: f32| {
-                            if !connected.get() {
-                                return;
+                    // Level change handler (no touch guard here — managed by callbacks)
+                    let on_level_change = Callback::new(move |new_level: f32| {
+                        if !connected.get() {
+                            return;
+                        }
+
+                        // Optimistic update
+                        set_channels.update(|chs| {
+                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                ch.level_db = new_level;
                             }
-
-                            // Optimistic update
-                            set_channels.update(|chs| {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                            if let Some(partner) = partner_idx {
+                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
                                     ch.level_db = new_level;
                                 }
-                                if let Some(partner) = partner_idx {
-                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                        ch.level_db = new_level;
-                                    }
-                                }
-                            });
+                            }
+                        });
 
-                            // Send via WebSocket (instant, no async)
+                        // Send via WebSocket (instant, no async)
+                        ws_send(ws, &iem_core::ClientMsg::SetLevel {
+                            track_index: track_idx,
+                            level_db: new_level,
+                        });
+                        if let Some(partner) = partner_idx {
                             ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                track_index: track_idx,
+                                track_index: partner,
                                 level_db: new_level,
                             });
+                        }
+                    });
+
+                    // Pan change handler
+                    let on_pan_change = Callback::new(move |new_pan: f32| {
+                        if !connected.get() {
+                            return;
+                        }
+
+                        set_fader_touched.update(|t| {
+                            t.insert(track_idx, true);
                             if let Some(partner) = partner_idx {
-                                ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                    track_index: partner,
-                                    level_db: new_level,
-                                });
+                                t.insert(partner, true);
                             }
                         });
 
-                        // Pan change handler
-                        let on_pan_change = Callback::new(move |new_pan: f32| {
-                            if !connected.get() {
-                                return;
+                        set_channels.update(|chs| {
+                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                ch.pan = new_pan;
                             }
-
-                            set_fader_touched.update(|t| {
-                                t.insert(track_idx, true);
-                                if let Some(partner) = partner_idx {
-                                    t.insert(partner, true);
+                            if let Some(partner) = partner_idx {
+                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
+                                    ch.pan = 1.0 - new_pan;
                                 }
-                            });
+                            }
+                        });
 
-                            set_channels.update(|chs| {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                    ch.pan = new_pan;
-                                }
-                                if let Some(partner) = partner_idx {
-                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                        ch.pan = 1.0 - new_pan;
-                                    }
-                                }
-                            });
-
+                        ws_send(ws, &iem_core::ClientMsg::SetPan {
+                            track_index: track_idx,
+                            pan: new_pan,
+                        });
+                        if let Some(partner) = partner_idx {
                             ws_send(ws, &iem_core::ClientMsg::SetPan {
-                                track_index: track_idx,
-                                pan: new_pan,
+                                track_index: partner,
+                                pan: 1.0 - new_pan,
                             });
-                            if let Some(partner) = partner_idx {
-                                ws_send(ws, &iem_core::ClientMsg::SetPan {
-                                    track_index: partner,
-                                    pan: 1.0 - new_pan,
-                                });
-                            }
+                        }
 
-                            gloo_timers::callback::Timeout::new(1000, move || {
-                                set_fader_touched.update(|t| {
-                                    t.remove(&track_idx);
-                                    if let Some(p) = partner_idx {
-                                        t.remove(&p);
-                                    }
-                                });
-                            }).forget();
-                        });
-
-                        // Mute toggle handler
-                        let on_mute_click = move |_| {
-                            if !connected.get() {
-                                return;
-                            }
-
-                            let current_muted = channels.get()
-                                .iter()
-                                .find(|c| c.track_index == track_idx)
-                                .map(|c| c.muted)
-                                .unwrap_or(false);
-                            let new_muted = !current_muted;
-
+                        gloo_timers::callback::Timeout::new(1000, move || {
                             set_fader_touched.update(|t| {
-                                t.insert(track_idx, true);
-                                if let Some(partner) = partner_idx {
-                                    t.insert(partner, true);
+                                t.remove(&track_idx);
+                                if let Some(p) = partner_idx {
+                                    t.remove(&p);
                                 }
                             });
+                        }).forget();
+                    });
 
-                            set_channels.update(|chs| {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                    // Mute toggle handler
+                    let on_mute_click = move |_| {
+                        if !connected.get() {
+                            return;
+                        }
+
+                        let current_muted = channels.get()
+                            .iter()
+                            .find(|c| c.track_index == track_idx)
+                            .map(|c| c.muted)
+                            .unwrap_or(false);
+                        let new_muted = !current_muted;
+
+                        set_fader_touched.update(|t| {
+                            t.insert(track_idx, true);
+                            if let Some(partner) = partner_idx {
+                                t.insert(partner, true);
+                            }
+                        });
+
+                        set_channels.update(|chs| {
+                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                ch.muted = new_muted;
+                            }
+                            if let Some(partner) = partner_idx {
+                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
                                     ch.muted = new_muted;
                                 }
-                                if let Some(partner) = partner_idx {
-                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                        ch.muted = new_muted;
-                                    }
-                                }
-                            });
+                            }
+                        });
 
+                        ws_send(ws, &iem_core::ClientMsg::SetMute {
+                            track_index: track_idx,
+                            muted: new_muted,
+                        });
+                        if let Some(partner) = partner_idx {
                             ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                track_index: track_idx,
+                                track_index: partner,
                                 muted: new_muted,
                             });
-                            if let Some(partner) = partner_idx {
-                                ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                    track_index: partner,
-                                    muted: new_muted,
-                                });
-                            }
+                        }
 
-                            gloo_timers::callback::Timeout::new(1000, move || {
-                                set_fader_touched.update(|t| {
-                                    t.remove(&track_idx);
-                                    if let Some(p) = partner_idx {
-                                        t.remove(&p);
-                                    }
-                                });
-                            }).forget();
-                        };
-
-                        // Solo toggle handler
-                        let on_solo_click = move |_| {
-                            if !connected.get() {
-                                return;
-                            }
-
-                            let all_channels = channels.get();
-                            let current_soloed = soloed.get();
-                            let is_currently_soloed = current_soloed.contains(&track_idx);
-
-                            if is_currently_soloed {
-                                let mut new_soloed = current_soloed.clone();
-                                new_soloed.remove(&track_idx);
-                                if let Some(partner) = partner_idx {
-                                    new_soloed.remove(&partner);
+                        gloo_timers::callback::Timeout::new(1000, move || {
+                            set_fader_touched.update(|t| {
+                                t.remove(&track_idx);
+                                if let Some(p) = partner_idx {
+                                    t.remove(&p);
                                 }
+                            });
+                        }).forget();
+                    };
 
-                                if new_soloed.is_empty() {
-                                    let saved = pre_solo_mutes.get();
-                                    for ch in &all_channels {
-                                        let should_be_muted = saved.get(&ch.track_index).copied().unwrap_or(false);
-                                        let idx = ch.track_index;
-                                        set_channels.update(|chs| {
-                                            if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
-                                                c.muted = should_be_muted;
-                                            }
-                                        });
-                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                            track_index: idx,
-                                            muted: should_be_muted,
-                                        });
-                                    }
-                                    set_pre_solo_mutes.set(HashMap::new());
-                                } else {
+                    // Solo toggle handler
+                    let on_solo_click = move |_| {
+                        if !connected.get() {
+                            return;
+                        }
+
+                        let all_channels = channels.get();
+                        let current_soloed = soloed.get();
+                        let is_currently_soloed = current_soloed.contains(&track_idx);
+
+                        if is_currently_soloed {
+                            let mut new_soloed = current_soloed.clone();
+                            new_soloed.remove(&track_idx);
+                            if let Some(partner) = partner_idx {
+                                new_soloed.remove(&partner);
+                            }
+
+                            if new_soloed.is_empty() {
+                                let saved = pre_solo_mutes.get();
+                                for ch in &all_channels {
+                                    let should_be_muted = saved.get(&ch.track_index).copied().unwrap_or(false);
+                                    let idx = ch.track_index;
                                     set_channels.update(|chs| {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
+                                            c.muted = should_be_muted;
+                                        }
+                                    });
+                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                        track_index: idx,
+                                        muted: should_be_muted,
+                                    });
+                                }
+                                set_pre_solo_mutes.set(HashMap::new());
+                            } else {
+                                set_channels.update(|chs| {
+                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                        ch.muted = true;
+                                    }
+                                    if let Some(partner) = partner_idx {
+                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
                                             ch.muted = true;
                                         }
-                                        if let Some(partner) = partner_idx {
-                                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                                ch.muted = true;
-                                            }
-                                        }
-                                    });
+                                    }
+                                });
+                                ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                    track_index: track_idx,
+                                    muted: true,
+                                });
+                                if let Some(partner) = partner_idx {
                                     ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: track_idx,
+                                        track_index: partner,
                                         muted: true,
                                     });
-                                    if let Some(partner) = partner_idx {
-                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                            track_index: partner,
-                                            muted: true,
-                                        });
-                                    }
                                 }
-                                set_soloed.set(new_soloed);
-                            } else {
-                                let was_empty = current_soloed.is_empty();
+                            }
+                            set_soloed.set(new_soloed);
+                        } else {
+                            let was_empty = current_soloed.is_empty();
 
-                                if was_empty {
-                                    let mut saved_mutes = HashMap::new();
-                                    for ch in &all_channels {
-                                        saved_mutes.insert(ch.track_index, ch.muted);
-                                    }
-                                    set_pre_solo_mutes.set(saved_mutes);
+                            if was_empty {
+                                let mut saved_mutes = HashMap::new();
+                                for ch in &all_channels {
+                                    saved_mutes.insert(ch.track_index, ch.muted);
+                                }
+                                set_pre_solo_mutes.set(saved_mutes);
 
-                                    for ch in &all_channels {
-                                        let should_mute = ch.track_index != track_idx && partner_idx != Some(ch.track_index);
-                                        let idx = ch.track_index;
-                                        set_channels.update(|chs| {
-                                            if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
-                                                c.muted = should_mute;
-                                            }
-                                        });
-                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                            track_index: idx,
-                                            muted: should_mute,
-                                        });
-                                    }
-                                } else {
+                                for ch in &all_channels {
+                                    let should_mute = ch.track_index != track_idx && partner_idx != Some(ch.track_index);
+                                    let idx = ch.track_index;
                                     set_channels.update(|chs| {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                            ch.muted = false;
-                                        }
-                                        if let Some(partner) = partner_idx {
-                                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                                ch.muted = false;
-                                            }
+                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
+                                            c.muted = should_mute;
                                         }
                                     });
                                     ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: track_idx,
+                                        track_index: idx,
+                                        muted: should_mute,
+                                    });
+                                }
+                            } else {
+                                set_channels.update(|chs| {
+                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                                        ch.muted = false;
+                                    }
+                                    if let Some(partner) = partner_idx {
+                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
+                                            ch.muted = false;
+                                        }
+                                    }
+                                });
+                                ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                    track_index: track_idx,
+                                    muted: false,
+                                });
+                                if let Some(partner) = partner_idx {
+                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
+                                        track_index: partner,
                                         muted: false,
                                     });
-                                    if let Some(partner) = partner_idx {
-                                        ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                            track_index: partner,
-                                            muted: false,
-                                        });
-                                    }
                                 }
-
-                                let mut new_soloed = current_soloed.clone();
-                                new_soloed.insert(track_idx);
-                                if let Some(partner) = partner_idx {
-                                    new_soloed.insert(partner);
-                                }
-                                set_soloed.set(new_soloed);
                             }
-                        };
 
-                        let is_soloed = move || soloed.get().contains(&track_idx);
-                        let is_connected = move || connected.get();
+                            let mut new_soloed = current_soloed.clone();
+                            new_soloed.insert(track_idx);
+                            if let Some(partner) = partner_idx {
+                                new_soloed.insert(partner);
+                            }
+                            set_soloed.set(new_soloed);
+                        }
+                    };
 
-                        view! {
-                            <div class=move || {
-                                let mut classes = vec!["channel"];
-                                if muted_signal.get() { classes.push("muted"); }
-                                if is_my { classes.push("more-me"); }
-                                if is_stereo { classes.push("stereo-pair"); }
-                                if !is_connected() { classes.push("disconnected"); }
-                                if is_fader_active.get() { classes.push("fader-active"); }
-                                classes.join(" ")
-                            }>
-                                <div class="ch-label">
-                                    <div class="ch-name">{parse_track_name(&name).0}</div>
-                                    <div class="ch-type">
-                                        {parse_track_name(&name).1}
-                                        {if is_stereo { " (st)" } else { "" }}
-                                    </div>
-                                </div>
+                    let is_soloed = move || soloed.get().contains(&track_idx);
+                    let is_connected = move || connected.get();
 
-                                <Meter level=meter_level />
-
-                                <div class="fader-area">
-                                    <Fader
-                                        value=level_signal
-                                        min=-60.0
-                                        max=12.0
-                                        on_change=on_level_change
-                                        on_activate=Callback::new(move |active| set_is_fader_active.set(active))
-                                        on_touch_state=Callback::new(move |touching: bool| {
-                                            if touching {
-                                                set_fader_touched.update(|t| {
-                                                    t.insert(track_idx, true);
-                                                    if let Some(partner) = partner_idx {
-                                                        t.insert(partner, true);
-                                                    }
-                                                });
-                                            } else {
-                                                // 300ms post-release guard for server catch-up
-                                                gloo_timers::callback::Timeout::new(300, move || {
-                                                    set_fader_touched.update(|t| {
-                                                        t.remove(&track_idx);
-                                                        if let Some(p) = partner_idx {
-                                                            t.remove(&p);
-                                                        }
-                                                    });
-                                                }).forget();
-                                            }
-                                        })
-                                    />
-                                </div>
-
-                                <div class="db-display">{move || format_db(level_signal.get())}</div>
-
-                                <PanKnob
-                                    value=pan_signal
-                                    on_change=on_pan_change
-                                />
-
-                                <div class="channel-btns">
-                                    <button
-                                        class=move || if is_soloed() { "solo-btn on" } else { "solo-btn off" }
-                                        on:click=on_solo_click
-                                    >
-                                        "S"
-                                    </button>
-                                    <button
-                                        class=move || if muted_signal.get() { "mute-btn on" } else { "mute-btn off" }
-                                        on:click=on_mute_click
-                                    >
-                                        "M"
-                                    </button>
+                    view! {
+                        <div class=move || {
+                            let mut classes = vec!["channel"];
+                            if muted_signal.get() { classes.push("muted"); }
+                            if is_my { classes.push("more-me"); }
+                            if is_stereo { classes.push("stereo-pair"); }
+                            if !is_connected() { classes.push("disconnected"); }
+                            if is_fader_active.get() { classes.push("fader-active"); }
+                            classes.join(" ")
+                        }>
+                            <div class="ch-label">
+                                <div class="ch-name">{parse_track_name(&name).0}</div>
+                                <div class="ch-type">
+                                    {parse_track_name(&name).1}
+                                    {if is_stereo { " (st)" } else { "" }}
                                 </div>
                             </div>
-                        }
-                    }).collect::<Vec<_>>()}
-                </>
-            }.into_any()
-        }
+
+                            <Meter level=meter_level />
+
+                            <div class="fader-area">
+                                <Fader
+                                    value=level_signal
+                                    min=-60.0
+                                    max=12.0
+                                    on_change=on_level_change
+                                    on_activate=Callback::new(move |active| set_is_fader_active.set(active))
+                                    on_touch_state=Callback::new(move |touching: bool| {
+                                        if touching {
+                                            set_fader_touched.update(|t| {
+                                                t.insert(track_idx, true);
+                                                if let Some(partner) = partner_idx {
+                                                    t.insert(partner, true);
+                                                }
+                                            });
+                                        } else {
+                                            // 300ms post-release guard for server catch-up
+                                            gloo_timers::callback::Timeout::new(300, move || {
+                                                set_fader_touched.update(|t| {
+                                                    t.remove(&track_idx);
+                                                    if let Some(p) = partner_idx {
+                                                        t.remove(&p);
+                                                    }
+                                                });
+                                            }).forget();
+                                        }
+                                    })
+                                />
+                            </div>
+
+                            <div class="db-display">{move || format_db(level_signal.get())}</div>
+
+                            <PanKnob
+                                value=pan_signal
+                                on_change=on_pan_change
+                            />
+
+                            <div class="channel-btns">
+                                <button
+                                    class=move || if is_soloed() { "solo-btn on" } else { "solo-btn off" }
+                                    on:click=on_solo_click
+                                >
+                                    "S"
+                                </button>
+                                <button
+                                    class=move || if muted_signal.get() { "mute-btn on" } else { "mute-btn off" }
+                                    on:click=on_mute_click
+                                >
+                                    "M"
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            />
+            </Show>
     }
 }
 

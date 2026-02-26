@@ -228,6 +228,80 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(classAfter).not.toContain("active");
   });
 
+  test("fader glow persists during continuous drag (regression test)", async ({
+    page,
+  }) => {
+    // CRITICAL: Tests that .active class persists through MULTIPLE mouse moves
+    // This catches the v1.4.x bug where component remounting caused is_activated
+    // to reset to false after the first movement, stopping further drag.
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Mouse down at 20% of fader (left side)
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down();
+
+    // Wait for 300ms activation delay
+    await page.waitForTimeout(350);
+
+    // Verify activation
+    await expect(fader).toHaveClass(/active/);
+
+    // FIRST drag movement to 40%
+    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
+    await page.waitForTimeout(100); // Give time for state updates
+
+    // CRITICAL CHECK: .active must STILL be present after first movement
+    await expect(fader).toHaveClass(/active/);
+    const classAfterMove1 = await fader.getAttribute("class");
+    expect(classAfterMove1).toContain("active");
+
+    // SECOND drag movement to 60%
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+    await page.waitForTimeout(100);
+
+    // CRITICAL CHECK: .active must STILL be present after second movement
+    await expect(fader).toHaveClass(/active/);
+    const classAfterMove2 = await fader.getAttribute("class");
+    expect(classAfterMove2).toContain("active");
+
+    // THIRD drag movement to 80%
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+    await page.waitForTimeout(100);
+
+    // CRITICAL CHECK: .active must STILL be present after third movement
+    await expect(fader).toHaveClass(/active/);
+    const classAfterMove3 = await fader.getAttribute("class");
+    expect(classAfterMove3).toContain("active");
+
+    // Verify fader actually moved (fill bar should span most of track)
+    const fillWidth = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    // Should have moved significantly from 20% to 80%
+    expect(fillWidth / box.width).toBeGreaterThan(0.5);
+
+    // Release
+    await page.mouse.up();
+
+    // Only NOW should .active be removed
+    await page.waitForTimeout(50);
+    const classAfterRelease = await fader.getAttribute("class");
+    expect(classAfterRelease).not.toContain("active");
+  });
+
   test("fader handle is visible with proper width", async ({ page }) => {
     // Verifies the handle thumb is wide enough to be a visible grab target
     await page.goto("/");
