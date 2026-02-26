@@ -341,6 +341,7 @@ body {
 
 /* Custom div-based fader — fill-bar visualization */
 .fader-track {
+  width: 100%;
   position: relative;
   height: 44px;
   background: var(--fader-track-bg);

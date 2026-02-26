@@ -102,6 +102,107 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     }
   });
 
+  test("fader has proper dimensions and fill-bar is visible", async ({
+    page,
+  }) => {
+    // This test catches the v1.3.0 bug where fader-track had 0 width
+    // because absolutely-positioned children don't contribute to parent size
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return; // No channels loaded (no REAPER)
+
+    // CRITICAL: Fader track must have real width (not collapsed to 0)
+    const box = await fader.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeGreaterThan(50); // Fader should span most of channel width
+    expect(box!.height).toBeGreaterThanOrEqual(40); // Touch-friendly height
+
+    // Fill bar must be a child with actual rendered dimensions
+    const fill = fader.locator(".fader-fill");
+    await expect(fill).toBeAttached();
+    const fillBox = await fill.boundingBox();
+    expect(fillBox).not.toBeNull();
+    // Fill height should match track height (absolute positioned top:0 bottom:0)
+    expect(fillBox!.height).toBeGreaterThan(0);
+
+    // Handle must be present
+    const handle = fader.locator(".fader-handle");
+    await expect(handle).toBeAttached();
+    const handleBox = await handle.boundingBox();
+    expect(handleBox).not.toBeNull();
+    expect(handleBox!.height).toBeGreaterThan(0);
+  });
+
+  test("fader click changes fill width on desktop", async ({ page }) => {
+    // Verifies that clicking the fader actually changes the visual state
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return; // Guard against layout issues
+
+    // Get initial fill width
+    const fillBefore = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Click at 75% of the fader track (right side = louder)
+    await page.mouse.click(box.x + box.width * 0.75, box.y + box.height / 2);
+    await page.waitForTimeout(100); // Allow reactive update
+
+    // Fill width should have changed (moved toward 75%)
+    const fillAfter = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // If connected to REAPER, the fill should change. Even without REAPER,
+    // the mousedown handler sets local value immediately.
+    // The fill width should be roughly 75% of track width
+    expect(fillAfter).toBeGreaterThan(box.width * 0.5);
+  });
+
+  test("channel layout has controls above fader", async ({ page }) => {
+    // Verifies row order: controls (label, dB, mute) in Row 1, fader in Row 2
+    // This catches the v1.2.0 bug where fader was on top and finger covered dB
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    // dB display must be ABOVE the fader (lower Y value = higher on screen)
+    const dbBox = await channel.locator(".db-display").boundingBox();
+    const faderBox = await channel.locator(".fader-track").boundingBox();
+
+    expect(dbBox).not.toBeNull();
+    expect(faderBox).not.toBeNull();
+    // dB display top edge must be above fader top edge
+    expect(dbBox!.y).toBeLessThan(faderBox!.y);
+  });
+
   test("mute button exists and is clickable", async ({ page }) => {
     // Login first
     await page.goto("/");
