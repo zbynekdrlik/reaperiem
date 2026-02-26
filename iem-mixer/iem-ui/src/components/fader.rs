@@ -77,12 +77,10 @@ pub fn Fader(
             set_is_activated.set(true);
             set_is_pending.set(false);
 
-            // Haptic feedback on activation
+            // Haptic feedback on activation (ignored on unsupported devices)
             if let Some(window) = web_sys::window() {
-                if let Ok(navigator) = window.navigator().dyn_into::<web_sys::Navigator>() {
-                    // Try to vibrate (will be ignored on unsupported devices)
-                    let _ = navigator.vibrate_with_duration(50);
-                }
+                let navigator = window.navigator();
+                let _ = navigator.vibrate_with_duration(50);
             }
         });
 
