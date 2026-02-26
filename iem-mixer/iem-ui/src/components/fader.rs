@@ -125,18 +125,25 @@ pub fn Fader(
             return;
         }
 
-        // Fader is activated - prevent scroll and handle input
+        // Fader is activated - prevent scroll and use RELATIVE positioning
+        // Fader moves proportionally to finger delta, never jumps to finger position
         ev.prevent_default();
 
         if let Some(touch) = ev.touches().get(0) {
             if let Some(target) = ev.target() {
                 if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
                     let rect = input.get_bounding_client_rect();
-                    let x = touch.client_x() as f64 - rect.left();
-                    let ratio = (x / rect.width()).clamp(0.0, 1.0);
-                    let new_value = min + (ratio as f32) * (max - min);
-                    set_local_value.set(new_value);
-                    on_change_touch(new_value);
+                    let current_x = touch.client_x() as f64;
+
+                    if let Some(start_x) = *touch_start_x_move.borrow() {
+                        let delta_x = current_x - start_x;
+                        let delta_ratio = delta_x / rect.width();
+                        let base = saved_value.get_untracked();
+                        let new_value = (base + (delta_ratio as f32) * (max - min)).clamp(min, max);
+                        set_local_value.set(new_value);
+                        input.set_value(&format!("{}", new_value));
+                        on_change_touch(new_value);
+                    }
                 }
             }
         }
@@ -154,20 +161,22 @@ pub fn Fader(
         *touch_start_y.borrow_mut() = None;
     };
 
-    // Input handler: blocks value changes during touch until activated
+    // Input handler: blocks ALL value changes during touch interaction.
+    // Touch movement is handled exclusively by touchmove for relative positioning.
+    // Only mouse/desktop input passes through for immediate response.
     let handle_input = move |ev: web_sys::Event| {
         let target = ev.target().unwrap();
         let input = target.dyn_into::<HtmlInputElement>().unwrap();
 
-        // During touch interaction, block input until activation delay passes
-        if is_touch_interaction.get_untracked() && !is_activated.get_untracked() {
-            // Restore the saved value — prevent the native input from changing it
+        // During ANY touch interaction, block native input — touchmove handles positioning
+        if is_touch_interaction.get_untracked() {
             let restore = saved_value.get_untracked();
             input.set_value(&format!("{}", restore));
             set_local_value.set(restore);
             return;
         }
 
+        // Desktop/mouse: immediate response
         let new_value: f32 = input.value().parse().unwrap_or(0.0);
         set_local_value.set(new_value);
         on_change_input(new_value);
