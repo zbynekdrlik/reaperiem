@@ -28,7 +28,6 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
-    let members = config.members.clone();
     drop(config);
 
     // Check which members have active WS connections

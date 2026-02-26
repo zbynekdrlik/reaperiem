@@ -128,7 +128,10 @@ pub async fn get_mixer_state(
     let send_results = futures::future::join_all(send_futures).await;
     for (track_index, result) in send_results {
         if let Ok((level, mute, pan)) = result {
-            if let Some(ch) = result_channels.iter_mut().find(|c| c.track_index == track_index) {
+            if let Some(ch) = result_channels
+                .iter_mut()
+                .find(|c| c.track_index == track_index)
+            {
                 ch.level_db = reaper_vol_to_db(level);
                 ch.muted = mute;
                 ch.pan = reaper_pan_to_ui(pan);
@@ -229,7 +232,10 @@ pub async fn poll_mixer_state(
     let send_results = futures::future::join_all(send_futures).await;
     for (track_index, result) in send_results {
         if let Ok((level, mute, pan)) = result {
-            if let Some(ch) = result_channels.iter_mut().find(|c| c.track_index == track_index) {
+            if let Some(ch) = result_channels
+                .iter_mut()
+                .find(|c| c.track_index == track_index)
+            {
                 ch.level_db = reaper_vol_to_db(level);
                 ch.muted = mute;
                 ch.pan = reaper_pan_to_ui(pan);
@@ -677,11 +683,7 @@ pub async fn ws_mixer(
 }
 
 /// Handle a WebSocket connection for a member
-async fn handle_ws(
-    mut socket: axum::extract::ws::WebSocket,
-    state: AppState,
-    member_id: String,
-) {
+async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, member_id: String) {
     use axum::extract::ws::Message;
     use iem_core::{ClientMsg, ServerMsg};
 
@@ -753,10 +755,7 @@ async fn handle_ws(
 }
 
 /// Build full state message for initial WebSocket connection
-async fn build_full_state(
-    state: &AppState,
-    member_id: &str,
-) -> Result<iem_core::ServerMsg, ()> {
+async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core::ServerMsg, ()> {
     let config = state.config.read().await;
 
     let member_index = config.member_index(member_id).ok_or(())?;
@@ -840,19 +839,14 @@ async fn execute_command(state: &AppState, member_id: &str, cmd: iem_core::Clien
             let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
             let _ = state.http_client.get(&url).send().await;
         }
-        iem_core::ClientMsg::SetMute {
-            track_index,
-            muted,
-        } => {
+        iem_core::ClientMsg::SetMute { track_index, muted } => {
             let mute_val: u8 = if muted { 1 } else { 0 };
-            let url =
-                reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
+            let url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
             let _ = state.http_client.get(&url).send().await;
         }
         iem_core::ClientMsg::SetPan { track_index, pan } => {
             let reaper_pan = ui_pan_to_reaper(pan);
-            let url =
-                reaper_api::set_send_pan(&reaper_url, track_index, member_index, reaper_pan);
+            let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, reaper_pan);
             let _ = state.http_client.get(&url).send().await;
         }
     }

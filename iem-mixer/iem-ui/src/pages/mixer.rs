@@ -103,11 +103,7 @@ fn connect_websocket(
                             } else {
                                 // Update non-touched channels
                                 for new_ch in &new_chs {
-                                    if !touched
-                                        .get(&new_ch.track_index)
-                                        .copied()
-                                        .unwrap_or(false)
-                                    {
+                                    if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
                                         if let Some(ch) = chs
                                             .iter_mut()
                                             .find(|c| c.track_index == new_ch.track_index)
