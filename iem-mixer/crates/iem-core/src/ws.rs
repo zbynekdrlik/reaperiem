@@ -19,7 +19,7 @@ pub enum ClientMsg {
 
 /// Server → Client events (pushed via WebSocket)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "event")]
+#[serde(tag = "event", content = "data")]
 pub enum ServerMsg {
     /// Full mixer state (sent on connect and periodically)
     State {
