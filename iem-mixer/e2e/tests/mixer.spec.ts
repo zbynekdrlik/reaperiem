@@ -632,9 +632,9 @@ test.describe("Main Tab and Global Volume", () => {
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Click Mics tab
+    // Click Mics tab (force: disconnected-warning overlay blocks clicks in CI)
     const micsTab = page.locator(".category-tab.mics");
-    await micsTab.click();
+    await micsTab.click({ force: true });
     await expect(micsTab).toHaveClass(/active/);
 
     // Global volume should NOT appear in Mics tab
@@ -651,9 +651,9 @@ test.describe("Main Tab and Global Volume", () => {
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Click Stems tab
+    // Click Stems tab (force: disconnected-warning overlay blocks clicks in CI)
     const stemsTab = page.locator(".category-tab.stems");
-    await stemsTab.click();
+    await stemsTab.click({ force: true });
     await expect(stemsTab).toHaveClass(/active/);
 
     // Wait for channels to appear
@@ -681,9 +681,9 @@ test.describe("Main Tab and Global Volume", () => {
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Click Tech tab
+    // Click Tech tab (force: disconnected-warning overlay blocks clicks in CI)
     const techTab = page.locator(".category-tab.tech");
-    await techTab.click();
+    await techTab.click({ force: true });
     await expect(techTab).toHaveClass(/active/);
 
     // Main tab should not be active
