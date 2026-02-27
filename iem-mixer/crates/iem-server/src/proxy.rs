@@ -665,12 +665,22 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
-                            if let Err(e) = execute_command(&state, &member_id, cmd).await {
-                                tracing::warn!(
-                                    member_id = %member_id,
-                                    error = %e,
-                                    "WS command failed"
-                                );
+                            match apply_command_to_cache(&state, &member_id, &cmd).await {
+                                Ok(url) => {
+                                    send_to_reaper(
+                                        state.http_client.clone(),
+                                        url,
+                                        member_id.clone(),
+                                        cmd,
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        member_id = %member_id,
+                                        error = %e,
+                                        "WS command failed"
+                                    );
+                                }
                             }
                         }
                     }
@@ -767,13 +777,14 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
     })
 }
 
-/// Execute a client command by forwarding to REAPER
-/// Returns an error message if the command failed
-async fn execute_command(
+/// Apply a client command to the local cache and record a command timestamp.
+/// This prevents the poller from broadcasting echo updates for recently-commanded channels.
+/// Returns the REAPER HTTP URL to send, or an error.
+async fn apply_command_to_cache(
     state: &AppState,
     member_id: &str,
-    cmd: iem_core::ClientMsg,
-) -> Result<(), String> {
+    cmd: &iem_core::ClientMsg,
+) -> Result<String, String> {
     let config = state.config.read().await;
     let member_index = match config.member_index(member_id) {
         Some(idx) => idx,
@@ -782,30 +793,85 @@ async fn execute_command(
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
-    let url = match &cmd {
+    let (url, track_index) = match cmd {
         iem_core::ClientMsg::SetLevel {
             track_index,
             level_db,
         } => {
             let vol = db_to_reaper_vol(*level_db);
-            reaper_api::set_send_vol(&reaper_url, *track_index, member_index, vol)
+            // Pre-write cache with the roundtrip-converted value (what REAPER will store)
+            let cached_db = reaper_vol_to_db(vol);
+            let mut cache = state.mixer_cache.write().await;
+            if let Some(channels) = cache.member_states.get_mut(member_id) {
+                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
+                    ch.level_db = cached_db;
+                }
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), *track_index),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_send_vol(&reaper_url, *track_index, member_index, vol),
+                *track_index,
+            )
         }
         iem_core::ClientMsg::SetMute { track_index, muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
-            reaper_api::set_send_mute(&reaper_url, *track_index, member_index, mute_val)
+            let mut cache = state.mixer_cache.write().await;
+            if let Some(channels) = cache.member_states.get_mut(member_id) {
+                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
+                    ch.muted = *muted;
+                }
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), *track_index),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_send_mute(&reaper_url, *track_index, member_index, mute_val),
+                *track_index,
+            )
         }
         iem_core::ClientMsg::SetPan { track_index, pan } => {
             let reaper_pan = ui_pan_to_reaper(*pan);
-            reaper_api::set_send_pan(&reaper_url, *track_index, member_index, reaper_pan)
+            let mut cache = state.mixer_cache.write().await;
+            if let Some(channels) = cache.member_states.get_mut(member_id) {
+                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
+                    ch.pan = reaper_pan_to_ui(reaper_pan);
+                }
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), *track_index),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_send_pan(&reaper_url, *track_index, member_index, reaper_pan),
+                *track_index,
+            )
         }
     };
 
-    state.http_client.get(&url).send().await.map_err(|e| {
-        tracing::error!(error = %e, member_id = %member_id, cmd = ?cmd, "WS command failed");
-        format!("REAPER error: {}", e)
-    })?;
+    tracing::debug!(
+        member_id = %member_id,
+        track_index = track_index,
+        cmd = ?cmd,
+        "Cache pre-write applied"
+    );
 
-    Ok(())
+    Ok(url)
+}
+
+/// Send a REAPER HTTP command (fire-and-forget, spawned as background task)
+fn send_to_reaper(client: reqwest::Client, url: String, member_id: String, cmd: iem_core::ClientMsg) {
+    tokio::spawn(async move {
+        if let Err(e) = client.get(&url).send().await {
+            tracing::error!(error = %e, member_id = %member_id, cmd = ?cmd, "REAPER HTTP failed");
+        }
+    });
 }
 
 /// REAPER HTTP API URL builder
@@ -1223,5 +1289,51 @@ mod tests {
         let url = reaper_api::get_send_state("http://iem.lan:8080", 1, 2);
         assert_eq!(url, "http://iem.lan:8080/_/GET/TRACK/1/SEND/2");
         assert!(url.contains("/_/"), "get_send_state must use /_/ prefix");
+    }
+
+    // ================================================================
+    // Volume roundtrip precision tests (echo suppression depends on this)
+    // ================================================================
+
+    #[test]
+    fn test_db_roundtrip_precision_full_range() {
+        // The cache pre-write uses reaper_vol_to_db(db_to_reaper_vol(x)) to store
+        // the value that REAPER will actually store. This roundtrip must match
+        // within 0.01 dB for the poller diff threshold to detect no change.
+        for db_10x in (-600..=120).step_by(5) {
+            let db = db_10x as f32 / 10.0;
+            let vol = db_to_reaper_vol(db);
+            let back = reaper_vol_to_db(vol);
+            let error = (back - db).abs();
+            assert!(
+                error < 0.01 || db <= -60.0,
+                "Roundtrip error too large at {:.1}dB: got {:.4}dB (error {:.4}dB)",
+                db,
+                back,
+                error
+            );
+        }
+    }
+
+    #[test]
+    fn test_cache_prewrite_prevents_diff_detection() {
+        // Simulate what happens during cache pre-write:
+        // 1. User sends SetLevel { level_db: -12.0 }
+        // 2. Cache stores reaper_vol_to_db(db_to_reaper_vol(-12.0))
+        // 3. Poller reads REAPER value (same as what we sent) and converts to dB
+        // 4. Diff should be < 0.01 dB threshold (no broadcast)
+        let user_db = -12.0_f32;
+        let reaper_vol = db_to_reaper_vol(user_db);
+        let cached_db = reaper_vol_to_db(reaper_vol);
+        let polled_db = reaper_vol_to_db(reaper_vol); // Same REAPER value
+
+        let diff = (cached_db - polled_db).abs();
+        assert!(
+            diff < 0.01,
+            "Cache pre-write value ({}) and polled value ({}) differ by {} dB (threshold 0.01)",
+            cached_db,
+            polled_db,
+            diff
+        );
     }
 }

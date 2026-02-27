@@ -42,6 +42,9 @@ pub struct MixerCache {
     pub connected: bool,
     /// Members with active WebSocket connections (member_id -> connection count)
     pub active_members: HashMap<String, usize>,
+    /// Timestamps of recent commands, keyed by (member_id, track_index).
+    /// Used by the poller to suppress echo broadcasts for recently-commanded channels.
+    pub command_timestamps: HashMap<(String, usize), std::time::Instant>,
 }
 
 impl MixerCache {
@@ -51,6 +54,7 @@ impl MixerCache {
             meters: HashMap::new(),
             connected: false,
             active_members: HashMap::new(),
+            command_timestamps: HashMap::new(),
         }
     }
 }
