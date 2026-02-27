@@ -14,8 +14,10 @@ fn main() {
         .as_secs();
     println!("cargo:rustc-env=BUILD_TIME={}", now);
 
-    // Rebuild if git HEAD changes
-    println!("cargo:rerun-if-changed=.git/HEAD");
+    // Rebuild if git HEAD changes (path relative to repo root, not crate dir)
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let git_head = std::path::Path::new(&manifest_dir).join("../.git/HEAD");
+    println!("cargo:rerun-if-changed={}", git_head.display());
 
     tauri_build::build()
 }

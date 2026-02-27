@@ -2,38 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Track information from REAPER
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Track {
-    /// Track index (1-based)
-    pub index: usize,
-    /// Track name
-    pub name: String,
-    /// Volume in dB
-    pub volume_db: f32,
-    /// Pan position (-1.0 to 1.0)
-    pub pan: f32,
-    /// Muted state
-    pub muted: bool,
-    /// Solo state
-    pub solo: bool,
-}
-
-/// Send information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Send {
-    /// Send index (1-based)
-    pub index: usize,
-    /// Target track name
-    pub target: String,
-    /// Level in dB
-    pub level_db: f32,
-    /// Pan position (-1.0 to 1.0)
-    pub pan: f32,
-    /// Muted state
-    pub muted: bool,
-}
-
 /// Mixer state for a band member
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MixerState {

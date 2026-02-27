@@ -13,11 +13,11 @@ pub mod routes;
 
 use axum::Router;
 use iem_core::{Config, ServerMsg};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 /// Shared application state
 #[derive(Clone)]
@@ -40,8 +40,8 @@ pub struct MixerCache {
     pub meters: HashMap<usize, f32>,
     /// Whether REAPER is currently reachable
     pub connected: bool,
-    /// Members with active WebSocket connections
-    pub active_members: HashSet<String>,
+    /// Members with active WebSocket connections (member_id -> connection count)
+    pub active_members: HashMap<String, usize>,
 }
 
 impl MixerCache {
@@ -50,7 +50,7 @@ impl MixerCache {
             member_states: HashMap::new(),
             meters: HashMap::new(),
             connected: false,
-            active_members: HashSet::new(),
+            active_members: HashMap::new(),
         }
     }
 }
@@ -60,7 +60,11 @@ impl AppState {
         let (event_tx, _) = broadcast::channel(256);
         Self {
             config: Arc::new(RwLock::new(config)),
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(2))
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .expect("failed to build HTTP client"),
             event_tx,
             mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
         }
@@ -94,10 +98,7 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let cors = CorsLayer::permissive();
 
     let app = Router::new()
         .merge(routes::api_routes())

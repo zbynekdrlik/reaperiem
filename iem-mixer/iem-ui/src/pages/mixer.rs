@@ -38,20 +38,6 @@ fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg
     }
 }
 
-/// Convert iem_core::Channel to crate::api::Channel
-fn convert_channel(ch: iem_core::Channel) -> Channel {
-    Channel {
-        track_index: ch.track_index,
-        name: ch.name,
-        level_db: ch.level_db,
-        pan: ch.pan,
-        muted: ch.muted,
-        category: ch.category,
-        stereo_pair: ch.stereo_pair,
-        stereo_side: ch.stereo_side,
-    }
-}
-
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
     member: &str,
@@ -94,7 +80,7 @@ fn connect_websocket(
                         set_channels.update(|chs| {
                             if chs.is_empty() {
                                 // First state — populate
-                                *chs = new_chs.into_iter().map(convert_channel).collect();
+                                *chs = new_chs;
                             } else {
                                 // Update non-touched channels
                                 for new_ch in &new_chs {
@@ -115,22 +101,6 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
-                        // Debug: log meter summary occasionally
-                        static mut LOG_COUNT: u32 = 0;
-                        unsafe {
-                            LOG_COUNT += 1;
-                            if LOG_COUNT % 66 == 1 {
-                                let non_zero = m.iter().filter(|(_, v)| **v > 0.001).count();
-                                web_sys::console::log_1(
-                                    &format!(
-                                        "Meters: {} entries, {} with signal",
-                                        m.len(),
-                                        non_zero
-                                    )
-                                    .into(),
-                                );
-                            }
-                        }
                         set_meters.set(m);
                     }
                     iem_core::ServerMsg::ChannelUpdate {
@@ -252,7 +222,16 @@ pub fn MixerPage() -> impl IntoView {
             }
         }
     });
-    std::mem::forget(reconnect_handle);
+
+    // Clean up WebSocket and reconnect interval on component unmount
+    leptos::on_cleanup(move || {
+        drop(reconnect_handle);
+        if let Some(w) = ws.get_untracked() {
+            w.set_onmessage(None);
+            w.set_onclose(None);
+            let _ = w.close();
+        }
+    });
 
     // Handle back button
     let on_back = move |_| {
@@ -502,51 +481,49 @@ fn ChannelList(
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
 
-                    // Derived signals that properly track channel updates from WebSocket
+                    // Derived signals using .with() to avoid cloning entire collections
                     let level_signal = Signal::derive(move || {
-                        channels.get()
-                            .iter()
-                            .find(|c| c.track_index == track_idx)
-                            .map(|c| c.level_db)
-                            .unwrap_or(-60.0)
+                        channels.with(|chs| {
+                            chs.iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.level_db)
+                                .unwrap_or(-60.0)
+                        })
                     });
 
                     let muted_signal = Signal::derive(move || {
-                        channels.get()
-                            .iter()
-                            .find(|c| c.track_index == track_idx)
-                            .map(|c| c.muted)
-                            .unwrap_or(false)
+                        channels.with(|chs| {
+                            chs.iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.muted)
+                                .unwrap_or(false)
+                        })
                     });
 
                     let pan_signal = Signal::derive(move || {
-                        channels.get()
-                            .iter()
-                            .find(|c| c.track_index == track_idx)
-                            .map(|c| c.pan)
-                            .unwrap_or(0.5)
+                        channels.with(|chs| {
+                            chs.iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.pan)
+                                .unwrap_or(0.5)
+                        })
                     });
 
                     let meter_level = Signal::derive(move || {
-                        meters.get().get(&track_idx).copied().unwrap_or(0.0)
+                        meters.with(|m| m.get(&track_idx).copied().unwrap_or(0.0))
                     });
 
                     // Fader activation state for channel glow
                     let (is_fader_active, set_is_fader_active) = signal(false);
 
                     // Level change handler
+                    // Note: fader_touched guard is managed by on_touch_state callback
+                    // (set on press, cleared 300ms after release). No independent guard here
+                    // to avoid conflicting remove() calls between the two mechanisms.
                     let on_level_change = Callback::new(move |new_level: f32| {
                         if !connected.get() {
                             return;
                         }
-
-                        // Set guard to block stale WebSocket echoes
-                        set_fader_touched.update(|t| {
-                            t.insert(track_idx, true);
-                            if let Some(partner) = partner_idx {
-                                t.insert(partner, true);
-                            }
-                        });
 
                         // Optimistic update
                         set_channels.update(|chs| {
@@ -571,19 +548,9 @@ fn ChannelList(
                                 level_db: new_level,
                             });
                         }
-
-                        // Remove guard after 1000ms timeout
-                        gloo_timers::callback::Timeout::new(1000, move || {
-                            set_fader_touched.update(|t| {
-                                t.remove(&track_idx);
-                                if let Some(p) = partner_idx {
-                                    t.remove(&p);
-                                }
-                            });
-                        }).forget();
                     });
 
-                    // Pan change handler
+                    // Pan change handler with short guard to prevent server echo overwrite
                     let on_pan_change = Callback::new(move |new_pan: f32| {
                         if !connected.get() {
                             return;
@@ -618,7 +585,7 @@ fn ChannelList(
                             });
                         }
 
-                        gloo_timers::callback::Timeout::new(1000, move || {
+                        gloo_timers::callback::Timeout::new(500, move || {
                             set_fader_touched.update(|t| {
                                 t.remove(&track_idx);
                                 if let Some(p) = partner_idx {
@@ -628,17 +595,18 @@ fn ChannelList(
                         }).forget();
                     });
 
-                    // Mute toggle handler
+                    // Mute toggle handler with short guard to prevent server echo overwrite
                     let on_mute_click = move |_| {
                         if !connected.get() {
                             return;
                         }
 
-                        let current_muted = channels.get()
-                            .iter()
-                            .find(|c| c.track_index == track_idx)
-                            .map(|c| c.muted)
-                            .unwrap_or(false);
+                        let current_muted = channels.with(|chs| {
+                            chs.iter()
+                                .find(|c| c.track_index == track_idx)
+                                .map(|c| c.muted)
+                                .unwrap_or(false)
+                        });
                         let new_muted = !current_muted;
 
                         set_fader_touched.update(|t| {
@@ -670,7 +638,7 @@ fn ChannelList(
                             });
                         }
 
-                        gloo_timers::callback::Timeout::new(1000, move || {
+                        gloo_timers::callback::Timeout::new(500, move || {
                             set_fader_touched.update(|t| {
                                 t.remove(&track_idx);
                                 if let Some(p) = partner_idx {
@@ -877,8 +845,8 @@ fn ChannelList(
 fn parse_track_name(name: &str) -> (String, String) {
     let parts: Vec<&str> = name.split_whitespace().collect();
     if parts.len() >= 2 {
-        let main = if parts[0].len() > 7 {
-            parts[0][..6].to_string()
+        let main = if parts[0].chars().count() > 7 {
+            parts[0].chars().take(6).collect::<String>()
         } else {
             parts[0].to_string()
         };

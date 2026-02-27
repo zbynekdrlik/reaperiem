@@ -141,10 +141,18 @@ fn serve_embedded_file(path: &str) -> Response {
             .first_or_octet_stream()
             .to_string();
 
+        // HTML files should not be cached (ensures fresh UI after deploys)
+        // Hashed assets (JS/WASM/CSS in /assets/) can be cached long-term
+        let cache_control = if path.ends_with(".html") || path == "index.html" {
+            "no-cache, must-revalidate"
+        } else {
+            "public, max-age=31536000"
+        };
+
         return Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, mime)
-            .header(header::CACHE_CONTROL, "public, max-age=31536000")
+            .header(header::CACHE_CONTROL, cache_control)
             .body(Body::from(file.data.into_owned()))
             .unwrap();
     }

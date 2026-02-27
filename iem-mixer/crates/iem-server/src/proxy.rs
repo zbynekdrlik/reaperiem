@@ -88,26 +88,7 @@ pub async fn get_mixer_state(
     let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
 
-    // Build channels from inputs with category and stereo info
-    let channels: Vec<iem_core::Channel> = config
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(i, input)| {
-            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
-            iem_core::Channel {
-                track_index: i + 1,
-                name: input.name.clone(),
-                level_db: input.default_level_db,
-                pan: 0.5, // Center in UI range (0.0-1.0)
-                muted: false,
-                category,
-                stereo_pair,
-                stereo_side,
-            }
-        })
-        .collect();
-
+    let channels = build_channel_templates(&config.inputs);
     drop(config);
 
     // Try to get actual levels from REAPER (all channels in parallel)
@@ -160,26 +141,7 @@ pub async fn poll_mixer_state(
     let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
 
-    // Build channels from inputs
-    let channels: Vec<iem_core::Channel> = config
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(i, input)| {
-            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
-            iem_core::Channel {
-                track_index: i + 1,
-                name: input.name.clone(),
-                level_db: input.default_level_db,
-                pan: 0.5, // Center in UI range (0.0-1.0)
-                muted: false,
-                category,
-                stereo_pair,
-                stereo_side,
-            }
-        })
-        .collect();
-
+    let channels = build_channel_templates(&config.inputs);
     drop(config);
 
     let mut result_channels = channels;
@@ -272,22 +234,46 @@ pub async fn batch_control(
 
     match payload.operation {
         BatchOperation::Reset => {
-            // Reset all to 0dB, unmuted, centered pan
-            for (i, _input) in inputs.iter().enumerate() {
-                let track_index = i + 1;
-                let vol = db_to_reaper_vol(0.0);
+            let vol = db_to_reaper_vol(0.0);
 
-                // Set volume to 0dB
-                let vol_url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
-                let _ = state.http_client.get(&vol_url).send().await;
+            // Reset all channels in parallel
+            let reset_futures: Vec<_> = inputs
+                .iter()
+                .enumerate()
+                .flat_map(|(i, _)| {
+                    let track_index = i + 1;
+                    let client = state.http_client.clone();
+                    let url = reaper_url.clone();
+                    vec![
+                        {
+                            let client = client.clone();
+                            let url = reaper_api::set_send_vol(&url, track_index, member_index, vol);
+                            async move { client.get(&url).send().await }
+                        },
+                        {
+                            let client = client.clone();
+                            let url = reaper_api::set_send_mute(&url, track_index, member_index, 0);
+                            async move { client.get(&url).send().await }
+                        },
+                        {
+                            let url = reaper_api::set_send_pan(&url, track_index, member_index, 0.0);
+                            async move { client.get(&url).send().await }
+                        },
+                    ]
+                })
+                .collect();
 
-                // Unmute
-                let mute_url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, 0);
-                let _ = state.http_client.get(&mute_url).send().await;
-
-                // Center pan (REAPER uses 0.0 for center, not 0.5)
-                let pan_url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, 0.0);
-                let _ = state.http_client.get(&pan_url).send().await;
+            let results = futures::future::join_all(reset_futures).await;
+            let errors: Vec<_> = results.iter().filter(|r| r.is_err()).collect();
+            if !errors.is_empty() {
+                tracing::warn!(error_count = errors.len(), "Batch reset: some REAPER calls failed");
+                return Err((
+                    StatusCode::BAD_GATEWAY,
+                    Json(ApiError::new(
+                        "REAPER_ERROR",
+                        format!("{} of {} reset commands failed", errors.len(), results.len()),
+                    )),
+                ));
             }
         }
     }
@@ -326,6 +312,7 @@ fn parse_send_volume(text: &str) -> Option<f32> {
 
 /// Parse a REAPER SEND response for mute (flag at position 3)
 /// Response format: SEND\ttrack\tsend\tMUTE\tvolume\tpan\tmode
+/// Mute flag is a bitfield: bit 3 (value 8) = muted
 #[cfg(test)]
 fn parse_send_mute(text: &str) -> Option<bool> {
     for line in text.lines() {
@@ -334,7 +321,7 @@ fn parse_send_mute(text: &str) -> Option<bool> {
             && parts.len() >= 4
             && let Ok(val) = parts[3].parse::<i32>()
         {
-            return Some(val != 0);
+            return Some((val & 8) != 0);
         }
     }
     None
@@ -358,6 +345,7 @@ fn parse_send_pan(text: &str) -> Option<f32> {
 
 /// Parse a full REAPER SEND response for vol, mute, and pan in one call
 /// Response format: SEND\ttrack\tsend\tMUTE_FLAG\tVOLUME\tPAN\tmode
+/// Mute flag is a bitfield: bit 3 (value 8) = muted
 fn parse_send_state(text: &str) -> Option<(f32, bool, f32)> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
@@ -365,7 +353,7 @@ fn parse_send_state(text: &str) -> Option<(f32, bool, f32)> {
             let vol = parts[4].parse::<f32>().ok()?;
             let mute_flag = parts[3].parse::<i32>().ok()?;
             let pan = parts[5].parse::<f32>().ok()?;
-            return Some((vol, mute_flag != 0, pan));
+            return Some((vol, (mute_flag & 8) != 0, pan));
         }
     }
     None
@@ -384,6 +372,27 @@ fn parse_reaper_value(text: &str) -> Option<f32> {
         }
     }
     None
+}
+
+/// Build channel templates from config inputs with category and stereo info
+pub(crate) fn build_channel_templates(inputs: &[iem_core::config::InputTrack]) -> Vec<iem_core::Channel> {
+    inputs
+        .iter()
+        .enumerate()
+        .map(|(i, input)| {
+            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
+            iem_core::Channel {
+                track_index: i + 1,
+                name: input.name.clone(),
+                level_db: 0.0,
+                pan: 0.5,
+                muted: false,
+                category,
+                stereo_pair,
+                stereo_side,
+            }
+        })
+        .collect()
 }
 
 /// Categorize a track by name
@@ -617,8 +626,15 @@ pub async fn ws_mixer(
     ws: axum::extract::ws::WebSocketUpgrade,
     State(state): State<AppState>,
     Path(member_id): Path<String>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, state, member_id))
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
+    // Validate member exists before upgrading
+    let config = state.config.read().await;
+    if config.find_member(&member_id).is_none() {
+        return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+    }
+    drop(config);
+
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id)))
 }
 
 /// Handle a WebSocket connection for a member
@@ -628,10 +644,10 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
 
     tracing::info!(member_id = %member_id, "WebSocket connected");
 
-    // Register this member as active (so poller queries their state)
+    // Register this member as active (ref-counted for multi-tab support)
     {
         let mut cache = state.mixer_cache.write().await;
-        cache.active_members.insert(member_id.clone());
+        *cache.active_members.entry(member_id.clone()).or_insert(0) += 1;
     }
 
     // Subscribe to broadcast channel
@@ -650,7 +666,9 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
-                            execute_command(&state, &member_id, cmd).await;
+                            if let Err(e) = execute_command(&state, &member_id, cmd).await {
+                                tracing::warn!(member_id = %member_id, error = %e, "WS command failed");
+                            }
                         }
                     }
                     Some(Ok(Message::Close(_))) | None => break,
@@ -687,10 +705,15 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
 
     tracing::info!(member_id = %member_id, "WebSocket disconnected");
 
-    // Cleanup: remove from active members
+    // Cleanup: decrement ref count, remove only when no tabs remain
     let mut cache = state.mixer_cache.write().await;
-    cache.active_members.remove(&member_id);
-    cache.member_states.remove(&member_id);
+    if let Some(count) = cache.active_members.get_mut(&member_id) {
+        *count = count.saturating_sub(1);
+        if *count == 0 {
+            cache.active_members.remove(&member_id);
+            cache.member_states.remove(&member_id);
+        }
+    }
 }
 
 /// Build full state message for initial WebSocket connection
@@ -700,25 +723,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
     let member_index = config.member_index(member_id).ok_or(())?;
     let reaper_url = config.reaper_url.clone();
 
-    let channels: Vec<iem_core::Channel> = config
-        .inputs
-        .iter()
-        .enumerate()
-        .map(|(i, input)| {
-            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
-            iem_core::Channel {
-                track_index: i + 1,
-                name: input.name.clone(),
-                level_db: 0.0,
-                pan: 0.5,
-                muted: false,
-                category,
-                stereo_pair,
-                stereo_side,
-            }
-        })
-        .collect();
-
+    let channels = build_channel_templates(&config.inputs);
     drop(config);
 
     // Query all send states in parallel
@@ -760,35 +765,40 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
 }
 
 /// Execute a client command by forwarding to REAPER
-async fn execute_command(state: &AppState, member_id: &str, cmd: iem_core::ClientMsg) {
+/// Returns an error message if the command failed
+async fn execute_command(state: &AppState, member_id: &str, cmd: iem_core::ClientMsg) -> Result<(), String> {
     let config = state.config.read().await;
     let member_index = match config.member_index(member_id) {
         Some(idx) => idx,
-        None => return,
+        None => return Err("Unknown member".to_string()),
     };
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
-    match cmd {
+    let url = match &cmd {
         iem_core::ClientMsg::SetLevel {
             track_index,
             level_db,
         } => {
-            let vol = db_to_reaper_vol(level_db);
-            let url = reaper_api::set_send_vol(&reaper_url, track_index, member_index, vol);
-            let _ = state.http_client.get(&url).send().await;
+            let vol = db_to_reaper_vol(*level_db);
+            reaper_api::set_send_vol(&reaper_url, *track_index, member_index, vol)
         }
         iem_core::ClientMsg::SetMute { track_index, muted } => {
-            let mute_val: u8 = if muted { 1 } else { 0 };
-            let url = reaper_api::set_send_mute(&reaper_url, track_index, member_index, mute_val);
-            let _ = state.http_client.get(&url).send().await;
+            let mute_val: u8 = if *muted { 1 } else { 0 };
+            reaper_api::set_send_mute(&reaper_url, *track_index, member_index, mute_val)
         }
         iem_core::ClientMsg::SetPan { track_index, pan } => {
-            let reaper_pan = ui_pan_to_reaper(pan);
-            let url = reaper_api::set_send_pan(&reaper_url, track_index, member_index, reaper_pan);
-            let _ = state.http_client.get(&url).send().await;
+            let reaper_pan = ui_pan_to_reaper(*pan);
+            reaper_api::set_send_pan(&reaper_url, *track_index, member_index, reaper_pan)
         }
-    }
+    };
+
+    state.http_client.get(&url).send().await.map_err(|e| {
+        tracing::error!(error = %e, member_id = %member_id, cmd = ?cmd, "WS command failed");
+        format!("REAPER error: {}", e)
+    })?;
+
+    Ok(())
 }
 
 /// REAPER HTTP API URL builder
@@ -971,8 +981,8 @@ mod tests {
 
     #[test]
     fn test_parse_send_mute_on() {
-        // Flag at position 3 indicates mute state
-        let input = "SEND\t1\t1\t1\t0.716000\t0.000000\t24";
+        // Flag at position 3 is a bitfield: bit 3 (value 8) = muted
+        let input = "SEND\t1\t1\t8\t0.716000\t0.000000\t24";
         assert_eq!(parse_send_mute(input), Some(true));
     }
 
@@ -1187,7 +1197,8 @@ mod tests {
 
     #[test]
     fn test_parse_send_state_muted() {
-        let input = "SEND\t1\t0\t1\t0.300000\t-0.500000\t24";
+        // Mute flag 8 = bit 3 set = muted
+        let input = "SEND\t1\t0\t8\t0.300000\t-0.500000\t24";
         let (vol, mute, pan) = parse_send_state(input).unwrap();
         assert!((vol - 0.3).abs() < 0.001);
         assert!(mute);

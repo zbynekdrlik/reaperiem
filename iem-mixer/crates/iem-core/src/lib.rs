@@ -9,7 +9,9 @@ pub mod ws;
 
 #[cfg(feature = "config")]
 pub use config::{BandMember, Config, InputTrack};
-pub use types::*;
+pub use types::{
+    ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, MixerState, PollResponse,
+};
 pub use ws::{ClientMsg, ServerMsg};
 
 /// Application version (from Cargo.toml)

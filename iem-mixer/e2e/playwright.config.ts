@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [["html"], ["list"]],
   use: {
     baseURL: process.env.E2E_BASE_URL || "http://localhost:80",
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
