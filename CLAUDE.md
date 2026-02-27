@@ -327,6 +327,19 @@ sed -i 's/version = "1.1.0"/version = "1.2.0"/' iem-mixer/crates/iem-core/Cargo.
 
 **THE RULE:** One push should work. If CI fails, the fix should be ONE commit that addresses ALL issues found, not a stream of partial fixes.
 
+### ⚠️ ZERO TOLERANCE FOR TRANSIENT CI FAILURES
+
+**The iem.lan network and GitHub runners are on strong infrastructure. There is NO excuse for transient failures.**
+
+Every CI failure must be treated as a real bug and hardened against:
+
+- **Network downloads** (wasm-bindgen, trunk, crates) — must use caching, retries, or pre-installed binaries
+- **Timeouts** — increase timeouts or add proper wait-for-ready logic
+- **Flaky tests** — fix the root cause, never re-run and hope
+- **Resource exhaustion** — size runners appropriately
+
+If a "transient" failure happens, the CI pipeline itself has a bug. Fix the pipeline, don't just re-run.
+
 ### After Pushing Code:
 
 ```bash
