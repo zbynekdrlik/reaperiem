@@ -4,10 +4,7 @@
 
 use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
-use send_wrapper::SendWrapper;
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
@@ -21,7 +18,7 @@ use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
 /// With server-side echo suppression, this only needs to cover WebSocket round-trip (~10-20ms).
-const POST_RELEASE_GUARD_MS: u32 = 100;
+const POST_RELEASE_GUARD_MS: i32 = 100;
 
 /// Minimum interval between WebSocket sends per track (ms).
 /// Limits to ~20 commands/sec to avoid overwhelming the server.
@@ -483,15 +480,14 @@ fn ChannelList(
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
-    // Cancellable guard timeouts per track — dropping a Timeout cancels it.
-    // SendWrapper is safe in WASM (single-threaded) and satisfies Send+Sync for Callback::new.
-    let guard_timeouts: SendWrapper<Rc<RefCell<HashMap<usize, gloo_timers::callback::Timeout>>>> =
-        SendWrapper::new(Rc::new(RefCell::new(HashMap::new())));
+    // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
+    // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
+    let (guard_ids, set_guard_ids) = signal(HashMap::<usize, i32>::new());
 
-    // Throttle state per track: (last_send_time_ms, pending_value, pending_timeout)
-    type ThrottleEntry = (f64, Option<f32>, Option<gloo_timers::callback::Timeout>);
-    let throttle_state: SendWrapper<Rc<RefCell<HashMap<usize, ThrottleEntry>>>> =
-        SendWrapper::new(Rc::new(RefCell::new(HashMap::new())));
+    // Throttle state signals — all Copy + Send + Sync for use in Callback::new closures.
+    let (last_send_times, set_last_send_times) = signal(HashMap::<usize, f64>::new());
+    let (pending_values, set_pending_values) = signal(HashMap::<usize, f32>::new());
+    let (pending_timeouts, set_pending_timeouts) = signal(HashMap::<usize, i32>::new());
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
@@ -546,11 +542,61 @@ fn ChannelList(
                     // Fader activation state for channel glow
                     let (is_fader_active, set_is_fader_active) = signal(false);
 
+                    // Helper: cancel a guard timeout by key.
+                    // All captures are Copy + Send + Sync, so this closure is too.
+                    let cancel_guard = move |key: usize| {
+                        set_guard_ids.update(|ids| {
+                            if let Some(id) = ids.remove(&key) {
+                                if let Some(w) = web_sys::window() {
+                                    w.clear_timeout_with_handle(id);
+                                }
+                            }
+                        });
+                    };
+
+                    // Helper: set a post-release guard timeout that clears
+                    // fader_touched after POST_RELEASE_GUARD_MS.
+                    let set_guard = move |key: usize| {
+                        cancel_guard(key);
+                        let cb = Closure::once_into_js(move || {
+                            set_guard_ids.update(|ids| {
+                                ids.remove(&key);
+                            });
+                            set_fader_touched.update(|t| {
+                                t.remove(&track_idx);
+                                if let Some(p) = partner_idx {
+                                    t.remove(&p);
+                                }
+                            });
+                        });
+                        if let Some(w) = web_sys::window() {
+                            if let Ok(id) =
+                                w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                    cb.unchecked_ref(),
+                                    POST_RELEASE_GUARD_MS,
+                                )
+                            {
+                                set_guard_ids.update(|ids| {
+                                    ids.insert(key, id);
+                                });
+                            }
+                        }
+                    };
+
+                    // Helper: cancel a pending throttle timeout for a track
+                    let cancel_pending_timeout = move |tidx: usize| {
+                        set_pending_timeouts.update(|m| {
+                            if let Some(id) = m.remove(&tidx) {
+                                if let Some(w) = web_sys::window() {
+                                    w.clear_timeout_with_handle(id);
+                                }
+                            }
+                        });
+                    };
+
                     // Level change handler with throttling.
                     // Optimistic UI updates happen at full rate; WebSocket sends are
                     // throttled to max ~20/sec per track to avoid server queue buildup.
-                    let throttle_ref = throttle_state.clone();
-                    let throttle_ref_flush = throttle_state.clone();
                     let on_level_change = Callback::new(move |new_level: f32| {
                         if !connected.get() {
                             return;
@@ -558,11 +604,15 @@ fn ChannelList(
 
                         // Optimistic update at full rate
                         set_channels.update(|chs| {
-                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                            if let Some(ch) =
+                                chs.iter_mut().find(|c| c.track_index == track_idx)
+                            {
                                 ch.level_db = new_level;
                             }
                             if let Some(partner) = partner_idx {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
+                                if let Some(ch) =
+                                    chs.iter_mut().find(|c| c.track_index == partner)
+                                {
                                     ch.level_db = new_level;
                                 }
                             }
@@ -570,61 +620,89 @@ fn ChannelList(
 
                         // Throttled WebSocket send
                         let now = js_sys::Date::now();
-                        let mut state = throttle_ref.borrow_mut();
-                        let entry = state.entry(track_idx).or_insert((0.0, None, None));
+                        let last_time =
+                            last_send_times.with(|m| m.get(&track_idx).copied().unwrap_or(0.0));
 
-                        if now - entry.0 >= THROTTLE_INTERVAL_MS {
+                        if now - last_time >= THROTTLE_INTERVAL_MS {
                             // Enough time has passed — send immediately
-                            entry.0 = now;
-                            entry.1 = None;
-                            // Cancel any pending deferred send
-                            entry.2 = None;
-                            drop(state);
-
-                            ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                track_index: track_idx,
-                                level_db: new_level,
+                            set_last_send_times.update(|m| {
+                                m.insert(track_idx, now);
                             });
-                            if let Some(partner) = partner_idx {
-                                ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                    track_index: partner,
+                            set_pending_values.update(|m| {
+                                m.remove(&track_idx);
+                            });
+                            cancel_pending_timeout(track_idx);
+
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::SetLevel {
+                                    track_index: track_idx,
                                     level_db: new_level,
-                                });
+                                },
+                            );
+                            if let Some(partner) = partner_idx {
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::SetLevel {
+                                        track_index: partner,
+                                        level_db: new_level,
+                                    },
+                                );
                             }
                         } else {
                             // Too soon — store as pending, schedule deferred send
-                            entry.1 = Some(new_level);
-                            let tr = throttle_ref.clone();
-                            let timeout = gloo_timers::callback::Timeout::new(
-                                THROTTLE_INTERVAL_MS as u32,
-                                move || {
-                                    let mut state = tr.borrow_mut();
-                                    if let Some(entry) = state.get_mut(&track_idx) {
-                                        if let Some(pending) = entry.1.take() {
-                                            entry.0 = js_sys::Date::now();
-                                            entry.2 = None;
-                                            drop(state);
-                                            ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                                track_index: track_idx,
-                                                level_db: pending,
-                                            });
-                                            if let Some(partner) = partner_idx {
-                                                ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                                    track_index: partner,
-                                                    level_db: pending,
-                                                });
-                                            }
-                                        }
+                            set_pending_values.update(|m| {
+                                m.insert(track_idx, new_level);
+                            });
+                            cancel_pending_timeout(track_idx);
+
+                            let cb = Closure::once_into_js(move || {
+                                let pending =
+                                    pending_values.with(|m| m.get(&track_idx).copied());
+                                if let Some(val) = pending {
+                                    set_last_send_times.update(|m| {
+                                        m.insert(track_idx, js_sys::Date::now());
+                                    });
+                                    set_pending_values.update(|m| {
+                                        m.remove(&track_idx);
+                                    });
+                                    set_pending_timeouts.update(|m| {
+                                        m.remove(&track_idx);
+                                    });
+                                    ws_send(
+                                        ws,
+                                        &iem_core::ClientMsg::SetLevel {
+                                            track_index: track_idx,
+                                            level_db: val,
+                                        },
+                                    );
+                                    if let Some(partner) = partner_idx {
+                                        ws_send(
+                                            ws,
+                                            &iem_core::ClientMsg::SetLevel {
+                                                track_index: partner,
+                                                level_db: val,
+                                            },
+                                        );
                                     }
-                                },
-                            );
-                            entry.2 = Some(timeout);
-                            drop(state);
+                                }
+                            });
+                            if let Some(w) = web_sys::window() {
+                                if let Ok(id) =
+                                    w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        cb.unchecked_ref(),
+                                        THROTTLE_INTERVAL_MS as i32,
+                                    )
+                                {
+                                    set_pending_timeouts.update(|m| {
+                                        m.insert(track_idx, id);
+                                    });
+                                }
+                            }
                         }
                     });
 
                     // Pan change handler with cancellable guard
-                    let pan_guard_ref = guard_timeouts.clone();
                     let on_pan_change = Callback::new(move |new_pan: f32| {
                         if !connected.get() {
                             return;
@@ -638,44 +716,42 @@ fn ChannelList(
                         });
 
                         set_channels.update(|chs| {
-                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                            if let Some(ch) =
+                                chs.iter_mut().find(|c| c.track_index == track_idx)
+                            {
                                 ch.pan = new_pan;
                             }
                             if let Some(partner) = partner_idx {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
+                                if let Some(ch) =
+                                    chs.iter_mut().find(|c| c.track_index == partner)
+                                {
                                     ch.pan = 1.0 - new_pan;
                                 }
                             }
                         });
 
-                        ws_send(ws, &iem_core::ClientMsg::SetPan {
-                            track_index: track_idx,
-                            pan: new_pan,
-                        });
+                        ws_send(
+                            ws,
+                            &iem_core::ClientMsg::SetPan {
+                                track_index: track_idx,
+                                pan: new_pan,
+                            },
+                        );
                         if let Some(partner) = partner_idx {
-                            ws_send(ws, &iem_core::ClientMsg::SetPan {
-                                track_index: partner,
-                                pan: 1.0 - new_pan,
-                            });
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::SetPan {
+                                    track_index: partner,
+                                    pan: 1.0 - new_pan,
+                                },
+                            );
                         }
 
-                        // Cancel any existing guard timeout, then set a new one
-                        let mut guards = pan_guard_ref.borrow_mut();
-                        // Use track_idx + 10000 as pan guard key to avoid collision with fader guards
-                        guards.remove(&(track_idx + 10000));
-                        let timeout = gloo_timers::callback::Timeout::new(POST_RELEASE_GUARD_MS, move || {
-                            set_fader_touched.update(|t| {
-                                t.remove(&track_idx);
-                                if let Some(p) = partner_idx {
-                                    t.remove(&p);
-                                }
-                            });
-                        });
-                        guards.insert(track_idx + 10000, timeout);
+                        // Cancellable post-release guard (pan key = track_idx + 10000)
+                        set_guard(track_idx + 10000);
                     });
 
                     // Mute toggle handler with cancellable guard
-                    let mute_guard_ref = guard_timeouts.clone();
                     let on_mute_click = move |_| {
                         if !connected.get() {
                             return;
@@ -697,40 +773,39 @@ fn ChannelList(
                         });
 
                         set_channels.update(|chs| {
-                            if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
+                            if let Some(ch) =
+                                chs.iter_mut().find(|c| c.track_index == track_idx)
+                            {
                                 ch.muted = new_muted;
                             }
                             if let Some(partner) = partner_idx {
-                                if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
+                                if let Some(ch) =
+                                    chs.iter_mut().find(|c| c.track_index == partner)
+                                {
                                     ch.muted = new_muted;
                                 }
                             }
                         });
 
-                        ws_send(ws, &iem_core::ClientMsg::SetMute {
-                            track_index: track_idx,
-                            muted: new_muted,
-                        });
-                        if let Some(partner) = partner_idx {
-                            ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                track_index: partner,
+                        ws_send(
+                            ws,
+                            &iem_core::ClientMsg::SetMute {
+                                track_index: track_idx,
                                 muted: new_muted,
-                            });
+                            },
+                        );
+                        if let Some(partner) = partner_idx {
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::SetMute {
+                                    track_index: partner,
+                                    muted: new_muted,
+                                },
+                            );
                         }
 
-                        // Cancel any existing guard timeout, then set a new one
-                        let mut guards = mute_guard_ref.borrow_mut();
-                        // Use track_idx + 20000 as mute guard key to avoid collision
-                        guards.remove(&(track_idx + 20000));
-                        let timeout = gloo_timers::callback::Timeout::new(POST_RELEASE_GUARD_MS, move || {
-                            set_fader_touched.update(|t| {
-                                t.remove(&track_idx);
-                                if let Some(p) = partner_idx {
-                                    t.remove(&p);
-                                }
-                            });
-                        });
-                        guards.insert(track_idx + 20000, timeout);
+                        // Cancellable post-release guard (mute key = track_idx + 20000)
+                        set_guard(track_idx + 20000);
                     };
 
                     // Solo toggle handler
@@ -844,6 +919,53 @@ fn ChannelList(
                         }
                     };
 
+                    // Touch state handler: manages fader_touched guards and flushes
+                    // pending throttled values on release.
+                    let on_touch_state = Callback::new(move |touching: bool| {
+                        if touching {
+                            // Cancel any pending release guard
+                            cancel_guard(track_idx);
+                            set_fader_touched.update(|t| {
+                                t.insert(track_idx, true);
+                                if let Some(partner) = partner_idx {
+                                    t.insert(partner, true);
+                                }
+                            });
+                        } else {
+                            // Flush any pending throttled value immediately on release
+                            let pending =
+                                pending_values.with(|m| m.get(&track_idx).copied());
+                            if let Some(val) = pending {
+                                set_last_send_times.update(|m| {
+                                    m.insert(track_idx, js_sys::Date::now());
+                                });
+                                set_pending_values.update(|m| {
+                                    m.remove(&track_idx);
+                                });
+                                cancel_pending_timeout(track_idx);
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::SetLevel {
+                                        track_index: track_idx,
+                                        level_db: val,
+                                    },
+                                );
+                                if let Some(partner) = partner_idx {
+                                    ws_send(
+                                        ws,
+                                        &iem_core::ClientMsg::SetLevel {
+                                            track_index: partner,
+                                            level_db: val,
+                                        },
+                                    );
+                                }
+                            }
+
+                            // Cancellable post-release guard
+                            set_guard(track_idx);
+                        }
+                    });
+
                     let is_soloed = move || soloed.get().contains(&track_idx);
                     let is_connected = move || connected.get();
 
@@ -874,59 +996,7 @@ fn ChannelList(
                                     max=12.0
                                     on_change=on_level_change
                                     on_activate=Callback::new(move |active| set_is_fader_active.set(active))
-                                    on_touch_state={
-                                        let fader_guard_ref = guard_timeouts.clone();
-                                        let flush_ref = throttle_ref_flush.clone();
-                                        Callback::new(move |touching: bool| {
-                                            if touching {
-                                                // Cancel any pending release guard
-                                                fader_guard_ref.borrow_mut().remove(&track_idx);
-                                                set_fader_touched.update(|t| {
-                                                    t.insert(track_idx, true);
-                                                    if let Some(partner) = partner_idx {
-                                                        t.insert(partner, true);
-                                                    }
-                                                });
-                                            } else {
-                                                // Flush any pending throttled value immediately on release
-                                                let mut state = flush_ref.borrow_mut();
-                                                if let Some(entry) = state.get_mut(&track_idx) {
-                                                    if let Some(pending) = entry.1.take() {
-                                                        entry.0 = js_sys::Date::now();
-                                                        entry.2 = None;
-                                                        drop(state);
-                                                        ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                                            track_index: track_idx,
-                                                            level_db: pending,
-                                                        });
-                                                        if let Some(partner) = partner_idx {
-                                                            ws_send(ws, &iem_core::ClientMsg::SetLevel {
-                                                                track_index: partner,
-                                                                level_db: pending,
-                                                            });
-                                                        }
-                                                    } else {
-                                                        drop(state);
-                                                    }
-                                                } else {
-                                                    drop(state);
-                                                }
-
-                                                // Cancellable post-release guard
-                                                let mut guards = fader_guard_ref.borrow_mut();
-                                                guards.remove(&track_idx);
-                                                let timeout = gloo_timers::callback::Timeout::new(POST_RELEASE_GUARD_MS, move || {
-                                                    set_fader_touched.update(|t| {
-                                                        t.remove(&track_idx);
-                                                        if let Some(p) = partner_idx {
-                                                            t.remove(&p);
-                                                        }
-                                                    });
-                                                });
-                                                guards.insert(track_idx, timeout);
-                                            }
-                                        })
-                                    }
+                                    on_touch_state=on_touch_state
                                 />
                             </div>
 

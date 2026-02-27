@@ -50,7 +50,6 @@ js-sys = "0.3"
 # HTTP requests from WASM
 gloo-net = "0.6"
 gloo-timers = "0.3"
-send_wrapper = "0.6"
 gloo-storage = "0.3"
 
 # Serialization
