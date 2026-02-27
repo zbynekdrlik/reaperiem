@@ -75,7 +75,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         // Fields: TRACK idx name flags vol pan vu_peak_L vu_peak_R ...
                         let track_name = parts[2];
                         if let Some(member_id) = member_track_names.get(track_name) {
-                            let vol: f32 = parts[4].parse().unwrap_or(0.716);
+                            let vol: f32 = parts[4].parse().unwrap_or(1.0);
                             let flags: i32 = parts[3].parse().unwrap_or(0);
                             output_tracks.insert(member_id.clone(), (track_idx, vol, flags));
                         }
@@ -385,7 +385,7 @@ mod tests {
 
         // Simulated NTRACK line for PETKA inear at track index 23
         let line =
-            "TRACK\t23\tPETKA inear\t0\t0.716000\t0.000000\t-2000\t-2000\t1.000000\t0\t0\t22\t0\t0";
+            "TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t0\t22\t0\t0";
         let parts: Vec<&str> = line.split('\t').collect();
         let track_name = parts[2];
 
