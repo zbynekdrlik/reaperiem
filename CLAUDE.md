@@ -37,6 +37,47 @@
 
 ---
 
+## Git Branching Model
+
+**Two branches only: `main` + `dev`** (enforced by GitHub rulesets)
+
+| Branch | Purpose     | Direct push | Force push | Delete  |
+| ------ | ----------- | :---------: | :--------: | :-----: |
+| `main` | Production  |   BLOCKED   |  BLOCKED   | BLOCKED |
+| `dev`  | Development |   allowed   |  BLOCKED   | BLOCKED |
+
+### Development Workflow
+
+1. Push all code to `dev`
+2. Create PR `dev` → `main` when ready to deploy
+3. CI runs all checks on PR (lint, tests, build, e2e, version bump)
+4. Merge commit (only method allowed — no squash, no rebase)
+5. Merge triggers auto-deploy to iem.lan
+
+### CI Job Matrix
+
+| Job                | `dev` push | PR to `main` | `main` push |
+| ------------------ | :--------: | :----------: | :---------: |
+| test-integrity     |    yes     |     yes      |     yes     |
+| lint               |    yes     |     yes      |     yes     |
+| test               |    yes     |     yes      |     yes     |
+| build-wasm         |    yes     |     yes      |     yes     |
+| e2e                |    yes     |     yes      |     yes     |
+| check-version-bump |     -      |   **yes**    |      -      |
+| build-tauri        |     -      |   **yes**    |   **yes**   |
+| deploy             |     -      |      -       |   **yes**   |
+
+### NEVER DO:
+
+```
+❌ Push directly to main (blocked by GitHub ruleset)
+❌ Create feature branches (blocked by GitHub ruleset)
+❌ Force push to main or dev (blocked)
+❌ Squash or rebase merge (only merge commits allowed)
+```
+
+---
+
 ## Project Overview
 
 MCP server for personal monitor mixing using REAPER's HTTP Web API for a church band.
@@ -301,13 +342,13 @@ gh run view <run-id> --log-failed
 
 ### CI Must Pass:
 
+- ✅ Test Integrity Check (no ignored/skipped tests)
 - ✅ Lint & Format (cargo fmt, clippy)
 - ✅ Unit Tests (cargo test)
-- ✅ Integration Tests (API endpoints)
 - ✅ **E2E Tests (Playwright)** - Full browser testing of web UI
 - ✅ Build WASM (trunk build)
-- ✅ Build Tauri (Windows)
-- ✅ CI Success (all jobs)
+- ✅ Build Tauri (Windows) — PRs and main only
+- ✅ Verify Version Bump — PRs only
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 

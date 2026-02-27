@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "iem-mixer/**"
       - ".github/workflows/ci.yml"
@@ -22,56 +22,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ============================================================
-  # CHECK VERSION BUMP - FIRST CHECK (fails fast before expensive builds)
-  # Only runs on main branch pushes - prevents deploying same version twice
-  # ============================================================
-  check-version-bump:
-    name: Verify Version Bump
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Get Cargo.toml version
-        id: cargo_version
-        run: |
-          VERSION=$(grep -m1 '^version' iem-mixer/crates/iem-core/Cargo.toml | cut -d'"' -f2)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Cargo.toml version: $VERSION"
-
-      - name: Get deployed version
-        id: deployed_version
-        continue-on-error: true
-        run: |
-          DEPLOYED=$(curl -sf --connect-timeout 5 http://10.77.9.231/api/version | jq -r '.version' || echo "0.0.0")
-          echo "version=$DEPLOYED" >> $GITHUB_OUTPUT
-          echo "Deployed version: $DEPLOYED"
-
-      - name: Compare versions
-        run: |
-          CARGO_VER="${{ steps.cargo_version.outputs.version }}"
-          DEPLOYED_VER="${{ steps.deployed_version.outputs.version }}"
-
-          # Skip check if deployed version couldn't be retrieved (first deploy or app down)
-          if [ "$DEPLOYED_VER" = "0.0.0" ] || [ -z "$DEPLOYED_VER" ]; then
-            echo "::notice::Could not retrieve deployed version (first deploy or app unreachable)"
-            echo "Proceeding with deployment of version $CARGO_VER"
-            exit 0
-          fi
-
-          if [ "$CARGO_VER" = "$DEPLOYED_VER" ]; then
-            echo "::error::Version $CARGO_VER already deployed!"
-            echo "::error::Bump version in iem-mixer/crates/iem-core/Cargo.toml before deploying."
-            echo ""
-            echo "Current: $DEPLOYED_VER"
-            echo "New:     $CARGO_VER"
-            echo ""
-            echo "To fix: Update version in iem-mixer/crates/iem-core/Cargo.toml (and other Cargo.toml files)"
-            exit 1
-          fi
-          echo "Version bump verified: $DEPLOYED_VER -> $CARGO_VER"
-
   # ============================================================
   # TEST INTEGRITY - Ensure tests aren't skipped/ignored
   # ============================================================
@@ -253,64 +203,6 @@ jobs:
           retention-days: 1
 
   # ============================================================
-  # BUILD TAURI - Windows app must build
-  # ============================================================
-  build-tauri:
-    name: Build Tauri (Windows)
-    runs-on: windows-latest
-    needs: [test, build-wasm]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download WASM dist
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-dist
-          path: iem-mixer/iem-ui/dist/
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            iem-mixer/target/
-          key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
-
-      - name: Install Tauri CLI
-        shell: bash
-        run: |
-          if ! command -v cargo-tauri &> /dev/null; then
-            cargo install tauri-cli
-          fi
-
-      - name: Build Tauri (release)
-        working-directory: iem-mixer/src-tauri
-        run: cargo tauri build
-
-      - name: Verify installer exists
-        shell: bash
-        run: |
-          INSTALLER=$(ls iem-mixer/target/release/bundle/nsis/*.exe 2>/dev/null | head -1)
-          if [ -z "$INSTALLER" ]; then
-            echo "ERROR: NSIS installer not found"
-            exit 1
-          fi
-          echo "Installer found: $INSTALLER"
-
-      - name: Upload Tauri installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: tauri-installer
-          path: iem-mixer/target/release/bundle/nsis/*.exe
-          retention-days: 1
-
-  # ============================================================
   # E2E TESTS - Browser tests must pass
   # ============================================================
   e2e:
@@ -393,23 +285,115 @@ jobs:
           path: iem-mixer/e2e/test-results/
 
   # ============================================================
-  # DEPLOY TO IEM.LAN - Auto deploy after all checks pass
+  # CHECK VERSION BUMP - Only on PRs to main
+  # Compares PR version against main branch version
+  # ============================================================
+  check-version-bump:
+    name: Verify Version Bump
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR version
+        id: pr_version
+        run: |
+          VERSION=$(grep -m1 '^version' iem-mixer/crates/iem-core/Cargo.toml | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "PR version: $VERSION"
+
+      - name: Get main branch version
+        id: main_version
+        run: |
+          VERSION=$(git show origin/main:iem-mixer/crates/iem-core/Cargo.toml | grep -m1 '^version' | cut -d'"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Main branch version: $VERSION"
+
+      - name: Compare versions
+        run: |
+          PR_VER="${{ steps.pr_version.outputs.version }}"
+          MAIN_VER="${{ steps.main_version.outputs.version }}"
+
+          if [ "$PR_VER" = "$MAIN_VER" ]; then
+            echo "::error::Version $PR_VER is the same as main branch!"
+            echo "::error::Bump version in iem-mixer/crates/iem-core/Cargo.toml before merging."
+            echo ""
+            echo "Main:  $MAIN_VER"
+            echo "PR:    $PR_VER"
+            exit 1
+          fi
+          echo "Version bump verified: $MAIN_VER -> $PR_VER"
+
+  # ============================================================
+  # BUILD TAURI - Windows app (PRs to main + main push only)
+  # ============================================================
+  build-tauri:
+    name: Build Tauri (Windows)
+    runs-on: windows-latest
+    needs: [test, build-wasm]
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download WASM dist
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-dist
+          path: iem-mixer/iem-ui/dist/
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            iem-mixer/target/
+          key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: |
+          if ! command -v cargo-tauri &> /dev/null; then
+            cargo install tauri-cli
+          fi
+
+      - name: Build Tauri (release)
+        working-directory: iem-mixer/src-tauri
+        run: cargo tauri build
+
+      - name: Verify installer exists
+        shell: bash
+        run: |
+          INSTALLER=$(ls iem-mixer/target/release/bundle/nsis/*.exe 2>/dev/null | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "ERROR: NSIS installer not found"
+            exit 1
+          fi
+          echo "Installer found: $INSTALLER"
+
+      - name: Upload Tauri installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-installer
+          path: iem-mixer/target/release/bundle/nsis/*.exe
+          retention-days: 1
+
+  # ============================================================
+  # DEPLOY TO IEM.LAN - Auto deploy after merge to main
   # Uses existing self-hosted runner on iem.lan (Windows)
   # ============================================================
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    needs:
-      [
-        test-integrity,
-        lint,
-        test,
-        build-wasm,
-        build-tauri,
-        e2e,
-        check-version-bump,
-      ]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
@@ -711,59 +695,3 @@ jobs:
               Start-Sleep -Seconds $retryDelay
             }
           }
-
-  # ============================================================
-  # ALL CHECKS PASSED
-  # ============================================================
-  ci-success:
-    name: CI Success
-    runs-on: ubuntu-latest
-    needs:
-      [
-        test-integrity,
-        lint,
-        test,
-        build-wasm,
-        build-tauri,
-        e2e,
-        check-version-bump,
-        deploy,
-      ]
-    if: always()
-    steps:
-      - name: Check all jobs passed
-        run: |
-          if [ "${{ needs.test-integrity.result }}" != "success" ]; then
-            echo "::error::Test integrity check failed"
-            exit 1
-          fi
-          if [ "${{ needs.lint.result }}" != "success" ]; then
-            echo "::error::Lint failed"
-            exit 1
-          fi
-          if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "::error::Tests failed"
-            exit 1
-          fi
-          if [ "${{ needs.build-wasm.result }}" != "success" ]; then
-            echo "::error::WASM build failed"
-            exit 1
-          fi
-          if [ "${{ needs.build-tauri.result }}" != "success" ]; then
-            echo "::error::Tauri build failed"
-            exit 1
-          fi
-          if [ "${{ needs.e2e.result }}" != "success" ]; then
-            echo "::error::E2E tests failed"
-            exit 1
-          fi
-          # Version check and deploy are only for main branch pushes
-          if [ "${{ needs.check-version-bump.result }}" != "success" ] && [ "${{ needs.check-version-bump.result }}" != "skipped" ]; then
-            echo "::error::Version bump check failed"
-            exit 1
-          fi
-          if [ "${{ needs.deploy.result }}" != "success" ] && [ "${{ needs.deploy.result }}" != "skipped" ]; then
-            echo "::error::Deploy failed"
-            exit 1
-          fi
-          echo "All CI checks passed!"
