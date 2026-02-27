@@ -227,16 +227,13 @@ mod tests {
         let now = std::time::Instant::now();
         let echo_window = Duration::from_millis(500);
 
-        let mut timestamps: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
         // Simulate a command sent 100ms ago
-        timestamps.insert(
-            ("petka".to_string(), 1),
-            now - Duration::from_millis(100),
-        );
+        let key = ("petka".to_string(), 1);
+        ts_map.insert(key.clone(), now - Duration::from_millis(100));
 
         // Check: should be suppressed (100ms < 500ms window)
-        let key = ("petka".to_string(), 1);
-        let recently_commanded = timestamps
+        let recently_commanded = ts_map
             .get(&key)
             .is_some_and(|ts| now.duration_since(*ts) < echo_window);
         assert!(recently_commanded, "Should suppress echo within 500ms window");
@@ -248,15 +245,12 @@ mod tests {
         let now = std::time::Instant::now();
         let echo_window = Duration::from_millis(500);
 
-        let mut timestamps: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
         // Simulate a command sent 600ms ago
-        timestamps.insert(
-            ("petka".to_string(), 1),
-            now - Duration::from_millis(600),
-        );
-
         let key = ("petka".to_string(), 1);
-        let recently_commanded = timestamps
+        ts_map.insert(key.clone(), now - Duration::from_millis(600));
+
+        let recently_commanded = ts_map
             .get(&key)
             .is_some_and(|ts| now.duration_since(*ts) < echo_window);
         assert!(
@@ -271,17 +265,15 @@ mod tests {
         let now = std::time::Instant::now();
         let echo_window = Duration::from_millis(500);
 
-        let mut timestamps: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
         // Command for track 1 only
-        timestamps.insert(
-            ("petka".to_string(), 1),
-            now - Duration::from_millis(100),
-        );
+        let key1 = ("petka".to_string(), 1);
+        ts_map.insert(key1, now - Duration::from_millis(100));
 
         // Track 2 should NOT be suppressed
-        let key = ("petka".to_string(), 2);
-        let recently_commanded = timestamps
-            .get(&key)
+        let key2 = ("petka".to_string(), 2);
+        let recently_commanded = ts_map
+            .get(&key2)
             .is_some_and(|ts| now.duration_since(*ts) < echo_window);
         assert!(
             !recently_commanded,
@@ -295,23 +287,19 @@ mod tests {
         let now = std::time::Instant::now();
         let stale_cutoff = Duration::from_secs(2);
 
-        let mut timestamps: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let key1 = ("petka".to_string(), 1);
+        let key2 = ("petka".to_string(), 2);
         // Fresh timestamp (100ms ago)
-        timestamps.insert(
-            ("petka".to_string(), 1),
-            now - Duration::from_millis(100),
-        );
+        ts_map.insert(key1.clone(), now - Duration::from_millis(100));
         // Stale timestamp (3s ago)
-        timestamps.insert(
-            ("petka".to_string(), 2),
-            now - Duration::from_secs(3),
-        );
+        ts_map.insert(key2, now - Duration::from_secs(3));
 
-        timestamps.retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
+        ts_map.retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
 
-        assert_eq!(timestamps.len(), 1, "Stale entries should be cleaned up");
+        assert_eq!(ts_map.len(), 1, "Stale entries should be cleaned up");
         assert!(
-            timestamps.contains_key(&("petka".to_string(), 1)),
+            ts_map.contains_key(&key1),
             "Fresh entry should be retained"
         );
     }

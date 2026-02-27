@@ -866,7 +866,12 @@ async fn apply_command_to_cache(
 }
 
 /// Send a REAPER HTTP command (fire-and-forget, spawned as background task)
-fn send_to_reaper(client: reqwest::Client, url: String, member_id: String, cmd: iem_core::ClientMsg) {
+fn send_to_reaper(
+    client: reqwest::Client,
+    url: String,
+    member_id: String,
+    cmd: iem_core::ClientMsg,
+) {
     tokio::spawn(async move {
         if let Err(e) = client.get(&url).send().await {
             tracing::error!(error = %e, member_id = %member_id, cmd = ?cmd, "REAPER HTTP failed");
