@@ -200,9 +200,11 @@ pub fn MixerPage() -> impl IntoView {
         );
     });
 
-    // Auto-reconnect: check every 2s if WebSocket is closed
+    // Auto-reconnect: check every 2s if WebSocket is closed.
+    // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
+    // since gloo_timers::Interval contains non-Send closures.
     let reconnect_member_id = member_id.clone();
-    let reconnect_handle = gloo_timers::callback::Interval::new(2000, move || {
+    let reconnect_closure = Closure::wrap(Box::new(move || {
         let needs_reconnect = match ws.get_untracked() {
             Some(ref w) => w.ready_state() == web_sys::WebSocket::CLOSED,
             None => false,
@@ -221,15 +223,22 @@ pub fn MixerPage() -> impl IntoView {
                 );
             }
         }
-    });
+    }) as Box<dyn FnMut()>);
+    let interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            reconnect_closure.as_ref().unchecked_ref(),
+            2000,
+        )
+        .unwrap();
+    reconnect_closure.forget();
 
-    // Clean up WebSocket and reconnect interval on component unmount
+    // Clean up reconnect interval on component unmount.
+    // The i32 interval_id is Send+Sync so it can be captured in on_cleanup.
+    // The WebSocket signal and its closures are dropped with the component.
     on_cleanup(move || {
-        drop(reconnect_handle);
-        if let Some(w) = ws.get_untracked() {
-            w.set_onmessage(None);
-            w.set_onclose(None);
-            let _ = w.close();
+        if let Some(w) = web_sys::window() {
+            w.clear_interval_with_handle(interval_id);
         }
     });
 
