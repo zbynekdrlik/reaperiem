@@ -398,11 +398,12 @@ pub(crate) fn build_channel_templates(
 pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<String>) {
     let name_lower = name.to_lowercase();
 
-    // Determine category
-    let category = if name_lower.contains("mic") || name_lower.contains("gtr") {
-        "mics"
-    } else if name_lower.contains("hand") || name_lower.contains("engineer") {
+    // Determine category — check hand/engineer BEFORE mic/gtr because
+    // "HAND1 mic" contains both "hand" and "mic" but must be "tech"
+    let category = if name_lower.contains("hand") || name_lower.contains("engineer") {
         "tech"
+    } else if name_lower.contains("mic") || name_lower.contains("gtr") {
+        "mics"
     } else {
         "stems"
     };
@@ -693,7 +694,7 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                 match event {
                     Ok((mid, server_msg)) => {
                         // Send meters and connection changes to all;
-                        // send state/channel updates only to the relevant member
+                        // send state/channel/global updates only to the relevant member
                         let should_send = match &server_msg {
                             ServerMsg::Meters { .. } => true,
                             ServerMsg::ConnectionChanged { .. } => true,
@@ -771,9 +772,19 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         }
     }
 
+    // Read cached global volume for this member
+    let cache = state.mixer_cache.read().await;
+    let (global_level_db, global_muted) = match cache.global_volumes.get(member_id) {
+        Some(gv) => (Some(gv.level_db), Some(gv.muted)),
+        None => (None, None),
+    };
+    drop(cache);
+
     Ok(iem_core::ServerMsg::State {
         channels: result_channels,
         connected,
+        global_level_db,
+        global_muted,
     })
 }
 
@@ -853,6 +864,70 @@ async fn apply_command_to_cache(
                 *track_index,
             )
         }
+        iem_core::ClientMsg::SetGlobalLevel { level_db } => {
+            let vol = db_to_reaper_vol(*level_db);
+            let cached_db = reaper_vol_to_db(vol);
+            let mut cache = state.mixer_cache.write().await;
+            let output_track = match cache.output_track_indices.get(member_id) {
+                Some(&idx) => idx,
+                None => {
+                    drop(cache);
+                    return Err("Output track not yet discovered".to_string());
+                }
+            };
+            if let Some(gv) = cache.global_volumes.get_mut(member_id) {
+                gv.level_db = cached_db;
+            } else {
+                cache.global_volumes.insert(
+                    member_id.to_string(),
+                    crate::GlobalVolState {
+                        level_db: cached_db,
+                        muted: false,
+                    },
+                );
+            }
+            // Use output track index as key for echo suppression (offset to avoid collision with send tracks)
+            cache.command_timestamps.insert(
+                (member_id.to_string(), output_track + 100000),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_track_vol(&reaper_url, output_track, vol),
+                output_track,
+            )
+        }
+        iem_core::ClientMsg::SetGlobalMute { muted } => {
+            let mute_val: u8 = if *muted { 1 } else { 0 };
+            let mut cache = state.mixer_cache.write().await;
+            let output_track = match cache.output_track_indices.get(member_id) {
+                Some(&idx) => idx,
+                None => {
+                    drop(cache);
+                    return Err("Output track not yet discovered".to_string());
+                }
+            };
+            if let Some(gv) = cache.global_volumes.get_mut(member_id) {
+                gv.muted = *muted;
+            } else {
+                cache.global_volumes.insert(
+                    member_id.to_string(),
+                    crate::GlobalVolState {
+                        level_db: 0.0,
+                        muted: *muted,
+                    },
+                );
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), output_track + 100000),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_track_mute(&reaper_url, output_track, mute_val),
+                output_track,
+            )
+        }
     };
 
     tracing::debug!(
@@ -923,6 +998,16 @@ pub(crate) mod reaper_api {
     #[cfg(test)]
     pub fn get_send_pan(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}/PAN", base_url, track, send)
+    }
+
+    /// Build URL for setting track volume (output bus volume)
+    pub fn set_track_vol(base_url: &str, track: usize, vol: f32) -> String {
+        format!("{}/_/SET/TRACK/{}/VOL/{}", base_url, track, vol)
+    }
+
+    /// Build URL for setting track mute (output bus mute)
+    pub fn set_track_mute(base_url: &str, track: usize, mute: u8) -> String {
+        format!("{}/_/SET/TRACK/{}/MUTE/{}", base_url, track, mute)
     }
 
     /// Build URL for querying tracks
@@ -1137,6 +1222,14 @@ mod tests {
             reaper_api::query_tracks(base).contains("/_/"),
             "query_tracks must use /_/ prefix"
         );
+        assert!(
+            reaper_api::set_track_vol(base, 1, 0.5).contains("/_/"),
+            "set_track_vol must use /_/ prefix"
+        );
+        assert!(
+            reaper_api::set_track_mute(base, 1, 0).contains("/_/"),
+            "set_track_mute must use /_/ prefix"
+        );
     }
 
     #[test]
@@ -1167,6 +1260,18 @@ mod tests {
     fn test_reaper_url_query_tracks_format() {
         let url = reaper_api::query_tracks("http://iem.lan:8080");
         assert_eq!(url, "http://iem.lan:8080/_/NTRACK;TRACK");
+    }
+
+    #[test]
+    fn test_reaper_url_set_track_vol_format() {
+        let url = reaper_api::set_track_vol("http://iem.lan:8080", 23, 0.716);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/23/VOL/0.716");
+    }
+
+    #[test]
+    fn test_reaper_url_set_track_mute_format() {
+        let url = reaper_api::set_track_mute("http://iem.lan:8080", 23, 1);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/23/MUTE/1");
     }
 
     // ================================================================
@@ -1340,5 +1445,42 @@ mod tests {
             polled_db,
             diff
         );
+    }
+
+    // ================================================================
+    // Track categorization regression tests - HAND tracks must be tech
+    // ================================================================
+
+    #[test]
+    fn test_categorize_hand_mic_as_tech() {
+        // Bug: "HAND1 mic" contains "mic" → wrongly categorized as "mics"
+        // HAND tracks must always be "tech", even though they have "mic" in the name
+        let (cat, _, _) = categorize_track("HAND1 mic");
+        assert_eq!(cat, "tech", "HAND1 mic must be tech, not mics");
+
+        let (cat, _, _) = categorize_track("HAND2 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("HAND3 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("HAND4 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("ENGINEER mic");
+        assert_eq!(cat, "tech", "ENGINEER mic must be tech, not mics");
+    }
+
+    #[test]
+    fn test_categorize_regular_mic_still_mics() {
+        // Regular member mics must still be categorized as "mics"
+        let (cat, _, _) = categorize_track("PETKA mic");
+        assert_eq!(cat, "mics");
+
+        let (cat, _, _) = categorize_track("STEVO mic");
+        assert_eq!(cat, "mics");
+
+        let (cat, _, _) = categorize_track("MAREK gtr");
+        assert_eq!(cat, "mics");
     }
 }

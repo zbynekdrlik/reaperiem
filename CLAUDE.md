@@ -378,6 +378,39 @@ gh run view <run-id> --log-failed
 - ✅ Build Tauri (Windows) — PRs and main only
 - ✅ Verify Version Bump — PRs only
 
+### ⚠️ TDD MANDATORY — REPRODUCE FIRST, THEN FIX
+
+**CRITICAL: Every bug fix and every feature MUST follow Test-Driven Development.**
+
+**For bug fixes — REPRODUCE BEFORE FIXING:**
+
+1. **Write a failing test that captures the EXACT reported bug** — if you can't reproduce the bug in a test, you don't understand it yet
+2. Run the test, confirm it FAILS (proving the bug exists)
+3. ONLY THEN write the fix
+4. Run the test again, confirm it PASSES
+5. Run ALL tests to verify nothing else broke
+
+**For new features — TESTS FIRST:**
+
+1. Write E2E tests that describe the expected behavior BEFORE writing implementation
+2. Write unit tests for new functions BEFORE implementing them
+3. Implement until all tests pass
+4. If tests pass but the feature is broken in the real app, THE TESTS ARE WRONG — fix the tests first
+
+**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing.
+
+```
+❌ NEVER: Read bug report → write code fix → hope it works → push
+✅ ALWAYS: Read bug report → write failing test → confirm failure → write fix → confirm pass → push
+```
+
+**Test comprehensiveness requirements:**
+
+- **E2E tests must test REAL behavior** — not just "element exists" but "element does X when interacted with"
+- **Integration tests must verify server-side logic** — WebSocket messages, REAPER API calls, cache behavior
+- **Unit tests must cover edge cases** — string comparisons (case sensitivity!), category classification, conversion formulas
+- **Every bug that reaches production gets a regression test** — so it never happens again
+
 ### ⚠️ MANDATORY: Comprehensive Testing
 
 **Every feature MUST have full test coverage before merging:**

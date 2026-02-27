@@ -5,7 +5,7 @@ use leptos::prelude::*;
 /// Category type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Category {
-    All,
+    Main,
     Mics,
     Stems,
     Tech,
@@ -14,7 +14,7 @@ pub enum Category {
 impl Category {
     pub fn label(&self) -> &'static str {
         match self {
-            Category::All => "All",
+            Category::Main => "Main",
             Category::Mics => "Mics",
             Category::Stems => "Stems",
             Category::Tech => "Tech",
@@ -23,7 +23,7 @@ impl Category {
 
     pub fn matches(&self, category: &str) -> bool {
         match self {
-            Category::All => true,
+            Category::Main => false, // Main has special rendering, not category filtering
             Category::Mics => category == "mics",
             Category::Stems => category == "stems",
             Category::Tech => category == "tech",
@@ -32,7 +32,7 @@ impl Category {
 
     pub fn class(&self) -> &'static str {
         match self {
-            Category::All => "all",
+            Category::Main => "main",
             Category::Mics => "mics",
             Category::Stems => "stems",
             Category::Tech => "tech",
@@ -49,7 +49,7 @@ pub fn CategoryTabs(
     on_select: impl Fn(Category) + 'static + Clone,
 ) -> impl IntoView {
     let categories = [
-        Category::All,
+        Category::Main,
         Category::Mics,
         Category::Stems,
         Category::Tech,

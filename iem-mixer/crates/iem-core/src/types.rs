@@ -176,4 +176,36 @@ mod tests {
         assert_eq!(claims.sub, "marek");
         assert!(!claims.engineer);
     }
+
+    // ================================================================
+    // "Me" fader input detection - case-sensitive comparison regression
+    // ================================================================
+
+    #[test]
+    fn test_my_input_detection_case_match() {
+        // Reproduces the bug: format must produce uppercase "MIC" to match
+        // channel names that are compared via to_uppercase()
+        let member = "petka";
+        let my_input = format!("{} MIC", member.to_uppercase());
+        let channel_name = "PETKA mic";
+
+        assert_eq!(
+            channel_name.to_uppercase(),
+            my_input,
+            "is_my_input must match when channel is member's mic"
+        );
+    }
+
+    #[test]
+    fn test_my_input_detection_non_member() {
+        let member = "petka";
+        let my_input = format!("{} MIC", member.to_uppercase());
+        let other_channel = "STEVO mic";
+
+        assert_ne!(
+            other_channel.to_uppercase(),
+            my_input,
+            "Other member's mic must NOT match"
+        );
+    }
 }

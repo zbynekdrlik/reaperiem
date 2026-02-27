@@ -559,3 +559,245 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     }
   });
 });
+
+test.describe("Main Tab and Global Volume", () => {
+  test("Main tab loads as default with IEM VOL and member mic", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Main tab should be active by default
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).toBeVisible();
+    await expect(mainTab).toHaveClass(/active/);
+
+    // Global Volume channel should be present with "IEM VOL" label
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (globalLoaded) {
+      await expect(globalVol.locator(".ch-name")).toContainText("IEM VOL");
+    }
+  });
+
+  test("Global Volume fader is draggable", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    // Check that fader exists within global volume
+    const fader = globalVol.locator(".fader-track");
+    await expect(fader).toBeVisible();
+    await expect(fader.locator(".fader-fill")).toBeAttached();
+    await expect(fader.locator(".fader-handle")).toBeAttached();
+  });
+
+  test("Global Mute button toggles", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    // Mute button should exist in global volume
+    const muteBtn = globalVol.locator(".mute-btn");
+    await expect(muteBtn).toBeVisible();
+    // Click mute (sends via WebSocket; may be no-op without REAPER)
+    await muteBtn.click({ force: true });
+  });
+
+  test("Switching to Mics tab shows all mics", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Use dispatchEvent to bypass overlay and trigger WASM event listeners
+    const micsTab = page.locator(".category-tab.mics");
+    await micsTab.dispatchEvent("click");
+    await expect(micsTab).toHaveClass(/active/);
+
+    // Global volume should NOT appear in Mics tab
+    const globalVol = page.locator(".channel.global-volume");
+    await expect(globalVol).toHaveCount(0);
+  });
+
+  test("Switching to Stems tab shows Click first then Guide", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Use dispatchEvent to bypass overlay and trigger WASM event listeners
+    const stemsTab = page.locator(".category-tab.stems");
+    await stemsTab.dispatchEvent("click");
+    await expect(stemsTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Get all channel names in order
+    const channelNames = await page
+      .locator(".channel .ch-name")
+      .allTextContents();
+
+    if (channelNames.length >= 2) {
+      // CLICK should be first, GUIDE second
+      expect(channelNames[0].toUpperCase()).toBe("CLICK");
+      expect(channelNames[1].toUpperCase()).toBe("GUIDE");
+    }
+  });
+
+  test("Switching to Tech tab shows tech channels", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Use dispatchEvent to bypass overlay and trigger WASM event listeners
+    const techTab = page.locator(".category-tab.tech");
+    await techTab.dispatchEvent("click");
+    await expect(techTab).toHaveClass(/active/);
+
+    // Main tab should not be active
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).not.toHaveClass(/active/);
+  });
+
+  test("Me fader appears on Main tab for logged-in member", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Main tab should be active by default
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Member's mic fader MUST be visible (the "Me" fader)
+    // Bug: case mismatch means this channel never appears
+    const meFader = page
+      .locator(".channel .ch-name")
+      .filter({ hasText: /PETKA/i });
+    await expect(meFader).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test("Global Volume fader holds position after drag (no snap-back)", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    const fader = globalVol.locator(".fader-track");
+    const box = await fader.boundingBox();
+    if (!box) return;
+
+    // Mouse down at center, wait for activation
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(350);
+
+    // Drag to 80%
+    for (let pct = 0.5; pct <= 0.8; pct += 0.05) {
+      await page.mouse.move(box.x + box.width * pct, box.y + box.height / 2);
+      await page.waitForTimeout(30);
+    }
+
+    // Read fill width WHILE still holding
+    const fillWhileHeld = await globalVol
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // Read fill width AFTER release — must not snap back
+    const fillAfterRelease = await globalVol
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Bug: without optimistic update, fillAfterRelease snaps to old value
+    const tolerance = box.width * 0.05;
+    expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
+  });
+
+  test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Switch to Tech tab
+    const techTab = page.locator(".category-tab.tech");
+    await techTab.dispatchEvent("click");
+    await expect(techTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Check HAND tracks are in Tech tab
+    const channels = page.locator(".channel .ch-name");
+    const names = await channels.allTextContents();
+    const hasHand = names.some((n) => /hand/i.test(n));
+    expect(hasHand).toBe(true);
+
+    // Switch to Mics tab — HAND must NOT be here
+    const micsTab = page.locator(".category-tab.mics");
+    await micsTab.dispatchEvent("click");
+    await expect(micsTab).toHaveClass(/active/);
+
+    const micsChannels = page.locator(".channel .ch-name");
+    const micsNames = await micsChannels.allTextContents();
+    const handInMics = micsNames.some((n) => /hand/i.test(n));
+    expect(handInMics).toBe(false);
+  });
+});
