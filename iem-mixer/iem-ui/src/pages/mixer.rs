@@ -1294,10 +1294,22 @@ fn parse_track_name(name: &str) -> (String, String) {
 /// Format dB value for display with unit suffix
 fn format_db(db: f32) -> String {
     if db <= -60.0 {
-        "-\u{221E}db".to_string()
+        "-\u{221E}dB".to_string()
     } else if db >= 0.0 {
-        format!("+{:.1}db", db)
+        format!("+{:.1}dB", db)
     } else {
-        format!("{:.1}db", db)
+        format!("{:.1}dB", db)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_db_uses_proper_notation() {
+        assert!(format_db(0.0).ends_with("dB"), "Must use 'dB' not 'db'");
+        assert!(format_db(-6.0).ends_with("dB"));
+        assert!(format_db(-60.0).ends_with("dB")); // -inf case
     }
 }

@@ -446,8 +446,8 @@ pub async fn set_send_level(
 
     drop(config);
 
-    // Convert dB to REAPER volume (approximate)
-    // REAPER uses 0-1 scale where 0.716 ≈ 0dB
+    // Convert dB to REAPER volume
+    // REAPER uses linear amplitude where 1.0 = 0 dB
     let vol = db_to_reaper_vol(payload.level_db);
 
     // Build REAPER API URL for setting send volume
@@ -580,18 +580,15 @@ pub struct SetMuteRequest {
 
 /// Convert dB to REAPER volume scale
 ///
-/// REAPER uses a logarithmic scale where:
-/// - 0.0 = -inf dB
-/// - 0.716 ≈ 0 dB (unity)
-/// - 1.0 ≈ +6 dB
+/// REAPER uses standard linear amplitude:
+/// - 0.0 = -inf dB (silence)
+/// - 1.0 = 0 dB (unity)
+/// - 2.0 ≈ +6 dB
 pub(crate) fn db_to_reaper_vol(db: f32) -> f32 {
     if db <= -60.0 {
         0.0
     } else {
-        // Approximate conversion
-        // vol = 10^(db/20) * 0.716
-        let linear = 10.0_f32.powf(db / 20.0);
-        (linear * 0.716).clamp(0.0, 4.0)
+        10.0_f32.powf(db / 20.0).clamp(0.0, 4.0)
     }
 }
 
@@ -600,7 +597,7 @@ pub(crate) fn reaper_vol_to_db(vol: f32) -> f32 {
     if vol <= 0.0 {
         -60.0
     } else {
-        20.0 * (vol / 0.716).log10()
+        20.0 * vol.log10()
     }
 }
 
@@ -1027,11 +1024,29 @@ mod tests {
 
     #[test]
     fn test_db_to_reaper_vol_unity() {
-        // 0 dB should be approximately 0.716
+        // 0 dB = linear 1.0 (standard: vol = 10^(0/20) = 1.0)
         let vol = db_to_reaper_vol(0.0);
+        assert!((vol - 1.0).abs() < 0.01, "0 dB should be 1.0, got {}", vol);
+    }
+
+    #[test]
+    fn test_db_to_reaper_vol_minus_6() {
+        // -6 dB ≈ 0.501
+        let vol = db_to_reaper_vol(-6.0);
         assert!(
-            (vol - 0.716).abs() < 0.01,
-            "0dB should be ~0.716, got {}",
+            (vol - 0.501).abs() < 0.01,
+            "-6 dB should be ~0.501, got {}",
+            vol
+        );
+    }
+
+    #[test]
+    fn test_db_to_reaper_vol_plus_6() {
+        // +6 dB ≈ 1.995
+        let vol = db_to_reaper_vol(6.0);
+        assert!(
+            (vol - 1.995).abs() < 0.01,
+            "+6 dB should be ~1.995, got {}",
             vol
         );
     }
@@ -1045,9 +1060,20 @@ mod tests {
 
     #[test]
     fn test_reaper_vol_to_db_unity() {
-        // 0.716 should be approximately 0 dB
-        let db = reaper_vol_to_db(0.716);
-        assert!(db.abs() < 0.1, "0.716 should be ~0dB, got {}", db);
+        // linear 1.0 = 0 dB
+        let db = reaper_vol_to_db(1.0);
+        assert!(db.abs() < 0.1, "1.0 should be ~0 dB, got {}", db);
+    }
+
+    #[test]
+    fn test_reaper_vol_to_db_half() {
+        // linear 0.5 ≈ -6.02 dB
+        let db = reaper_vol_to_db(0.5);
+        assert!(
+            (db - (-6.02)).abs() < 0.1,
+            "0.5 should be ~-6 dB, got {}",
+            db
+        );
     }
 
     #[test]
@@ -1064,7 +1090,7 @@ mod tests {
             let back = reaper_vol_to_db(vol);
             assert!(
                 (back - db).abs() < 0.5,
-                "Roundtrip failed for {}dB: got {}dB",
+                "Roundtrip failed for {} dB: got {} dB",
                 db,
                 back
             );
@@ -1137,40 +1163,40 @@ mod tests {
 
     #[test]
     fn test_parse_send_volume_unity() {
-        let input = "SEND\t1\t2\t0\t0.716000\t0.000000\t24";
+        let input = "SEND\t1\t2\t0\t1.000000\t0.000000\t24";
         let vol = parse_send_volume(input).unwrap();
-        assert!((vol - 0.716).abs() < 0.001, "Expected 0.716, got {}", vol);
+        assert!((vol - 1.0).abs() < 0.001, "Expected 1.0, got {}", vol);
     }
 
     #[test]
     fn test_parse_send_mute_on() {
         // Flag at position 3 is a bitfield: bit 3 (value 8) = muted
-        let input = "SEND\t1\t1\t8\t0.716000\t0.000000\t24";
+        let input = "SEND\t1\t1\t8\t1.000000\t0.000000\t24";
         assert_eq!(parse_send_mute(input), Some(true));
     }
 
     #[test]
     fn test_parse_send_mute_off() {
-        let input = "SEND\t1\t1\t0\t0.716000\t0.000000\t24";
+        let input = "SEND\t1\t1\t0\t1.000000\t0.000000\t24";
         assert_eq!(parse_send_mute(input), Some(false));
     }
 
     #[test]
     fn test_parse_send_pan_center() {
         // Pan is at position 5 (0.0 = center in REAPER)
-        let input = "SEND\t1\t1\t0\t0.716000\t0.000000\t24";
+        let input = "SEND\t1\t1\t0\t1.000000\t0.000000\t24";
         assert_eq!(parse_send_pan(input), Some(0.0));
     }
 
     #[test]
     fn test_parse_send_pan_left() {
-        let input = "SEND\t1\t1\t0\t0.716000\t-1.000000\t24";
+        let input = "SEND\t1\t1\t0\t1.000000\t-1.000000\t24";
         assert_eq!(parse_send_pan(input), Some(-1.0));
     }
 
     #[test]
     fn test_parse_send_pan_right() {
-        let input = "SEND\t1\t1\t0\t0.716000\t1.000000\t24";
+        let input = "SEND\t1\t1\t0\t1.000000\t1.000000\t24";
         assert_eq!(parse_send_pan(input), Some(1.0));
     }
 
@@ -1234,8 +1260,8 @@ mod tests {
 
     #[test]
     fn test_reaper_url_set_send_vol_format() {
-        let url = reaper_api::set_send_vol("http://iem.lan:8080", 1, 2, 0.716);
-        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/1/SEND/2/VOL/0.716");
+        let url = reaper_api::set_send_vol("http://iem.lan:8080", 1, 2, 1.0);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/1/SEND/2/VOL/1");
     }
 
     #[test]
@@ -1264,8 +1290,8 @@ mod tests {
 
     #[test]
     fn test_reaper_url_set_track_vol_format() {
-        let url = reaper_api::set_track_vol("http://iem.lan:8080", 23, 0.716);
-        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/23/VOL/0.716");
+        let url = reaper_api::set_track_vol("http://iem.lan:8080", 23, 1.0);
+        assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/23/VOL/1");
     }
 
     #[test]
@@ -1371,9 +1397,9 @@ mod tests {
 
     #[test]
     fn test_parse_send_state_full() {
-        let input = "SEND\t1\t0\t0\t0.716000\t0.000000\t24";
+        let input = "SEND\t1\t0\t0\t1.000000\t0.000000\t24";
         let (vol, mute, pan) = parse_send_state(input).unwrap();
-        assert!((vol - 0.716).abs() < 0.001);
+        assert!((vol - 1.0).abs() < 0.001);
         assert!(!mute);
         assert!((pan - 0.0).abs() < 0.001);
     }
