@@ -23,24 +23,37 @@ pub fn git_hash() -> &'static str {
     option_env!("GIT_HASH").unwrap_or("unknown")
 }
 
+/// Git branch at build time
+/// Returns "unknown" if not set during build
+pub fn git_branch() -> &'static str {
+    option_env!("GIT_BRANCH").unwrap_or("unknown")
+}
+
 /// Build timestamp (unix seconds)
 /// Returns "0" if not set during build
 pub fn build_time() -> &'static str {
     option_env!("BUILD_TIME").unwrap_or("0")
 }
 
-/// Full version string for display (e.g., "1.1.0 (2026-02-26 14:30)")
-/// Shows human-readable deployment time instead of git hash
+/// Full version string for display
+/// On main: "1.6.0 (2026-02-27 12:07)"
+/// On dev:  "1.6.0-dev (2026-02-27 12:07)"
 pub fn full_version() -> String {
+    let branch = git_branch();
+    let version_base = if branch != "main" && branch != "unknown" {
+        format!("{}-{}", VERSION, branch)
+    } else {
+        VERSION.to_string()
+    };
+
     let timestamp = build_time().parse::<i64>().unwrap_or(0);
     if timestamp == 0 {
-        format!("{} (dev)", VERSION)
+        format!("{} (local)", version_base)
     } else {
-        // Convert unix timestamp to human-readable format
         let datetime = chrono::DateTime::from_timestamp(timestamp, 0)
             .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
             .unwrap_or_else(|| "unknown".to_string());
-        format!("{} ({})", VERSION, datetime)
+        format!("{} ({})", version_base, datetime)
     }
 }
 

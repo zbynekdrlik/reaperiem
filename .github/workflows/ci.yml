@@ -327,13 +327,12 @@ jobs:
           echo "Version bump verified: $MAIN_VER -> $PR_VER"
 
   # ============================================================
-  # BUILD TAURI - Windows app (PRs to main + main push only)
+  # BUILD TAURI - Windows app (all events)
   # ============================================================
   build-tauri:
     name: Build Tauri (Windows)
     runs-on: windows-latest
     needs: [test, build-wasm]
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     steps:
       - uses: actions/checkout@v4
 
@@ -386,14 +385,14 @@ jobs:
           retention-days: 1
 
   # ============================================================
-  # DEPLOY TO IEM.LAN - Auto deploy after merge to main
+  # DEPLOY TO IEM.LAN - Auto deploy on push to main or dev
   # Uses existing self-hosted runner on iem.lan (Windows)
   # ============================================================
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
     needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
 

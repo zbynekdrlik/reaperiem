@@ -64,8 +64,21 @@
 | build-wasm         |    yes     |     yes      |     yes     |
 | e2e                |    yes     |     yes      |     yes     |
 | check-version-bump |     -      |   **yes**    |      -      |
-| build-tauri        |     -      |   **yes**    |   **yes**   |
-| deploy             |     -      |      -       |   **yes**   |
+| build-tauri        |  **yes**   |   **yes**    |   **yes**   |
+| deploy             |  **yes**   |      -       |   **yes**   |
+
+### PR Delivery Requirement
+
+**You are responsible for delivering a GREEN, mergeable PR.** When creating a PR from `dev` → `main`:
+
+1. Push to `dev`, wait for CI to pass (including deploy to iem.lan)
+2. Fix any failures on `dev` before creating the PR
+3. Create PR only when `dev` CI is fully green
+4. Monitor PR CI until ALL required checks pass
+5. Provide the PR URL to the user only after it is confirmed green and mergeable
+6. **The PR URL you give the user must be ready to merge — no exceptions**
+
+If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
 
 ### NEVER DO:
 
@@ -74,6 +87,8 @@
 ❌ Create feature branches (blocked by GitHub ruleset)
 ❌ Force push to main or dev (blocked)
 ❌ Squash or rebase merge (only merge commits allowed)
+❌ Give the user a PR URL that has failing CI checks
+❌ Ask the user to merge a PR that isn't green
 ```
 
 ---
