@@ -398,11 +398,12 @@ pub(crate) fn build_channel_templates(
 pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<String>) {
     let name_lower = name.to_lowercase();
 
-    // Determine category
-    let category = if name_lower.contains("mic") || name_lower.contains("gtr") {
-        "mics"
-    } else if name_lower.contains("hand") || name_lower.contains("engineer") {
+    // Determine category — check hand/engineer BEFORE mic/gtr because
+    // "HAND1 mic" contains both "hand" and "mic" but must be "tech"
+    let category = if name_lower.contains("hand") || name_lower.contains("engineer") {
         "tech"
+    } else if name_lower.contains("mic") || name_lower.contains("gtr") {
+        "mics"
     } else {
         "stems"
     };
@@ -1444,5 +1445,42 @@ mod tests {
             polled_db,
             diff
         );
+    }
+
+    // ================================================================
+    // Track categorization regression tests - HAND tracks must be tech
+    // ================================================================
+
+    #[test]
+    fn test_categorize_hand_mic_as_tech() {
+        // Bug: "HAND1 mic" contains "mic" → wrongly categorized as "mics"
+        // HAND tracks must always be "tech", even though they have "mic" in the name
+        let (cat, _, _) = categorize_track("HAND1 mic");
+        assert_eq!(cat, "tech", "HAND1 mic must be tech, not mics");
+
+        let (cat, _, _) = categorize_track("HAND2 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("HAND3 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("HAND4 mic");
+        assert_eq!(cat, "tech");
+
+        let (cat, _, _) = categorize_track("ENGINEER mic");
+        assert_eq!(cat, "tech", "ENGINEER mic must be tech, not mics");
+    }
+
+    #[test]
+    fn test_categorize_regular_mic_still_mics() {
+        // Regular member mics must still be categorized as "mics"
+        let (cat, _, _) = categorize_track("PETKA mic");
+        assert_eq!(cat, "mics");
+
+        let (cat, _, _) = categorize_track("STEVO mic");
+        assert_eq!(cat, "mics");
+
+        let (cat, _, _) = categorize_track("MAREK gtr");
+        assert_eq!(cat, "mics");
     }
 }

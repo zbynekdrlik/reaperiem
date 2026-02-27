@@ -690,4 +690,114 @@ test.describe("Main Tab and Global Volume", () => {
     const mainTab = page.locator(".category-tab.main");
     await expect(mainTab).not.toHaveClass(/active/);
   });
+
+  test("Me fader appears on Main tab for logged-in member", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Main tab should be active by default
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Member's mic fader MUST be visible (the "Me" fader)
+    // Bug: case mismatch means this channel never appears
+    const meFader = page
+      .locator(".channel .ch-name")
+      .filter({ hasText: /PETKA/i });
+    await expect(meFader).toHaveCount(1, { timeout: 5000 });
+  });
+
+  test("Global Volume fader holds position after drag (no snap-back)", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    const fader = globalVol.locator(".fader-track");
+    const box = await fader.boundingBox();
+    if (!box) return;
+
+    // Mouse down at center, wait for activation
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(350);
+
+    // Drag to 80%
+    for (let pct = 0.5; pct <= 0.8; pct += 0.05) {
+      await page.mouse.move(box.x + box.width * pct, box.y + box.height / 2);
+      await page.waitForTimeout(30);
+    }
+
+    // Read fill width WHILE still holding
+    const fillWhileHeld = await globalVol
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // Read fill width AFTER release — must not snap back
+    const fillAfterRelease = await globalVol
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Bug: without optimistic update, fillAfterRelease snaps to old value
+    const tolerance = box.width * 0.05;
+    expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
+  });
+
+  test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Switch to Tech tab
+    const techTab = page.locator(".category-tab.tech");
+    await techTab.dispatchEvent("click");
+    await expect(techTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Check HAND tracks are in Tech tab
+    const channels = page.locator(".channel .ch-name");
+    const names = await channels.allTextContents();
+    const hasHand = names.some((n) => /hand/i.test(n));
+    expect(hasHand).toBe(true);
+
+    // Switch to Mics tab — HAND must NOT be here
+    const micsTab = page.locator(".category-tab.mics");
+    await micsTab.dispatchEvent("click");
+    await expect(micsTab).toHaveClass(/active/);
+
+    const micsChannels = page.locator(".channel .ch-name");
+    const micsNames = await micsChannels.allTextContents();
+    const handInMics = micsNames.some((n) => /hand/i.test(n));
+    expect(handInMics).toBe(false);
+  });
 });

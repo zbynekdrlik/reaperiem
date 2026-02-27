@@ -288,7 +288,7 @@ pub fn MixerPage() -> impl IntoView {
     let display_channels = move || {
         let chs = channels.get();
         let member = member_id();
-        let my_input = format!("{} mic", member.to_uppercase());
+        let my_input = format!("{} MIC", member.to_uppercase());
         let active_cat = active_category.get();
 
         let mut result = Vec::new();
@@ -489,7 +489,9 @@ pub fn MixerPage() -> impl IntoView {
                         >
                             <GlobalVolumeFader
                                 level=global_level
+                                set_level=set_global_level
                                 muted=global_muted
+                                set_muted=set_global_muted
                                 set_global_touched=set_global_touched
                                 connected=connected
                                 ws=ws
@@ -532,7 +534,9 @@ pub fn MixerPage() -> impl IntoView {
 #[component]
 fn GlobalVolumeFader(
     level: ReadSignal<f32>,
+    set_level: WriteSignal<f32>,
     muted: ReadSignal<bool>,
+    set_muted: WriteSignal<bool>,
     set_global_touched: WriteSignal<bool>,
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
@@ -582,6 +586,7 @@ fn GlobalVolumeFader(
     };
 
     let on_level_change = Callback::new(move |new_level: f32| {
+        set_level.set(new_level); // Optimistic update — prevents snap-back
         if !connected.get() {
             return;
         }
@@ -645,6 +650,7 @@ fn GlobalVolumeFader(
             return;
         }
         let new_muted = !muted.get();
+        set_muted.set(new_muted); // Optimistic update — immediate UI feedback
         set_global_touched.set(true);
         ws_send(ws, &iem_core::ClientMsg::SetGlobalMute { muted: new_muted });
         // Post-release guard for mute
