@@ -224,7 +224,7 @@ pub fn MixerPage() -> impl IntoView {
     });
 
     // Clean up WebSocket and reconnect interval on component unmount
-    leptos::on_cleanup(move || {
+    on_cleanup(move || {
         drop(reconnect_handle);
         if let Some(w) = ws.get_untracked() {
             w.set_onmessage(None);

@@ -236,36 +236,24 @@ pub async fn batch_control(
         BatchOperation::Reset => {
             let vol = db_to_reaper_vol(0.0);
 
-            // Reset all channels in parallel
-            let reset_futures: Vec<_> = inputs
+            // Reset all channels in parallel — collect URLs first to avoid
+            // heterogeneous async block types in vec![]
+            let urls: Vec<String> = inputs
                 .iter()
                 .enumerate()
                 .flat_map(|(i, _)| {
-                    let track_index = i + 1;
-                    let client = state.http_client.clone();
-                    let url = reaper_url.clone();
+                    let t = i + 1;
                     vec![
-                        {
-                            let client = client.clone();
-                            let url =
-                                reaper_api::set_send_vol(&url, track_index, member_index, vol);
-                            async move { client.get(&url).send().await }
-                        },
-                        {
-                            let client = client.clone();
-                            let url = reaper_api::set_send_mute(&url, track_index, member_index, 0);
-                            async move { client.get(&url).send().await }
-                        },
-                        {
-                            let url =
-                                reaper_api::set_send_pan(&url, track_index, member_index, 0.0);
-                            async move { client.get(&url).send().await }
-                        },
+                        reaper_api::set_send_vol(&reaper_url, t, member_index, vol),
+                        reaper_api::set_send_mute(&reaper_url, t, member_index, 0),
+                        reaper_api::set_send_pan(&reaper_url, t, member_index, 0.0),
                     ]
                 })
                 .collect();
 
-            let results = futures::future::join_all(reset_futures).await;
+            let results =
+                futures::future::join_all(urls.iter().map(|url| state.http_client.get(url).send()))
+                    .await;
             let errors: Vec<_> = results.iter().filter(|r| r.is_err()).collect();
             if !errors.is_empty() {
                 tracing::warn!(

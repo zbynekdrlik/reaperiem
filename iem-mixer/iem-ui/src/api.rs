@@ -3,7 +3,7 @@
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{AuthState, get_token};
+use crate::auth::AuthState;
 
 /// Base URL for API calls (same origin)
 const API_BASE: &str = "/api";
