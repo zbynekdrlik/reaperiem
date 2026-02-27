@@ -32,6 +32,13 @@ pub struct AppState {
     pub mixer_cache: Arc<RwLock<MixerCache>>,
 }
 
+/// Global IEM output volume state for a member
+#[derive(Debug, Clone)]
+pub struct GlobalVolState {
+    pub level_db: f32,
+    pub muted: bool,
+}
+
 /// Cached mixer state for change detection
 pub struct MixerCache {
     /// Last known channel states per member (member_id -> channels)
@@ -45,6 +52,10 @@ pub struct MixerCache {
     /// Timestamps of recent commands, keyed by (member_id, track_index).
     /// Used by the poller to suppress echo broadcasts for recently-commanded channels.
     pub command_timestamps: HashMap<(String, usize), std::time::Instant>,
+    /// Last known global IEM output volume per member (member_id -> state)
+    pub global_volumes: HashMap<String, GlobalVolState>,
+    /// Output track indices per member (member_id -> 1-based track index)
+    pub output_track_indices: HashMap<String, usize>,
 }
 
 impl MixerCache {
@@ -55,6 +66,8 @@ impl MixerCache {
             connected: false,
             active_members: HashMap::new(),
             command_timestamps: HashMap::new(),
+            global_volumes: HashMap::new(),
+            output_track_indices: HashMap::new(),
         }
     }
 }

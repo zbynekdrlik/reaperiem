@@ -156,7 +156,7 @@ body {
   color: var(--text-primary);
 }
 
-.category-tab.all.active {
+.category-tab.main.active {
   border-bottom-color: var(--accent);
 }
 .category-tab.mics.active {
@@ -1054,4 +1054,29 @@ body {
     font-size: 1.2em;
     min-width: 52px;
   }
+}
+
+/* ================================================================
+   Global Volume channel strip (Main tab)
+   ================================================================ */
+.channel.global-volume {
+  grid-column: 1 / -1;
+  background: var(--bg-channel-hover);
+  border: 1px solid var(--border-active);
+}
+
+.channel.global-volume .ch-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Section label in Main tab */
+.main-section-label {
+  grid-column: 1 / -1;
+  font-size: 0.7em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  padding: 8px 4px 4px;
 }

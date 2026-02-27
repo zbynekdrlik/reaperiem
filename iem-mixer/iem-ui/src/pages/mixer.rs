@@ -55,6 +55,9 @@ fn connect_websocket(
     set_connected: WriteSignal<bool>,
     set_loading: WriteSignal<bool>,
     fader_touched: ReadSignal<HashMap<usize, bool>>,
+    set_global_level: WriteSignal<f32>,
+    set_global_muted: WriteSignal<bool>,
+    global_touched: ReadSignal<bool>,
 ) {
     let location = web_sys::window().unwrap().location();
     let host = location.host().unwrap_or_default();
@@ -84,6 +87,8 @@ fn connect_websocket(
                     iem_core::ServerMsg::State {
                         channels: new_chs,
                         connected: conn,
+                        global_level_db,
+                        global_muted,
                     } => {
                         set_channels.update(|chs| {
                             if chs.is_empty() {
@@ -105,6 +110,13 @@ fn connect_websocket(
                                 }
                             }
                         });
+                        // Update global volume from initial state
+                        if let Some(lvl) = global_level_db {
+                            set_global_level.set(lvl);
+                        }
+                        if let Some(muted) = global_muted {
+                            set_global_muted.set(muted);
+                        }
                         set_connected.set(conn);
                         set_loading.set(false);
                     }
@@ -127,6 +139,12 @@ fn connect_websocket(
                                     ch.pan = pan;
                                 }
                             });
+                        }
+                    }
+                    iem_core::ServerMsg::GlobalVolumeUpdate { level_db, muted } => {
+                        if !global_touched.get_untracked() {
+                            set_global_level.set(level_db);
+                            set_global_muted.set(muted);
                         }
                     }
                     iem_core::ServerMsg::ConnectionChanged { connected: conn } => {
@@ -179,12 +197,17 @@ pub fn MixerPage() -> impl IntoView {
     let (channels, set_channels) = signal(Vec::<Channel>::new());
     let (meters, set_meters) = signal(HashMap::<usize, f32>::new());
     let (connected, set_connected) = signal(false);
-    let (active_category, set_active_category) = signal(Category::All);
+    let (active_category, set_active_category) = signal(Category::Main);
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
     let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
     let (loading, set_loading) = signal(true);
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
     let (pre_solo_mutes, set_pre_solo_mutes) = signal(HashMap::<usize, bool>::new());
+
+    // Global IEM output volume state
+    let (global_level, set_global_level) = signal(0.0_f32);
+    let (global_muted, set_global_muted) = signal(false);
+    let (global_touched, set_global_touched) = signal(false);
 
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
@@ -205,6 +228,9 @@ pub fn MixerPage() -> impl IntoView {
             set_connected,
             set_loading,
             fader_touched,
+            set_global_level,
+            set_global_muted,
+            global_touched,
         );
     });
 
@@ -228,6 +254,9 @@ pub fn MixerPage() -> impl IntoView {
                     set_connected,
                     set_loading,
                     fader_touched,
+                    set_global_level,
+                    set_global_muted,
+                    global_touched,
                 );
             }
         }
@@ -269,7 +298,15 @@ pub fn MixerPage() -> impl IntoView {
             if ch.stereo_side.as_deref() == Some("R") {
                 continue;
             }
-            if !active_cat.matches(&ch.category) {
+
+            let is_my_input = ch.name.to_uppercase() == my_input;
+
+            // Main tab: only show "me" channel (global volume is rendered separately)
+            if active_cat == Category::Main {
+                if !is_my_input {
+                    continue;
+                }
+            } else if !active_cat.matches(&ch.category) {
                 continue;
             }
 
@@ -299,7 +336,6 @@ pub fn MixerPage() -> impl IntoView {
             } else {
                 ch.name.clone()
             };
-            let is_my_input = ch.name.to_uppercase() == my_input;
 
             result.push(DisplayChannel {
                 track_index: ch.track_index,
@@ -307,6 +343,20 @@ pub fn MixerPage() -> impl IntoView {
                 is_stereo,
                 partner_index,
                 is_my_input,
+            });
+        }
+
+        // Sort Stems: Click first, Guide second, then rest
+        if active_cat == Category::Stems {
+            result.sort_by_key(|ch| {
+                let name_upper = ch.display_name.to_uppercase();
+                if name_upper == "CLICK" {
+                    0
+                } else if name_upper == "GUIDE" {
+                    1
+                } else {
+                    2
+                }
             });
         }
 
@@ -433,6 +483,19 @@ pub fn MixerPage() -> impl IntoView {
             >
                 <div class="channels-scroll">
                     <div class="channels-grid">
+                        <Show
+                            when=move || active_category.get() == Category::Main
+                            fallback=|| ()
+                        >
+                            <GlobalVolumeFader
+                                level=global_level
+                                muted=global_muted
+                                set_global_touched=set_global_touched
+                                connected=connected
+                                ws=ws
+                            />
+                            <div class="main-section-label">"MY MIC"</div>
+                        </Show>
                         <ChannelList
                             display_channels=Signal::derive(display_channels)
                             meters=meters.into()
@@ -461,6 +524,184 @@ pub fn MixerPage() -> impl IntoView {
                 on_load=on_load_preset
                 get_current_state=get_current_state
             />
+        </div>
+    }
+}
+
+/// Global IEM volume fader rendered on the Main tab
+#[component]
+fn GlobalVolumeFader(
+    level: ReadSignal<f32>,
+    muted: ReadSignal<bool>,
+    set_global_touched: WriteSignal<bool>,
+    connected: ReadSignal<bool>,
+    ws: ReadSignal<Option<web_sys::WebSocket>>,
+) -> impl IntoView {
+    let (is_fader_active, set_is_fader_active) = signal(false);
+
+    // Guard timeout for post-release protection
+    let (guard_id, set_guard_id) = signal(Option::<i32>::None);
+
+    // Throttle state
+    let (last_send_time, set_last_send_time) = signal(0.0_f64);
+    let (pending_value, set_pending_value) = signal(Option::<f32>::None);
+    let (pending_timeout, set_pending_timeout) = signal(Option::<i32>::None);
+
+    let cancel_guard = move || {
+        if let Some(id) = guard_id.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_timeout_with_handle(id);
+            }
+            set_guard_id.set(None);
+        }
+    };
+
+    let set_guard = move || {
+        cancel_guard();
+        let cb = Closure::once_into_js(move || {
+            set_guard_id.set(None);
+            set_global_touched.set(false);
+        });
+        if let Some(w) = web_sys::window() {
+            if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.unchecked_ref(),
+                POST_RELEASE_GUARD_MS,
+            ) {
+                set_guard_id.set(Some(id));
+            }
+        }
+    };
+
+    let cancel_pending = move || {
+        if let Some(id) = pending_timeout.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_timeout_with_handle(id);
+            }
+            set_pending_timeout.set(None);
+        }
+    };
+
+    let on_level_change = Callback::new(move |new_level: f32| {
+        if !connected.get() {
+            return;
+        }
+
+        // Throttled WebSocket send
+        let now = js_sys::Date::now();
+        let last = last_send_time.get_untracked();
+
+        if now - last >= THROTTLE_INTERVAL_MS {
+            set_last_send_time.set(now);
+            set_pending_value.set(None);
+            cancel_pending();
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetGlobalLevel {
+                    level_db: new_level,
+                },
+            );
+        } else {
+            set_pending_value.set(Some(new_level));
+            cancel_pending();
+            let cb = Closure::once_into_js(move || {
+                let pending = pending_value.get_untracked();
+                if let Some(val) = pending {
+                    set_last_send_time.set(js_sys::Date::now());
+                    set_pending_value.set(None);
+                    set_pending_timeout.set(None);
+                    ws_send(ws, &iem_core::ClientMsg::SetGlobalLevel { level_db: val });
+                }
+            });
+            if let Some(w) = web_sys::window() {
+                if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    cb.unchecked_ref(),
+                    THROTTLE_INTERVAL_MS as i32,
+                ) {
+                    set_pending_timeout.set(Some(id));
+                }
+            }
+        }
+    });
+
+    let on_touch_state = Callback::new(move |touching: bool| {
+        if touching {
+            cancel_guard();
+            set_global_touched.set(true);
+        } else {
+            // Flush pending
+            let pending = pending_value.get_untracked();
+            if let Some(val) = pending {
+                set_last_send_time.set(js_sys::Date::now());
+                set_pending_value.set(None);
+                cancel_pending();
+                ws_send(ws, &iem_core::ClientMsg::SetGlobalLevel { level_db: val });
+            }
+            set_guard();
+        }
+    });
+
+    let on_mute_click = move |_| {
+        if !connected.get() {
+            return;
+        }
+        let new_muted = !muted.get();
+        set_global_touched.set(true);
+        ws_send(ws, &iem_core::ClientMsg::SetGlobalMute { muted: new_muted });
+        // Post-release guard for mute
+        let cb = Closure::once_into_js(move || {
+            set_global_touched.set(false);
+        });
+        if let Some(w) = web_sys::window() {
+            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.unchecked_ref(),
+                POST_RELEASE_GUARD_MS,
+            );
+        }
+    };
+
+    let level_signal = Signal::derive(move || level.get());
+
+    view! {
+        <div class=move || {
+            let mut classes = vec!["channel", "global-volume"];
+            if muted.get() { classes.push("muted"); }
+            if !connected.get() { classes.push("disconnected"); }
+            if is_fader_active.get() { classes.push("fader-active"); }
+            classes.join(" ")
+        }>
+            <div class="ch-label">
+                <div class="ch-name">"IEM VOL"</div>
+                <div class="ch-type">"master"</div>
+            </div>
+
+            <div class="meter-container">
+                <div class="meter-fill" style="height: 0%"></div>
+            </div>
+
+            <div class="fader-area">
+                <Fader
+                    value=level_signal
+                    min=-60.0
+                    max=12.0
+                    on_change=on_level_change
+                    on_activate=Callback::new(move |active| set_is_fader_active.set(active))
+                    on_touch_state=on_touch_state
+                />
+            </div>
+
+            <div class="db-display">{move || format_db(level.get())}</div>
+
+            <div class="pan-container"></div>
+
+            <div class="channel-btns">
+                <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                <button
+                    class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
+                    on:click=on_mute_click
+                >
+                    "M"
+                </button>
+            </div>
         </div>
     }
 }

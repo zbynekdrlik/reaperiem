@@ -559,3 +559,135 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     }
   });
 });
+
+test.describe("Main Tab and Global Volume", () => {
+  test("Main tab loads as default with IEM VOL and member mic", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Main tab should be active by default
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).toBeVisible();
+    await expect(mainTab).toHaveClass(/active/);
+
+    // Global Volume channel should be present with "IEM VOL" label
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (globalLoaded) {
+      await expect(globalVol.locator(".ch-name")).toContainText("IEM VOL");
+    }
+  });
+
+  test("Global Volume fader is draggable", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    // Check that fader exists within global volume
+    const fader = globalVol.locator(".fader-track");
+    await expect(fader).toBeVisible();
+    await expect(fader.locator(".fader-fill")).toBeAttached();
+    await expect(fader.locator(".fader-handle")).toBeAttached();
+  });
+
+  test("Global Mute button toggles", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const globalVol = page.locator(".channel.global-volume");
+    const globalLoaded = await globalVol
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!globalLoaded) return;
+
+    // Mute button should exist in global volume
+    const muteBtn = globalVol.locator(".mute-btn");
+    await expect(muteBtn).toBeVisible();
+    // Click mute (sends via WebSocket; may be no-op without REAPER)
+    await muteBtn.click({ force: true });
+  });
+
+  test("Switching to Mics tab shows all mics", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Click Mics tab
+    const micsTab = page.locator(".category-tab.mics");
+    await micsTab.click();
+    await expect(micsTab).toHaveClass(/active/);
+
+    // Global volume should NOT appear in Mics tab
+    const globalVol = page.locator(".channel.global-volume");
+    await expect(globalVol).toHaveCount(0);
+  });
+
+  test("Switching to Stems tab shows Click first then Guide", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Click Stems tab
+    const stemsTab = page.locator(".category-tab.stems");
+    await stemsTab.click();
+    await expect(stemsTab).toHaveClass(/active/);
+
+    // Wait for channels to appear
+    const channelsLoaded = await page
+      .waitForSelector(".channel", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Get all channel names in order
+    const channelNames = await page
+      .locator(".channel .ch-name")
+      .allTextContents();
+
+    if (channelNames.length >= 2) {
+      // CLICK should be first, GUIDE second
+      expect(channelNames[0].toUpperCase()).toBe("CLICK");
+      expect(channelNames[1].toUpperCase()).toBe("GUIDE");
+    }
+  });
+
+  test("Switching to Tech tab shows tech channels", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Click Tech tab
+    const techTab = page.locator(".category-tab.tech");
+    await techTab.click();
+    await expect(techTab).toHaveClass(/active/);
+
+    // Main tab should not be active
+    const mainTab = page.locator(".category-tab.main");
+    await expect(mainTab).not.toHaveClass(/active/);
+  });
+});

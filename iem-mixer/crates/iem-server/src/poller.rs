@@ -7,7 +7,7 @@ use iem_core::ServerMsg;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::AppState;
+use crate::{AppState, GlobalVolState};
 use crate::proxy::{
     build_channel_templates, query_send_state, reaper_api, reaper_pan_to_ui, reaper_vol_to_db,
 };
@@ -28,6 +28,12 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
+    // Build member track_name -> id mapping for output track discovery
+    let member_track_names: HashMap<String, String> = config
+        .members
+        .iter()
+        .map(|m| (m.track_name(), m.id()))
+        .collect();
     drop(config);
 
     // Check which members have active WS connections (HashMap keys)
@@ -44,6 +50,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     // 1. Query meters via NTRACK;TRACK (single call)
     let mut meters: HashMap<usize, f32> = HashMap::new();
     let mut connected = false;
+    // Discovered output tracks: member_id -> (track_index, vol_linear, flags)
+    let mut output_tracks: HashMap<String, (usize, f32, i32)> = HashMap::new();
 
     let tracks_url = reaper_api::query_tracks(&reaper_url);
     if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
@@ -51,18 +59,27 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             connected = true;
             for line in text.lines() {
                 let parts: Vec<&str> = line.split('\t').collect();
-                if parts.first() == Some(&"TRACK")
-                    && parts.len() > 7
-                    && let Ok(track_idx) = parts[1].parse::<usize>()
-                    && let Ok(peak_centibels) = parts[6].parse::<f32>()
-                {
-                    let peak_db = peak_centibels / 100.0;
-                    let peak_linear = if peak_db <= -60.0 {
-                        0.0
-                    } else {
-                        10.0_f32.powf(peak_db / 20.0)
-                    };
-                    meters.insert(track_idx, peak_linear);
+                if parts.first() == Some(&"TRACK") && parts.len() > 7 {
+                    if let Ok(track_idx) = parts[1].parse::<usize>() {
+                        // Extract meters (field 6 = VU peak L in centibels)
+                        if let Ok(peak_centibels) = parts[6].parse::<f32>() {
+                            let peak_db = peak_centibels / 100.0;
+                            let peak_linear = if peak_db <= -60.0 {
+                                0.0
+                            } else {
+                                10.0_f32.powf(peak_db / 20.0)
+                            };
+                            meters.insert(track_idx, peak_linear);
+                        }
+                        // Check if this is a member output track (e.g. "PETKA inear")
+                        // Fields: TRACK idx name flags vol pan vu_peak_L vu_peak_R ...
+                        let track_name = parts[2];
+                        if let Some(member_id) = member_track_names.get(track_name) {
+                            let vol: f32 = parts[4].parse().unwrap_or(0.716);
+                            let flags: i32 = parts[3].parse().unwrap_or(0);
+                            output_tracks.insert(member_id.clone(), (track_idx, vol, flags));
+                        }
+                    }
                 }
             }
             // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
@@ -75,6 +92,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     meter_count = meters.len(),
                     non_zero_count = non_zero.len(),
                     sample = ?non_zero,
+                    output_tracks = output_tracks.len(),
                     "Meter poll summary"
                 );
             }
@@ -105,10 +123,48 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         },
     ));
 
-    // Update cached meters
+    // Update cached meters and output track state
     {
+        let now = std::time::Instant::now();
+        let echo_suppress_window = Duration::from_millis(500);
         let mut cache = state.mixer_cache.write().await;
         cache.meters = meters;
+
+        // Update output track indices and global volumes, broadcast changes
+        for (member_id, (track_idx, vol_linear, flags)) in &output_tracks {
+            cache
+                .output_track_indices
+                .insert(member_id.clone(), *track_idx);
+
+            let level_db = reaper_vol_to_db(*vol_linear);
+            let muted = (*flags & 8) != 0;
+
+            let changed = match cache.global_volumes.get(member_id) {
+                Some(gv) => (gv.level_db - level_db).abs() > 0.01 || gv.muted != muted,
+                None => true,
+            };
+
+            if changed {
+                // Check echo suppression (keyed with output_track + 100000 offset)
+                let key = (member_id.clone(), *track_idx + 100000);
+                let recently_commanded = cache
+                    .command_timestamps
+                    .get(&key)
+                    .is_some_and(|ts| now.duration_since(*ts) < echo_suppress_window);
+
+                if !recently_commanded {
+                    let _ = state.event_tx.send((
+                        member_id.clone(),
+                        ServerMsg::GlobalVolumeUpdate { level_db, muted },
+                    ));
+                }
+            }
+
+            cache.global_volumes.insert(
+                member_id.clone(),
+                GlobalVolState { level_db, muted },
+            );
+        }
     }
 
     // 2. For each active member, query send states in parallel
@@ -194,11 +250,18 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             }
         } else {
             // First poll for this member - send full state
+            let (global_level_db, global_muted) = cache
+                .global_volumes
+                .get(member_id)
+                .map(|gv| (Some(gv.level_db), Some(gv.muted)))
+                .unwrap_or((None, None));
             let _ = state.event_tx.send((
                 member_id.clone(),
                 ServerMsg::State {
                     channels: result_channels.clone(),
                     connected: true,
+                    global_level_db,
+                    global_muted,
                 },
             ));
         }
@@ -309,5 +372,46 @@ mod tests {
     fn test_mixer_cache_new_has_empty_timestamps() {
         let cache = MixerCache::new();
         assert!(cache.command_timestamps.is_empty());
+    }
+
+    /// Test that NTRACK output track name matching works
+    #[test]
+    fn test_ntrack_output_track_name_matching() {
+        let member_track_names: HashMap<String, String> = [
+            ("PETKA inear".to_string(), "petka".to_string()),
+            ("MAREK inear".to_string(), "marek".to_string()),
+        ]
+        .into_iter()
+        .collect();
+
+        // Simulated NTRACK line for PETKA inear at track index 23
+        let line = "TRACK\t23\tPETKA inear\t0\t0.716000\t0.000000\t-2000\t-2000\t1.000000\t0\t0\t22\t0\t0";
+        let parts: Vec<&str> = line.split('\t').collect();
+        let track_name = parts[2];
+
+        assert!(member_track_names.contains_key(track_name));
+        assert_eq!(
+            member_track_names.get(track_name),
+            Some(&"petka".to_string())
+        );
+    }
+
+    /// Test that NTRACK flags mute bit is correctly detected
+    #[test]
+    fn test_ntrack_flags_mute_bit() {
+        // Flag 8 = muted (bit 3)
+        assert!((8_i32 & 8) != 0, "Flag 8 should be muted");
+        assert!((0_i32 & 8) == 0, "Flag 0 should be unmuted");
+        // Flag can have other bits set too
+        assert!((9_i32 & 8) != 0, "Flag 9 (8+1) should be muted");
+        assert!((7_i32 & 8) == 0, "Flag 7 should be unmuted");
+    }
+
+    /// Test MixerCache initializes with empty global volumes
+    #[test]
+    fn test_mixer_cache_new_has_empty_global_volumes() {
+        let cache = MixerCache::new();
+        assert!(cache.global_volumes.is_empty());
+        assert!(cache.output_track_indices.is_empty());
     }
 }

@@ -15,6 +15,10 @@ pub enum ClientMsg {
     SetMute { track_index: usize, muted: bool },
     /// Set send pan for a track
     SetPan { track_index: usize, pan: f32 },
+    /// Set global IEM output volume for this member
+    SetGlobalLevel { level_db: f32 },
+    /// Set global IEM output mute for this member
+    SetGlobalMute { muted: bool },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -25,6 +29,10 @@ pub enum ServerMsg {
     State {
         channels: Vec<Channel>,
         connected: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        global_level_db: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        global_muted: Option<bool>,
     },
     /// Meter levels (sent every ~150ms)
     Meters { meters: HashMap<usize, f32> },
@@ -35,6 +43,8 @@ pub enum ServerMsg {
         muted: bool,
         pan: f32,
     },
+    /// Global IEM output volume changed
+    GlobalVolumeUpdate { level_db: f32, muted: bool },
     /// REAPER connection status changed
     ConnectionChanged { connected: bool },
 }
@@ -94,11 +104,49 @@ mod tests {
                 stereo_side: None,
             }],
             connected: true,
+            global_level_db: None,
+            global_muted: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"State\""));
+        // Optional fields should NOT appear when None
+        assert!(!json.contains("global_level_db"));
+        assert!(!json.contains("global_muted"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_state_with_global_volume() {
+        let msg = ServerMsg::State {
+            channels: vec![],
+            connected: true,
+            global_level_db: Some(-3.5),
+            global_muted: Some(false),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"global_level_db\":-3.5"));
+        assert!(json.contains("\"global_muted\":false"));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_state_backwards_compat() {
+        // Old State messages without global fields should still deserialize
+        let json = r#"{"event":"State","data":{"channels":[],"connected":true}}"#;
+        let decoded: ServerMsg = serde_json::from_str(json).unwrap();
+        match decoded {
+            ServerMsg::State {
+                global_level_db,
+                global_muted,
+                ..
+            } => {
+                assert_eq!(global_level_db, None);
+                assert_eq!(global_muted, None);
+            }
+            _ => panic!("Expected State variant"),
+        }
     }
 
     #[test]
@@ -132,6 +180,38 @@ mod tests {
         let msg = ServerMsg::ConnectionChanged { connected: false };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"ConnectionChanged\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_global_level_serialization() {
+        let msg = ClientMsg::SetGlobalLevel { level_db: -6.0 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetGlobalLevel\""));
+        assert!(json.contains("\"level_db\":-6.0"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_global_mute_serialization() {
+        let msg = ClientMsg::SetGlobalMute { muted: true };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetGlobalMute\""));
+        assert!(json.contains("\"muted\":true"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_global_volume_update_serialization() {
+        let msg = ServerMsg::GlobalVolumeUpdate {
+            level_db: -12.0,
+            muted: false,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"GlobalVolumeUpdate\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
