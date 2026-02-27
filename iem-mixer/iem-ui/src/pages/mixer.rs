@@ -482,12 +482,12 @@ fn ChannelList(
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
-    let (guard_ids, set_guard_ids) = signal(HashMap::<usize, i32>::new());
+    let (_guard_ids, set_guard_ids) = signal(HashMap::<usize, i32>::new());
 
     // Throttle state signals — all Copy + Send + Sync for use in Callback::new closures.
     let (last_send_times, set_last_send_times) = signal(HashMap::<usize, f64>::new());
     let (pending_values, set_pending_values) = signal(HashMap::<usize, f32>::new());
-    let (pending_timeouts, set_pending_timeouts) = signal(HashMap::<usize, i32>::new());
+    let (_pending_timeouts, set_pending_timeouts) = signal(HashMap::<usize, i32>::new());
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
