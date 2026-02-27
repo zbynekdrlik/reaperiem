@@ -64,8 +64,8 @@
 | build-wasm         |    yes     |     yes      |     yes     |
 | e2e                |    yes     |     yes      |     yes     |
 | check-version-bump |     -      |   **yes**    |      -      |
-| build-tauri        |     -      |   **yes**    |   **yes**   |
-| deploy             |     -      |      -       |   **yes**   |
+| build-tauri        |  **yes**   |   **yes**    |   **yes**   |
+| deploy             |  **yes**   |      -       |   **yes**   |
 
 ### NEVER DO:
 
