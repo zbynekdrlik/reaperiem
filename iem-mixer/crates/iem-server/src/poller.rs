@@ -155,7 +155,10 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         }
 
         // Diff against cached state and broadcast changes
+        let now = std::time::Instant::now();
+        let echo_suppress_window = Duration::from_millis(500);
         let mut cache = state.mixer_cache.write().await;
+
         if let Some(cached_channels) = cache.member_states.get(member_id) {
             // Send per-channel updates for changed channels
             for new_ch in &result_channels {
@@ -163,19 +166,29 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     .iter()
                     .find(|c| c.track_index == new_ch.track_index)
                 {
-                    if (old_ch.level_db - new_ch.level_db).abs() > 0.01
+                    let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.01
                         || old_ch.muted != new_ch.muted
-                        || (old_ch.pan - new_ch.pan).abs() > 0.001
-                    {
-                        let _ = state.event_tx.send((
-                            member_id.clone(),
-                            ServerMsg::ChannelUpdate {
-                                track_index: new_ch.track_index,
-                                level_db: new_ch.level_db,
-                                muted: new_ch.muted,
-                                pan: new_ch.pan,
-                            },
-                        ));
+                        || (old_ch.pan - new_ch.pan).abs() > 0.001;
+
+                    if changed {
+                        // Check if this channel was recently commanded — suppress echo
+                        let key = (member_id.clone(), new_ch.track_index);
+                        let recently_commanded = cache
+                            .command_timestamps
+                            .get(&key)
+                            .is_some_and(|ts| now.duration_since(*ts) < echo_suppress_window);
+
+                        if !recently_commanded {
+                            let _ = state.event_tx.send((
+                                member_id.clone(),
+                                ServerMsg::ChannelUpdate {
+                                    track_index: new_ch.track_index,
+                                    level_db: new_ch.level_db,
+                                    muted: new_ch.muted,
+                                    pan: new_ch.pan,
+                                },
+                            ));
+                        }
                     }
                 }
             }
@@ -190,9 +203,111 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             ));
         }
 
-        // Update cache
+        // Update cache (always, even when suppressing broadcast, so it converges)
         cache
             .member_states
             .insert(member_id.clone(), result_channels);
+
+        // Periodic cleanup of stale command timestamps (>2s old)
+        let stale_cutoff = Duration::from_secs(2);
+        cache
+            .command_timestamps
+            .retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::MixerCache;
+
+    /// Test that command_timestamps suppress echo broadcasts
+    #[test]
+    fn test_echo_suppression_within_window() {
+        let now = std::time::Instant::now();
+        let echo_window = Duration::from_millis(500);
+
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        // Simulate a command sent 100ms ago
+        let key = ("petka".to_string(), 1);
+        ts_map.insert(key.clone(), now - Duration::from_millis(100));
+
+        // Check: should be suppressed (100ms < 500ms window)
+        let recently_commanded = ts_map
+            .get(&key)
+            .is_some_and(|ts| now.duration_since(*ts) < echo_window);
+        assert!(
+            recently_commanded,
+            "Should suppress echo within 500ms window"
+        );
+    }
+
+    /// Test that broadcasts happen normally outside the suppression window
+    #[test]
+    fn test_no_suppression_outside_window() {
+        let now = std::time::Instant::now();
+        let echo_window = Duration::from_millis(500);
+
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        // Simulate a command sent 600ms ago
+        let key = ("petka".to_string(), 1);
+        ts_map.insert(key.clone(), now - Duration::from_millis(600));
+
+        let recently_commanded = ts_map
+            .get(&key)
+            .is_some_and(|ts| now.duration_since(*ts) < echo_window);
+        assert!(
+            !recently_commanded,
+            "Should NOT suppress echo outside 500ms window"
+        );
+    }
+
+    /// Test that non-commanded channels are not suppressed
+    #[test]
+    fn test_no_suppression_for_unrelated_channel() {
+        let now = std::time::Instant::now();
+        let echo_window = Duration::from_millis(500);
+
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        // Command for track 1 only
+        let key1 = ("petka".to_string(), 1);
+        ts_map.insert(key1, now - Duration::from_millis(100));
+
+        // Track 2 should NOT be suppressed
+        let key2 = ("petka".to_string(), 2);
+        let recently_commanded = ts_map
+            .get(&key2)
+            .is_some_and(|ts| now.duration_since(*ts) < echo_window);
+        assert!(
+            !recently_commanded,
+            "Unrelated track should NOT be suppressed"
+        );
+    }
+
+    /// Test that timestamp cleanup removes stale entries
+    #[test]
+    fn test_stale_timestamp_cleanup() {
+        let now = std::time::Instant::now();
+        let stale_cutoff = Duration::from_secs(2);
+
+        let mut ts_map: HashMap<(String, usize), std::time::Instant> = HashMap::new();
+        let key1 = ("petka".to_string(), 1);
+        let key2 = ("petka".to_string(), 2);
+        // Fresh timestamp (100ms ago)
+        ts_map.insert(key1.clone(), now - Duration::from_millis(100));
+        // Stale timestamp (3s ago)
+        ts_map.insert(key2, now - Duration::from_secs(3));
+
+        ts_map.retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
+
+        assert_eq!(ts_map.len(), 1, "Stale entries should be cleaned up");
+        assert!(ts_map.contains_key(&key1), "Fresh entry should be retained");
+    }
+
+    /// Test that MixerCache initializes with empty command_timestamps
+    #[test]
+    fn test_mixer_cache_new_has_empty_timestamps() {
+        let cache = MixerCache::new();
+        assert!(cache.command_timestamps.is_empty());
     }
 }

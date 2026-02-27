@@ -411,6 +411,118 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await expect(resetBtn).toHaveCount(0);
   });
 
+  test("fader does not snap back after drag (regression)", async ({ page }) => {
+    // CRITICAL: This test catches the snap-back bug where the fader jumps
+    // to a stale position after release due to server echo broadcasts.
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Mouse down at 20% and wait for activation
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(350); // Wait for 300ms activation delay
+
+    // Drag to 80% in steps (simulating real finger movement)
+    for (let pct = 0.3; pct <= 0.8; pct += 0.05) {
+      await page.mouse.move(box.x + box.width * pct, box.y + box.height / 2);
+      await page.waitForTimeout(30);
+    }
+
+    // Record fill width at release point
+    const fillAtRelease = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Release
+    await page.mouse.up();
+
+    // Wait for server convergence (echo suppression window)
+    await page.waitForTimeout(500);
+
+    // Fill width must be stable (within 5% of track width tolerance)
+    const fillAfterWait = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const drift = Math.abs(fillAfterWait - fillAtRelease);
+    const tolerance = box.width * 0.05;
+    expect(drift).toBeLessThan(tolerance);
+
+    // Wait another 500ms to ensure no late snap-back
+    await page.waitForTimeout(500);
+    const fillLater = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const lateDrift = Math.abs(fillLater - fillAtRelease);
+    expect(lateDrift).toBeLessThan(tolerance);
+  });
+
+  test("rapid fader movement does not cause stutter (regression)", async ({
+    page,
+  }) => {
+    // Tests that rapid back-and-forth movement doesn't cause UI stutter
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Mouse down and activate
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(350);
+
+    // Rapid back-and-forth movement (5 cycles)
+    for (let i = 0; i < 5; i++) {
+      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+      await page.waitForTimeout(30);
+      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height / 2);
+      await page.waitForTimeout(30);
+    }
+
+    // End at 60% position
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+    await page.waitForTimeout(50);
+
+    const fillAtEnd = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Release
+    await page.mouse.up();
+
+    // Wait for convergence
+    await page.waitForTimeout(500);
+
+    // Should be stable near the 60% position
+    const fillAfterWait = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const drift = Math.abs(fillAfterWait - fillAtEnd);
+    const tolerance = box.width * 0.05;
+    expect(drift).toBeLessThan(tolerance);
+  });
+
   test("solo button triggers state change when clicked", async ({ page }) => {
     // Login first
     await page.goto("/");
