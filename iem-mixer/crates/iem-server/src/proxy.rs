@@ -247,7 +247,12 @@ pub async fn batch_control(
                     vec![
                         {
                             let client = client.clone();
-                            let url = reaper_api::set_send_vol(&url, track_index, member_index, vol);
+                            let url = reaper_api::set_send_vol(
+                                &url,
+                                track_index,
+                                member_index,
+                                vol,
+                            );
                             async move { client.get(&url).send().await }
                         },
                         {
@@ -256,7 +261,12 @@ pub async fn batch_control(
                             async move { client.get(&url).send().await }
                         },
                         {
-                            let url = reaper_api::set_send_pan(&url, track_index, member_index, 0.0);
+                            let url = reaper_api::set_send_pan(
+                                &url,
+                                track_index,
+                                member_index,
+                                0.0,
+                            );
                             async move { client.get(&url).send().await }
                         },
                     ]
@@ -266,12 +276,19 @@ pub async fn batch_control(
             let results = futures::future::join_all(reset_futures).await;
             let errors: Vec<_> = results.iter().filter(|r| r.is_err()).collect();
             if !errors.is_empty() {
-                tracing::warn!(error_count = errors.len(), "Batch reset: some REAPER calls failed");
+                tracing::warn!(
+                    error_count = errors.len(),
+                    "Batch reset: some REAPER calls failed"
+                );
                 return Err((
                     StatusCode::BAD_GATEWAY,
                     Json(ApiError::new(
                         "REAPER_ERROR",
-                        format!("{} of {} reset commands failed", errors.len(), results.len()),
+                        format!(
+                            "{} of {} reset commands failed",
+                            errors.len(),
+                            results.len()
+                        ),
                     )),
                 ));
             }
@@ -375,7 +392,9 @@ fn parse_reaper_value(text: &str) -> Option<f32> {
 }
 
 /// Build channel templates from config inputs with category and stereo info
-pub(crate) fn build_channel_templates(inputs: &[iem_core::config::InputTrack]) -> Vec<iem_core::Channel> {
+pub(crate) fn build_channel_templates(
+    inputs: &[iem_core::config::InputTrack],
+) -> Vec<iem_core::Channel> {
     inputs
         .iter()
         .enumerate()
@@ -766,7 +785,11 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
 
 /// Execute a client command by forwarding to REAPER
 /// Returns an error message if the command failed
-async fn execute_command(state: &AppState, member_id: &str, cmd: iem_core::ClientMsg) -> Result<(), String> {
+async fn execute_command(
+    state: &AppState,
+    member_id: &str,
+    cmd: iem_core::ClientMsg,
+) -> Result<(), String> {
     let config = state.config.read().await;
     let member_index = match config.member_index(member_id) {
         Some(idx) => idx,
