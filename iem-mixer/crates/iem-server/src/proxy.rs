@@ -1026,11 +1026,7 @@ mod tests {
     fn test_db_to_reaper_vol_unity() {
         // 0 dB = linear 1.0 (standard: vol = 10^(0/20) = 1.0)
         let vol = db_to_reaper_vol(0.0);
-        assert!(
-            (vol - 1.0).abs() < 0.01,
-            "0 dB should be 1.0, got {}",
-            vol
-        );
+        assert!((vol - 1.0).abs() < 0.01, "0 dB should be 1.0, got {}", vol);
     }
 
     #[test]
