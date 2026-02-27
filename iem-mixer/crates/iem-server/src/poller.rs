@@ -236,7 +236,10 @@ mod tests {
         let recently_commanded = ts_map
             .get(&key)
             .is_some_and(|ts| now.duration_since(*ts) < echo_window);
-        assert!(recently_commanded, "Should suppress echo within 500ms window");
+        assert!(
+            recently_commanded,
+            "Should suppress echo within 500ms window"
+        );
     }
 
     /// Test that broadcasts happen normally outside the suppression window
@@ -298,10 +301,7 @@ mod tests {
         ts_map.retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
 
         assert_eq!(ts_map.len(), 1, "Stale entries should be cleaned up");
-        assert!(
-            ts_map.contains_key(&key1),
-            "Fresh entry should be retained"
-        );
+        assert!(ts_map.contains_key(&key1), "Fresh entry should be retained");
     }
 
     /// Test that MixerCache initializes with empty command_timestamps
