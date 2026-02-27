@@ -13,6 +13,7 @@ use crate::auth::save_auth;
 pub fn LoginPage() -> impl IntoView {
     let query = use_query_map();
     let navigate = use_navigate();
+    let navigate_back = navigate.clone();
 
     // Get member and next URL from query params
     let member = move || {
@@ -83,6 +84,13 @@ pub fn LoginPage() -> impl IntoView {
 
     view! {
         <div class="app">
+            <header class="mixer-header">
+                <button class="back-btn" on:click=move |_| { navigate_back("/", Default::default()); }>
+                    "\u{2190}"
+                </button>
+                <h1>"IEM Mixer"</h1>
+                <div style="width: 40px"></div>
+            </header>
             <main class="main">
                 <div class="login-container">
                     <div class="login-box">

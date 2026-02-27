@@ -390,3 +390,31 @@ pub fn Fader(
         </div>
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_zero_db_marker_position() {
+        let pct = value_to_percent(0.0, -60.0, 12.0);
+        assert!(
+            (pct - 83.33).abs() < 0.1,
+            "0 dB should be at ~83.33%, got {pct}"
+        );
+    }
+
+    #[test]
+    fn test_value_to_percent_boundaries() {
+        assert!((value_to_percent(-60.0, -60.0, 12.0) - 0.0).abs() < 0.01);
+        assert!((value_to_percent(12.0, -60.0, 12.0) - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_quantize_half_db_steps() {
+        assert_eq!(quantize(0.0), 0.0);
+        assert_eq!(quantize(-3.3), -3.5);
+        assert_eq!(quantize(-3.2), -3.0);
+        assert_eq!(quantize(6.75), 7.0);
+    }
+}

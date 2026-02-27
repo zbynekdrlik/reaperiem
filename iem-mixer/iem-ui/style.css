@@ -351,6 +351,18 @@ body {
   cursor: pointer;
 }
 
+.fader-track::before {
+  content: "";
+  position: absolute;
+  left: 83.33%;
+  top: 2px;
+  bottom: 2px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .fader-fill {
   position: absolute;
   left: 0;
@@ -474,18 +486,19 @@ body {
   cursor: pointer;
   transition:
     background 0.12s,
-    color 0.12s;
+    color 0.12s,
+    box-shadow 0.12s;
 }
 
 .mute-btn.off {
-  background: var(--mute-red-dim);
-  color: #884048;
+  background: #2a2a3a;
+  color: #666;
 }
 
 .mute-btn.on {
   background: var(--mute-red);
   color: #fff;
-  box-shadow: 0 2px 10px rgba(230, 57, 70, 0.35);
+  box-shadow: 0 0 14px rgba(230, 57, 70, 0.5);
 }
 
 /* Solo button */

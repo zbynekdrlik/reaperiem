@@ -1,0 +1,18 @@
+{
+  "name": "IEM Mixer",
+  "short_name": "IEM Mix",
+  "description": "In-ear monitor mixer for live performance",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111119",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
