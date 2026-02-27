@@ -247,12 +247,8 @@ pub async fn batch_control(
                     vec![
                         {
                             let client = client.clone();
-                            let url = reaper_api::set_send_vol(
-                                &url,
-                                track_index,
-                                member_index,
-                                vol,
-                            );
+                            let url =
+                                reaper_api::set_send_vol(&url, track_index, member_index, vol);
                             async move { client.get(&url).send().await }
                         },
                         {
@@ -261,12 +257,8 @@ pub async fn batch_control(
                             async move { client.get(&url).send().await }
                         },
                         {
-                            let url = reaper_api::set_send_pan(
-                                &url,
-                                track_index,
-                                member_index,
-                                0.0,
-                            );
+                            let url =
+                                reaper_api::set_send_pan(&url, track_index, member_index, 0.0);
                             async move { client.get(&url).send().await }
                         },
                     ]
@@ -686,7 +678,11 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             if let Err(e) = execute_command(&state, &member_id, cmd).await {
-                                tracing::warn!(member_id = %member_id, error = %e, "WS command failed");
+                                tracing::warn!(
+                                    member_id = %member_id,
+                                    error = %e,
+                                    "WS command failed"
+                                );
                             }
                         }
                     }
