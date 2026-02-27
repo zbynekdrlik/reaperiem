@@ -4,6 +4,7 @@
 
 use leptos::prelude::*;
 use leptos_router::hooks::{use_navigate, use_params_map};
+use send_wrapper::SendWrapper;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -482,14 +483,15 @@ fn ChannelList(
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
-    // Cancellable guard timeouts per track — dropping a Timeout cancels it
-    let guard_timeouts: Rc<RefCell<HashMap<usize, gloo_timers::callback::Timeout>>> =
-        Rc::new(RefCell::new(HashMap::new()));
+    // Cancellable guard timeouts per track — dropping a Timeout cancels it.
+    // SendWrapper is safe in WASM (single-threaded) and satisfies Send+Sync for Callback::new.
+    let guard_timeouts: SendWrapper<Rc<RefCell<HashMap<usize, gloo_timers::callback::Timeout>>>> =
+        SendWrapper::new(Rc::new(RefCell::new(HashMap::new())));
 
     // Throttle state per track: (last_send_time_ms, pending_value, pending_timeout)
     type ThrottleEntry = (f64, Option<f32>, Option<gloo_timers::callback::Timeout>);
-    let throttle_state: Rc<RefCell<HashMap<usize, ThrottleEntry>>> =
-        Rc::new(RefCell::new(HashMap::new()));
+    let throttle_state: SendWrapper<Rc<RefCell<HashMap<usize, ThrottleEntry>>>> =
+        SendWrapper::new(Rc::new(RefCell::new(HashMap::new())));
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
