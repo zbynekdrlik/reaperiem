@@ -7,10 +7,10 @@ use iem_core::ServerMsg;
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::{AppState, GlobalVolState};
 use crate::proxy::{
     build_channel_templates, query_send_state, reaper_api, reaper_pan_to_ui, reaper_vol_to_db,
 };
+use crate::{AppState, GlobalVolState};
 
 /// Spawn the background poller task
 pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
@@ -160,10 +160,9 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 }
             }
 
-            cache.global_volumes.insert(
-                member_id.clone(),
-                GlobalVolState { level_db, muted },
-            );
+            cache
+                .global_volumes
+                .insert(member_id.clone(), GlobalVolState { level_db, muted });
         }
     }
 
@@ -385,7 +384,8 @@ mod tests {
         .collect();
 
         // Simulated NTRACK line for PETKA inear at track index 23
-        let line = "TRACK\t23\tPETKA inear\t0\t0.716000\t0.000000\t-2000\t-2000\t1.000000\t0\t0\t22\t0\t0";
+        let line =
+            "TRACK\t23\tPETKA inear\t0\t0.716000\t0.000000\t-2000\t-2000\t1.000000\t0\t0\t22\t0\t0";
         let parts: Vec<&str> = line.split('\t').collect();
         let track_name = parts[2];
 

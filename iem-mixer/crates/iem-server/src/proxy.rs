@@ -891,7 +891,10 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
-            (reaper_api::set_track_vol(&reaper_url, output_track, vol), output_track)
+            (
+                reaper_api::set_track_vol(&reaper_url, output_track, vol),
+                output_track,
+            )
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
@@ -919,7 +922,10 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
-            (reaper_api::set_track_mute(&reaper_url, output_track, mute_val), output_track)
+            (
+                reaper_api::set_track_mute(&reaper_url, output_track, mute_val),
+                output_track,
+            )
         }
     };
 
