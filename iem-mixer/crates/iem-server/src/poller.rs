@@ -494,8 +494,7 @@ mod tests {
     /// VU at 0 centibels (0 dB = full scale) should be 1.0 linear
     #[test]
     fn test_ntrack_vu_full_scale() {
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t0\t0\t1.000000\t0\t9\t0\t0\t0";
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t0\t0\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         let val = meters[&1];
         assert!(
