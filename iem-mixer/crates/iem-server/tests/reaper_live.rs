@@ -45,10 +45,7 @@ async fn test_live_meter_floor() {
     assert!(!meters.is_empty(), "Should have parsed at least one track");
 
     // When no audio is active, all meters should be at floor (0.0)
-    let non_zero: Vec<_> = meters
-        .iter()
-        .filter(|(_, v)| **v > 0.0)
-        .collect();
+    let non_zero: Vec<_> = meters.iter().filter(|(_, v)| **v > 0.0).collect();
     // Note: this test may have non-zero meters if audio is actually playing.
     // When run with no audio sources, all should be 0.0.
     println!(
@@ -101,7 +98,8 @@ async fn test_live_all_tracks_14_fields() {
 
     assert!(total_tracks > 0, "Should have found tracks in REAPER");
     assert_eq!(
-        total_tracks, tracks_with_14_fields,
+        total_tracks,
+        tracks_with_14_fields,
         "All tracks should have 14+ fields (record-armed); {} tracks had fewer",
         short_tracks.len()
     );

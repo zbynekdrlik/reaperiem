@@ -507,11 +507,7 @@ mod tests {
             val
         );
         // -14.0 dB → 10^(-14/20) ≈ 0.1995
-        assert!(
-            (val - 0.1995).abs() < 0.01,
-            "Expected ~0.1995, got {}",
-            val
-        );
+        assert!((val - 0.1995).abs() < 0.01, "Expected ~0.1995, got {}", val);
     }
 
     /// Parse captured live NTRACK response — all tracks silent at -1500 floor
