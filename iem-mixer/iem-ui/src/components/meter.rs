@@ -1,8 +1,7 @@
 //! Stereo VU Meter component — two thin gradient bars with ballistics and peak hold
 
 use leptos::prelude::*;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::*, JsCast};
 
 /// PPM-style decay rate: 26 dB/s
 const DECAY_DB_PER_SEC: f32 = 26.0;
