@@ -452,8 +452,10 @@ mod tests {
                                     10.0_f32.powf(cb / 100.0 / 20.0)
                                 }
                             };
-                            meters
-                                .insert(track_idx, [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)]);
+                            meters.insert(
+                                track_idx,
+                                [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                            );
                         }
                     }
                 }
@@ -525,7 +527,11 @@ mod tests {
         assert!(left > 0.0, "-1400 cb L should show signal, got {}", left);
         assert!(right > 0.0, "-1200 cb R should show signal, got {}", right);
         // -14.0 dB → 10^(-14/20) ≈ 0.1995
-        assert!((left - 0.1995).abs() < 0.01, "L expected ~0.1995, got {}", left);
+        assert!(
+            (left - 0.1995).abs() < 0.01,
+            "L expected ~0.1995, got {}",
+            left
+        );
         // -12.0 dB → 10^(-12/20) ≈ 0.2512
         assert!(
             (right - 0.2512).abs() < 0.01,

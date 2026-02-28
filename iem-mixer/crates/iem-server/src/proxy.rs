@@ -178,7 +178,10 @@ pub async fn poll_mixer_state(
                         10.0_f32.powf(cb / 100.0 / 20.0)
                     }
                 };
-                meters.insert(track_idx, [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)]);
+                meters.insert(
+                    track_idx,
+                    [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                );
             }
             // No VU (< 14 fields) → don't insert → frontend defaults to 0.0
         }
@@ -1582,8 +1585,10 @@ mod tests {
                         10.0_f32.powf(cb / 100.0 / 20.0)
                     }
                 };
-                meters
-                    .insert(track_idx, [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)]);
+                meters.insert(
+                    track_idx,
+                    [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                );
             }
         }
         meters
@@ -1677,11 +1682,7 @@ TRACK\t2\tSTEVO mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
 TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
         let meters = parse_meters_from_ntrack(text);
         for (idx, [left, right]) in &meters {
-            assert_eq!(
-                *left, 0.0,
-                "Track {} L should be silent, got {}",
-                idx, left
-            );
+            assert_eq!(*left, 0.0, "Track {} L should be silent, got {}", idx, left);
             assert_eq!(
                 *right, 0.0,
                 "Track {} R should be silent, got {}",

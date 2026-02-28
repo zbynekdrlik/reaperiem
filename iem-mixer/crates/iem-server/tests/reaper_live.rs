@@ -25,7 +25,10 @@ fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, [f32; 2]> {
                     10.0_f32.powf(cb / 100.0 / 20.0)
                 }
             };
-            meters.insert(track_idx, [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)]);
+            meters.insert(
+                track_idx,
+                [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+            );
         }
     }
     meters
