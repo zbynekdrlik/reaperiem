@@ -766,6 +766,91 @@ test.describe("Main Tab and Global Volume", () => {
     expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
   });
 
+  test("version is displayed in toolbar", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Toolbar version element must exist
+    const version = page.locator(".toolbar-version");
+    await expect(version).toBeVisible({ timeout: 5000 });
+    // Must contain version number pattern (e.g., "1.15.0")
+    const text = await version.textContent();
+    expect(text).toMatch(/\d+\.\d+\.\d+/);
+  });
+
+  test("status badge shows LIVE or OFFLINE text", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Status badge must exist in header
+    const badge = page.locator(".status-badge");
+    await expect(badge).toBeVisible({ timeout: 5000 });
+    // Must show either LIVE or OFFLINE
+    const text = await badge.textContent();
+    expect(["LIVE", "OFFLINE"]).toContain(text?.trim());
+  });
+
+  test("disconnected banner uses amber style (not red)", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Old red warning must NOT exist
+    const oldWarning = page.locator(".disconnected-warning");
+    await expect(oldWarning).toHaveCount(0);
+
+    // If disconnected, banner should use new amber class
+    const banner = page.locator(".disconnected-banner");
+    const bannerCount = await banner.count();
+    if (bannerCount > 0) {
+      // Text should be the calmer message
+      await expect(banner).toContainText("Reconnecting");
+    }
+  });
+
+  test("pan center indicator visible when pan is centered", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Wait for channels to load
+    const channelsLoaded = await page
+      .waitForSelector(".pan-slider", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Pan sliders with default center position should have "centered" class
+    const panSliders = page.locator(".pan-slider");
+    const count = await panSliders.count();
+    if (count > 0) {
+      // At least one slider should have the centered class (default pan = center)
+      const centeredCount = await page.locator(".pan-slider.centered").count();
+      expect(centeredCount).toBeGreaterThan(0);
+    }
+
+    // Center tick mark (::after pseudo) on pan-container — verify via computed styles
+    const panContainer = page.locator(".pan-container").first();
+    if ((await panContainer.count()) > 0) {
+      const hasPosition = await panContainer.evaluate((el) => {
+        return window.getComputedStyle(el).position;
+      });
+      // Must be relative for ::after positioning
+      expect(hasPosition).toBe("relative");
+    }
+  });
+
   test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "petka");

@@ -118,6 +118,7 @@ pub fn PanKnob(
                 // Double-tap detected → center pan
                 ev.prevent_default();
                 set_local_value.set(0.5);
+                set_saved_value.set(0.5);
                 on_change_touch.run(0.5);
                 // Reset tap tracking
                 *last_tap_time_start.borrow_mut() = 0.0;
@@ -257,6 +258,7 @@ pub fn PanKnob(
                     let mut classes = vec!["pan-slider"];
                     if is_pending.get() { classes.push("activating"); }
                     if is_activated.get() { classes.push("active"); }
+                    if (local_value.get() - 0.5).abs() < 0.005 { classes.push("centered"); }
                     classes.join(" ")
                 }
                 min="0"

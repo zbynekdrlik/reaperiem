@@ -452,11 +452,13 @@ pub fn MixerPage() -> impl IntoView {
                 }}</h1>
                 <div class=move || {
                     if connected.get() {
-                        "status-dot connected"
+                        "status-badge connected"
                     } else {
-                        "status-dot error"
+                        "status-badge disconnected"
                     }
-                } />
+                }>
+                    {move || if connected.get() { "LIVE" } else { "OFFLINE" }}
+                </div>
             </header>
 
             <CategoryTabs
@@ -468,8 +470,8 @@ pub fn MixerPage() -> impl IntoView {
                 when=move || !connected.get() && !loading.get()
                 fallback=|| ()
             >
-                <div class="disconnected-warning">
-                    "DISCONNECTED - Controls disabled (REAPER not reachable)"
+                <div class="disconnected-banner">
+                    "Reconnecting to REAPER..."
                 </div>
             </Show>
 
