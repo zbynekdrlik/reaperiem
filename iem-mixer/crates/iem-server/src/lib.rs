@@ -128,9 +128,7 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     {
         let config = state.config.read().await;
         if config.tls {
-            let config_dir = dirs::config_dir()
-                .unwrap_or_default()
-                .join("iem-mixer");
+            let config_dir = dirs::config_dir().unwrap_or_default().join("iem-mixer");
             let cert_path = config_dir.join(&config.tls_cert);
             let key_path = config_dir.join(&config.tls_key);
             let https_port = config.https_port;
@@ -153,10 +151,7 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
                     }
                 });
             } else {
-                tracing::warn!(
-                    "TLS enabled but cert files not found at {:?}",
-                    cert_path
-                );
+                tracing::warn!("TLS enabled but cert files not found at {:?}", cert_path);
             }
         }
     }
