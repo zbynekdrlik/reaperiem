@@ -1051,9 +1051,9 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
   });
 });
 
-test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () => {
-  test("horizontal meter bar is visible above fader", async ({ page }) => {
-    // Issue #17: Meter should be horizontal (full-width) above the fader
+test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
+  test("stereo meter bars visible above fader", async ({ page }) => {
+    // v1.19.0: Meter redesigned as stereo (L+R) with gradient and peak hold
     await page.goto("/");
     await loginAs(page, "petka");
     await page.goto("/petka");
@@ -1065,8 +1065,8 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
       .catch(() => null);
     if (!channelLoaded) return;
 
-    // Meter container must exist
-    const meter = channel.locator(".meter-container");
+    // Stereo meter container must exist
+    const meter = channel.locator(".meter-stereo");
     await expect(meter).toBeAttached();
     const meterBox = await meter.boundingBox();
     expect(meterBox).not.toBeNull();
@@ -1075,8 +1075,12 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
     expect(meterBox!.width).toBeGreaterThan(meterBox!.height);
     // Meter should span significant width (full channel width minus padding)
     expect(meterBox!.width).toBeGreaterThan(50);
-    // Meter height should be small (6px + minor rounding)
+    // Meter height should be small (6px = 2px + 1px gap + 2px + minor rounding)
     expect(meterBox!.height).toBeLessThanOrEqual(10);
+
+    // Must have exactly 2 meter bars (L and R channels)
+    const bars = channel.locator(".meter-bar");
+    await expect(bars).toHaveCount(2);
 
     // Meter must be ABOVE fader (lower Y = higher on screen)
     const faderBox = await channel.locator(".fader-track").boundingBox();
@@ -1084,10 +1088,10 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
     expect(meterBox!.y).toBeLessThan(faderBox!.y);
   });
 
-  test("meter fill uses width (not height) for horizontal layout", async ({
+  test("meter uses gradient fill (no CSS transition, Rust ballistics)", async ({
     page,
   }) => {
-    // Verify CSS uses width-based fill, not height-based
+    // v1.19.0: Ballistics handled in Rust at 30fps, no CSS transition
     await page.goto("/");
     await loginAs(page, "petka");
     await page.goto("/petka");
@@ -1099,12 +1103,11 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
       .catch(() => null);
     if (!loaded) return;
 
-    // The fill transition should be on "width", not "height"
-    const transition = await meterFill.evaluate(
-      (el) => window.getComputedStyle(el).transition,
+    // Meter fill should use gradient background, not solid color
+    const bg = await meterFill.evaluate(
+      (el) => window.getComputedStyle(el).backgroundImage,
     );
-    expect(transition).toContain("width");
-    expect(transition).not.toContain("height");
+    expect(bg).toContain("gradient");
   });
 
   test("fader double-click animates to 0dB (not instant jump)", async ({
@@ -1213,11 +1216,10 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
     expect(rowCount).toBe(3);
   });
 
-  test("meter shows zero width when no audio signal present", async ({
+  test("stereo meter shows zero width when no audio signal present", async ({
     page,
   }) => {
-    // v1.18.2 fix: REAPER meter floor (-1500 centibels) must produce 0.0 (silence)
-    // v1.18.1 addressed 12-field tracks; v1.18.2 fixes the -1500 cb floor threshold
+    // v1.19.0: Stereo meters with REAPER meter floor (-1500 cb) = silence
     await page.goto("/");
     await loginAs(page, "petka");
     await page.goto("/petka");
@@ -1232,12 +1234,26 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
     // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
     await page.waitForTimeout(500);
 
-    // With no audio source active, meter fill width should be 0% (or very small)
-    const fillWidth = await meterFill.evaluate((el) => {
-      const style = el.getAttribute("style") || "";
-      const match = style.match(/width:\s*([\d.]+)%/);
-      return match ? parseFloat(match[1]) : 0;
-    });
-    expect(fillWidth).toBeLessThanOrEqual(1);
+    // With no audio source active, both L and R meter fills should be 0% (or very small)
+    const fills = page.locator(".meter-fill");
+    const fillCount = await fills.count();
+    for (let i = 0; i < Math.min(fillCount, 4); i++) {
+      const fillWidth = await fills.nth(i).evaluate((el) => {
+        const style = el.getAttribute("style") || "";
+        const match = style.match(/width:\s*([\d.]+)%/);
+        return match ? parseFloat(match[1]) : 0;
+      });
+      expect(fillWidth).toBeLessThanOrEqual(1);
+    }
+
+    // Peak indicators should be hidden when no audio
+    const peaks = page.locator(".meter-peak");
+    const peakCount = await peaks.count();
+    for (let i = 0; i < Math.min(peakCount, 4); i++) {
+      const display = await peaks
+        .nth(i)
+        .evaluate((el) => window.getComputedStyle(el).display);
+      expect(display).toBe("none");
+    }
   });
 });

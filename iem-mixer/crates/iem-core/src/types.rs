@@ -42,8 +42,8 @@ pub struct PollResponse {
     pub member_id: String,
     /// Channel states
     pub channels: Vec<Channel>,
-    /// Meter levels (track_index -> peak level 0.0-1.0)
-    pub meters: std::collections::HashMap<usize, f32>,
+    /// Meter levels (track_index -> [left, right] peak levels 0.0-1.0)
+    pub meters: std::collections::HashMap<usize, [f32; 2]>,
     /// Connection status
     pub connected: bool,
 }

@@ -7,23 +7,25 @@
 
 use std::collections::HashMap;
 
-/// Parse meters from NTRACK response using the same logic as poller/proxy.
-fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, f32> {
+/// Parse stereo meters from NTRACK response using the same logic as poller/proxy.
+fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, [f32; 2]> {
     let mut meters = HashMap::new();
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.first() == Some(&"TRACK")
             && parts.len() >= 14
             && let Ok(track_idx) = parts[1].parse::<usize>()
-            && let Ok(peak_centibels) = parts[6].parse::<f32>()
+            && let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+                (parts[6].parse::<f32>(), parts[7].parse::<f32>())
         {
-            let peak_linear = if peak_centibels <= -1500.0 {
-                0.0
-            } else {
-                let peak_db = peak_centibels / 100.0;
-                10.0_f32.powf(peak_db / 20.0)
+            let cb_to_linear = |cb: f32| -> f32 {
+                if cb <= -1500.0 {
+                    0.0
+                } else {
+                    10.0_f32.powf(cb / 100.0 / 20.0)
+                }
             };
-            meters.insert(track_idx, peak_linear);
+            meters.insert(track_idx, [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)]);
         }
     }
     meters
@@ -45,7 +47,10 @@ async fn test_live_meter_floor() {
     assert!(!meters.is_empty(), "Should have parsed at least one track");
 
     // When no audio is active, all meters should be at floor (0.0)
-    let non_zero: Vec<_> = meters.iter().filter(|(_, v)| **v > 0.0).collect();
+    let non_zero: Vec<_> = meters
+        .iter()
+        .filter(|(_, [l, r])| *l > 0.0 || *r > 0.0)
+        .collect();
     // Note: this test may have non-zero meters if audio is actually playing.
     // When run with no audio sources, all should be 0.0.
     println!(
@@ -53,8 +58,8 @@ async fn test_live_meter_floor() {
         meters.len(),
         non_zero.len()
     );
-    for (idx, val) in &non_zero {
-        println!("  Track {} has signal: {:.6}", idx, val);
+    for (idx, [left, right]) in &non_zero {
+        println!("  Track {} has signal: L={:.6} R={:.6}", idx, left, right);
     }
 }
 

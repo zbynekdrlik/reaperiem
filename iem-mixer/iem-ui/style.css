@@ -14,9 +14,7 @@
   --mute-red: #e63946;
   --mute-red-dim: #5a1a1f;
   --solo-yellow: #f4d35e;
-  --meter-green: #4ecdc4;
-  --meter-yellow: #f4d35e;
-  --meter-red: #e63946;
+  /* meter colors replaced by continuous gradient in .meter-fill */
   --border-subtle: rgba(78, 205, 196, 0.15);
   --border-active: rgba(78, 205, 196, 0.5);
   --more-me-bg: rgba(78, 205, 196, 0.08);
@@ -540,13 +538,22 @@ body {
   text-transform: lowercase;
 }
 
-/* Meter bar — horizontal, spans full channel width */
-.meter-container {
+/* Stereo meter — two thin gradient bars with peak hold */
+.meter-stereo {
   grid-area: meter;
   width: 100%;
   height: 6px;
-  background: var(--fader-track-bg);
-  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+
+.meter-bar {
+  width: 100%;
+  height: 2px;
+  background: #0d0d18;
+  border-radius: 1px;
   position: relative;
   overflow: hidden;
 }
@@ -556,17 +563,25 @@ body {
   top: 0;
   left: 0;
   height: 100%;
-  background: var(--meter-green);
-  border-radius: 2px;
-  transition: width 0.08s linear;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    #1a4a2e 0%,
+    #2d6b42 30%,
+    #5a7a32 55%,
+    #7a6828 75%,
+    #6b2828 92%,
+    #8a2020 100%
+  );
+  /* NO CSS transition — ballistics handled in Rust at 30fps */
 }
 
-.meter-fill.warn {
-  background: var(--meter-yellow);
-}
-
-.meter-fill.clip {
-  background: var(--meter-red);
+.meter-peak {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.35);
 }
 
 /* Fader area - Row 1: spans ALL columns for maximum precision */

@@ -52,7 +52,7 @@ fn connect_websocket(
     member: &str,
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
     set_channels: WriteSignal<Vec<Channel>>,
-    set_meters: WriteSignal<HashMap<usize, f32>>,
+    set_meters: WriteSignal<HashMap<usize, [f32; 2]>>,
     set_connected: WriteSignal<bool>,
     set_loading: WriteSignal<bool>,
     fader_touched: ReadSignal<HashMap<usize, bool>>,
@@ -198,7 +198,7 @@ pub fn MixerPage() -> impl IntoView {
 
     // Reactive state
     let (channels, set_channels) = signal(Vec::<Channel>::new());
-    let (meters, set_meters) = signal(HashMap::<usize, f32>::new());
+    let (meters, set_meters) = signal(HashMap::<usize, [f32; 2]>::new());
     let (connected, set_connected) = signal(false);
     let (active_category, set_active_category) = signal(Category::Main);
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
@@ -704,8 +704,9 @@ fn GlobalVolumeFader(
                 <div class="ch-type">"master"</div>
             </div>
 
-            <div class="meter-container">
-                <div class="meter-fill" style="height: 0%"></div>
+            <div class="meter-stereo">
+                <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
+                <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
             </div>
 
             <div class="fader-area">
@@ -740,7 +741,7 @@ fn GlobalVolumeFader(
 #[component]
 fn ChannelList(
     display_channels: Signal<Vec<DisplayChannel>>,
-    meters: ReadSignal<HashMap<usize, f32>>,
+    meters: ReadSignal<HashMap<usize, [f32; 2]>>,
     channels: ReadSignal<Vec<Channel>>,
     set_channels: WriteSignal<Vec<Channel>>,
     set_fader_touched: WriteSignal<HashMap<usize, bool>>,
@@ -806,8 +807,11 @@ fn ChannelList(
                         })
                     });
 
-                    let meter_level = Signal::derive(move || {
-                        meters.with(|m| m.get(&track_idx).copied().unwrap_or(0.0))
+                    let meter_l = Signal::derive(move || {
+                        meters.with(|m| m.get(&track_idx).map(|v| v[0]).unwrap_or(0.0))
+                    });
+                    let meter_r = Signal::derive(move || {
+                        meters.with(|m| m.get(&track_idx).map(|v| v[1]).unwrap_or(0.0))
                     });
 
                     // Fader activation state for channel glow
@@ -1258,7 +1262,7 @@ fn ChannelList(
                                 </div>
                             </div>
 
-                            <Meter level=meter_level />
+                            <Meter level_l=meter_l level_r=meter_r />
 
                             <div class="fader-area">
                                 <Fader

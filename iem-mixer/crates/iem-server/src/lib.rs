@@ -46,8 +46,8 @@ pub struct GlobalVolState {
 pub struct MixerCache {
     /// Last known channel states per member (member_id -> channels)
     pub member_states: HashMap<String, Vec<iem_core::Channel>>,
-    /// Last known meter values (track_index -> peak_linear)
-    pub meters: HashMap<usize, f32>,
+    /// Last known meter values (track_index -> [left, right] peak_linear)
+    pub meters: HashMap<usize, [f32; 2]>,
     /// Whether REAPER is currently reachable
     pub connected: bool,
     /// Members with active WebSocket connections (member_id -> connection count)
