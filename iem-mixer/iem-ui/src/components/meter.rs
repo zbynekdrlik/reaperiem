@@ -1,7 +1,7 @@
 //! Stereo VU Meter component — two thin gradient bars with ballistics and peak hold
 
 use leptos::prelude::*;
-use wasm_bindgen::{JsCast, prelude::*};
+use wasm_bindgen::{prelude::*, JsCast};
 
 /// PPM-style decay rate: 26 dB/s
 const DECAY_DB_PER_SEC: f32 = 26.0;
@@ -137,6 +137,7 @@ pub fn Meter(
             TICK_MS as i32,
         )
         .unwrap();
+    // Leaks ~300 bytes of closure state; interval is cleared by on_cleanup below
     tick_closure.forget();
 
     on_cleanup(move || {

@@ -1230,7 +1230,10 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!loaded) return;
+    expect(
+      loaded,
+      "meter-fill element must render for regression test",
+    ).not.toBeNull();
 
     // Wait for WS to connect (poller sends first State within ~150ms)
     await page.waitForTimeout(500);
@@ -1252,17 +1255,24 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       return true;
     });
 
-    if (!injected) return; // WS not available (e.g., server not running)
+    expect(
+      injected,
+      "__iem_ws must be exposed for meter injection test",
+    ).toBeTruthy();
 
-    // Wait for 3+ animation ticks (33ms each ≈ 100ms) plus render
-    await page.waitForTimeout(200);
-
-    // Check if meter fill has width > 0%
-    const fillWidth = await meterFill.evaluate((el) => {
-      const style = el.getAttribute("style") || "";
-      const match = style.match(/width:\s*([\d.]+)%/);
-      return match ? parseFloat(match[1]) : 0;
-    });
+    // Poll until meter fill shows signal (more robust than fixed timeout)
+    const fillWidth = await page
+      .waitForFunction(
+        () => {
+          const el = document.querySelector(".meter-fill");
+          if (!el) return 0;
+          const style = el.getAttribute("style") || "";
+          const match = style.match(/width:\s*([\d.]+)%/);
+          return match ? parseFloat(match[1]) : 0;
+        },
+        { timeout: 2000 },
+      )
+      .then((h) => h.jsonValue());
 
     // If the animation timer is alive, it processes the 0.85 signal level
     // through ballistic_tick (instant attack) and linear_to_pct (~90%).
