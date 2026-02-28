@@ -34,6 +34,22 @@ pub struct Config {
     /// JWT secret for token signing
     #[serde(default = "default_jwt_secret")]
     pub jwt_secret: String,
+
+    /// Enable HTTPS (for PWA installability on phones)
+    #[serde(default)]
+    pub tls: bool,
+
+    /// HTTPS port (default 443)
+    #[serde(default = "default_https_port")]
+    pub https_port: u16,
+
+    /// TLS certificate file path (relative to config dir)
+    #[serde(default = "default_tls_cert")]
+    pub tls_cert: String,
+
+    /// TLS private key file path (relative to config dir)
+    #[serde(default = "default_tls_key")]
+    pub tls_key: String,
 }
 
 fn default_reaper_url() -> String {
@@ -49,6 +65,18 @@ fn default_jwt_secret() -> String {
     "change-me-in-production".to_string()
 }
 
+fn default_https_port() -> u16 {
+    443
+}
+
+fn default_tls_cert() -> String {
+    "cert.pem".to_string()
+}
+
+fn default_tls_key() -> String {
+    "key.pem".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -59,6 +87,10 @@ impl Default for Config {
             pins: HashMap::new(),
             engineer_pin: None,
             jwt_secret: default_jwt_secret(),
+            tls: false,
+            https_port: default_https_port(),
+            tls_cert: default_tls_cert(),
+            tls_key: default_tls_key(),
         }
     }
 }

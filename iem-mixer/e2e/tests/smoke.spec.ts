@@ -131,6 +131,31 @@ test.describe("PWA Support - Issue #19", () => {
     expect(contentType).toContain("svg");
   });
 
+  test("icon PNGs are served", async ({ request }) => {
+    const r192 = await request.get("/icon-192.png");
+    expect(r192.status()).toBe(200);
+    expect(r192.headers()["content-type"]).toContain("png");
+
+    const r512 = await request.get("/icon-512.png");
+    expect(r512.status()).toBe(200);
+    expect(r512.headers()["content-type"]).toContain("png");
+  });
+
+  test("manifest icons include PNG entries", async ({ request }) => {
+    const response = await request.get("/manifest.json");
+    const manifest = await response.json();
+    const pngIcons = manifest.icons.filter(
+      (i: { type: string }) => i.type === "image/png",
+    );
+    expect(pngIcons.length).toBeGreaterThanOrEqual(2);
+    expect(pngIcons.some((i: { sizes: string }) => i.sizes === "192x192")).toBe(
+      true,
+    );
+    expect(pngIcons.some((i: { sizes: string }) => i.sizes === "512x512")).toBe(
+      true,
+    );
+  });
+
   test("sw.js is served with no-cache header", async ({ request }) => {
     const response = await request.get("/sw.js");
     expect(response.status()).toBe(200);

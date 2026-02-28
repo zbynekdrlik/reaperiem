@@ -121,8 +121,47 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
         .merge(routes::api_routes())
         .merge(routes::static_routes())
         .layer(cors)
-        .with_state(state);
+        .with_state(state.clone());
 
+    // Spawn HTTPS server on port 443 (if TLS enabled and certs exist)
+    #[cfg(feature = "tls")]
+    {
+        let config = state.config.read().await;
+        if config.tls {
+            let config_dir = dirs::config_dir()
+                .unwrap_or_default()
+                .join("iem-mixer");
+            let cert_path = config_dir.join(&config.tls_cert);
+            let key_path = config_dir.join(&config.tls_key);
+            let https_port = config.https_port;
+            drop(config);
+
+            if cert_path.exists() && key_path.exists() {
+                let rustls_config =
+                    axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert_path, &key_path)
+                        .await?;
+                let https_addr = SocketAddr::from(([0, 0, 0, 0], https_port));
+                let https_app = app.clone();
+
+                tokio::spawn(async move {
+                    tracing::info!("HTTPS server on https://iem.newlevel.media");
+                    if let Err(e) = axum_server::bind_rustls(https_addr, rustls_config)
+                        .serve(https_app.into_make_service())
+                        .await
+                    {
+                        tracing::error!("HTTPS server failed: {}", e);
+                    }
+                });
+            } else {
+                tracing::warn!(
+                    "TLS enabled but cert files not found at {:?}",
+                    cert_path
+                );
+            }
+        }
+    }
+
+    // HTTP server (always runs)
     let addr = SocketAddr::from(([0, 0, 0, 0], server_config.port));
     tracing::info!("Starting server on http://{}", addr);
 

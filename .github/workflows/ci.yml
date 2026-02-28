@@ -454,6 +454,9 @@ jobs:
 
       - name: Install and start IEM Mixer
         shell: powershell
+        env:
+          TLS_CERT_PEM: ${{ secrets.TLS_CERT_PEM }}
+          TLS_KEY_PEM: ${{ secrets.TLS_KEY_PEM }}
         run: |
           $ErrorActionPreference = "Stop"  # Fail on ANY error
 
@@ -525,15 +528,28 @@ jobs:
             New-Item -ItemType Directory -Path $configDir -Force | Out-Null
           }
           Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
+
+          # Deploy TLS certificates from GitHub secrets (for HTTPS/PWA)
+          $tlsCert = "$env:TLS_CERT_PEM"
+          $tlsKey = "$env:TLS_KEY_PEM"
+          if ($tlsCert -and $tlsKey) {
+            [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
+            [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
+            Write-Host "TLS certificates deployed to $configDir"
+          } else {
+            Write-Host "::warning::TLS secrets not set - HTTPS will not be available"
+          }
           if (-not (Test-Path "$configDir\config.yaml")) {
             Write-Host "::error::Config copy failed"
             exit 1
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Reserve port 80 for non-admin use (idempotent)
+          # Reserve ports 80 and 443 for non-admin use (idempotent)
           Write-Host "Ensuring port 80 URL ACL..."
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
+          Write-Host "Ensuring port 443 URL ACL..."
+          & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
           # Start app via Task Scheduler using PowerShell cmdlets for reliable path handling
           # Register-ScheduledTask handles paths with spaces correctly (unlike schtasks.exe)
@@ -682,6 +698,17 @@ jobs:
               $members = Invoke-WebRequest -Uri "http://localhost:80/api/members" -UseBasicParsing
               $memberData = $members.Content | ConvertFrom-Json
               Write-Host "API members: $($memberData.Count) members loaded"
+
+              # Also verify HTTPS if cert was deployed
+              $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
+              if (Test-Path "$configDir\cert.pem") {
+                try {
+                  $httpsResp = Invoke-WebRequest -Uri "https://iem.newlevel.media/api/version" -UseBasicParsing
+                  Write-Host "HTTPS verified: OK"
+                } catch {
+                  Write-Host "::warning::HTTPS not responding (cert may need DNS propagation)"
+                }
+              }
 
               Write-Host "Deployment fully verified!"
               exit 0
