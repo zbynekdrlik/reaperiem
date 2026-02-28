@@ -1,6 +1,8 @@
 //! Stereo VU Meter component — two thin gradient bars with ballistics and peak hold
 
 use leptos::prelude::*;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// PPM-style decay rate: 26 dB/s
 const DECAY_DB_PER_SEC: f32 = 26.0;
@@ -101,30 +103,35 @@ pub fn Meter(
     let p_decay = peak_decay_factor();
     let tick_ms_f64 = TICK_MS as f64;
 
-    // 30fps animation loop using gloo_timers (same pattern as fader.rs)
-    let _interval = StoredValue::new(gloo_timers::callback::Interval::new(TICK_MS, move || {
-        let target_l = level_l.get_untracked();
-        let target_r = level_r.get_untracked();
+    // 30fps animation loop using gloo_timers (same Rc<RefCell> pattern as fader.rs)
+    // Interval stored in Rc to keep it alive for component lifetime.
+    let _interval_handle: Rc<RefCell<Option<gloo_timers::callback::Interval>>> =
+        Rc::new(RefCell::new(Some(gloo_timers::callback::Interval::new(
+            TICK_MS,
+            move || {
+                let target_l = level_l.get_untracked();
+                let target_r = level_r.get_untracked();
 
-        // Ballistic smoothing for bar levels
-        set_display_l.update(|d| *d = ballistic_tick(*d, target_l, decay));
-        set_display_r.update(|d| *d = ballistic_tick(*d, target_r, decay));
+                // Ballistic smoothing for bar levels
+                set_display_l.update(|d| *d = ballistic_tick(*d, target_l, decay));
+                set_display_r.update(|d| *d = ballistic_tick(*d, target_r, decay));
 
-        // Peak hold logic
-        let cur_peak_l = peak_l.get_untracked();
-        let cur_hold_l = hold_l.get_untracked();
-        let (new_peak_l, new_hold_l) =
-            peak_hold_tick(cur_peak_l, cur_hold_l, target_l, p_decay, tick_ms_f64);
-        set_peak_l.set(new_peak_l);
-        set_hold_l.set(new_hold_l);
+                // Peak hold logic
+                let cur_peak_l = peak_l.get_untracked();
+                let cur_hold_l = hold_l.get_untracked();
+                let (new_peak_l, new_hold_l) =
+                    peak_hold_tick(cur_peak_l, cur_hold_l, target_l, p_decay, tick_ms_f64);
+                set_peak_l.set(new_peak_l);
+                set_hold_l.set(new_hold_l);
 
-        let cur_peak_r = peak_r.get_untracked();
-        let cur_hold_r = hold_r.get_untracked();
-        let (new_peak_r, new_hold_r) =
-            peak_hold_tick(cur_peak_r, cur_hold_r, target_r, p_decay, tick_ms_f64);
-        set_peak_r.set(new_peak_r);
-        set_hold_r.set(new_hold_r);
-    }));
+                let cur_peak_r = peak_r.get_untracked();
+                let cur_hold_r = hold_r.get_untracked();
+                let (new_peak_r, new_hold_r) =
+                    peak_hold_tick(cur_peak_r, cur_hold_r, target_r, p_decay, tick_ms_f64);
+                set_peak_r.set(new_peak_r);
+                set_hold_r.set(new_hold_r);
+            },
+        ))));
 
     // Derived percentage signals for rendering
     let bar_l_pct = move || linear_to_pct(display_l.get());
