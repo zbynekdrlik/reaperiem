@@ -156,12 +156,14 @@ pub async fn poll_mixer_state(
     {
         connected = true;
         // Parse track data for meters
-        // REAPER TRACK format: TRACK\tindex\tname\tflags\tvol\tpan\tvu_peak_L\tvu_peak_R\t...
-        // Field 6 = VU peak L (integer, centibels relative to 0 dBFS)
+        // REAPER TRACK format varies by VU availability:
+        //   With VU (14 fields): TRACK idx name flags vol pan VU_L VU_R width panmode sendcnt recvcnt hwout color
+        //   Without VU (12 fields): TRACK idx name flags vol pan width panmode sendcnt recvcnt hwout color
+        // VU fields only present when track is record-armed (input monitoring)
         for line in text.lines() {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.first() == Some(&"TRACK")
-                && parts.len() > 7
+                && parts.len() >= 14
                 && let Ok(track_idx) = parts[1].parse::<usize>()
                 && let Ok(peak_centibels) = parts[6].parse::<f32>()
             {
@@ -174,6 +176,7 @@ pub async fn poll_mixer_state(
                 };
                 meters.insert(track_idx, peak_linear);
             }
+            // No VU (< 14 fields) → don't insert → frontend defaults to 0.0
         }
     }
 
@@ -1555,5 +1558,73 @@ mod tests {
 
         let (cat, _, _) = categorize_track("MAREK gtr");
         assert_eq!(cat, "mics");
+    }
+
+    /// Helper: parse meters from NTRACK text (mirrors poll_mixer_state logic)
+    fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, f32> {
+        let mut meters = HashMap::new();
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK")
+                && parts.len() >= 14
+                && let Ok(track_idx) = parts[1].parse::<usize>()
+                && let Ok(peak_centibels) = parts[6].parse::<f32>()
+            {
+                let peak_db = peak_centibels / 100.0;
+                let peak_linear = if peak_db <= -60.0 {
+                    0.0
+                } else {
+                    10.0_f32.powf(peak_db / 20.0)
+                };
+                meters.insert(track_idx, peak_linear);
+            }
+        }
+        meters
+    }
+
+    /// 14-field TRACK line (with VU) should produce meter data
+    #[test]
+    fn test_ntrack_14_fields_produces_meter() {
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(meters.contains_key(&1));
+        let val = meters[&1];
+        assert!(
+            (val - 0.1).abs() < 0.01,
+            "-2000 centibels should be ~0.1 linear, got {}",
+            val
+        );
+    }
+
+    /// 12-field TRACK line (no VU) must NOT produce meter data — this was the bug!
+    /// Without VU, field[6] is width (1.000000), which was wrongly parsed as centibels,
+    /// causing meters to show ~100% on silent tracks.
+    #[test]
+    fn test_ntrack_12_fields_no_meter() {
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(
+            !meters.contains_key(&1),
+            "12-field line must NOT produce meter — field[6] is width, not VU"
+        );
+    }
+
+    /// Regression: width value 1.000000 parsed as 1 centibel = 0.01 dB = linear ~1.0
+    /// This must NOT happen — only 14-field lines have VU data
+    #[test]
+    fn test_ntrack_width_not_parsed_as_centibels() {
+        // This is exactly the bug scenario: all tracks report width=1.0 as "signal"
+        let text = "\
+NTRACK\t3
+TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
+TRACK\t2\tSTEVO mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
+TRACK\t3\tMAREK mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(text);
+        assert!(
+            meters.is_empty(),
+            "No 12-field tracks should produce meters, got {} entries",
+            meters.len()
+        );
     }
 }

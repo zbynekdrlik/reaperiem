@@ -1212,4 +1212,32 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
     const rowCount = gridRows.split(" ").length;
     expect(rowCount).toBe(3);
   });
+
+  test("meter shows zero width when no audio signal present", async ({
+    page,
+  }) => {
+    // v1.18.1 fix: meters should NOT show false signal when tracks lack VU data
+    // The bug was field[6] being parsed as VU centibels when it was actually width
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
+    await page.waitForTimeout(500);
+
+    // With no audio source active, meter fill width should be 0% (or very small)
+    const fillWidth = await meterFill.evaluate((el) => {
+      const style = el.getAttribute("style") || "";
+      const match = style.match(/width:\s*([\d.]+)%/);
+      return match ? parseFloat(match[1]) : 0;
+    });
+    expect(fillWidth).toBeLessThanOrEqual(1);
+  });
 });

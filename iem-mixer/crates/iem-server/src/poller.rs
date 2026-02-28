@@ -61,16 +61,22 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 let parts: Vec<&str> = line.split('\t').collect();
                 if parts.first() == Some(&"TRACK") && parts.len() > 7 {
                     if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        // Extract meters (field 6 = VU peak L in centibels)
-                        if let Ok(peak_centibels) = parts[6].parse::<f32>() {
-                            let peak_db = peak_centibels / 100.0;
-                            let peak_linear = if peak_db <= -60.0 {
-                                0.0
-                            } else {
-                                10.0_f32.powf(peak_db / 20.0)
-                            };
-                            meters.insert(track_idx, peak_linear);
+                        // VU meter fields only present when track has 14+ fields
+                        // (record-armed tracks include VU_L at [6], VU_R at [7])
+                        // Without VU (12 fields): field [6] is width, NOT centibels
+                        if parts.len() >= 14 {
+                            if let Ok(peak_centibels) = parts[6].parse::<f32>() {
+                                let peak_db = peak_centibels / 100.0;
+                                let peak_linear = if peak_db <= -60.0 {
+                                    0.0
+                                } else {
+                                    10.0_f32.powf(peak_db / 20.0)
+                                };
+                                meters.insert(track_idx, peak_linear);
+                            }
                         }
+                        // No VU → don't insert → frontend defaults to 0.0
+
                         // Check if this is a member output track (e.g. "PETKA inear")
                         // Fields: TRACK idx name flags vol pan vu_peak_L vu_peak_R ...
                         let track_name = parts[2];
@@ -413,5 +419,108 @@ mod tests {
         let cache = MixerCache::new();
         assert!(cache.global_volumes.is_empty());
         assert!(cache.output_track_indices.is_empty());
+    }
+
+    /// Helper: parse meters from NTRACK response text using the same logic as the poller
+    fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, f32> {
+        let mut meters = HashMap::new();
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK") && parts.len() > 7 {
+                if let Ok(track_idx) = parts[1].parse::<usize>() {
+                    if parts.len() >= 14 {
+                        if let Ok(peak_centibels) = parts[6].parse::<f32>() {
+                            let peak_db = peak_centibels / 100.0;
+                            let peak_linear = if peak_db <= -60.0 {
+                                0.0
+                            } else {
+                                10.0_f32.powf(peak_db / 20.0)
+                            };
+                            meters.insert(track_idx, peak_linear);
+                        }
+                    }
+                }
+            }
+        }
+        meters
+    }
+
+    /// 14-field TRACK line (with VU) should produce meter data
+    #[test]
+    fn test_ntrack_with_vu_produces_meter() {
+        // 14 fields: TRACK idx name flags vol pan VU_L VU_R width panmode sendcnt recvcnt hwout color
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(
+            meters.contains_key(&1),
+            "14-field line should produce meter for track 1"
+        );
+        // -2000 centibels = -20.0 dB → linear 0.1
+        let val = meters[&1];
+        assert!(
+            (val - 0.1).abs() < 0.01,
+            "-2000 centibels should be ~0.1 linear, got {}",
+            val
+        );
+    }
+
+    /// 12-field TRACK line (without VU) must NOT produce meter data
+    #[test]
+    fn test_ntrack_without_vu_no_meter() {
+        // 12 fields: TRACK idx name flags vol pan width panmode sendcnt recvcnt hwout color
+        // Field [6] is width (1.000000), NOT VU centibels
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(
+            !meters.contains_key(&1),
+            "12-field line (no VU) should NOT produce meter data"
+        );
+    }
+
+    /// Very quiet VU (-6000 centibels = -60 dB) should be clamped to 0.0
+    #[test]
+    fn test_ntrack_vu_silence_threshold() {
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-6000\t-6000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert_eq!(
+            meters.get(&1),
+            Some(&0.0),
+            "-6000 centibels (-60 dB) should clamp to 0.0"
+        );
+    }
+
+    /// VU at 0 centibels (0 dB = full scale) should be 1.0 linear
+    #[test]
+    fn test_ntrack_vu_full_scale() {
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t0\t0\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        let val = meters[&1];
+        assert!(
+            (val - 1.0).abs() < 0.01,
+            "0 centibels should be ~1.0 linear, got {}",
+            val
+        );
+    }
+
+    /// Multiple tracks: only 14-field lines produce meters
+    #[test]
+    fn test_ntrack_mixed_field_counts() {
+        let text = "\
+NTRACK\t33
+TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0
+TRACK\t2\tSTEVO mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
+TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-500\t-500\t1.000000\t0\t0\t22\t0\t0";
+        let meters = parse_meters_from_ntrack(text);
+        assert!(meters.contains_key(&1), "Track 1 (14 fields) should have meter");
+        assert!(
+            !meters.contains_key(&2),
+            "Track 2 (12 fields) should NOT have meter"
+        );
+        assert!(
+            meters.contains_key(&23),
+            "Track 23 (14 fields) should have meter"
+        );
     }
 }
