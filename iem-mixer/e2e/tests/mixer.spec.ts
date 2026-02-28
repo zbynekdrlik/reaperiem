@@ -1050,3 +1050,166 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     expect(avg).toBeGreaterThan(100); // #555 = 85 avg, #888 = 136 avg
   });
 });
+
+test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () => {
+  test("horizontal meter bar is visible above fader", async ({ page }) => {
+    // Issue #17: Meter should be horizontal (full-width) above the fader
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    // Meter container must exist
+    const meter = channel.locator(".meter-container");
+    await expect(meter).toBeAttached();
+    const meterBox = await meter.boundingBox();
+    expect(meterBox).not.toBeNull();
+
+    // Meter should be horizontal: wider than tall
+    expect(meterBox!.width).toBeGreaterThan(meterBox!.height);
+    // Meter should span significant width (full channel width minus padding)
+    expect(meterBox!.width).toBeGreaterThan(50);
+    // Meter height should be small (6px + minor rounding)
+    expect(meterBox!.height).toBeLessThanOrEqual(10);
+
+    // Meter must be ABOVE fader (lower Y = higher on screen)
+    const faderBox = await channel.locator(".fader-track").boundingBox();
+    expect(faderBox).not.toBeNull();
+    expect(meterBox!.y).toBeLessThan(faderBox!.y);
+  });
+
+  test("meter fill uses width (not height) for horizontal layout", async ({
+    page,
+  }) => {
+    // Verify CSS uses width-based fill, not height-based
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // The fill transition should be on "width", not "height"
+    const transition = await meterFill.evaluate(
+      (el) => window.getComputedStyle(el).transition,
+    );
+    expect(transition).toContain("width");
+    expect(transition).not.toContain("height");
+  });
+
+  test("fader double-click animates to 0dB (not instant jump)", async ({
+    page,
+  }) => {
+    // Issue #33: Double-click should smoothly animate the fader to 0dB
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Record fill width before double-click
+    const fillBefore = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Double-click the fader
+    await fader.dblclick({ force: true });
+
+    // The "animating" class should appear
+    await page.waitForTimeout(100);
+    const classAfterDbl = await fader.getAttribute("class");
+    expect(classAfterDbl).toContain("animating");
+
+    // Wait for animation to complete (max ~3s from -60dB)
+    await page.waitForTimeout(4000);
+
+    // After animation, "animating" class should be removed
+    const classAfterAnim = await fader.getAttribute("class");
+    expect(classAfterAnim).not.toContain("animating");
+
+    // Fill should be near 83.33% (0dB position on -60..+12 range)
+    const fillAfter = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const expectedPct = 83.33;
+    const actualPct = (fillAfter / box.width) * 100;
+    // Allow 5% tolerance
+    expect(Math.abs(actualPct - expectedPct)).toBeLessThan(5);
+  });
+
+  test("fader touch interrupts animation", async ({ page }) => {
+    // Issue #33: Touching fader during animation should stop it immediately
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Double-click to start animation
+    await fader.dblclick({ force: true });
+    await page.waitForTimeout(200); // Let animation start
+
+    // Should be animating
+    const classAnimating = await fader.getAttribute("class");
+    expect(classAnimating).toContain("animating");
+
+    // Mouse down to interrupt
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+
+    // Animation should be cancelled
+    const classAfterInterrupt = await fader.getAttribute("class");
+    expect(classAfterInterrupt).not.toContain("animating");
+
+    await page.mouse.up();
+  });
+
+  test("channel grid has 3 rows (controls, meter, fader)", async ({ page }) => {
+    // Verify the CSS grid has 3 row areas
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    // Grid template should have 3 rows
+    const gridRows = await channel.evaluate(
+      (el) => window.getComputedStyle(el).gridTemplateRows,
+    );
+    // Should have 3 values (e.g., "36px 8px 44px")
+    const rowCount = gridRows.split(" ").length;
+    expect(rowCount).toBe(3);
+  });
+});

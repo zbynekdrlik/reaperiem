@@ -4,6 +4,8 @@
 //! behavior and enable fill-bar visualization. Implements a 150ms activation
 //! pattern for BOTH touch AND mouse — ALL movement is relative-only.
 //! No absolute positioning jumps on any platform.
+//!
+//! Double-tap (touch) or double-click (mouse) triggers smooth animation to 0dB.
 
 use leptos::prelude::*;
 use std::cell::RefCell;
@@ -17,14 +19,29 @@ const ACTIVATION_DELAY_MS: u32 = 150;
 /// Time window to ignore synthesized mouse events after touch (ms)
 const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
 
+/// Maximum time between taps for double-tap detection (ms)
+const DOUBLE_TAP_MS: f64 = 500.0;
+
+/// Maximum distance between taps for double-tap detection (px)
+const DOUBLE_TAP_DISTANCE_PX: f64 = 30.0;
+
+/// Animation tick interval in ms (20 ticks/sec, matches WS throttle)
+const ANIMATION_TICK_MS: u32 = 50;
+
+/// dB step per animation tick (1.0 dB/tick × 20 ticks/sec = 20 dB/sec)
+const ANIMATION_STEP_DB: f32 = 1.0;
+
+/// Target dB for double-tap animation
+const ANIMATION_TARGET_DB: f32 = 0.0;
+
 /// Convert a dB value to a percentage position on the fader track
 fn value_to_percent(value: f32, min: f32, max: f32) -> f32 {
     ((value - min) / (max - min) * 100.0).clamp(0.0, 100.0)
 }
 
-/// Quantize to 0.5 dB steps
+/// Quantize to 0.1 dB steps
 fn quantize(value: f32) -> f32 {
-    (value * 2.0).round() / 2.0
+    (value * 10.0).round() / 10.0
 }
 
 /// Horizontal fader component with touch-safe activation
@@ -33,6 +50,7 @@ fn quantize(value: f32) -> f32 {
 /// - Press and release before 150ms: NO change (prevents accidental jumps)
 /// - Press and hold 150ms+: Fader activates with visual feedback, relative movement
 /// - All movement is relative — fader never jumps to click/tap position
+/// - Double-tap (touch) or double-click (mouse): Smooth animation to 0dB
 #[component]
 pub fn Fader(
     /// Current value in dB (reactive signal)
@@ -57,6 +75,7 @@ pub fn Fader(
     let (is_pending, set_is_pending) = signal(false);
     let (is_touch_interaction, set_is_touch_interaction) = signal(false);
     let (saved_value, set_saved_value) = signal(0.0f32);
+    let (is_animating, set_is_animating) = signal(false);
 
     // Store the timeout handle so we can cancel it
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
@@ -73,15 +92,109 @@ pub fn Fader(
     // Timestamp of last touch event — guards against synthesized mouse events
     let last_touch_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
+    // Double-tap detection state (same pattern as pan.rs)
+    let last_tap_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+    let last_tap_x: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
+    // Animation state
+    let animation_handle: Rc<RefCell<Option<gloo_timers::callback::Interval>>> =
+        Rc::new(RefCell::new(None));
+
+    // Guard: blocks Effect from overwriting local_value for 300ms after animation completes
+    let animation_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
     // Node ref for measuring track dimensions
     let track_ref = NodeRef::<leptos::html::Div>::new();
 
-    // Update local value when external signal changes (but only if not actively touching)
+    // --- Rc clones for animation ---
+    let animation_handle_ts = animation_handle.clone();
+    let animation_handle_md = animation_handle.clone();
+    let animation_handle_dbl = animation_handle.clone();
+    let animation_guard_time_effect = animation_guard_time.clone();
+    let animation_guard_time_anim = animation_guard_time.clone();
+    let animation_guard_time_dbl = animation_guard_time.clone();
+
+    // Update local value when external signal changes (but only if not actively touching
+    // and not animating, and not within 300ms guard after animation)
     Effect::new(move |_| {
-        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() {
+        let guard_active = js_sys::Date::now() - *animation_guard_time_effect.borrow() < 300.0;
+        if !is_activated.get()
+            && !is_pending.get()
+            && !is_touch_interaction.get()
+            && !is_animating.get()
+            && !guard_active
+        {
             set_local_value.set(value.get());
         }
     });
+
+    // --- Helper: start animation toward 0dB ---
+    let start_animation = {
+        let animation_handle_start = animation_handle.clone();
+        let animation_guard_start = animation_guard_time_anim;
+        move || {
+            // Cancel any existing animation
+            animation_handle_start.borrow_mut().take();
+
+            set_is_animating.set(true);
+            if let Some(cb) = on_touch_state {
+                cb.run(true); // prevents server echo
+            }
+
+            let animation_handle_inner = animation_handle_start.clone();
+            let animation_guard_inner = animation_guard_start.clone();
+
+            let interval = gloo_timers::callback::Interval::new(ANIMATION_TICK_MS, move || {
+                let current = local_value.get_untracked();
+                let diff = ANIMATION_TARGET_DB - current;
+
+                if diff.abs() < ANIMATION_STEP_DB {
+                    // Close enough — snap to target and stop
+                    set_local_value.set(ANIMATION_TARGET_DB);
+                    on_change.run(ANIMATION_TARGET_DB);
+                    // Stop animation
+                    animation_handle_inner.borrow_mut().take();
+                    set_is_animating.set(false);
+                    // Set guard time to block Effect overwrite
+                    *animation_guard_inner.borrow_mut() = js_sys::Date::now();
+                    if let Some(cb) = on_touch_state {
+                        cb.run(false);
+                    }
+                } else {
+                    // Step toward target
+                    let step = if diff > 0.0 {
+                        ANIMATION_STEP_DB
+                    } else {
+                        -ANIMATION_STEP_DB
+                    };
+                    let new_val = quantize(current + step);
+                    set_local_value.set(new_val);
+                    on_change.run(new_val);
+                }
+            });
+
+            *animation_handle_start.borrow_mut() = Some(interval);
+        }
+    };
+
+    let start_animation_ts = start_animation.clone();
+    let start_animation_dbl = start_animation;
+
+    // --- Helper: cancel animation (called on touch/mouse interrupt) ---
+    let cancel_animation = {
+        let animation_handle_cancel = animation_handle.clone();
+        move || {
+            if is_animating.get_untracked() {
+                animation_handle_cancel.borrow_mut().take();
+                set_is_animating.set(false);
+                // Note: no on_touch_state(false) here — the touchstart/mousedown
+                // handler immediately calls on_touch_state(true) itself
+            }
+        }
+    };
+
+    let cancel_animation_ts = cancel_animation.clone();
+    let cancel_animation_md = cancel_animation;
 
     // --- Rc clones for each closure ---
 
@@ -109,13 +222,41 @@ pub fn Fader(
     let last_touch_time_tc = last_touch_time.clone();
     let last_touch_time_md = last_touch_time; // mousedown (last user)
 
+    let last_tap_time_ts = last_tap_time.clone();
+    let last_tap_x_ts = last_tap_x.clone();
+
     // --- Touch handlers ---
 
     let handle_touchstart = move |ev: TouchEvent| {
-        *last_touch_time_ts.borrow_mut() = js_sys::Date::now();
+        let now = js_sys::Date::now();
+        *last_touch_time_ts.borrow_mut() = now;
+
+        // Cancel any running animation first
+        cancel_animation_ts();
 
         if let Some(touch) = ev.touches().get(0) {
             let x = touch.client_x() as f64;
+
+            // Check for double-tap: two taps within time and distance thresholds
+            let prev_time = *last_tap_time_ts.borrow();
+            let prev_x = *last_tap_x_ts.borrow();
+            let dt = now - prev_time;
+            let dx = (x - prev_x).abs();
+
+            if dt < DOUBLE_TAP_MS && dx < DOUBLE_TAP_DISTANCE_PX && prev_time > 0.0 {
+                // Double-tap detected → start animation to 0dB
+                ev.prevent_default();
+                // Reset tap tracking
+                *last_tap_time_ts.borrow_mut() = 0.0;
+                set_is_touch_interaction.set(true);
+                start_animation_ts();
+                return;
+            }
+
+            // Record this tap for potential double-tap
+            *last_tap_time_ts.borrow_mut() = now;
+            *last_tap_x_ts.borrow_mut() = x;
+
             *touch_start_x_ts.borrow_mut() = Some(x);
             *touch_start_y_ts.borrow_mut() = Some(touch.client_y() as f64);
             *move_base_x_ts.borrow_mut() = Some(x);
@@ -214,8 +355,12 @@ pub fn Fader(
         *touch_start_y.borrow_mut() = None;
         *move_base_x_te.borrow_mut() = None;
 
-        if let Some(cb) = on_touch_state {
-            cb.run(false);
+        // Don't fire on_touch_state(false) if animation is running
+        // (animation manages its own touch state lifecycle)
+        if !is_animating.get_untracked() {
+            if let Some(cb) = on_touch_state {
+                cb.run(false);
+            }
         }
     };
 
@@ -233,8 +378,10 @@ pub fn Fader(
         set_is_activated.set(false);
         set_is_touch_interaction.set(false);
 
-        if let Some(cb) = on_touch_state {
-            cb.run(false);
+        if !is_animating.get_untracked() {
+            if let Some(cb) = on_touch_state {
+                cb.run(false);
+            }
         }
     };
 
@@ -258,6 +405,9 @@ pub fn Fader(
         if js_sys::Date::now() - *last_touch_time_md.borrow() < TOUCH_MOUSE_GUARD_MS {
             return;
         }
+
+        // Cancel any running animation
+        cancel_animation_md();
 
         ev.prevent_default();
 
@@ -367,6 +517,15 @@ pub fn Fader(
         *mu_closure_md.borrow_mut() = Some(uc);
     };
 
+    // Desktop double-click to animate to 0dB
+    let handle_dblclick = move |_ev: web_sys::MouseEvent| {
+        // Cancel any existing animation
+        animation_handle_dbl.borrow_mut().take();
+        // Guard time for Effect
+        *animation_guard_time_dbl.borrow_mut() = js_sys::Date::now();
+        start_animation_dbl();
+    };
+
     // Compute percentage for rendering
     let pct = move || value_to_percent(local_value.get(), min, max);
 
@@ -377,6 +536,7 @@ pub fn Fader(
                 let mut classes = vec!["fader-track"];
                 if is_pending.get() { classes.push("activating"); }
                 if is_activated.get() { classes.push("active"); }
+                if is_animating.get() { classes.push("animating"); }
                 classes.join(" ")
             }
             on:touchstart=handle_touchstart
@@ -384,6 +544,7 @@ pub fn Fader(
             on:touchend=handle_touchend
             on:touchcancel=handle_touchcancel
             on:mousedown=handle_mousedown
+            on:dblclick=handle_dblclick
         >
             <div class="fader-fill" style=move || format!("width:{}%", pct()) />
             <div class="fader-handle" style=move || format!("left:{}%", pct()) />
@@ -411,10 +572,25 @@ mod tests {
     }
 
     #[test]
-    fn test_quantize_half_db_steps() {
+    fn test_quantize_tenth_db_steps() {
         assert_eq!(quantize(0.0), 0.0);
-        assert_eq!(quantize(-3.3), -3.5);
-        assert_eq!(quantize(-3.2), -3.0);
-        assert_eq!(quantize(6.75), 7.0);
+        assert_eq!(quantize(-3.34), -3.3);
+        assert_eq!(quantize(-3.35), -3.4);
+        assert_eq!(quantize(6.75), 6.8);
+        assert_eq!(quantize(-12.0), -12.0);
+        assert_eq!(quantize(-0.05), -0.1);
+        assert_eq!(quantize(-0.04), 0.0);
+    }
+
+    #[test]
+    fn test_animation_constants() {
+        // Animation should reach 0dB from -60dB in ~3 seconds (60 steps at 50ms)
+        let steps = (60.0 / ANIMATION_STEP_DB) as u32;
+        let duration_ms = steps * ANIMATION_TICK_MS;
+        assert_eq!(duration_ms, 3000);
+        // Animation from +12dB to 0dB should take ~0.6s
+        let steps_down = (12.0 / ANIMATION_STEP_DB) as u32;
+        let duration_down = steps_down * ANIMATION_TICK_MS;
+        assert_eq!(duration_down, 600);
     }
 }

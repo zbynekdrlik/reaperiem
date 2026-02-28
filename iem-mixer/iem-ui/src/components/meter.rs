@@ -1,15 +1,15 @@
-//! VU Meter component
+//! VU Meter component — horizontal bar above fader
 
 use leptos::prelude::*;
 
-/// Vertical VU meter component
+/// Horizontal VU meter component
 #[component]
 pub fn Meter(
     /// Peak level (0.0 to 1.0+)
     level: Signal<f32>,
 ) -> impl IntoView {
     // Convert linear level to percentage (logarithmic scale)
-    let height_pct = move || {
+    let width_pct = move || {
         let l = level.get();
         if l <= 0.0001 {
             return 0.0;
@@ -35,7 +35,7 @@ pub fn Meter(
         <div class="meter-container">
             <div
                 class=move || format!("meter-fill {}", color_class())
-                style=move || format!("height: {}%", height_pct())
+                style=move || format!("width: {}%", width_pct())
             />
         </div>
     }

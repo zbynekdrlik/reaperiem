@@ -424,17 +424,19 @@ body {
 }
 
 /* ================================================================
-   Channel Strip: Two-row layout (ALL screen sizes)
-   Row 1: Label | Meter | Solo | Mute | dB | Pan (controls visible above fader)
-   Row 2: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
+   Channel Strip: Three-row layout (ALL screen sizes)
+   Row 1: Label | Solo | Mute | dB | Pan (controls visible above fader)
+   Row 2: FULL-WIDTH HORIZONTAL METER
+   Row 3: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
   display: grid;
-  grid-template-columns: 56px 8px 36px 40px 52px 1fr;
-  grid-template-rows: 36px 44px;
+  grid-template-columns: 56px 36px 40px 52px 1fr;
+  grid-template-rows: 36px 8px 44px;
   grid-template-areas:
-    "label  meter  solo   mute   db     pan"
-    "fader  fader  fader  fader  fader  fader";
+    "label  solo   mute   db     pan"
+    "meter  meter  meter  meter  meter"
+    "fader  fader  fader  fader  fader";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -538,11 +540,11 @@ body {
   text-transform: lowercase;
 }
 
-/* Meter bar */
+/* Meter bar — horizontal, spans full channel width */
 .meter-container {
   grid-area: meter;
-  width: 6px;
-  height: 32px;
+  width: 100%;
+  height: 6px;
   background: var(--fader-track-bg);
   border-radius: 2px;
   position: relative;
@@ -551,12 +553,12 @@ body {
 
 .meter-fill {
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
-  width: 100%;
+  height: 100%;
   background: var(--meter-green);
   border-radius: 2px;
-  transition: height 0.08s linear;
+  transition: width 0.08s linear;
 }
 
 .meter-fill.warn {
@@ -638,6 +640,19 @@ body {
   width: 16px;
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Double-tap animation to 0dB — smooth fill/handle transition */
+.fader-track.animating {
+  border-color: var(--accent-dim);
+}
+
+.fader-track.animating .fader-fill {
+  transition: width 0.05s linear;
+}
+
+.fader-track.animating .fader-handle {
+  transition: left 0.05s linear;
 }
 
 /* dB display - Row 2, centered for stage visibility */
