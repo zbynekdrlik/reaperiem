@@ -1,6 +1,6 @@
 [package]
 name = "iem-mixer-app"
-version = "1.11.0"
+version = "1.13.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "IEM Mixer desktop application with Tauri 2"
@@ -19,7 +19,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-dialog = "2"
 
 # Server crate
-iem-server = { path = "../crates/iem-server" }
+iem-server = { path = "../crates/iem-server", features = ["tls"] }
 iem-core = { path = "../crates/iem-core" }
 
 # Async runtime

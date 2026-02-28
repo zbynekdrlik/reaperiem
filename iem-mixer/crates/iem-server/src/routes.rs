@@ -147,6 +147,8 @@ fn serve_embedded_file(path: &str) -> Response {
         // Hashed assets (JS/WASM/CSS in /assets/) can be cached long-term
         let cache_control = if path.ends_with(".html") || path == "index.html" {
             "no-cache, must-revalidate"
+        } else if path == "sw.js" || path == "manifest.json" {
+            "no-cache, must-revalidate"
         } else {
             "public, max-age=31536000"
         };

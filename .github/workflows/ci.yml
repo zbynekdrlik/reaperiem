@@ -454,6 +454,9 @@ jobs:
 
       - name: Install and start IEM Mixer
         shell: powershell
+        env:
+          TLS_CERT_PEM: ${{ secrets.TLS_CERT_PEM }}
+          TLS_KEY_PEM: ${{ secrets.TLS_KEY_PEM }}
         run: |
           $ErrorActionPreference = "Stop"  # Fail on ANY error
 
@@ -525,15 +528,28 @@ jobs:
             New-Item -ItemType Directory -Path $configDir -Force | Out-Null
           }
           Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
+
+          # Deploy TLS certificates from GitHub secrets (for HTTPS/PWA)
+          $tlsCert = "$env:TLS_CERT_PEM"
+          $tlsKey = "$env:TLS_KEY_PEM"
+          if ($tlsCert -and $tlsKey) {
+            [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
+            [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
+            Write-Host "TLS certificates deployed to $configDir"
+          } else {
+            Write-Host "::warning::TLS secrets not set - HTTPS will not be available"
+          }
           if (-not (Test-Path "$configDir\config.yaml")) {
             Write-Host "::error::Config copy failed"
             exit 1
           }
           Write-Host "Config deployed to $configDir\config.yaml"
 
-          # Reserve port 80 for non-admin use (idempotent)
+          # Reserve ports 80 and 443 for non-admin use (idempotent)
           Write-Host "Ensuring port 80 URL ACL..."
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
+          Write-Host "Ensuring port 443 URL ACL..."
+          & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
           # Start app via Task Scheduler using PowerShell cmdlets for reliable path handling
           # Register-ScheduledTask handles paths with spaces correctly (unlike schtasks.exe)
@@ -650,10 +666,31 @@ jobs:
           }
           Write-Host "App running (PID: $($proc.Id))"
 
+          # Dump app logs for diagnostics
+          Write-Host "=== APP LOG (last 50 lines) ==="
+          $logDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer\logs"
+          if (Test-Path $logDir) {
+            $latestLog = Get-ChildItem $logDir -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($latestLog) {
+              Write-Host "Log file: $($latestLog.FullName)"
+              Get-Content $latestLog.FullName -Tail 50 | ForEach-Object { Write-Host "  $_" }
+            } else {
+              Write-Host "No log files found in $logDir"
+            }
+          } else {
+            Write-Host "Log directory not found: $logDir"
+          }
+          Write-Host "=== END APP LOG ==="
+
+          # Check all listening ports
+          Write-Host "=== LISTENING PORTS ==="
+          netstat -an | Select-String "LISTENING" | Select-String ":80 |:443 |:8080 " | ForEach-Object { Write-Host "  $_" }
+          Write-Host "=== END PORTS ==="
+
           # App is running - verify it's serving correctly
           $expected_hash = (git rev-parse --short HEAD).Trim()
-          $maxRetries = 5
-          $retryDelay = 3
+          $maxRetries = 8
+          $retryDelay = 5
 
           for ($i = 1; $i -le $maxRetries; $i++) {
             try {
@@ -683,11 +720,33 @@ jobs:
               $memberData = $members.Content | ConvertFrom-Json
               Write-Host "API members: $($memberData.Count) members loaded"
 
+              # Also verify HTTPS if cert was deployed
+              $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
+              if (Test-Path "$configDir\cert.pem") {
+                try {
+                  $httpsResp = Invoke-WebRequest -Uri "https://iem.newlevel.media/api/version" -UseBasicParsing
+                  Write-Host "HTTPS verified: OK"
+                } catch {
+                  Write-Host "::warning::HTTPS not responding (cert may need DNS propagation)"
+                }
+              }
+
               Write-Host "Deployment fully verified!"
               exit 0
             } catch {
               Write-Host "Attempt ${i}: $_"
               if ($i -eq $maxRetries) {
+                # Dump full log on final failure for debugging
+                Write-Host "=== FULL APP LOG ON FAILURE ==="
+                $logDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer\logs"
+                if (Test-Path $logDir) {
+                  Get-ChildItem $logDir -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object {
+                    Get-Content $_.FullName -Tail 100 | ForEach-Object { Write-Host "  $_" }
+                  }
+                }
+                Write-Host "=== ALL LISTENING PORTS ==="
+                netstat -an | Select-String "LISTENING" | ForEach-Object { Write-Host "  $_" }
+                Write-Host "=== END DEBUG ==="
                 Write-Host "::error::App is running but HTTP endpoints not responding"
                 exit 1
               }
