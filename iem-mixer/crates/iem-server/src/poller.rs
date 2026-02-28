@@ -452,18 +452,19 @@ mod tests {
     #[test]
     fn test_ntrack_with_vu_produces_meter() {
         // 14 fields: TRACK idx name flags vol pan VU_L VU_R width panmode sendcnt recvcnt hwout color
+        // Use -1000 centibels (-10 dB), which is above the -1500 meter floor
         let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-1000\t-1000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             meters.contains_key(&1),
             "14-field line should produce meter for track 1"
         );
-        // -2000 centibels = -20.0 dB → linear 0.1
+        // -1000 centibels = -10.0 dB → 10^(-10/20) ≈ 0.3162
         let val = meters[&1];
         assert!(
-            (val - 0.1).abs() < 0.01,
-            "-2000 centibels should be ~0.1 linear, got {}",
+            (val - 0.3162).abs() < 0.01,
+            "-1000 centibels should be ~0.3162 linear, got {}",
             val
         );
     }
