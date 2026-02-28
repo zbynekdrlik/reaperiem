@@ -167,11 +167,13 @@ pub async fn poll_mixer_state(
                 && let Ok(track_idx) = parts[1].parse::<usize>()
                 && let Ok(peak_centibels) = parts[6].parse::<f32>()
             {
-                // Convert centibels to linear (0.0-1.0 where 1.0 = 0 dBFS)
-                let peak_db = peak_centibels / 100.0;
-                let peak_linear = if peak_db <= -60.0 {
+                // REAPER HTTP API meter floor: -1500 centibels (-15.0 dB)
+                // Verified 2026-02-28: all 33 tracks report exactly -1500
+                // when no audio is present; REAPER's own UI shows zero.
+                let peak_linear = if peak_centibels <= -1500.0 {
                     0.0
                 } else {
+                    let peak_db = peak_centibels / 100.0;
                     10.0_f32.powf(peak_db / 20.0)
                 };
                 meters.insert(track_idx, peak_linear);
@@ -1570,10 +1572,10 @@ mod tests {
                 && let Ok(track_idx) = parts[1].parse::<usize>()
                 && let Ok(peak_centibels) = parts[6].parse::<f32>()
             {
-                let peak_db = peak_centibels / 100.0;
-                let peak_linear = if peak_db <= -60.0 {
+                let peak_linear = if peak_centibels <= -1500.0 {
                     0.0
                 } else {
+                    let peak_db = peak_centibels / 100.0;
                     10.0_f32.powf(peak_db / 20.0)
                 };
                 meters.insert(track_idx, peak_linear);
@@ -1626,5 +1628,50 @@ TRACK\t3\tMAREK mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
             "No 12-field tracks should produce meters, got {} entries",
             meters.len()
         );
+    }
+
+    /// REAPER meter floor (-1500 centibels) must produce 0.0 (silence)
+    /// Verified 2026-02-28: all 33 live tracks report -1500 with no audio.
+    #[test]
+    fn test_reaper_meter_floor_is_silence() {
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(line);
+        assert_eq!(
+            meters.get(&1),
+            Some(&0.0),
+            "-1500 centibels (REAPER meter floor) must be silence"
+        );
+    }
+
+    /// Values above REAPER meter floor should produce signal
+    #[test]
+    fn test_reaper_above_floor_shows_signal() {
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1400\t-1400\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(line);
+        let val = meters[&1];
+        assert!(
+            val > 0.0,
+            "-1400 centibels (above floor) should show signal, got {}",
+            val
+        );
+    }
+
+    /// Parse captured live NTRACK response — all tracks silent at -1500 floor
+    /// Data captured 2026-02-28 from: curl -s "http://iem.lan:8080/_/NTRACK;TRACK"
+    #[test]
+    fn test_reaper_captured_ntrack_all_silent() {
+        let text = "\
+NTRACK\t33
+TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t2\tSTEVO mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(text);
+        for (idx, val) in &meters {
+            assert_eq!(
+                *val, 0.0,
+                "Track {} should be silent (0.0), got {}",
+                idx, val
+            );
+        }
     }
 }

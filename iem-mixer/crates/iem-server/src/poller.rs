@@ -66,10 +66,13 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         // Without VU (12 fields): field [6] is width, NOT centibels
                         if parts.len() >= 14 {
                             if let Ok(peak_centibels) = parts[6].parse::<f32>() {
-                                let peak_db = peak_centibels / 100.0;
-                                let peak_linear = if peak_db <= -60.0 {
+                                // REAPER HTTP API meter floor: -1500 centibels (-15.0 dB)
+                                // Verified 2026-02-28: all 33 tracks report exactly -1500
+                                // when no audio is present; REAPER's own UI shows zero.
+                                let peak_linear = if peak_centibels <= -1500.0 {
                                     0.0
                                 } else {
+                                    let peak_db = peak_centibels / 100.0;
                                     10.0_f32.powf(peak_db / 20.0)
                                 };
                                 meters.insert(track_idx, peak_linear);
@@ -430,10 +433,10 @@ mod tests {
                 if let Ok(track_idx) = parts[1].parse::<usize>() {
                     if parts.len() >= 14 {
                         if let Ok(peak_centibels) = parts[6].parse::<f32>() {
-                            let peak_db = peak_centibels / 100.0;
-                            let peak_linear = if peak_db <= -60.0 {
+                            let peak_linear = if peak_centibels <= -1500.0 {
                                 0.0
                             } else {
+                                let peak_db = peak_centibels / 100.0;
                                 10.0_f32.powf(peak_db / 20.0)
                             };
                             meters.insert(track_idx, peak_linear);
@@ -478,17 +481,56 @@ mod tests {
         );
     }
 
-    /// Very quiet VU (-6000 centibels = -60 dB) should be clamped to 0.0
+    /// REAPER meter floor (-1500 centibels) must produce 0.0 (silence)
+    /// Verified 2026-02-28: all 33 live tracks report -1500 with no audio.
     #[test]
-    fn test_ntrack_vu_silence_threshold() {
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-6000\t-6000\t1.000000\t0\t9\t0\t0\t0";
+    fn test_reaper_meter_floor_is_silence() {
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
         let meters = parse_meters_from_ntrack(line);
         assert_eq!(
             meters.get(&1),
             Some(&0.0),
-            "-6000 centibels (-60 dB) should clamp to 0.0"
+            "-1500 centibels (REAPER meter floor) must be silence"
         );
+    }
+
+    /// Values above REAPER meter floor should produce signal
+    #[test]
+    fn test_reaper_above_floor_shows_signal() {
+        // -1400 centibels = -14.0 dB — just above the -1500 floor
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1400\t-1400\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(line);
+        let val = meters[&1];
+        assert!(
+            val > 0.0,
+            "-1400 centibels (above floor) should show signal, got {}",
+            val
+        );
+        // -14.0 dB → 10^(-14/20) ≈ 0.1995
+        assert!(
+            (val - 0.1995).abs() < 0.01,
+            "Expected ~0.1995, got {}",
+            val
+        );
+    }
+
+    /// Parse captured live NTRACK response — all tracks silent at -1500 floor
+    /// Data captured 2026-02-28 from: curl -s "http://iem.lan:8080/_/NTRACK;TRACK"
+    #[test]
+    fn test_reaper_captured_ntrack_all_silent() {
+        let text = "\
+NTRACK\t33
+TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t2\tSTEVO mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(text);
+        for (idx, val) in &meters {
+            assert_eq!(
+                *val, 0.0,
+                "Track {} should be silent (0.0), got {}",
+                idx, val
+            );
+        }
     }
 
     /// VU at 0 centibels (0 dB = full scale) should be 1.0 linear

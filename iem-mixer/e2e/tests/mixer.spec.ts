@@ -1216,8 +1216,8 @@ test.describe("v1.18.0 — Fader Resolution, Double-Tap, Horizontal Meter", () =
   test("meter shows zero width when no audio signal present", async ({
     page,
   }) => {
-    // v1.18.1 fix: meters should NOT show false signal when tracks lack VU data
-    // The bug was field[6] being parsed as VU centibels when it was actually width
+    // v1.18.2 fix: REAPER meter floor (-1500 centibels) must produce 0.0 (silence)
+    // v1.18.1 addressed 12-field tracks; v1.18.2 fixes the -1500 cb floor threshold
     await page.goto("/");
     await loginAs(page, "petka");
     await page.goto("/petka");
