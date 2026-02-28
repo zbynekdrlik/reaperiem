@@ -1226,13 +1226,15 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    const meterFill = page.locator(".meter-fill").first();
+    // Skip the first 2 static .meter-fill elements (IEM VOL master L/R)
+    // which always have width:0%. Target a dynamic Meter component's fill.
+    const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
     expect(
       loaded,
-      "meter-fill element must render for regression test",
+      "dynamic meter-fill element must render for regression test",
     ).not.toBeNull();
 
     // Wait for WS to connect (poller sends first State within ~150ms)
@@ -1261,14 +1263,15 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       "__iem_ws must be exposed for meter injection test",
     ).toBeTruthy();
 
-    // Poll until meter fill shows signal (more robust than fixed timeout).
-    // waitForFunction resolves on truthy return; 0 is falsy so return null
-    // to keep polling, and .catch to get a clear assertion instead of timeout.
+    // Poll until a dynamic meter fill shows signal (skip first 2 = IEM VOL master).
+    // waitForFunction resolves on truthy return; return null to keep polling,
+    // .catch gives a clear assertion failure instead of timeout.
     const fillWidth = await page
       .waitForFunction(
         () => {
-          const el = document.querySelector(".meter-fill");
-          if (!el) return null;
+          const fills = document.querySelectorAll(".meter-fill");
+          if (fills.length < 3) return null;
+          const el = fills[2]; // First dynamic Meter component fill
           const style = el.getAttribute("style") || "";
           const match = style.match(/width:\s*([\d.]+)%/);
           const w = match ? parseFloat(match[1]) : 0;
