@@ -167,6 +167,28 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
         }
     }
 
+    // Wrap HTTP app with HTTPS redirect middleware when TLS + domain configured
+    #[cfg(feature = "tls")]
+    let app = {
+        let config = state.config.read().await;
+        if config.tls {
+            if let Some(ref domain) = config.https_domain {
+                let domain = domain.clone();
+                drop(config);
+                app.layer(axum::middleware::from_fn(move |req, next| {
+                    let domain = domain.clone();
+                    https_redirect(req, next, domain)
+                }))
+            } else {
+                drop(config);
+                app
+            }
+        } else {
+            drop(config);
+            app
+        }
+    };
+
     // HTTP server (always runs)
     let addr = SocketAddr::from(([0, 0, 0, 0], server_config.port));
     tracing::info!("Starting server on http://{}", addr);
@@ -175,6 +197,36 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Redirect HTTP requests to HTTPS when the Host header matches the configured domain.
+/// Requests via IP address (e.g., from Tauri desktop app) pass through unchanged.
+#[cfg(feature = "tls")]
+async fn https_redirect(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+    domain: String,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+
+    let host = req
+        .headers()
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    // Strip port from host header for comparison
+    let host_name = host.split(':').next().unwrap_or("");
+    if host_name == domain {
+        let path = req
+            .uri()
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/");
+        let location = format!("https://{domain}{path}");
+        axum::response::Redirect::permanent(&location).into_response()
+    } else {
+        next.run(req).await
+    }
 }
 
 /// Get the local network URL for remote access

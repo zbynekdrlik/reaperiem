@@ -141,6 +141,7 @@ tls: true
 https_port: 443
 tls_cert: "cert.pem"
 tls_key: "key.pem"
+https_domain: "iem.newlevel.media"
 
 # PIN codes for authentication (empty = no PIN required)
 pins: {}

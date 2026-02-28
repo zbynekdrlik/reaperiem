@@ -50,6 +50,10 @@ pub struct Config {
     /// TLS private key file path (relative to config dir)
     #[serde(default = "default_tls_key")]
     pub tls_key: String,
+
+    /// Domain for HTTPS redirect (HTTP requests to this domain → HTTPS)
+    #[serde(default)]
+    pub https_domain: Option<String>,
 }
 
 fn default_reaper_url() -> String {
@@ -91,6 +95,7 @@ impl Default for Config {
             https_port: default_https_port(),
             tls_cert: default_tls_cert(),
             tls_key: default_tls_key(),
+            https_domain: None,
         }
     }
 }
