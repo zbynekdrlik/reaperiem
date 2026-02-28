@@ -666,10 +666,31 @@ jobs:
           }
           Write-Host "App running (PID: $($proc.Id))"
 
+          # Dump app logs for diagnostics
+          Write-Host "=== APP LOG (last 50 lines) ==="
+          $logDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer\logs"
+          if (Test-Path $logDir) {
+            $latestLog = Get-ChildItem $logDir -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($latestLog) {
+              Write-Host "Log file: $($latestLog.FullName)"
+              Get-Content $latestLog.FullName -Tail 50 | ForEach-Object { Write-Host "  $_" }
+            } else {
+              Write-Host "No log files found in $logDir"
+            }
+          } else {
+            Write-Host "Log directory not found: $logDir"
+          }
+          Write-Host "=== END APP LOG ==="
+
+          # Check all listening ports
+          Write-Host "=== LISTENING PORTS ==="
+          netstat -an | Select-String "LISTENING" | Select-String ":80 |:443 |:8080 " | ForEach-Object { Write-Host "  $_" }
+          Write-Host "=== END PORTS ==="
+
           # App is running - verify it's serving correctly
           $expected_hash = (git rev-parse --short HEAD).Trim()
-          $maxRetries = 5
-          $retryDelay = 3
+          $maxRetries = 8
+          $retryDelay = 5
 
           for ($i = 1; $i -le $maxRetries; $i++) {
             try {
@@ -715,6 +736,17 @@ jobs:
             } catch {
               Write-Host "Attempt ${i}: $_"
               if ($i -eq $maxRetries) {
+                # Dump full log on final failure for debugging
+                Write-Host "=== FULL APP LOG ON FAILURE ==="
+                $logDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer\logs"
+                if (Test-Path $logDir) {
+                  Get-ChildItem $logDir -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object {
+                    Get-Content $_.FullName -Tail 100 | ForEach-Object { Write-Host "  $_" }
+                  }
+                }
+                Write-Host "=== ALL LISTENING PORTS ==="
+                netstat -an | Select-String "LISTENING" | ForEach-Object { Write-Host "  $_" }
+                Write-Host "=== END DEBUG ==="
                 Write-Host "::error::App is running but HTTP endpoints not responding"
                 exit 1
               }
