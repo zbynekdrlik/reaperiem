@@ -1260,19 +1260,23 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       "__iem_ws must be exposed for meter injection test",
     ).toBeTruthy();
 
-    // Poll until meter fill shows signal (more robust than fixed timeout)
+    // Poll until meter fill shows signal (more robust than fixed timeout).
+    // waitForFunction resolves on truthy return; 0 is falsy so return null
+    // to keep polling, and .catch to get a clear assertion instead of timeout.
     const fillWidth = await page
       .waitForFunction(
         () => {
           const el = document.querySelector(".meter-fill");
-          if (!el) return 0;
+          if (!el) return null;
           const style = el.getAttribute("style") || "";
           const match = style.match(/width:\s*([\d.]+)%/);
-          return match ? parseFloat(match[1]) : 0;
+          const w = match ? parseFloat(match[1]) : 0;
+          return w > 10 ? w : null;
         },
         { timeout: 2000 },
       )
-      .then((h) => h.jsonValue());
+      .then((h) => h.jsonValue())
+      .catch(() => 0);
 
     // If the animation timer is alive, it processes the 0.85 signal level
     // through ballistic_tick (instant attack) and linear_to_pct (~90%).
