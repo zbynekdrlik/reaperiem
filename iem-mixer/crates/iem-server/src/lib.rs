@@ -110,6 +110,12 @@ pub struct Assets;
 
 /// Start the server
 pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
+    // Install rustls crypto provider (required when tls feature brings rustls into dep tree)
+    #[cfg(feature = "tls")]
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
     let state = AppState::new(server_config.config);
 
     // Spawn background REAPER poller
