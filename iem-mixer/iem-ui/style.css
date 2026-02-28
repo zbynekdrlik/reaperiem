@@ -220,13 +220,20 @@ body {
   border-color: var(--accent);
 }
 
-.pin-dot {
-  font-size: 1.4em;
-  color: var(--text-secondary);
+.pin-field .pin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  border: 2px solid var(--border-subtle);
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 
-.pin-dot.filled {
-  color: var(--accent);
+.pin-field .pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .pin-error {
@@ -1146,7 +1153,7 @@ body {
   margin-bottom: 24px;
 }
 
-.pin-dot {
+.pin-display .pin-dot {
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -1157,12 +1164,12 @@ body {
     border-color 0.15s;
 }
 
-.pin-dot.filled {
+.pin-display .pin-dot.filled {
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.pin-dot.error {
+.pin-display .pin-dot.error {
   background: var(--mute-red);
   border-color: var(--mute-red);
 }
