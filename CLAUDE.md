@@ -199,6 +199,21 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 
 ---
 
+## ⚠️ REAPER Data Verification (MANDATORY)
+
+Before ANY change to REAPER HTTP API parsing, you MUST:
+
+1. `curl -s "http://iem.lan:8080/_/NTRACK;TRACK"` — see real field layout
+2. `curl -s "http://iem.lan:8080/_/GET/TRACK/1/SEND/0"` — see real SEND format
+3. Capture the actual values and use them in tests
+4. NEVER assume field counts, value ranges, or sentinel values
+
+**Known REAPER meter floor:** `-1500` centibels (-15.0 dB) — this is the HTTP API's "no signal" value. REAPER's own UI shows zero at this level. All track meter parsing must treat values ≤ -1500 cb as silence (0.0 linear).
+
+Integration tests exist: `cargo test -p iem-server --features integration`
+
+---
+
 ## ⚠️ REAPER Development Rules
 
 ### NEVER DO:

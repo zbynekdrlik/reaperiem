@@ -34,8 +34,8 @@ pub enum ServerMsg {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         global_muted: Option<bool>,
     },
-    /// Meter levels (sent every ~150ms)
-    Meters { meters: HashMap<usize, f32> },
+    /// Meter levels (sent every ~150ms) — stereo [left, right] peaks
+    Meters { meters: HashMap<usize, [f32; 2]> },
     /// Single channel changed (delta update)
     ChannelUpdate {
         track_index: usize,
@@ -152,13 +152,27 @@ mod tests {
     #[test]
     fn test_server_msg_meters_serialization() {
         let mut meters = HashMap::new();
-        meters.insert(1, 0.5);
-        meters.insert(2, 0.3);
+        meters.insert(1, [0.5, 0.4]);
+        meters.insert(2, [0.3, 0.25]);
         let msg = ServerMsg::Meters { meters };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"Meters\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_meters_stereo_wire_format() {
+        let mut meters = HashMap::new();
+        meters.insert(1, [0.5, 0.3]);
+        let msg = ServerMsg::Meters { meters };
+        let json = serde_json::to_string(&msg).unwrap();
+        // Verify stereo pair format: key maps to [left, right] array
+        assert!(
+            json.contains("[0.5,0.3]"),
+            "Stereo meters should serialize as [L,R] arrays, got: {}",
+            json
+        );
     }
 
     #[test]

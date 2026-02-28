@@ -1050,3 +1050,264 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     expect(avg).toBeGreaterThan(100); // #555 = 85 avg, #888 = 136 avg
   });
 });
+
+test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
+  test("stereo meter bars visible above fader", async ({ page }) => {
+    // v1.19.0: Meter redesigned as stereo (L+R) with gradient and peak hold
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    // Stereo meter container must exist
+    const meter = channel.locator(".meter-stereo");
+    await expect(meter).toBeAttached();
+    const meterBox = await meter.boundingBox();
+    expect(meterBox).not.toBeNull();
+
+    // Meter should be horizontal: wider than tall
+    expect(meterBox!.width).toBeGreaterThan(meterBox!.height);
+    // Meter should span significant width (full channel width minus padding)
+    expect(meterBox!.width).toBeGreaterThan(50);
+    // Meter height should be small (6px = 2px + 1px gap + 2px + minor rounding)
+    expect(meterBox!.height).toBeLessThanOrEqual(10);
+
+    // Must have exactly 2 meter bars (L and R channels)
+    const bars = channel.locator(".meter-bar");
+    await expect(bars).toHaveCount(2);
+
+    // Meter must be ABOVE fader (lower Y = higher on screen)
+    const faderBox = await channel.locator(".fader-track").boundingBox();
+    expect(faderBox).not.toBeNull();
+    expect(meterBox!.y).toBeLessThan(faderBox!.y);
+  });
+
+  test("meter uses gradient fill (no CSS transition, Rust ballistics)", async ({
+    page,
+  }) => {
+    // v1.19.0: Ballistics handled in Rust at 30fps, no CSS transition
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Meter fill should use gradient background, not solid color
+    const bg = await meterFill.evaluate(
+      (el) => window.getComputedStyle(el).backgroundImage,
+    );
+    expect(bg).toContain("gradient");
+  });
+
+  test("fader double-click animates to 0dB (not instant jump)", async ({
+    page,
+  }) => {
+    // Issue #33: Double-click should smoothly animate the fader to 0dB
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Record fill width before double-click
+    const fillBefore = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+
+    // Double-click the fader
+    await fader.dblclick({ force: true });
+
+    // The "animating" class should appear
+    await page.waitForTimeout(100);
+    const classAfterDbl = await fader.getAttribute("class");
+    expect(classAfterDbl).toContain("animating");
+
+    // Wait for animation to complete (max ~3s from -60dB)
+    await page.waitForTimeout(4000);
+
+    // After animation, "animating" class should be removed
+    const classAfterAnim = await fader.getAttribute("class");
+    expect(classAfterAnim).not.toContain("animating");
+
+    // Fill should be near 83.33% (0dB position on -60..+12 range)
+    const fillAfter = await fader
+      .locator(".fader-fill")
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const expectedPct = 83.33;
+    const actualPct = (fillAfter / box.width) * 100;
+    // Allow 5% tolerance
+    expect(Math.abs(actualPct - expectedPct)).toBeLessThan(5);
+  });
+
+  test("fader touch interrupts animation", async ({ page }) => {
+    // Issue #33: Touching fader during animation should stop it immediately
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const fader = page.locator(".fader-track").first();
+    const channelLoaded = await fader
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    const box = await fader.boundingBox();
+    if (!box || box.width < 50) return;
+
+    // Double-click to start animation
+    await fader.dblclick({ force: true });
+    await page.waitForTimeout(200); // Let animation start
+
+    // Should be animating
+    const classAnimating = await fader.getAttribute("class");
+    expect(classAnimating).toContain("animating");
+
+    // Mouse down to interrupt
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(100);
+
+    // Animation should be cancelled
+    const classAfterInterrupt = await fader.getAttribute("class");
+    expect(classAfterInterrupt).not.toContain("animating");
+
+    await page.mouse.up();
+  });
+
+  test("channel grid has 3 rows (controls, meter, fader)", async ({ page }) => {
+    // Verify the CSS grid has 3 row areas
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!channelLoaded) return;
+
+    // Grid template should have 3 rows
+    const gridRows = await channel.evaluate(
+      (el) => window.getComputedStyle(el).gridTemplateRows,
+    );
+    // Should have 3 values (e.g., "36px 8px 44px")
+    const rowCount = gridRows.split(" ").length;
+    expect(rowCount).toBe(3);
+  });
+
+  test("meter animation timer stays alive after mount", async ({ page }) => {
+    // Regression: gloo_timers Interval was stored in a local Rc that got
+    // dropped on component return, killing the 30fps animation loop.
+    // This test injects a fake Meters WebSocket message with non-zero values
+    // and asserts that the animation timer processes them into width > 0%.
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Wait for WS to connect (poller sends first State within ~150ms)
+    await page.waitForTimeout(500);
+
+    // Inject a fake Meters message via the exposed __iem_ws.onmessage handler.
+    // ServerMsg format (adjacently tagged): {"event":"Meters","data":{...}}
+    // Meter values are linear [L, R] floats keyed by track index string.
+    const injected = await page.evaluate(() => {
+      const ws = (window as any).__iem_ws as WebSocket | undefined;
+      if (!ws || !ws.onmessage) return false;
+
+      const meters: Record<string, [number, number]> = {};
+      for (let i = 1; i <= 22; i++) {
+        meters[String(i)] = [0.85, 0.82]; // Strong stereo signal
+      }
+      const msg = JSON.stringify({ event: "Meters", data: meters });
+      // Call onmessage directly with a MessageEvent (same as browser would)
+      ws.onmessage(new MessageEvent("message", { data: msg }));
+      return true;
+    });
+
+    if (!injected) return; // WS not available (e.g., server not running)
+
+    // Wait for 3+ animation ticks (33ms each ≈ 100ms) plus render
+    await page.waitForTimeout(200);
+
+    // Check if meter fill has width > 0%
+    const fillWidth = await meterFill.evaluate((el) => {
+      const style = el.getAttribute("style") || "";
+      const match = style.match(/width:\s*([\d.]+)%/);
+      return match ? parseFloat(match[1]) : 0;
+    });
+
+    // If the animation timer is alive, it processes the 0.85 signal level
+    // through ballistic_tick (instant attack) and linear_to_pct (~90%).
+    // If the timer is dead (the bug), fillWidth stays 0.
+    expect(fillWidth).toBeGreaterThan(10);
+  });
+
+  test("stereo meter shows zero width when no audio signal present", async ({
+    page,
+  }) => {
+    // v1.19.0: Stereo meters with REAPER meter floor (-1500 cb) = silence
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
+    await page.waitForTimeout(500);
+
+    // With no audio source active, both L and R meter fills should be 0% (or very small)
+    const fills = page.locator(".meter-fill");
+    const fillCount = await fills.count();
+    for (let i = 0; i < Math.min(fillCount, 4); i++) {
+      const fillWidth = await fills.nth(i).evaluate((el) => {
+        const style = el.getAttribute("style") || "";
+        const match = style.match(/width:\s*([\d.]+)%/);
+        return match ? parseFloat(match[1]) : 0;
+      });
+      expect(fillWidth).toBeLessThanOrEqual(1);
+    }
+
+    // Peak indicators should be hidden when no audio
+    const peaks = page.locator(".meter-peak");
+    const peakCount = await peaks.count();
+    for (let i = 0; i < Math.min(peakCount, 4); i++) {
+      const display = await peaks
+        .nth(i)
+        .evaluate((el) => window.getComputedStyle(el).display);
+      expect(display).toBe("none");
+    }
+  });
+});

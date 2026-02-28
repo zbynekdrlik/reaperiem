@@ -48,7 +48,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     }
 
     // 1. Query meters via NTRACK;TRACK (single call)
-    let mut meters: HashMap<usize, f32> = HashMap::new();
+    let mut meters: HashMap<usize, [f32; 2]> = HashMap::new();
     let mut connected = false;
     // Discovered output tracks: member_id -> (track_index, vol_linear, flags)
     let mut output_tracks: HashMap<String, (usize, f32, i32)> = HashMap::new();
@@ -61,16 +61,31 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 let parts: Vec<&str> = line.split('\t').collect();
                 if parts.first() == Some(&"TRACK") && parts.len() > 7 {
                     if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        // Extract meters (field 6 = VU peak L in centibels)
-                        if let Ok(peak_centibels) = parts[6].parse::<f32>() {
-                            let peak_db = peak_centibels / 100.0;
-                            let peak_linear = if peak_db <= -60.0 {
-                                0.0
-                            } else {
-                                10.0_f32.powf(peak_db / 20.0)
-                            };
-                            meters.insert(track_idx, peak_linear);
+                        // VU meter fields only present when track has 14+ fields
+                        // (record-armed tracks include VU_L at [6], VU_R at [7])
+                        // Without VU (12 fields): field [6] is width, NOT centibels
+                        if parts.len() >= 14 {
+                            if let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+                                (parts[6].parse::<f32>(), parts[7].parse::<f32>())
+                            {
+                                // REAPER HTTP API meter floor: -1500 centibels (-15.0 dB)
+                                // Verified 2026-02-28: all 33 tracks report exactly -1500
+                                // when no audio is present; REAPER's own UI shows zero.
+                                let cb_to_linear = |cb: f32| -> f32 {
+                                    if cb <= -1500.0 {
+                                        0.0
+                                    } else {
+                                        10.0_f32.powf(cb / 100.0 / 20.0)
+                                    }
+                                };
+                                meters.insert(
+                                    track_idx,
+                                    [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                                );
+                            }
                         }
+                        // No VU → don't insert → frontend defaults to 0.0
+
                         // Check if this is a member output track (e.g. "PETKA inear")
                         // Fields: TRACK idx name flags vol pan vu_peak_L vu_peak_R ...
                         let track_name = parts[2];
@@ -87,7 +102,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
             let count = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
             if count % 66 == 0 {
-                let non_zero: Vec<_> = meters.iter().filter(|(_, v)| **v > 0.001).take(5).collect();
+                let non_zero: Vec<_> = meters
+                    .iter()
+                    .filter(|(_, v)| v[0] > 0.001 || v[1] > 0.001)
+                    .take(5)
+                    .collect();
                 tracing::debug!(
                     meter_count = meters.len(),
                     non_zero_count = non_zero.len(),
@@ -413,5 +432,179 @@ mod tests {
         let cache = MixerCache::new();
         assert!(cache.global_volumes.is_empty());
         assert!(cache.output_track_indices.is_empty());
+    }
+
+    /// Helper: parse stereo meters from NTRACK response text using the same logic as the poller
+    fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, [f32; 2]> {
+        let mut meters = HashMap::new();
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK") && parts.len() > 7 {
+                if let Ok(track_idx) = parts[1].parse::<usize>() {
+                    if parts.len() >= 14 {
+                        if let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+                            (parts[6].parse::<f32>(), parts[7].parse::<f32>())
+                        {
+                            let cb_to_linear = |cb: f32| -> f32 {
+                                if cb <= -1500.0 {
+                                    0.0
+                                } else {
+                                    10.0_f32.powf(cb / 100.0 / 20.0)
+                                }
+                            };
+                            meters.insert(
+                                track_idx,
+                                [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        meters
+    }
+
+    /// 14-field TRACK line (with VU) should produce stereo meter data
+    #[test]
+    fn test_ntrack_with_vu_produces_meter() {
+        // 14 fields: TRACK idx name flags vol pan VU_L VU_R width panmode sendcnt recvcnt hwout color
+        // Use -1000 centibels (-10 dB), which is above the -1500 meter floor
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-1000\t-800\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(
+            meters.contains_key(&1),
+            "14-field line should produce meter for track 1"
+        );
+        let [left, right] = meters[&1];
+        // -1000 centibels = -10.0 dB → 10^(-10/20) ≈ 0.3162
+        assert!(
+            (left - 0.3162).abs() < 0.01,
+            "-1000 centibels L should be ~0.3162 linear, got {}",
+            left
+        );
+        // -800 centibels = -8.0 dB → 10^(-8/20) ≈ 0.3981
+        assert!(
+            (right - 0.3981).abs() < 0.01,
+            "-800 centibels R should be ~0.3981 linear, got {}",
+            right
+        );
+    }
+
+    /// 12-field TRACK line (without VU) must NOT produce meter data
+    #[test]
+    fn test_ntrack_without_vu_no_meter() {
+        // 12 fields: TRACK idx name flags vol pan width panmode sendcnt recvcnt hwout color
+        // Field [6] is width (1.000000), NOT VU centibels
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        assert!(
+            !meters.contains_key(&1),
+            "12-field line (no VU) should NOT produce meter data"
+        );
+    }
+
+    /// REAPER meter floor (-1500 centibels) must produce 0.0 (silence) for both channels
+    /// Verified 2026-02-28: all 33 live tracks report -1500 with no audio.
+    #[test]
+    fn test_reaper_meter_floor_is_silence() {
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(line);
+        assert_eq!(
+            meters.get(&1),
+            Some(&[0.0, 0.0]),
+            "-1500 centibels (REAPER meter floor) must be silence on both channels"
+        );
+    }
+
+    /// Values above REAPER meter floor should produce signal on both channels
+    #[test]
+    fn test_reaper_above_floor_shows_signal() {
+        // L: -1400 centibels = -14.0 dB, R: -1200 centibels = -12.0 dB
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1400\t-1200\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(line);
+        let [left, right] = meters[&1];
+        assert!(left > 0.0, "-1400 cb L should show signal, got {}", left);
+        assert!(right > 0.0, "-1200 cb R should show signal, got {}", right);
+        // -14.0 dB → 10^(-14/20) ≈ 0.1995
+        assert!(
+            (left - 0.1995).abs() < 0.01,
+            "L expected ~0.1995, got {}",
+            left
+        );
+        // -12.0 dB → 10^(-12/20) ≈ 0.2512
+        assert!(
+            (right - 0.2512).abs() < 0.01,
+            "R expected ~0.2512, got {}",
+            right
+        );
+    }
+
+    /// Parse captured live NTRACK response — all tracks silent at -1500 floor
+    /// Data captured 2026-02-28 from: curl -s "http://iem.lan:8080/_/NTRACK;TRACK"
+    #[test]
+    fn test_reaper_captured_ntrack_all_silent() {
+        let text = "\
+NTRACK\t33
+TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t2\tSTEVO mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844
+TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
+        let meters = parse_meters_from_ntrack(text);
+        for (idx, [left, right]) in &meters {
+            assert_eq!(
+                *left, 0.0,
+                "Track {} L should be silent (0.0), got {}",
+                idx, left
+            );
+            assert_eq!(
+                *right, 0.0,
+                "Track {} R should be silent (0.0), got {}",
+                idx, right
+            );
+        }
+    }
+
+    /// VU at 0 centibels (0 dB = full scale) should be 1.0 linear on both channels
+    #[test]
+    fn test_ntrack_vu_full_scale() {
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t0\t0\t1.000000\t0\t9\t0\t0\t0";
+        let meters = parse_meters_from_ntrack(line);
+        let [left, right] = meters[&1];
+        assert!(
+            (left - 1.0).abs() < 0.01,
+            "0 centibels L should be ~1.0 linear, got {}",
+            left
+        );
+        assert!(
+            (right - 1.0).abs() < 0.01,
+            "0 centibels R should be ~1.0 linear, got {}",
+            right
+        );
+    }
+
+    /// Multiple tracks: only 14-field lines produce meters, and stereo channels differ
+    #[test]
+    fn test_ntrack_mixed_field_counts() {
+        let text = "\
+NTRACK\t33
+TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-1800\t1.000000\t0\t9\t0\t0\t0
+TRACK\t2\tSTEVO mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
+TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-500\t-600\t1.000000\t0\t0\t22\t0\t0";
+        let meters = parse_meters_from_ntrack(text);
+        assert!(
+            meters.contains_key(&1),
+            "Track 1 (14 fields) should have meter"
+        );
+        assert!(
+            !meters.contains_key(&2),
+            "Track 2 (12 fields) should NOT have meter"
+        );
+        assert!(
+            meters.contains_key(&23),
+            "Track 23 (14 fields) should have meter"
+        );
+        // Verify stereo: track 23 has different L (-500) and R (-600)
+        let [l, r] = meters[&23];
+        assert!(l > r, "L (-500 cb) should be louder than R (-600 cb)");
     }
 }
