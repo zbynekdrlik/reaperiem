@@ -119,7 +119,7 @@ body {
 
 .header-version-date {
   font-size: 0.55em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -136,9 +136,12 @@ body {
   background: var(--accent);
 }
 
-.status-dot.connected.pulse-a,
+.status-dot.connected.pulse-a {
+  animation: dot-pulse-a 0.3s ease-out;
+}
+
 .status-dot.connected.pulse-b {
-  animation: dot-pulse 0.3s ease-out;
+  animation: dot-pulse-b 0.3s ease-out;
 }
 
 .status-dot.disconnected {
@@ -146,7 +149,18 @@ body {
   animation: badge-pulse 2s ease-in-out infinite;
 }
 
-@keyframes dot-pulse {
+@keyframes dot-pulse-a {
+  0% {
+    box-shadow: 0 0 6px var(--accent-glow);
+    transform: scale(1.3);
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes dot-pulse-b {
   0% {
     box-shadow: 0 0 6px var(--accent-glow);
     transform: scale(1.3);

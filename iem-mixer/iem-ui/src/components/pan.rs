@@ -134,6 +134,12 @@ pub fn PanKnob(
                 *last_tap_time_start.borrow_mut() = 0.0;
                 // Guard: block Effect from overwriting for 300ms
                 *double_tap_guard_time_tap.borrow_mut() = js_sys::Date::now();
+                // Force native input to update its visual thumb position
+                if let Some(target) = ev.target() {
+                    if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                        input.set_value("50");
+                    }
+                }
                 set_is_touch_interaction.set(true);
                 return;
             }
@@ -258,12 +264,18 @@ pub fn PanKnob(
     };
 
     // Desktop double-click to center
-    let handle_dblclick = move |_| {
+    let handle_dblclick = move |ev: web_sys::MouseEvent| {
         set_local_value.set(0.5);
         set_saved_value.set(0.5);
         on_change.run(0.5);
         // Guard: block Effect from overwriting for 300ms
         *double_tap_guard_time_dblclick.borrow_mut() = js_sys::Date::now();
+        // Force native input to update its visual thumb position
+        if let Some(target) = ev.target() {
+            if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                input.set_value("50");
+            }
+        }
     };
 
     view! {

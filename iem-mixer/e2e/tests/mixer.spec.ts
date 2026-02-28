@@ -896,3 +896,73 @@ test.describe("Main Tab and Global Volume", () => {
     expect(handInMics).toBe(false);
   });
 });
+
+test.describe("v1.16.0 Hotfix Regression Tests", () => {
+  test("pan double-click moves thumb to center position", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const panSlider = page.locator(".pan-slider").first();
+    const loaded = await panSlider
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Double-click the pan slider
+    await panSlider.dblclick({ force: true });
+    await page.waitForTimeout(100);
+
+    // The native input's value property must be 50 (center)
+    const inputValue = await panSlider.inputValue();
+    expect(parseInt(inputValue)).toBe(50);
+    // The slider must also have the "centered" CSS class
+    await expect(panSlider).toHaveClass(/centered/);
+  });
+
+  test("status dot has pulse animation when connected", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const dot = page.locator(".status-dot");
+    await expect(dot).toBeVisible({ timeout: 5000 });
+
+    // If connected, wait for animation to appear (Meters arrive every ~150ms)
+    const isConnected = await dot.evaluate((el) =>
+      el.classList.contains("connected"),
+    );
+    if (isConnected) {
+      // Wait up to 1s for a pulse class to appear
+      await page.waitForTimeout(500);
+      const animName = await dot.evaluate(
+        (el) => window.getComputedStyle(el).animationName,
+      );
+      // Must have a non-"none" animation running
+      expect(animName).not.toBe("none");
+    }
+  });
+
+  test("version date text has readable contrast", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const versionDate = page.locator(".header-version-date");
+    await expect(versionDate).toBeVisible({ timeout: 5000 });
+
+    // Get computed color — must be brighter than #555 (85 in each channel)
+    const color = await versionDate.evaluate(
+      (el) => window.getComputedStyle(el).color,
+    );
+    // Parse rgb(r, g, b) — each channel must average > 100 for readability
+    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).not.toBeNull();
+    const avg =
+      (parseInt(match![1]) + parseInt(match![2]) + parseInt(match![3])) / 3;
+    expect(avg).toBeGreaterThan(100); // #555 = 85 avg, #888 = 136 avg
+  });
+});
