@@ -141,9 +141,7 @@ pub fn PinChangeModal(
                     .map(|i| {
                         let filled = i < len;
                         view! {
-                            <span class=if filled { "pin-dot filled" } else { "pin-dot" }>
-                                {if filled { "\u{25CF}" } else { "\u{25CB}" }}
-                            </span>
+                            <div class=if filled { "pin-dot filled" } else { "pin-dot" }></div>
                         }
                     })
                     .collect::<Vec<_>>()}
