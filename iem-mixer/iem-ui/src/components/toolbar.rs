@@ -18,7 +18,6 @@ pub fn Toolbar(
             >
                 "Presets"
             </button>
-            <span class="toolbar-version">{iem_core::full_version()}</span>
         </div>
     }
 }

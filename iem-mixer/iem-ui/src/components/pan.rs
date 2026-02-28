@@ -64,9 +64,18 @@ pub fn PanKnob(
     let last_tap_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
     let last_tap_x: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
+    // Guard: blocks Effect from overwriting local_value for 300ms after double-tap center
+    let double_tap_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
+    let double_tap_guard_time_effect = double_tap_guard_time.clone();
+    let double_tap_guard_time_tap = double_tap_guard_time;
+
     // Update local value when signal changes (but only if not actively touching)
+    // Also blocked for 300ms after double-tap center to prevent Effect from overwriting
     Effect::new(move |_| {
-        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() {
+        let guard_active = js_sys::Date::now() - *double_tap_guard_time_effect.borrow() < 300.0;
+        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() && !guard_active
+        {
             set_local_value.set(value.get());
         }
     });
@@ -122,6 +131,9 @@ pub fn PanKnob(
                 on_change_touch.run(0.5);
                 // Reset tap tracking
                 *last_tap_time_start.borrow_mut() = 0.0;
+                // Guard: block Effect from overwriting for 300ms
+                *double_tap_guard_time_tap.borrow_mut() = js_sys::Date::now();
+                set_is_touch_interaction.set(true);
                 return;
             }
 

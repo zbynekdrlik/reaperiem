@@ -766,34 +766,44 @@ test.describe("Main Tab and Global Volume", () => {
     expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
   });
 
-  test("version is displayed in toolbar", async ({ page }) => {
+  test("version is displayed in mixer header", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "petka");
 
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Toolbar version element must exist
-    const version = page.locator(".toolbar-version");
-    await expect(version).toBeVisible({ timeout: 5000 });
-    // Must contain version number pattern (e.g., "1.15.0")
-    const text = await version.textContent();
-    expect(text).toMatch(/\d+\.\d+\.\d+/);
+    // Version block in header must exist
+    const versionBlock = page.locator(".header-version");
+    await expect(versionBlock).toBeVisible({ timeout: 5000 });
+    // Version number must contain semver pattern (e.g., "v1.16.0")
+    const versionNumber = page.locator(".header-version-number");
+    await expect(versionNumber).toBeVisible();
+    const text = await versionNumber.textContent();
+    expect(text).toMatch(/v?\d+\.\d+\.\d+/);
+    // Build date must exist
+    const versionDate = page.locator(".header-version-date");
+    await expect(versionDate).toBeVisible();
   });
 
-  test("status badge shows LIVE or OFFLINE text", async ({ page }) => {
+  test("status dot shows connection state", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "petka");
 
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Status badge must exist in header
-    const badge = page.locator(".status-badge");
-    await expect(badge).toBeVisible({ timeout: 5000 });
-    // Must show either LIVE or OFFLINE
-    const text = await badge.textContent();
-    expect(["LIVE", "OFFLINE"]).toContain(text?.trim());
+    // Status dot must exist in header
+    const dot = page.locator(".status-dot");
+    await expect(dot).toBeVisible({ timeout: 5000 });
+    // Must have either connected or disconnected class
+    const classes = await dot.getAttribute("class");
+    expect(classes).toMatch(/connected|disconnected/);
+    // Dot should be small (10x10px)
+    const box = await dot.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(15);
+    expect(box!.height).toBeLessThanOrEqual(15);
   });
 
   test("disconnected banner uses amber style (not red)", async ({ page }) => {

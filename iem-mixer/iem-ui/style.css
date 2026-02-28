@@ -100,31 +100,61 @@ body {
   margin-right: 12px;
 }
 
-/* Connection status badge */
-.status-badge {
-  font-size: 0.65em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 3px 10px;
-  border-radius: 10px;
+/* Version display in mixer header */
+.header-version {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
   flex-shrink: 0;
-  transition:
-    background 0.3s,
-    color 0.3s,
-    box-shadow 0.3s;
+  margin-right: 8px;
 }
 
-.status-badge.connected {
-  background: rgba(78, 205, 196, 0.15);
-  color: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
+.header-version-number {
+  font-size: 0.65em;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.status-badge.disconnected {
-  background: rgba(244, 211, 94, 0.2);
-  color: var(--solo-yellow);
+.header-version-date {
+  font-size: 0.55em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Connection status dot — dynamic heartbeat when data flows */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.status-dot.connected {
+  background: var(--accent);
+}
+
+.status-dot.connected.pulse-a,
+.status-dot.connected.pulse-b {
+  animation: dot-pulse 0.3s ease-out;
+}
+
+.status-dot.disconnected {
+  background: var(--solo-yellow);
   animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0% {
+    box-shadow: 0 0 6px var(--accent-glow);
+    transform: scale(1.3);
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
 }
 
 @keyframes badge-pulse {
@@ -597,16 +627,6 @@ body {
 .toolbar-btn:active {
   background: var(--accent);
   color: var(--bg-primary);
-}
-
-.toolbar-version {
-  font-size: 0.65em;
-  color: var(--text-muted);
-  white-space: nowrap;
-  user-select: text;
-  -webkit-user-select: text;
-  padding: 0 4px;
-  align-self: center;
 }
 
 /* Pan slider touch-safe activation states */
