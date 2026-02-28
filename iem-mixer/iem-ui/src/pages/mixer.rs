@@ -58,6 +58,7 @@ fn connect_websocket(
     set_global_level: WriteSignal<f32>,
     set_global_muted: WriteSignal<bool>,
     global_touched: ReadSignal<bool>,
+    set_data_pulse: WriteSignal<bool>,
 ) {
     let location = web_sys::window().unwrap().location();
     let host = location.host().unwrap_or_default();
@@ -122,6 +123,7 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
                         set_meters.set(m);
+                        set_data_pulse.update(|v| *v = !*v);
                     }
                     iem_core::ServerMsg::ChannelUpdate {
                         track_index,
@@ -204,6 +206,9 @@ pub fn MixerPage() -> impl IntoView {
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
     let (pre_solo_mutes, set_pre_solo_mutes) = signal(HashMap::<usize, bool>::new());
 
+    // Status dot pulse — toggles on each Meters message to restart CSS animation
+    let (data_pulse, set_data_pulse) = signal(false);
+
     // Global IEM output volume state
     let (global_level, set_global_level) = signal(0.0_f32);
     let (global_muted, set_global_muted) = signal(false);
@@ -231,6 +236,7 @@ pub fn MixerPage() -> impl IntoView {
             set_global_level,
             set_global_muted,
             global_touched,
+            set_data_pulse,
         );
     });
 
@@ -257,6 +263,7 @@ pub fn MixerPage() -> impl IntoView {
                     set_global_level,
                     set_global_muted,
                     global_touched,
+                    set_data_pulse,
                 );
             }
         }
@@ -450,13 +457,20 @@ pub fn MixerPage() -> impl IntoView {
                         Some(c) => c.to_uppercase().chain(chars).collect(),
                     }
                 }}</h1>
+                <div class="header-version">
+                    <span class="header-version-number">{iem_core::version_label()}</span>
+                    <span class="header-version-date">{iem_core::build_datetime()}</span>
+                </div>
                 <div class=move || {
-                    if connected.get() {
-                        "status-dot connected"
+                    let base = if connected.get() { "status-dot connected" } else { "status-dot disconnected" };
+                    if connected.get() && data_pulse.get() {
+                        format!("{} pulse-a", base)
+                    } else if connected.get() {
+                        format!("{} pulse-b", base)
                     } else {
-                        "status-dot error"
+                        base.to_string()
                     }
-                } />
+                }/>
             </header>
 
             <CategoryTabs
@@ -468,8 +482,8 @@ pub fn MixerPage() -> impl IntoView {
                 when=move || !connected.get() && !loading.get()
                 fallback=|| ()
             >
-                <div class="disconnected-warning">
-                    "DISCONNECTED - Controls disabled (REAPER not reachable)"
+                <div class="disconnected-banner">
+                    "Reconnecting to REAPER..."
                 </div>
             </Show>
 

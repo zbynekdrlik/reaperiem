@@ -100,26 +100,85 @@ body {
   margin-right: 12px;
 }
 
-/* Connection status dot */
+/* Version display in mixer header */
+.header-version {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.header-version-number {
+  font-size: 0.65em;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-version-date {
+  font-size: 0.55em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Connection status dot — dynamic heartbeat when data flows */
 .status-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--text-muted);
   flex-shrink: 0;
-  transition:
-    background 0.3s,
-    box-shadow 0.3s;
+  transition: background 0.3s;
 }
 
 .status-dot.connected {
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
 }
 
-.status-dot.error {
-  background: var(--mute-red);
-  box-shadow: 0 0 8px rgba(230, 57, 70, 0.5);
+.status-dot.connected.pulse-a {
+  animation: dot-pulse-a 0.3s ease-out;
+}
+
+.status-dot.connected.pulse-b {
+  animation: dot-pulse-b 0.3s ease-out;
+}
+
+.status-dot.disconnected {
+  background: var(--solo-yellow);
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse-a {
+  0% {
+    box-shadow: 0 0 6px var(--accent-glow);
+    transform: scale(1.3);
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes dot-pulse-b {
+  0% {
+    box-shadow: 0 0 6px var(--accent-glow);
+    transform: scale(1.3);
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+@keyframes badge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* ================================================================
@@ -244,29 +303,31 @@ body {
   border-radius: inherit;
 }
 
-/* Disconnected overlay warning */
-.disconnected-warning {
+/* Disconnected banner - calmer amber slide-in */
+.disconnected-banner {
   position: fixed;
   top: 52px;
   left: 0;
   right: 0;
-  background: var(--mute-red);
-  color: white;
+  background: rgba(244, 211, 94, 0.15);
+  color: var(--solo-yellow);
   text-align: center;
   padding: 8px;
-  font-size: 0.85em;
+  font-size: 0.8em;
   font-weight: 600;
   z-index: 50;
-  animation: pulse 1.5s ease-in-out infinite;
+  border-bottom: 1px solid rgba(244, 211, 94, 0.3);
+  animation: slide-in 0.3s ease-out;
 }
 
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 1;
+@keyframes slide-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
   }
-  50% {
-    opacity: 0.7;
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 
@@ -422,6 +483,22 @@ body {
   display: flex;
   align-items: center;
   justify-self: end;
+  position: relative;
+}
+
+/* Center tick mark for pan */
+.pan-container::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 10px;
+  background: var(--text-muted);
+  pointer-events: none;
+  opacity: 0.5;
+  border-radius: 1px;
 }
 
 .pan-slider {
@@ -591,6 +668,17 @@ body {
 .pan-slider.active::-moz-range-thumb {
   background: var(--accent);
   box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Pan slider centered state — thumb glows accent when at center */
+.pan-slider.centered::-webkit-slider-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.pan-slider.centered::-moz-range-thumb {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
 }
 
 /* ================================================================

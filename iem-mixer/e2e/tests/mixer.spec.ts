@@ -766,6 +766,101 @@ test.describe("Main Tab and Global Volume", () => {
     expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
   });
 
+  test("version is displayed in mixer header", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Version block in header must exist
+    const versionBlock = page.locator(".header-version");
+    await expect(versionBlock).toBeVisible({ timeout: 5000 });
+    // Version number must contain semver pattern (e.g., "v1.16.0")
+    const versionNumber = page.locator(".header-version-number");
+    await expect(versionNumber).toBeVisible();
+    const text = await versionNumber.textContent();
+    expect(text).toMatch(/v?\d+\.\d+\.\d+/);
+    // Build date must exist
+    const versionDate = page.locator(".header-version-date");
+    await expect(versionDate).toBeVisible();
+  });
+
+  test("status dot shows connection state", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Status dot must exist in header
+    const dot = page.locator(".status-dot");
+    await expect(dot).toBeVisible({ timeout: 5000 });
+    // Must have either connected or disconnected class
+    const classes = await dot.getAttribute("class");
+    expect(classes).toMatch(/connected|disconnected/);
+    // Dot should be small (10x10px)
+    const box = await dot.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(15);
+    expect(box!.height).toBeLessThanOrEqual(15);
+  });
+
+  test("disconnected banner uses amber style (not red)", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Old red warning must NOT exist
+    const oldWarning = page.locator(".disconnected-warning");
+    await expect(oldWarning).toHaveCount(0);
+
+    // If disconnected, banner should use new amber class
+    const banner = page.locator(".disconnected-banner");
+    const bannerCount = await banner.count();
+    if (bannerCount > 0) {
+      // Text should be the calmer message
+      await expect(banner).toContainText("Reconnecting");
+    }
+  });
+
+  test("pan center indicator visible when pan is centered", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Wait for channels to load
+    const channelsLoaded = await page
+      .waitForSelector(".pan-slider", { timeout: 5000 })
+      .catch(() => null);
+    if (!channelsLoaded) return;
+
+    // Pan sliders with default center position should have "centered" class
+    const panSliders = page.locator(".pan-slider");
+    const count = await panSliders.count();
+    if (count > 0) {
+      // At least one slider should have the centered class (default pan = center)
+      const centeredCount = await page.locator(".pan-slider.centered").count();
+      expect(centeredCount).toBeGreaterThan(0);
+    }
+
+    // Center tick mark (::after pseudo) on pan-container — verify via computed styles
+    const panContainer = page.locator(".pan-container").first();
+    if ((await panContainer.count()) > 0) {
+      const hasPosition = await panContainer.evaluate((el) => {
+        return window.getComputedStyle(el).position;
+      });
+      // Must be relative for ::after positioning
+      expect(hasPosition).toBe("relative");
+    }
+  });
+
   test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "petka");
@@ -799,5 +894,75 @@ test.describe("Main Tab and Global Volume", () => {
     const micsNames = await micsChannels.allTextContents();
     const handInMics = micsNames.some((n) => /hand/i.test(n));
     expect(handInMics).toBe(false);
+  });
+});
+
+test.describe("v1.16.0 Hotfix Regression Tests", () => {
+  test("pan double-click moves thumb to center position", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const panSlider = page.locator(".pan-slider").first();
+    const loaded = await panSlider
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Double-click the pan slider
+    await panSlider.dblclick({ force: true });
+    await page.waitForTimeout(100);
+
+    // The native input's value property must be 50 (center)
+    const inputValue = await panSlider.inputValue();
+    expect(parseInt(inputValue)).toBe(50);
+    // The slider must also have the "centered" CSS class
+    await expect(panSlider).toHaveClass(/centered/);
+  });
+
+  test("status dot has pulse animation when connected", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const dot = page.locator(".status-dot");
+    await expect(dot).toBeVisible({ timeout: 5000 });
+
+    // If connected, wait for animation to appear (Meters arrive every ~150ms)
+    const isConnected = await dot.evaluate((el) =>
+      el.classList.contains("connected"),
+    );
+    if (isConnected) {
+      // Wait up to 1s for a pulse class to appear
+      await page.waitForTimeout(500);
+      const animName = await dot.evaluate(
+        (el) => window.getComputedStyle(el).animationName,
+      );
+      // Must have a non-"none" animation running
+      expect(animName).not.toBe("none");
+    }
+  });
+
+  test("version date text has readable contrast", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const versionDate = page.locator(".header-version-date");
+    await expect(versionDate).toBeVisible({ timeout: 5000 });
+
+    // Get computed color — must be brighter than #555 (85 in each channel)
+    const color = await versionDate.evaluate(
+      (el) => window.getComputedStyle(el).color,
+    );
+    // Parse rgb(r, g, b) — each channel must average > 100 for readability
+    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).not.toBeNull();
+    const avg =
+      (parseInt(match![1]) + parseInt(match![2]) + parseInt(match![3])) / 3;
+    expect(avg).toBeGreaterThan(100); // #555 = 85 avg, #888 = 136 avg
   });
 });

@@ -57,6 +57,28 @@ pub fn full_version() -> String {
     }
 }
 
+/// Version label for display (e.g., "v1.16.0" or "v1.16.0-dev")
+pub fn version_label() -> String {
+    let branch = git_branch();
+    if branch != "main" && branch != "unknown" {
+        format!("v{}-{}", VERSION, branch)
+    } else {
+        format!("v{}", VERSION)
+    }
+}
+
+/// Build datetime for display (e.g., "2026-02-28 09:47")
+pub fn build_datetime() -> String {
+    let timestamp = build_time().parse::<i64>().unwrap_or(0);
+    if timestamp == 0 {
+        "local build".to_string()
+    } else {
+        chrono::DateTime::from_timestamp(timestamp, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    }
+}
+
 /// Get formatted deployment timestamp (e.g., "2026-02-26 14:30:00 UTC")
 pub fn deployed_at() -> String {
     let timestamp = build_time().parse::<i64>().unwrap_or(0);

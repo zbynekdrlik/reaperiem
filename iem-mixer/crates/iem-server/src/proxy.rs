@@ -664,7 +664,11 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             match apply_command_to_cache(&state, &member_id, &cmd).await {
-                                Ok(url) => {
+                                Ok((url, broadcast)) => {
+                                    // Broadcast to other clients of same member for cross-device sync
+                                    if let Some(event) = broadcast {
+                                        let _ = state.event_tx.send((member_id.clone(), event));
+                                    }
                                     send_to_reaper(
                                         state.http_client.clone(),
                                         url,
@@ -792,7 +796,7 @@ async fn apply_command_to_cache(
     state: &AppState,
     member_id: &str,
     cmd: &iem_core::ClientMsg,
-) -> Result<String, String> {
+) -> Result<(String, Option<iem_core::ServerMsg>), String> {
     let config = state.config.read().await;
     let member_index = match config.member_index(member_id) {
         Some(idx) => idx,
@@ -801,7 +805,7 @@ async fn apply_command_to_cache(
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
-    let (url, track_index) = match cmd {
+    let (url, track_index, broadcast) = match cmd {
         iem_core::ClientMsg::SetLevel {
             track_index,
             level_db,
@@ -810,9 +814,16 @@ async fn apply_command_to_cache(
             // Pre-write cache with the roundtrip-converted value (what REAPER will store)
             let cached_db = reaper_vol_to_db(vol);
             let mut cache = state.mixer_cache.write().await;
+            let mut event = None;
             if let Some(channels) = cache.member_states.get_mut(member_id) {
                 if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
                     ch.level_db = cached_db;
+                    event = Some(iem_core::ServerMsg::ChannelUpdate {
+                        track_index: *track_index,
+                        level_db: cached_db,
+                        muted: ch.muted,
+                        pan: ch.pan,
+                    });
                 }
             }
             cache.command_timestamps.insert(
@@ -823,14 +834,22 @@ async fn apply_command_to_cache(
             (
                 reaper_api::set_send_vol(&reaper_url, *track_index, member_index, vol),
                 *track_index,
+                event,
             )
         }
         iem_core::ClientMsg::SetMute { track_index, muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
             let mut cache = state.mixer_cache.write().await;
+            let mut event = None;
             if let Some(channels) = cache.member_states.get_mut(member_id) {
                 if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
                     ch.muted = *muted;
+                    event = Some(iem_core::ServerMsg::ChannelUpdate {
+                        track_index: *track_index,
+                        level_db: ch.level_db,
+                        muted: *muted,
+                        pan: ch.pan,
+                    });
                 }
             }
             cache.command_timestamps.insert(
@@ -841,14 +860,23 @@ async fn apply_command_to_cache(
             (
                 reaper_api::set_send_mute(&reaper_url, *track_index, member_index, mute_val),
                 *track_index,
+                event,
             )
         }
         iem_core::ClientMsg::SetPan { track_index, pan } => {
             let reaper_pan = ui_pan_to_reaper(*pan);
+            let cached_pan = reaper_pan_to_ui(reaper_pan);
             let mut cache = state.mixer_cache.write().await;
+            let mut event = None;
             if let Some(channels) = cache.member_states.get_mut(member_id) {
                 if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.pan = reaper_pan_to_ui(reaper_pan);
+                    ch.pan = cached_pan;
+                    event = Some(iem_core::ServerMsg::ChannelUpdate {
+                        track_index: *track_index,
+                        level_db: ch.level_db,
+                        muted: ch.muted,
+                        pan: cached_pan,
+                    });
                 }
             }
             cache.command_timestamps.insert(
@@ -859,6 +887,7 @@ async fn apply_command_to_cache(
             (
                 reaper_api::set_send_pan(&reaper_url, *track_index, member_index, reaper_pan),
                 *track_index,
+                event,
             )
         }
         iem_core::ClientMsg::SetGlobalLevel { level_db } => {
@@ -872,6 +901,11 @@ async fn apply_command_to_cache(
                     return Err("Output track not yet discovered".to_string());
                 }
             };
+            let current_muted = cache
+                .global_volumes
+                .get(member_id)
+                .map(|gv| gv.muted)
+                .unwrap_or(false);
             if let Some(gv) = cache.global_volumes.get_mut(member_id) {
                 gv.level_db = cached_db;
             } else {
@@ -892,6 +926,10 @@ async fn apply_command_to_cache(
             (
                 reaper_api::set_track_vol(&reaper_url, output_track, vol),
                 output_track,
+                Some(iem_core::ServerMsg::GlobalVolumeUpdate {
+                    level_db: cached_db,
+                    muted: current_muted,
+                }),
             )
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
@@ -904,6 +942,11 @@ async fn apply_command_to_cache(
                     return Err("Output track not yet discovered".to_string());
                 }
             };
+            let current_db = cache
+                .global_volumes
+                .get(member_id)
+                .map(|gv| gv.level_db)
+                .unwrap_or(0.0);
             if let Some(gv) = cache.global_volumes.get_mut(member_id) {
                 gv.muted = *muted;
             } else {
@@ -923,6 +966,10 @@ async fn apply_command_to_cache(
             (
                 reaper_api::set_track_mute(&reaper_url, output_track, mute_val),
                 output_track,
+                Some(iem_core::ServerMsg::GlobalVolumeUpdate {
+                    level_db: current_db,
+                    muted: *muted,
+                }),
             )
         }
     };
@@ -934,7 +981,7 @@ async fn apply_command_to_cache(
         "Cache pre-write applied"
     );
 
-    Ok(url)
+    Ok((url, broadcast))
 }
 
 /// Send a REAPER HTTP command (fire-and-forget, spawned as background task)

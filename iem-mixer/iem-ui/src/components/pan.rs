@@ -64,9 +64,19 @@ pub fn PanKnob(
     let last_tap_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
     let last_tap_x: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
+    // Guard: blocks Effect from overwriting local_value for 300ms after double-tap center
+    let double_tap_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
+    let double_tap_guard_time_effect = double_tap_guard_time.clone();
+    let double_tap_guard_time_dblclick = double_tap_guard_time.clone();
+    let double_tap_guard_time_tap = double_tap_guard_time;
+
     // Update local value when signal changes (but only if not actively touching)
+    // Also blocked for 300ms after double-tap center to prevent Effect from overwriting
     Effect::new(move |_| {
-        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() {
+        let guard_active = js_sys::Date::now() - *double_tap_guard_time_effect.borrow() < 300.0;
+        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() && !guard_active
+        {
             set_local_value.set(value.get());
         }
     });
@@ -118,9 +128,19 @@ pub fn PanKnob(
                 // Double-tap detected → center pan
                 ev.prevent_default();
                 set_local_value.set(0.5);
+                set_saved_value.set(0.5);
                 on_change_touch.run(0.5);
                 // Reset tap tracking
                 *last_tap_time_start.borrow_mut() = 0.0;
+                // Guard: block Effect from overwriting for 300ms
+                *double_tap_guard_time_tap.borrow_mut() = js_sys::Date::now();
+                // Force native input to update its visual thumb position
+                if let Some(target) = ev.target() {
+                    if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                        input.set_value("50");
+                    }
+                }
+                set_is_touch_interaction.set(true);
                 return;
             }
 
@@ -244,9 +264,18 @@ pub fn PanKnob(
     };
 
     // Desktop double-click to center
-    let handle_dblclick = move |_| {
+    let handle_dblclick = move |ev: web_sys::MouseEvent| {
         set_local_value.set(0.5);
+        set_saved_value.set(0.5);
         on_change.run(0.5);
+        // Guard: block Effect from overwriting for 300ms
+        *double_tap_guard_time_dblclick.borrow_mut() = js_sys::Date::now();
+        // Force native input to update its visual thumb position
+        if let Some(target) = ev.target() {
+            if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
+                input.set_value("50");
+            }
+        }
     };
 
     view! {
@@ -257,6 +286,7 @@ pub fn PanKnob(
                     let mut classes = vec!["pan-slider"];
                     if is_pending.get() { classes.push("activating"); }
                     if is_activated.get() { classes.push("active"); }
+                    if (local_value.get() - 0.5).abs() < 0.005 { classes.push("centered"); }
                     classes.join(" ")
                 }
                 min="0"
