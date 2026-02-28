@@ -135,21 +135,29 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
             drop(config);
 
             if cert_path.exists() && key_path.exists() {
-                let rustls_config =
-                    axum_server::tls_rustls::RustlsConfig::from_pem_file(&cert_path, &key_path)
-                        .await?;
-                let https_addr = SocketAddr::from(([0, 0, 0, 0], https_port));
-                let https_app = app.clone();
-
-                tokio::spawn(async move {
-                    tracing::info!("HTTPS server on https://iem.newlevel.media");
-                    if let Err(e) = axum_server::bind_rustls(https_addr, rustls_config)
-                        .serve(https_app.into_make_service())
-                        .await
-                    {
-                        tracing::error!("HTTPS server failed: {}", e);
+                match axum_server::tls_rustls::RustlsConfig::from_pem_file(
+                    &cert_path, &key_path,
+                )
+                .await
+                {
+                    Ok(rustls_config) => {
+                        let https_addr = SocketAddr::from(([0, 0, 0, 0], https_port));
+                        let https_app = app.clone();
+                        tokio::spawn(async move {
+                            tracing::info!("HTTPS server on https://iem.newlevel.media");
+                            if let Err(e) =
+                                axum_server::bind_rustls(https_addr, rustls_config)
+                                    .serve(https_app.into_make_service())
+                                    .await
+                            {
+                                tracing::error!("HTTPS server failed: {}", e);
+                            }
+                        });
                     }
-                });
+                    Err(e) => {
+                        tracing::error!("Failed to load TLS certificates: {}", e);
+                    }
+                }
             } else {
                 tracing::warn!("TLS enabled but cert files not found at {:?}", cert_path);
             }
