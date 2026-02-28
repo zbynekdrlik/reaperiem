@@ -80,6 +80,13 @@ fn connect_websocket(
 
     set_ws.set(Some(ws.clone()));
 
+    // Expose WS to window for E2E test meter injection
+    let _ = js_sys::Reflect::set(
+        &web_sys::window().unwrap(),
+        &wasm_bindgen::JsValue::from_str("__iem_ws"),
+        &ws,
+    );
+
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
         if let Some(text) = e.data().as_string() {

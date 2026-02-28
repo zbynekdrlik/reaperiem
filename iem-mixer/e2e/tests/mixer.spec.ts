@@ -1216,6 +1216,60 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     expect(rowCount).toBe(3);
   });
 
+  test("meter animation timer stays alive after mount", async ({ page }) => {
+    // Regression: gloo_timers Interval was stored in a local Rc that got
+    // dropped on component return, killing the 30fps animation loop.
+    // This test injects a fake Meters WebSocket message with non-zero values
+    // and asserts that the animation timer processes them into width > 0%.
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").first();
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!loaded) return;
+
+    // Wait for WS to connect (poller sends first State within ~150ms)
+    await page.waitForTimeout(500);
+
+    // Inject a fake Meters message via the exposed __iem_ws.onmessage handler.
+    // ServerMsg format (adjacently tagged): {"event":"Meters","data":{...}}
+    // Meter values are linear [L, R] floats keyed by track index string.
+    const injected = await page.evaluate(() => {
+      const ws = (window as any).__iem_ws as WebSocket | undefined;
+      if (!ws || !ws.onmessage) return false;
+
+      const meters: Record<string, [number, number]> = {};
+      for (let i = 1; i <= 22; i++) {
+        meters[String(i)] = [0.85, 0.82]; // Strong stereo signal
+      }
+      const msg = JSON.stringify({ event: "Meters", data: meters });
+      // Call onmessage directly with a MessageEvent (same as browser would)
+      ws.onmessage(new MessageEvent("message", { data: msg }));
+      return true;
+    });
+
+    if (!injected) return; // WS not available (e.g., server not running)
+
+    // Wait for 3+ animation ticks (33ms each ≈ 100ms) plus render
+    await page.waitForTimeout(200);
+
+    // Check if meter fill has width > 0%
+    const fillWidth = await meterFill.evaluate((el) => {
+      const style = el.getAttribute("style") || "";
+      const match = style.match(/width:\s*([\d.]+)%/);
+      return match ? parseFloat(match[1]) : 0;
+    });
+
+    // If the animation timer is alive, it processes the 0.85 signal level
+    // through ballistic_tick (instant attack) and linear_to_pct (~90%).
+    // If the timer is dead (the bug), fillWidth stays 0.
+    expect(fillWidth).toBeGreaterThan(10);
+  });
+
   test("stereo meter shows zero width when no audio signal present", async ({
     page,
   }) => {
