@@ -1,6 +1,6 @@
 [package]
 name = "iem-core"
-version = "1.17.0"
+version = "1.17.1"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Core types and configuration for IEM mixer"
