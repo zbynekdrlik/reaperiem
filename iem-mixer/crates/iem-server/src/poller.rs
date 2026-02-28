@@ -449,7 +449,8 @@ mod tests {
     #[test]
     fn test_ntrack_with_vu_produces_meter() {
         // 14 fields: TRACK idx name flags vol pan VU_L VU_R width panmode sendcnt recvcnt hwout color
-        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             meters.contains_key(&1),
@@ -469,8 +470,7 @@ mod tests {
     fn test_ntrack_without_vu_no_meter() {
         // 12 fields: TRACK idx name flags vol pan width panmode sendcnt recvcnt hwout color
         // Field [6] is width (1.000000), NOT VU centibels
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             !meters.contains_key(&1),
@@ -481,7 +481,8 @@ mod tests {
     /// Very quiet VU (-6000 centibels = -60 dB) should be clamped to 0.0
     #[test]
     fn test_ntrack_vu_silence_threshold() {
-        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-6000\t-6000\t1.000000\t0\t9\t0\t0\t0";
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-6000\t-6000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert_eq!(
             meters.get(&1),
@@ -513,7 +514,10 @@ TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t
 TRACK\t2\tSTEVO mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
 TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-500\t-500\t1.000000\t0\t0\t22\t0\t0";
         let meters = parse_meters_from_ntrack(text);
-        assert!(meters.contains_key(&1), "Track 1 (14 fields) should have meter");
+        assert!(
+            meters.contains_key(&1),
+            "Track 1 (14 fields) should have meter"
+        );
         assert!(
             !meters.contains_key(&2),
             "Track 2 (12 fields) should NOT have meter"

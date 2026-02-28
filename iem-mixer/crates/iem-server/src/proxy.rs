@@ -1585,7 +1585,8 @@ mod tests {
     /// 14-field TRACK line (with VU) should produce meter data
     #[test]
     fn test_ntrack_14_fields_produces_meter() {
-        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
+        let line =
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-2000\t-2000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(meters.contains_key(&1));
         let val = meters[&1];
@@ -1601,8 +1602,7 @@ mod tests {
     /// causing meters to show ~100% on silent tracks.
     #[test]
     fn test_ntrack_12_fields_no_meter() {
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             !meters.contains_key(&1),
