@@ -66,7 +66,9 @@ pub fn PinChangeModal(
     let on_backspace = move |_| {
         let field = active_field.get();
         match field {
-            0 => set_current_pin.update(|p| { p.pop(); }),
+            0 => set_current_pin.update(|p| {
+                p.pop();
+            }),
             1 => set_new_pin.update(|p| {
                 if p.is_empty() {
                     set_active_field.set(0);
