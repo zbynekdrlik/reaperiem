@@ -1239,8 +1239,9 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.waitForTimeout(500);
 
     // Inject a fake Meters message via the exposed __iem_ws.onmessage handler.
-    // ServerMsg format (adjacently tagged): {"event":"Meters","data":{...}}
-    // Meter values are linear [L, R] floats keyed by track index string.
+    // ServerMsg is adjacently tagged (#[serde(tag="event", content="data")]).
+    // The Meters variant has a named field "meters", so wire format is:
+    //   {"event":"Meters","data":{"meters":{"1":[0.85,0.82],...}}}
     const injected = await page.evaluate(() => {
       const ws = (window as any).__iem_ws as WebSocket | undefined;
       if (!ws || !ws.onmessage) return false;
@@ -1249,7 +1250,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       for (let i = 1; i <= 22; i++) {
         meters[String(i)] = [0.85, 0.82]; // Strong stereo signal
       }
-      const msg = JSON.stringify({ event: "Meters", data: meters });
+      const msg = JSON.stringify({ event: "Meters", data: { meters } });
       // Call onmessage directly with a MessageEvent (same as browser would)
       ws.onmessage(new MessageEvent("message", { data: msg }));
       return true;
