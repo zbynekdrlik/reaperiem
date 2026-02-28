@@ -13,6 +13,7 @@ use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::fader::Fader;
 use crate::components::meter::Meter;
 use crate::components::pan::PanKnob;
+use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::toolbar::Toolbar;
 
@@ -201,6 +202,7 @@ pub fn MixerPage() -> impl IntoView {
     let (connected, set_connected) = signal(false);
     let (active_category, set_active_category) = signal(Category::Main);
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
+    let (pin_modal_visible, set_pin_modal_visible) = signal(false);
     let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
     let (loading, set_loading) = signal(true);
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
@@ -461,6 +463,9 @@ pub fn MixerPage() -> impl IntoView {
                     <span class="header-version-number">{iem_core::version_label()}</span>
                     <span class="header-version-date">{iem_core::build_datetime()}</span>
                 </div>
+                <button class="settings-btn" on:click=move |_| set_pin_modal_visible.set(true)>
+                    "\u{2699}"
+                </button>
                 <div class=move || {
                     let base = if connected.get() { "status-dot connected" } else { "status-dot disconnected" };
                     if connected.get() && data_pulse.get() {
@@ -539,6 +544,11 @@ pub fn MixerPage() -> impl IntoView {
                 on_close=on_close_modal
                 on_load=on_load_preset
                 get_current_state=get_current_state
+            />
+
+            <PinChangeModal
+                visible=pin_modal_visible.into()
+                on_close=Callback::new(move |_: ()| set_pin_modal_visible.set(false))
             />
         </div>
     }

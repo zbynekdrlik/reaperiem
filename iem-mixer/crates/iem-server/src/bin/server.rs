@@ -57,7 +57,15 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|p| p.parse().ok())
         .unwrap_or(config.port);
 
-    let server_config = ServerConfig { port, config };
+    let config_dir = std::path::Path::new(&config_path)
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let server_config = ServerConfig {
+        port,
+        config,
+        config_dir,
+    };
 
     tracing::info!("Server listening on http://0.0.0.0:{}", port);
     iem_server::start_server(server_config).await?;

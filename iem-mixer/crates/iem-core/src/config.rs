@@ -4,6 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
+/// Default member PIN when no custom PIN is configured
+pub const DEFAULT_MEMBER_PIN: &str = "7711";
+
+/// Default engineer PIN (full access to any member's mixer)
+pub const DEFAULT_ENGINEER_PIN: &str = "1177";
+
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -123,26 +129,26 @@ impl Config {
 
     /// Validate a PIN for a member or engineer
     pub fn validate_pin(&self, member_id: &str, pin: &str) -> PinValidation {
-        // Check engineer PIN first
-        if let Some(ref eng_pin) = self.engineer_pin
-            && pin == eng_pin
-        {
+        // Check engineer PIN (config override or default "1177")
+        let eng_pin = self.engineer_pin.as_deref().unwrap_or(DEFAULT_ENGINEER_PIN);
+        if pin == eng_pin {
             return PinValidation::Engineer;
         }
 
-        // Check member PIN
+        // Check member-specific PIN from config
         if let Some(expected_pin) = self.pins.get(member_id) {
-            // Member has a PIN configured - must match
             if pin == expected_pin {
                 return PinValidation::Member(member_id.to_string());
             }
             return PinValidation::Invalid;
         }
 
-        // No PIN configured for this member - allow access with any PIN (including empty)
-        // This enables "no PIN required" mode when pins map is empty
+        // No config PIN for this member — check default PIN "7711"
         if self.find_member(member_id).is_some() {
-            return PinValidation::Member(member_id.to_string());
+            if pin == DEFAULT_MEMBER_PIN {
+                return PinValidation::Member(member_id.to_string());
+            }
+            return PinValidation::Invalid;
         }
 
         PinValidation::Invalid
@@ -241,5 +247,67 @@ mod tests {
             config.validate_pin("marek", "wrong"),
             PinValidation::Invalid
         );
+    }
+
+    fn make_test_member(name: &str) -> BandMember {
+        BandMember {
+            name: name.to_string(),
+            dante_output_l: 3,
+            dante_output_r: 4,
+        }
+    }
+
+    #[test]
+    fn test_default_pin_required_when_no_pin_configured() {
+        let mut config = Config::default();
+        config.members.push(make_test_member("Petka"));
+        // Default PIN "7711" should work
+        assert_eq!(
+            config.validate_pin("petka", "7711"),
+            PinValidation::Member("petka".to_string())
+        );
+        // Empty PIN should NOT work anymore
+        assert_eq!(config.validate_pin("petka", ""), PinValidation::Invalid);
+        // Wrong PIN should NOT work
+        assert_eq!(config.validate_pin("petka", "0000"), PinValidation::Invalid);
+    }
+
+    #[test]
+    fn test_engineer_pin_default_1177() {
+        let mut config = Config::default();
+        config.members.push(make_test_member("Petka"));
+        // Default engineer PIN "1177" works on any member
+        assert_eq!(
+            config.validate_pin("petka", "1177"),
+            PinValidation::Engineer
+        );
+    }
+
+    #[test]
+    fn test_engineer_pin_config_overrides_default() {
+        let mut config = Config::default();
+        config.engineer_pin = Some("9999".to_string());
+        config.members.push(make_test_member("Petka"));
+        // Config engineer PIN works
+        assert_eq!(
+            config.validate_pin("petka", "9999"),
+            PinValidation::Engineer
+        );
+        // Default "1177" should NOT work when overridden
+        assert_eq!(config.validate_pin("petka", "1177"), PinValidation::Invalid);
+    }
+
+    #[test]
+    fn test_config_pin_overrides_default() {
+        let mut config = Config::default();
+        config.members.push(make_test_member("Petka"));
+        config.pins.insert("petka".to_string(), "5555".to_string());
+        // Config-specific PIN works
+        assert_eq!(
+            config.validate_pin("petka", "5555"),
+            PinValidation::Member("petka".to_string())
+        );
+        // Default PIN "7711" should NOT work when member has config PIN
+        assert_eq!(config.validate_pin("petka", "7711"), PinValidation::Invalid);
     }
 }

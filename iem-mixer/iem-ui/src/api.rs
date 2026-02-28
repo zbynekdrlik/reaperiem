@@ -80,3 +80,32 @@ pub async fn login(member: &str, pin: &str) -> Result<AuthState, String> {
         Err(format!("Server error: {}", resp.status()))
     }
 }
+
+/// Change PIN for the authenticated member
+pub async fn change_pin(old_pin: &str, new_pin: &str) -> Result<(), String> {
+    let token = crate::auth::get_token().ok_or("Not authenticated")?;
+
+    #[derive(Serialize)]
+    struct ChangePinRequest<'a> {
+        old_pin: &'a str,
+        new_pin: &'a str,
+    }
+
+    let resp = Request::post(&format!("{}/auth/change-pin", API_BASE))
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&ChangePinRequest { old_pin, new_pin })
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else if resp.status() == 401 {
+        Err("Wrong current PIN".to_string())
+    } else if resp.status() == 400 {
+        Err("PIN must be exactly 4 digits".to_string())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
