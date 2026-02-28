@@ -107,8 +107,6 @@ pub fn Fader(
     let track_ref = NodeRef::<leptos::html::Div>::new();
 
     // --- Rc clones for animation ---
-    let animation_handle_ts = animation_handle.clone();
-    let animation_handle_md = animation_handle.clone();
     let animation_handle_dbl = animation_handle.clone();
     let animation_guard_time_effect = animation_guard_time.clone();
     let animation_guard_time_anim = animation_guard_time.clone();
