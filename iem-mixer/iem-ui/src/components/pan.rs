@@ -68,6 +68,7 @@ pub fn PanKnob(
     let double_tap_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
     let double_tap_guard_time_effect = double_tap_guard_time.clone();
+    let double_tap_guard_time_dblclick = double_tap_guard_time.clone();
     let double_tap_guard_time_tap = double_tap_guard_time;
 
     // Update local value when signal changes (but only if not actively touching)
@@ -259,7 +260,10 @@ pub fn PanKnob(
     // Desktop double-click to center
     let handle_dblclick = move |_| {
         set_local_value.set(0.5);
+        set_saved_value.set(0.5);
         on_change.run(0.5);
+        // Guard: block Effect from overwriting for 300ms
+        *double_tap_guard_time_dblclick.borrow_mut() = js_sys::Date::now();
     };
 
     view! {
