@@ -74,7 +74,15 @@ pub fn run() {
     let rt_handle = rt.handle().clone();
 
     // Spawn web server
-    let server_config = ServerConfig { port, config };
+    let config_dir = config_path
+        .parent()
+        .unwrap_or(std::path::Path::new("."))
+        .to_path_buf();
+    let server_config = ServerConfig {
+        port,
+        config,
+        config_dir,
+    };
     rt_handle.spawn(async move {
         if let Err(e) = iem_server::start_server(server_config).await {
             tracing::error!("Web server error: {}", e);

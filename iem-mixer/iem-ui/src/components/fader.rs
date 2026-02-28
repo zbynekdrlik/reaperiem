@@ -1,7 +1,7 @@
 //! Custom div-based fader component with touch-safe activation delay
 //!
 //! Replaces native `<input type="range">` to eliminate browser jump-to-click
-//! behavior and enable fill-bar visualization. Implements a 300ms activation
+//! behavior and enable fill-bar visualization. Implements a 150ms activation
 //! pattern for BOTH touch AND mouse — ALL movement is relative-only.
 //! No absolute positioning jumps on any platform.
 
@@ -11,8 +11,8 @@ use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::TouchEvent;
 
-/// Activation delay in milliseconds (SOTA: 250-350ms)
-const ACTIVATION_DELAY_MS: u32 = 300;
+/// Activation delay in milliseconds — reduced from 300ms for snappier stage feel
+const ACTIVATION_DELAY_MS: u32 = 150;
 
 /// Time window to ignore synthesized mouse events after touch (ms)
 const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
@@ -30,8 +30,8 @@ fn quantize(value: f32) -> f32 {
 /// Horizontal fader component with touch-safe activation
 ///
 /// Both touch and mouse use the same interaction model:
-/// - Press and release before 300ms: NO change (prevents accidental jumps)
-/// - Press and hold 300ms+: Fader activates with visual feedback, relative movement
+/// - Press and release before 150ms: NO change (prevents accidental jumps)
+/// - Press and hold 150ms+: Fader activates with visual feedback, relative movement
 /// - All movement is relative — fader never jumps to click/tap position
 #[component]
 pub fn Fader(

@@ -7,6 +7,7 @@
 //! - Provides real-time WebSocket updates
 
 pub mod auth;
+pub mod pin_store;
 pub mod poller;
 pub mod proxy;
 pub mod routes;
@@ -30,6 +31,8 @@ pub struct AppState {
     pub event_tx: broadcast::Sender<(String, ServerMsg)>,
     /// Cache of last-known state per member (for diff detection)
     pub mixer_cache: Arc<RwLock<MixerCache>>,
+    /// Runtime PIN storage (persisted to pins.json)
+    pub pin_store: Arc<RwLock<pin_store::PinStore>>,
 }
 
 /// Global IEM output volume state for a member
@@ -73,7 +76,7 @@ impl MixerCache {
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, config_dir: &std::path::Path) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         Self {
             config: Arc::new(RwLock::new(config)),
@@ -84,6 +87,7 @@ impl AppState {
                 .expect("failed to build HTTP client"),
             event_tx,
             mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
+            pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
         }
     }
 }
@@ -92,6 +96,8 @@ impl AppState {
 pub struct ServerConfig {
     pub port: u16,
     pub config: Config,
+    /// Directory where config and runtime data live (for pins.json, etc.)
+    pub config_dir: std::path::PathBuf,
 }
 
 impl Default for ServerConfig {
@@ -99,6 +105,7 @@ impl Default for ServerConfig {
         Self {
             port: 80,
             config: Config::default(),
+            config_dir: std::path::PathBuf::from("."),
         }
     }
 }
@@ -116,7 +123,7 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
 
-    let state = AppState::new(server_config.config);
+    let state = AppState::new(server_config.config, &server_config.config_dir);
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());

@@ -1,6 +1,6 @@
 //! Pan knob component with touch-safe activation delay
 //!
-//! Implements the same 300ms touch-and-hold activation pattern as the Fader
+//! Implements the same 150ms touch-and-hold activation pattern as the Fader
 //! to prevent accidental pan changes when scrolling. Includes double-tap
 //! to center for mobile (since dblclick doesn't fire on touch devices).
 //! Uses RELATIVE positioning — pan moves proportionally to finger delta,
@@ -12,8 +12,8 @@ use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlInputElement, TouchEvent};
 
-/// Activation delay in milliseconds (matches fader)
-const ACTIVATION_DELAY_MS: u32 = 300;
+/// Activation delay in milliseconds — reduced from 300ms for snappier stage feel
+const ACTIVATION_DELAY_MS: u32 = 150;
 
 /// Maximum time between taps for double-tap detection (ms)
 const DOUBLE_TAP_MS: f64 = 500.0;
@@ -27,8 +27,8 @@ const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
 /// Horizontal pan slider component with touch-safe activation
 ///
 /// Touch behavior:
-/// - Touch and release before 300ms: NO change (user was scrolling)
-/// - Touch and hold 300ms+: Pan activates with haptic feedback
+/// - Touch and release before 150ms: NO change (user was scrolling)
+/// - Touch and hold 150ms+: Pan activates with haptic feedback
 /// - Activated drag: RELATIVE movement (never jumps to finger position)
 /// - Double-tap: Centers pan (0.5)
 /// - Mouse/desktop: Immediate response (no delay needed)

@@ -149,6 +149,173 @@ body {
   animation: badge-pulse 2s ease-in-out infinite;
 }
 
+/* Settings gear button in mixer header */
+.settings-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.2em;
+  padding: 4px 8px;
+  cursor: pointer;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.settings-btn:hover {
+  opacity: 1;
+}
+
+/* PIN Change Modal */
+.pin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.pin-modal {
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md, 12px);
+  padding: 24px;
+  width: min(320px, 90vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.pin-modal h2 {
+  margin: 0 0 16px;
+  text-align: center;
+  color: var(--text-primary);
+  font-size: 1.1em;
+}
+
+.pin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pin-form label {
+  font-size: 0.75em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.pin-field {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--radius-sm, 6px);
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.pin-field.active {
+  border-color: var(--accent);
+}
+
+.pin-dot {
+  font-size: 1.4em;
+  color: var(--text-secondary);
+}
+
+.pin-dot.filled {
+  color: var(--accent);
+}
+
+.pin-error {
+  color: var(--mute-red);
+  text-align: center;
+  font-size: 0.8em;
+  margin-bottom: 8px;
+}
+
+.pin-numpad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.pin-numpad .numpad-btn {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary);
+  font-size: 1.3em;
+  width: auto;
+  height: auto;
+  padding: 14px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pin-numpad .numpad-btn:active {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.pin-numpad .numpad-btn.save {
+  background: var(--accent);
+  color: var(--bg-primary);
+  font-weight: bold;
+}
+
+.pin-numpad .numpad-btn.save:disabled {
+  opacity: 0.3;
+}
+
+.pin-numpad .numpad-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pin-actions {
+  text-align: center;
+}
+
+.pin-cancel {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-secondary);
+  padding: 8px 24px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.pin-success {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.pin-success-icon {
+  font-size: 3em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.pin-success p {
+  color: var(--text-secondary);
+  margin: 8px 0 16px;
+}
+
+.pin-done {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 32px;
+  cursor: pointer;
+  font-size: 1em;
+}
+
 @keyframes dot-pulse-a {
   0% {
     box-shadow: 0 0 6px var(--accent-glow);

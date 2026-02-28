@@ -43,6 +43,8 @@ pub fn api_routes() -> Router<AppState> {
         .route("/api/version", get(get_version))
         // Auth (public)
         .route("/api/auth", post(auth::login))
+        // Change PIN (authenticated)
+        .route("/api/auth/change-pin", post(auth::change_pin))
         // Member list (public)
         .route("/api/members", get(get_members))
         // Mixer state (should be protected)

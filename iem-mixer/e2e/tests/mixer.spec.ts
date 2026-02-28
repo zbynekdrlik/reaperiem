@@ -4,7 +4,7 @@ import { test, expect, Page } from "@playwright/test";
 async function loginAs(page: Page, member: string) {
   // First, call the login API to get a token
   const response = await page.request.post("/api/auth", {
-    data: { member, pin: "" }, // Empty PIN when no PIN is configured
+    data: { member, pin: "7711" }, // Default member PIN
   });
 
   if (response.status() === 200) {
@@ -143,7 +143,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
   test("fader single click does NOT jump (safety)", async ({ page }) => {
     // CRITICAL SAFETY: Clicking anywhere on fader must NOT cause absolute jump.
-    // All movement is relative-only with 300ms activation delay.
+    // All movement is relative-only with 150ms activation delay.
     await page.goto("/");
     await loginAs(page, "petka");
 
@@ -164,7 +164,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    // Click at 75% of the fader track — should NOT jump (300ms activation required)
+    // Click at 75% of the fader track — should NOT jump (150ms activation required)
     await page.mouse.click(box.x + box.width * 0.75, box.y + box.height / 2);
     await page.waitForTimeout(100);
 
@@ -177,7 +177,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   });
 
   test("fader hold-and-drag activates then moves", async ({ page }) => {
-    // Verifies 300ms activation delay + relative drag movement
+    // Verifies 150ms activation delay + relative drag movement
     await page.goto("/");
     await loginAs(page, "petka");
 
@@ -197,7 +197,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
     await page.mouse.down();
 
-    // Wait for 300ms activation delay
+    // Wait for 150ms activation delay
     await page.waitForTimeout(350);
 
     // Verify .active class appears after activation
@@ -253,7 +253,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
     await page.mouse.down();
 
-    // Wait for 300ms activation delay
+    // Wait for 150ms activation delay
     await page.waitForTimeout(350);
 
     // Verify activation
@@ -432,7 +432,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Mouse down at 20% and wait for activation
     await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.waitForTimeout(350); // Wait for 300ms activation delay
+    await page.waitForTimeout(350); // Wait for 150ms activation delay
 
     // Drag to 80% in steps (simulating real finger movement)
     for (let pct = 0.3; pct <= 0.8; pct += 0.05) {
@@ -894,6 +894,90 @@ test.describe("Main Tab and Global Volume", () => {
     const micsNames = await micsChannels.allTextContents();
     const handInMics = micsNames.some((n) => /hand/i.test(n));
     expect(handInMics).toBe(false);
+  });
+});
+
+test.describe("v1.17.0 PIN Authentication", () => {
+  test("login with default PIN 7711 succeeds", async ({ request }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    expect(resp.status()).toBe(200);
+    const data = await resp.json();
+    expect(data.member).toBe("petka");
+    expect(data.engineer).toBe(false);
+  });
+
+  test("login with wrong PIN fails", async ({ request }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "0000" },
+    });
+    expect(resp.status()).toBe(401);
+  });
+
+  test("login with empty PIN fails", async ({ request }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "" },
+    });
+    expect(resp.status()).toBe(401);
+  });
+
+  test("engineer PIN 1177 grants engineer access", async ({ request }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "1177" },
+    });
+    expect(resp.status()).toBe(200);
+    const data = await resp.json();
+    expect(data.engineer).toBe(true);
+  });
+
+  test("change PIN flow works", async ({ request }) => {
+    // Login with default PIN
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    expect(loginResp.status()).toBe(200);
+    const { token } = await loginResp.json();
+
+    // Change PIN
+    const changeResp = await request.post("/api/auth/change-pin", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { old_pin: "7711", new_pin: "1234" },
+    });
+    expect(changeResp.status()).toBe(200);
+
+    // Login with new PIN works
+    const newLoginResp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "1234" },
+    });
+    expect(newLoginResp.status()).toBe(200);
+
+    // Login with old default PIN fails
+    const oldLoginResp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    expect(oldLoginResp.status()).toBe(401);
+
+    // Reset: change back to default so other tests work
+    const { token: newToken } = await newLoginResp.json();
+    const resetResp = await request.post("/api/auth/change-pin", {
+      headers: { Authorization: `Bearer ${newToken}` },
+      data: { old_pin: "1234", new_pin: "7711" },
+    });
+    expect(resetResp.status()).toBe(200);
+  });
+
+  test("settings gear icon visible in mixer header", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petka");
+    await page.goto("/petka");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const settingsBtn = page.locator(".settings-btn");
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    // Should contain the gear unicode character
+    const text = await settingsBtn.textContent();
+    expect(text).toContain("\u2699");
   });
 });
 
