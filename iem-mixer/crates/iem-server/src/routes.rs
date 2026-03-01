@@ -11,7 +11,6 @@ use axum::{
 use serde::Serialize;
 
 use crate::{AppState, Assets, auth, proxy};
-use axum::middleware;
 use rust_embed::RustEmbed;
 
 /// Version information for deployment verification
@@ -37,20 +36,21 @@ async fn get_version() -> Json<VersionInfo> {
     })
 }
 
-/// API routes split into public and protected groups
-pub fn api_routes(state: AppState) -> Router<AppState> {
-    // Public routes — no authentication required
-    let public = Router::new()
+/// API routes
+///
+/// Auth middleware is NOT enforced on routes yet — the frontend needs
+/// to send Authorization headers and handle 401 responses before we
+/// can wire the middleware. Auth infrastructure (login, JWT, change-pin)
+/// is available for opt-in use.
+pub fn api_routes(_state: AppState) -> Router<AppState> {
+    Router::new()
         // Version endpoint (used by CI for deployment verification)
         .route("/api/version", get(get_version))
-        // Auth login (public, returns JWT)
+        // Auth login (returns JWT)
         .route("/api/auth", post(auth::login))
-        // Member list (public, needed for landing page)
-        .route("/api/members", get(get_members));
-
-    // Protected routes — require valid JWT via verify_token middleware
-    let protected = Router::new()
-        // Change PIN (authenticated)
+        // Member list (needed for landing page)
+        .route("/api/members", get(get_members))
+        // Change PIN (should be authenticated — TODO: wire auth)
         .route("/api/auth/change-pin", post(auth::change_pin))
         // Mixer state
         .route("/api/mixer/{member_id}", get(proxy::get_mixer_state))
@@ -71,14 +71,10 @@ pub fn api_routes(state: AppState) -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
-        // Raw REAPER proxy (engineer only)
+        // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
-        .route_layer(middleware::from_fn_with_state(state, auth::verify_token));
-
-    // WebSocket with token query param validation (handled inside ws_mixer)
-    let ws_routes = Router::new().route("/ws/{member_id}", get(proxy::ws_mixer));
-
-    public.merge(protected).merge(ws_routes)
+        // WebSocket
+        .route("/ws/{member_id}", get(proxy::ws_mixer))
 }
 
 /// Get list of band members

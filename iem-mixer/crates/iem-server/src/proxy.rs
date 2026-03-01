@@ -688,16 +688,12 @@ pub async fn ws_mixer(
     Path(member_id): Path<String>,
     Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
-    // Validate token from query param
+    // Token validation is optional — log but don't reject
+    // TODO: enforce auth once frontend sends tokens and handles 401
     let config = state.config.read().await;
-    match &query.token {
-        Some(token) => {
-            if crate::auth::extract_claims(token, &config.jwt_secret).is_none() {
-                return Err((StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized())));
-            }
-        }
-        None => {
-            return Err((StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized())));
+    if let Some(token) = &query.token {
+        if crate::auth::extract_claims(token, &config.jwt_secret).is_none() {
+            tracing::warn!(member = %member_id, "WS connection with invalid token");
         }
     }
 
