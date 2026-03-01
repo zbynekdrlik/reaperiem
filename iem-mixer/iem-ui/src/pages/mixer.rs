@@ -50,6 +50,7 @@ fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
     member: &str,
+    ws: ReadSignal<Option<web_sys::WebSocket>>,
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
     set_channels: WriteSignal<Vec<Channel>>,
     set_meters: WriteSignal<HashMap<usize, [f32; 2]>>,
@@ -62,7 +63,7 @@ fn connect_websocket(
     set_data_pulse: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
-    if let Some(old_ws) = set_ws.try_get_untracked().flatten() {
+    if let Some(old_ws) = ws.try_get_untracked() {
         old_ws.set_onmessage(None);
         old_ws.set_onclose(None);
         old_ws.set_onerror(None);
@@ -246,6 +247,7 @@ pub fn MixerPage() -> impl IntoView {
 
         connect_websocket(
             &member,
+            ws,
             set_ws,
             set_channels,
             set_meters,
@@ -273,6 +275,7 @@ pub fn MixerPage() -> impl IntoView {
             if !member.is_empty() {
                 connect_websocket(
                     &member,
+                    ws,
                     set_ws,
                     set_channels,
                     set_meters,
