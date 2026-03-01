@@ -58,24 +58,10 @@ pub fn SettingsModal(
     /// Member ID for localStorage persistence
     member_id: String,
 ) -> impl IntoView {
+    // Use Rc<str> so closures capturing member_id can be Fn (not just FnOnce)
+    let member_id: std::rc::Rc<str> = member_id.into();
     let member_id_fader = member_id.clone();
     let member_id_pan = member_id;
-
-    let toggle_fader = move |_| {
-        let new_val = !double_tap_fader.get_untracked();
-        set_double_tap_fader.set(new_val);
-        let mut settings = UserSettings::load(&member_id_fader);
-        settings.double_tap_fader = new_val;
-        settings.save(&member_id_fader);
-    };
-
-    let toggle_pan = move |_| {
-        let new_val = !double_tap_pan.get_untracked();
-        set_double_tap_pan.set(new_val);
-        let mut settings = UserSettings::load(&member_id_pan);
-        settings.double_tap_pan = new_val;
-        settings.save(&member_id_pan);
-    };
 
     view! {
         <Show when=move || visible.get() fallback=|| ()>
@@ -89,7 +75,13 @@ pub fn SettingsModal(
                     <div class="settings-section">
                         <div class="settings-section-title">"Preferences"</div>
 
-                        <div class="settings-row" on:click=toggle_fader>
+                        <div class="settings-row" on:click=move |_| {
+                            let new_val = !double_tap_fader.get_untracked();
+                            set_double_tap_fader.set(new_val);
+                            let mut settings = UserSettings::load(&member_id_fader);
+                            settings.double_tap_fader = new_val;
+                            settings.save(&member_id_fader);
+                        }>
                             <div class="settings-label">
                                 <div class="settings-name">"Fader double-tap"</div>
                                 <div class="settings-desc">"Double-tap fader to animate to 0 dB"</div>
@@ -99,7 +91,13 @@ pub fn SettingsModal(
                             </div>
                         </div>
 
-                        <div class="settings-row" on:click=toggle_pan>
+                        <div class="settings-row" on:click=move |_| {
+                            let new_val = !double_tap_pan.get_untracked();
+                            set_double_tap_pan.set(new_val);
+                            let mut settings = UserSettings::load(&member_id_pan);
+                            settings.double_tap_pan = new_val;
+                            settings.save(&member_id_pan);
+                        }>
                             <div class="settings-label">
                                 <div class="settings-name">"Pan double-tap"</div>
                                 <div class="settings-desc">"Double-tap pan to animate to center"</div>
