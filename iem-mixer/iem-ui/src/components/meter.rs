@@ -137,6 +137,7 @@ pub fn Meter(
             TICK_MS as i32,
         )
         .unwrap();
+    // Leaks ~300 bytes of closure state; interval is cleared by on_cleanup below
     tick_closure.forget();
 
     on_cleanup(move || {

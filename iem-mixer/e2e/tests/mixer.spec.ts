@@ -1226,18 +1226,24 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/petka");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    const meterFill = page.locator(".meter-fill").first();
+    // Skip the first 2 static .meter-fill elements (IEM VOL master L/R)
+    // which always have width:0%. Target a dynamic Meter component's fill.
+    const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!loaded) return;
+    expect(
+      loaded,
+      "dynamic meter-fill element must render for regression test",
+    ).not.toBeNull();
 
     // Wait for WS to connect (poller sends first State within ~150ms)
     await page.waitForTimeout(500);
 
     // Inject a fake Meters message via the exposed __iem_ws.onmessage handler.
-    // ServerMsg format (adjacently tagged): {"event":"Meters","data":{...}}
-    // Meter values are linear [L, R] floats keyed by track index string.
+    // ServerMsg is adjacently tagged (#[serde(tag="event", content="data")]).
+    // The Meters variant has a named field "meters", so wire format is:
+    //   {"event":"Meters","data":{"meters":{"1":[0.85,0.82],...}}}
     const injected = await page.evaluate(() => {
       const ws = (window as any).__iem_ws as WebSocket | undefined;
       if (!ws || !ws.onmessage) return false;
@@ -1246,23 +1252,35 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       for (let i = 1; i <= 22; i++) {
         meters[String(i)] = [0.85, 0.82]; // Strong stereo signal
       }
-      const msg = JSON.stringify({ event: "Meters", data: meters });
+      const msg = JSON.stringify({ event: "Meters", data: { meters } });
       // Call onmessage directly with a MessageEvent (same as browser would)
       ws.onmessage(new MessageEvent("message", { data: msg }));
       return true;
     });
 
-    if (!injected) return; // WS not available (e.g., server not running)
+    expect(
+      injected,
+      "__iem_ws must be exposed for meter injection test",
+    ).toBeTruthy();
 
-    // Wait for 3+ animation ticks (33ms each ≈ 100ms) plus render
-    await page.waitForTimeout(200);
-
-    // Check if meter fill has width > 0%
-    const fillWidth = await meterFill.evaluate((el) => {
-      const style = el.getAttribute("style") || "";
-      const match = style.match(/width:\s*([\d.]+)%/);
-      return match ? parseFloat(match[1]) : 0;
-    });
+    // Poll until a dynamic meter fill shows signal (skip first 2 = IEM VOL master).
+    // waitForFunction resolves on truthy return; return null to keep polling,
+    // .catch gives a clear assertion failure instead of timeout.
+    const fillWidth = await page
+      .waitForFunction(
+        () => {
+          const fills = document.querySelectorAll(".meter-fill");
+          if (fills.length < 3) return null;
+          const el = fills[2]; // First dynamic Meter component fill
+          const style = el.getAttribute("style") || "";
+          const match = style.match(/width:\s*([\d.]+)%/);
+          const w = match ? parseFloat(match[1]) : 0;
+          return w > 10 ? w : null;
+        },
+        { timeout: 2000 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => 0);
 
     // If the animation timer is alive, it processes the 0.85 signal level
     // through ballistic_tick (instant attack) and linear_to_pct (~90%).
