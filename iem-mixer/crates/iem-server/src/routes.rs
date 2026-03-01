@@ -11,6 +11,7 @@ use axum::{
 use serde::Serialize;
 
 use crate::{AppState, Assets, auth, proxy};
+use axum::middleware;
 use rust_embed::RustEmbed;
 
 /// Version information for deployment verification
@@ -36,24 +37,28 @@ async fn get_version() -> Json<VersionInfo> {
     })
 }
 
-/// API routes (protected by authentication)
-pub fn api_routes() -> Router<AppState> {
-    Router::new()
-        // Version endpoint (public, used by CI for deployment verification)
+/// API routes split into public and protected groups
+pub fn api_routes(state: AppState) -> Router<AppState> {
+    // Public routes — no authentication required
+    let public = Router::new()
+        // Version endpoint (used by CI for deployment verification)
         .route("/api/version", get(get_version))
-        // Auth (public)
+        // Auth login (public, returns JWT)
         .route("/api/auth", post(auth::login))
+        // Member list (public, needed for landing page)
+        .route("/api/members", get(get_members));
+
+    // Protected routes — require valid JWT via verify_token middleware
+    let protected = Router::new()
         // Change PIN (authenticated)
         .route("/api/auth/change-pin", post(auth::change_pin))
-        // Member list (public)
-        .route("/api/members", get(get_members))
-        // Mixer state (should be protected)
+        // Mixer state
         .route("/api/mixer/{member_id}", get(proxy::get_mixer_state))
         // Polling endpoint (optimized for frequent calls)
         .route("/api/mixer/{member_id}/poll", get(proxy::poll_mixer_state))
         // Batch operations (Reset)
         .route("/api/mixer/{member_id}/batch", post(proxy::batch_control))
-        // Mixer controls (should be protected)
+        // Mixer controls
         .route(
             "/api/mixer/{member_id}/track/{track_index}/level",
             post(proxy::set_send_level),
@@ -66,10 +71,15 @@ pub fn api_routes() -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
-        // WebSocket for real-time mixer updates
-        .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Raw REAPER proxy (engineer only)
         .route("/api/reaper/{*path}", any(reaper_proxy))
+        .route_layer(middleware::from_fn_with_state(state, auth::verify_token));
+
+    // WebSocket with token query param validation (handled inside ws_mixer)
+    let ws_routes = Router::new()
+        .route("/ws/{member_id}", get(proxy::ws_mixer));
+
+    public.merge(protected).merge(ws_routes)
 }
 
 /// Get list of band members

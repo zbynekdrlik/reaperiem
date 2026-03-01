@@ -659,10 +659,15 @@ jobs:
           # Check if process is running (may not be if user isn't logged into desktop)
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if (-not $proc) {
-            Write-Host "::warning::App process not running - user may not have active desktop session"
-            Write-Host "App will start at next login via startup shortcut."
-            Write-Host "Skipping HTTP verification."
-            exit 0
+            Write-Host "::warning::App process not running locally"
+            Write-Host "Attempting HTTP verification via network IP..."
+            try {
+              $response = Invoke-WebRequest -Uri "http://10.77.9.231/api/version" -UseBasicParsing -TimeoutSec 10
+              Write-Host "App responding on network IP: OK (status $($response.StatusCode))"
+            } catch {
+              Write-Host "::error::App not running and not responding on network"
+              exit 1
+            }
           }
           Write-Host "App running (PID: $($proc.Id))"
 

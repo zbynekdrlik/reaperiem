@@ -1,5 +1,6 @@
 """SSH client for running git commands on remote Windows machine."""
 
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -75,15 +76,14 @@ class SSHGitClient:
 
     def add(self, paths: str = ".") -> None:
         """Stage files."""
-        stdout, stderr, code = self.run_git(f"add {paths}")
+        stdout, stderr, code = self.run_git(f"add -- {shlex.quote(paths)}")
         if code != 0:
             raise RuntimeError(f"git add failed: {stderr}")
 
     def commit(self, message: str) -> str:
         """Create commit with message."""
-        # Escape quotes in message
-        escaped_msg = message.replace('"', '\\"')
-        stdout, stderr, code = self.run_git(f'commit -m "{escaped_msg}"')
+        escaped_msg = shlex.quote(message)
+        stdout, stderr, code = self.run_git(f"commit -m {escaped_msg}")
         if code != 0:
             if "nothing to commit" in stdout or "nothing to commit" in stderr:
                 return "Nothing to commit"
@@ -99,6 +99,7 @@ class SSHGitClient:
 
     def log(self, count: int = 5) -> str:
         """Get recent commits."""
+        count = max(1, min(count, 100))
         stdout, stderr, code = self.run_git(
             f"log --oneline -n {count}"
         )

@@ -117,7 +117,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return; // No channels loaded (no REAPER)
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     // CRITICAL: Fader track must have real width (not collapsed to 0)
     const box = await fader.boundingBox();
@@ -154,10 +154,11 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Get initial fill width
     const fillBefore = await fader
@@ -165,7 +166,10 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .evaluate((el) => el.getBoundingClientRect().width);
 
     // Click at 75% of the fader track — should NOT jump (150ms activation required)
-    await page.mouse.click(box.x + box.width * 0.75, box.y + box.height / 2);
+    await page.mouse.click(
+      box!.x + box!.width * 0.75,
+      box!.y + box!.height / 2,
+    );
     await page.waitForTimeout(100);
 
     // Fill width must NOT have changed (no absolute jump)
@@ -188,13 +192,14 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Mouse down at center of fader
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
     await page.mouse.down();
 
     // Wait for 150ms activation delay
@@ -209,7 +214,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .evaluate((el) => el.getBoundingClientRect().width);
 
     // Drag right by 30% of track width (relative movement)
-    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.8, box!.y + box!.height / 2);
     await page.waitForTimeout(50);
 
     // Fill should have grown (moved right via relative delta)
@@ -244,13 +249,14 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Mouse down at 20% of fader (left side)
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.2, box!.y + box!.height / 2);
     await page.mouse.down();
 
     // Wait for 150ms activation delay
@@ -260,7 +266,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await expect(fader).toHaveClass(/active/);
 
     // FIRST drag movement to 40%
-    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.4, box!.y + box!.height / 2);
     await page.waitForTimeout(100); // Give time for state updates
 
     // CRITICAL CHECK: .active must STILL be present after first movement
@@ -269,7 +275,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(classAfterMove1).toContain("active");
 
     // SECOND drag movement to 60%
-    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.6, box!.y + box!.height / 2);
     await page.waitForTimeout(100);
 
     // CRITICAL CHECK: .active must STILL be present after second movement
@@ -278,7 +284,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(classAfterMove2).toContain("active");
 
     // THIRD drag movement to 80%
-    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.8, box!.y + box!.height / 2);
     await page.waitForTimeout(100);
 
     // CRITICAL CHECK: .active must STILL be present after third movement
@@ -291,7 +297,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
     // Should have moved significantly from 20% to 80%
-    expect(fillWidth / box.width).toBeGreaterThan(0.5);
+    expect(fillWidth / box!.width).toBeGreaterThan(0.5);
 
     // Release
     await page.mouse.up();
@@ -314,7 +320,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const handle = fader.locator(".fader-handle");
     await expect(handle).toBeAttached();
@@ -337,7 +343,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     // dB display must be ABOVE the fader (lower Y value = higher on screen)
     const dbBox = await channel.locator(".db-display").boundingBox();
@@ -360,7 +366,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
       .catch(() => null);
-    if (!appLoaded) return; // Page didn't load - skip test
+    expect(appLoaded, "mixer page must load for this test").toBeTruthy();
 
     // Check for mute button without long wait
     const muteBtn = page.locator(".mute-btn").first();
@@ -424,19 +430,23 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Mouse down at 20% and wait for activation
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.2, box!.y + box!.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(350); // Wait for 150ms activation delay
 
     // Drag to 80% in steps (simulating real finger movement)
     for (let pct = 0.3; pct <= 0.8; pct += 0.05) {
-      await page.mouse.move(box.x + box.width * pct, box.y + box.height / 2);
+      await page.mouse.move(
+        box!.x + box!.width * pct,
+        box!.y + box!.height / 2,
+      );
       await page.waitForTimeout(30);
     }
 
@@ -456,7 +466,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
     const drift = Math.abs(fillAfterWait - fillAtRelease);
-    const tolerance = box.width * 0.05;
+    const tolerance = box!.width * 0.05;
     expect(drift).toBeLessThan(tolerance);
 
     // Wait another 500ms to ensure no late snap-back
@@ -482,26 +492,33 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Mouse down and activate
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(350);
 
     // Rapid back-and-forth movement (5 cycles)
     for (let i = 0; i < 5; i++) {
-      await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+      await page.mouse.move(
+        box!.x + box!.width * 0.3,
+        box!.y + box!.height / 2,
+      );
       await page.waitForTimeout(30);
-      await page.mouse.move(box.x + box.width * 0.7, box.y + box.height / 2);
+      await page.mouse.move(
+        box!.x + box!.width * 0.7,
+        box!.y + box!.height / 2,
+      );
       await page.waitForTimeout(30);
     }
 
     // End at 60% position
-    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.6, box!.y + box!.height / 2);
     await page.waitForTimeout(50);
 
     const fillAtEnd = await fader
@@ -519,7 +536,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
     const drift = Math.abs(fillAfterWait - fillAtEnd);
-    const tolerance = box.width * 0.05;
+    const tolerance = box!.width * 0.05;
     expect(drift).toBeLessThan(tolerance);
   });
 
@@ -533,13 +550,16 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
       .catch(() => null);
-    if (!appLoaded) return; // Page didn't load - skip test
+    expect(appLoaded, "mixer page must load for this test").toBeTruthy();
 
     // Try to find and click solo button with short timeout
     const channelBtns = await page
       .waitForSelector(".channel-btns", { timeout: 3000 })
       .catch(() => null);
-    if (!channelBtns) return; // No channels loaded (no REAPER) - skip
+    expect(
+      channelBtns,
+      "channel buttons must load (requires REAPER)",
+    ).toBeTruthy();
 
     const soloBtn = page.locator(".solo-btn").first();
     const count = await soloBtn.count().catch(() => 0);
@@ -596,7 +616,10 @@ test.describe("Main Tab and Global Volume", () => {
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!globalLoaded) return;
+    expect(
+      globalLoaded,
+      "global volume channel must load for this test",
+    ).toBeTruthy();
 
     // Check that fader exists within global volume
     const fader = globalVol.locator(".fader-track");
@@ -616,7 +639,10 @@ test.describe("Main Tab and Global Volume", () => {
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!globalLoaded) return;
+    expect(
+      globalLoaded,
+      "global volume channel must load for this test",
+    ).toBeTruthy();
 
     // Mute button should exist in global volume
     const muteBtn = globalVol.locator(".mute-btn");
@@ -660,7 +686,10 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (!channelsLoaded) return;
+    expect(
+      channelsLoaded,
+      "channels must load in stems tab for this test",
+    ).toBeTruthy();
 
     // Get all channel names in order
     const channelNames = await page
@@ -708,7 +737,10 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (!channelsLoaded) return;
+    expect(
+      channelsLoaded,
+      "channels must load on main tab for this test",
+    ).toBeTruthy();
 
     // Member's mic fader MUST be visible (the "Me" fader)
     // Bug: case mismatch means this channel never appears
@@ -731,20 +763,26 @@ test.describe("Main Tab and Global Volume", () => {
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!globalLoaded) return;
+    expect(
+      globalLoaded,
+      "global volume channel must load for this test",
+    ).toBeTruthy();
 
     const fader = globalVol.locator(".fader-track");
     const box = await fader.boundingBox();
-    if (!box) return;
+    expect(box, "global volume fader bounding box must exist").toBeTruthy();
 
     // Mouse down at center, wait for activation
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(350);
 
     // Drag to 80%
     for (let pct = 0.5; pct <= 0.8; pct += 0.05) {
-      await page.mouse.move(box.x + box.width * pct, box.y + box.height / 2);
+      await page.mouse.move(
+        box!.x + box!.width * pct,
+        box!.y + box!.height / 2,
+      );
       await page.waitForTimeout(30);
     }
 
@@ -762,7 +800,7 @@ test.describe("Main Tab and Global Volume", () => {
       .evaluate((el) => el.getBoundingClientRect().width);
 
     // Bug: without optimistic update, fillAfterRelease snaps to old value
-    const tolerance = box.width * 0.05;
+    const tolerance = box!.width * 0.05;
     expect(Math.abs(fillAfterRelease - fillWhileHeld)).toBeLessThan(tolerance);
   });
 
@@ -839,7 +877,7 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".pan-slider", { timeout: 5000 })
       .catch(() => null);
-    if (!channelsLoaded) return;
+    expect(channelsLoaded, "pan sliders must load for this test").toBeTruthy();
 
     // Pan sliders with default center position should have "centered" class
     const panSliders = page.locator(".pan-slider");
@@ -877,7 +915,10 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (!channelsLoaded) return;
+    expect(
+      channelsLoaded,
+      "channels must load in tech tab for this test",
+    ).toBeTruthy();
 
     // Check HAND tracks are in Tech tab
     const channels = page.locator(".channel .ch-name");
@@ -992,7 +1033,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     const loaded = await panSlider
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!loaded) return;
+    expect(loaded, "pan slider must load for this test").toBeTruthy();
 
     // Double-click the pan slider
     await panSlider.dblclick({ force: true });
@@ -1063,7 +1104,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     // Stereo meter container must exist
     const meter = channel.locator(".meter-stereo");
@@ -1101,7 +1142,10 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!loaded) return;
+    expect(
+      loaded,
+      "meter fill element must be attached for this test",
+    ).toBeTruthy();
 
     // Meter fill should use gradient background, not solid color
     const bg = await meterFill.evaluate(
@@ -1123,10 +1167,11 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Record fill width before double-click
     const fillBefore = await fader
@@ -1153,7 +1198,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
     const expectedPct = 83.33;
-    const actualPct = (fillAfter / box.width) * 100;
+    const actualPct = (fillAfter / box!.width) * 100;
     // Allow 5% tolerance
     expect(Math.abs(actualPct - expectedPct)).toBeLessThan(5);
   });
@@ -1169,10 +1214,11 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!box || box.width < 50) return;
+    expect(box, "fader bounding box must exist").toBeTruthy();
+    expect(box!.width, "fader must have usable width").toBeGreaterThan(50);
 
     // Double-click to start animation
     await fader.dblclick({ force: true });
@@ -1183,7 +1229,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     expect(classAnimating).toContain("animating");
 
     // Mouse down to interrupt
-    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+    await page.mouse.move(box!.x + box!.width * 0.3, box!.y + box!.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(100);
 
@@ -1205,7 +1251,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!channelLoaded) return;
+    expect(channelLoaded, "channel must load for this test").toBeTruthy();
 
     // Grid template should have 3 rows
     const gridRows = await channel.evaluate(
@@ -1301,7 +1347,10 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!loaded) return;
+    expect(
+      loaded,
+      "meter fill element must be attached for this test",
+    ).toBeTruthy();
 
     // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
     await page.waitForTimeout(500);
