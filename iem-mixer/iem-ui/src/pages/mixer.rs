@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
-use crate::auth::can_access_member;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::fader::Fader;
 use crate::components::meter::Meter;
@@ -190,8 +189,7 @@ fn connect_websocket(
 #[component]
 pub fn MixerPage() -> impl IntoView {
     let params = use_params_map();
-    let navigate = use_navigate();
-    let navigate_back = navigate.clone();
+    let navigate_back = use_navigate();
 
     // Get member ID from route params
     let member_id = move || {
@@ -201,18 +199,6 @@ pub fn MixerPage() -> impl IntoView {
             .map(|s| s.to_string())
             .unwrap_or_default()
     };
-
-    // Check auth on mount
-    Effect::new(move |_| {
-        let member = member_id();
-        if !can_access_member(&member) {
-            let nav = navigate.clone();
-            nav(
-                &format!("/login?member={}&next=/{}", member, member),
-                Default::default(),
-            );
-        }
-    });
 
     // Reactive state
     let (channels, set_channels) = signal(Vec::<Channel>::new());
