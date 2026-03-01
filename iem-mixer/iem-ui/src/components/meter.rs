@@ -1,7 +1,7 @@
 //! Stereo VU Meter component — two thin gradient bars with ballistics and peak hold
 
 use leptos::prelude::*;
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::{JsCast, prelude::*};
 
 /// PPM-style decay rate: 20 dB/s (smooth analog VU feel)
 const DECAY_DB_PER_SEC: f32 = 20.0;
