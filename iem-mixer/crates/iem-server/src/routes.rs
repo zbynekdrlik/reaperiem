@@ -76,8 +76,7 @@ pub fn api_routes(state: AppState) -> Router<AppState> {
         .route_layer(middleware::from_fn_with_state(state, auth::verify_token));
 
     // WebSocket with token query param validation (handled inside ws_mixer)
-    let ws_routes = Router::new()
-        .route("/ws/{member_id}", get(proxy::ws_mixer));
+    let ws_routes = Router::new().route("/ws/{member_id}", get(proxy::ws_mixer));
 
     public.merge(protected).merge(ws_routes)
 }
