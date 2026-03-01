@@ -1,6 +1,7 @@
 """MCP tools for send/mix control - the core of IEM mixing."""
 
 import math
+import shlex
 from typing import Any
 
 from ..lib.reaper_http import ReaperHTTPClient
@@ -43,10 +44,8 @@ async def set_send_pan(
     if pan < -1.0 or pan > 1.0:
         raise ValueError(f"Pan must be between -1.0 and 1.0, got {pan}")
 
-    # Convert from user range (-1.0 to 1.0) to REAPER range (0.0 to 1.0)
-    reaper_pan = (pan + 1.0) / 2.0
-
-    await client.set_send_pan(track_index, send_index, reaper_pan)
+    # REAPER SET PAN uses -1.0..1.0 natively (verified empirically 2026-03-01)
+    await client.set_send_pan(track_index, send_index, pan)
     return f"Send from track {track_index} to send {send_index} pan set to {pan}"
 
 
@@ -97,8 +96,12 @@ async def get_track_meter(
     """Get real-time meter levels for a track.
 
     Returns peak and RMS levels in dB for both channels.
-    REAPER's TRACK response includes meter values at indices 12-13
-    of the tab-separated TRACK array (peak_l, peak_r as linear 0.0-1.0).
+    REAPER TRACK response (after keyword stripping by _parse_response):
+      [0]=index, [1]=name, [2]=flags, [3]=vol, [4]=pan,
+      [5]=VU_PEAK_L (centibels), [6]=VU_PEAK_R (centibels), ...
+
+    Meter values are integer centibels (e.g., -231 = -2.31 dB).
+    Floor: -1500 cb (-15.0 dB) = silence (verified empirically 2026-02-28).
 
     Args:
         client: REAPER HTTP client
@@ -116,31 +119,24 @@ async def get_track_meter(
     if track_data is None:
         raise ValueError(f"Track {track_index} not found")
 
-    # REAPER TRACK response array indices:
-    # [0]=index, [1]=name, [2]=flags, [3]=vol, [4]=pan, ...
-    # [12]=peak_l (linear), [13]=peak_r (linear)
-    # Meter values are linear 0.0-1.0; convert to dB
+    # Extract peak values from centibels (indices 5,6 after keyword strip)
+    peak_l_db = float("-inf")
+    peak_r_db = float("-inf")
 
-    # Extract peak values from the response
-    peak_l_linear = 0.0
-    peak_r_linear = 0.0
+    if isinstance(track_data, list) and len(track_data) > 6:
+        cb_l = float(track_data[5])
+        cb_r = float(track_data[6])
 
-    if isinstance(track_data, list) and len(track_data) > 12:
-        peak_l_linear = float(track_data[12])
-        if len(track_data) > 13:
-            peak_r_linear = float(track_data[13])
-        else:
-            # Mono track: use same value for both channels
-            peak_r_linear = peak_l_linear
+        peak_l_db = cb_l / 100.0 if cb_l > -1500.0 else float("-inf")
+        peak_r_db = cb_r / 100.0 if cb_r > -1500.0 else float("-inf")
+    elif isinstance(track_data, list) and len(track_data) > 5:
+        cb_l = float(track_data[5])
+        peak_l_db = cb_l / 100.0 if cb_l > -1500.0 else float("-inf")
+        peak_r_db = peak_l_db  # Mono track
 
-    peak_l_db = linear_to_db(peak_l_linear)
-    peak_r_db = linear_to_db(peak_r_linear)
-
-    # RMS approximation from peak: RMS ~= peak * 0.707 (-3dB) for typical audio
-    # This is a reasonable approximation when REAPER doesn't expose separate RMS
-    rms_factor = 1.0 / math.sqrt(2)  # 0.7071...
-    rms_l_db = linear_to_db(peak_l_linear * rms_factor)
-    rms_r_db = linear_to_db(peak_r_linear * rms_factor)
+    # RMS approximation: peak - 3 dB
+    rms_l_db = peak_l_db - 3.0 if peak_l_db != float("-inf") else float("-inf")
+    rms_r_db = peak_r_db - 3.0 if peak_r_db != float("-inf") else float("-inf")
 
     return {
         "track_index": track_index,
@@ -149,6 +145,16 @@ async def get_track_meter(
         "rms_l": rms_l_db,
         "rms_r": rms_r_db,
     }
+
+
+def cb_to_linear(cb: float) -> float:
+    """Convert centibels to linear gain.
+
+    REAPER HTTP API meter floor: -1500 centibels = silence.
+    """
+    if cb <= -1500.0:
+        return 0.0
+    return 10.0 ** (cb / 100.0 / 20.0)
 
 
 def db_to_linear(db: float) -> float:

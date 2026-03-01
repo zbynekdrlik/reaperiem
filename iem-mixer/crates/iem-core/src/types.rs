@@ -104,6 +104,10 @@ impl ApiError {
     pub fn not_found(what: &str) -> Self {
         Self::new("NOT_FOUND", format!("{} not found", what))
     }
+
+    pub fn bad_request(msg: &str) -> Self {
+        Self::new("BAD_REQUEST", msg)
+    }
 }
 
 #[cfg(test)]
@@ -134,6 +138,13 @@ mod tests {
         let err = ApiError::not_found("Member");
         assert_eq!(err.code, "NOT_FOUND");
         assert!(err.message.contains("Member"));
+    }
+
+    #[test]
+    fn test_api_error_bad_request() {
+        let err = ApiError::bad_request("invalid input");
+        assert_eq!(err.code, "BAD_REQUEST");
+        assert!(err.message.contains("invalid input"));
     }
 
     #[test]

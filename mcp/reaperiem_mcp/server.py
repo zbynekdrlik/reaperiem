@@ -146,7 +146,7 @@ async def set_send_level(
 
     Args:
         track_index: Source track number (1-based)
-        send_index: Send/output bus number (1-based)
+        send_index: Send/output bus number (0-based)
         level_db: Level in dB (0.0 = unity, -inf to +12 range)
     """
     client = get_reaper_client()
@@ -164,7 +164,7 @@ async def set_send_pan(
 
     Args:
         track_index: Source track number (1-based)
-        send_index: Send/output bus number (1-based)
+        send_index: Send/output bus number (0-based)
         pan: Pan position from -1.0 (hard left) to 1.0 (hard right), 0.0 = center
     """
     client = get_reaper_client()
@@ -182,7 +182,7 @@ async def set_send_mute(
 
     Args:
         track_index: Source track number (1-based)
-        send_index: Send/output bus number (1-based)
+        send_index: Send/output bus number (0-based)
         mute: True to mute, False to unmute
     """
     client = get_reaper_client()
@@ -197,7 +197,7 @@ async def adjust_send_level(
 
     Args:
         track_index: Source track number (1-based)
-        send_index: Send/output bus number (1-based)
+        send_index: Send/output bus number (0-based)
         adjustment_db: Relative adjustment (+3.0 = boost 3dB, -6.0 = cut 6dB)
     """
     client = get_reaper_client()

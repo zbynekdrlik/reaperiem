@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     tracing::info!("Server listening on http://0.0.0.0:{}", port);
-    iem_server::start_server(server_config).await?;
+    iem_server::start_server(server_config, None).await?;
 
     Ok(())
 }

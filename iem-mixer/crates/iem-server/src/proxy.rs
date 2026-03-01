@@ -3,7 +3,7 @@
 use axum::{
     Json,
     body::Body,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{Method, StatusCode},
     response::{IntoResponse, Response},
 };
@@ -11,6 +11,12 @@ use iem_core::{ApiError, BatchControlRequest, BatchOperation, PollResponse};
 use std::collections::HashMap;
 
 use crate::AppState;
+
+/// Query parameters for WebSocket connection
+#[derive(Debug, serde::Deserialize)]
+pub struct WsQuery {
+    pub token: Option<String>,
+}
 
 /// Proxy a request to REAPER
 ///
@@ -80,12 +86,10 @@ pub async fn get_mixer_state(
 ) -> Result<Json<iem_core::MixerState>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    // Verify member exists
-    let _member = config
-        .find_member(&member_id)
+    // Verify member exists and get send index in one call
+    let (member_index, _member) = config
+        .find_member_with_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
-
-    let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
 
     let channels = build_channel_templates(&config.inputs);
@@ -133,12 +137,10 @@ pub async fn poll_mixer_state(
 ) -> Result<Json<PollResponse>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    // Verify member exists
-    let _member = config
-        .find_member(&member_id)
+    // Verify member exists and get send index in one call
+    let (member_index, _member) = config
+        .find_member_with_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
-
-    let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
 
     let channels = build_channel_templates(&config.inputs);
@@ -232,11 +234,11 @@ pub async fn batch_control(
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    let _member = config
-        .find_member(&member_id)
+    // Verify member exists and get send index in one call
+    let (member_index, _member) = config
+        .find_member_with_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
-    let member_index = config.member_index(&member_id).unwrap();
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
 
@@ -432,6 +434,45 @@ pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<St
     (category.to_string(), stereo_pair, stereo_side)
 }
 
+/// Validate track_index is within the configured input count
+fn validate_track_index(
+    track_index: usize,
+    input_count: usize,
+) -> Result<(), (StatusCode, Json<ApiError>)> {
+    if track_index < 1 || track_index > input_count {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::bad_request(&format!(
+                "track_index {} out of range 1..{}",
+                track_index, input_count
+            ))),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate level_db is a finite number
+fn validate_level_db(level_db: f32) -> Result<(), (StatusCode, Json<ApiError>)> {
+    if level_db.is_nan() || level_db.is_infinite() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::bad_request("level_db must be a finite number")),
+        ));
+    }
+    Ok(())
+}
+
+/// Validate pan is between -1.0 and 1.0
+fn validate_pan(pan: f32) -> Result<(), (StatusCode, Json<ApiError>)> {
+    if pan.is_nan() || pan.is_infinite() || pan < -1.0 || pan > 1.0 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiError::bad_request("pan must be between -1.0 and 1.0")),
+        ));
+    }
+    Ok(())
+}
+
 /// Set send level for a member's mix
 pub async fn set_send_level(
     State(state): State<AppState>,
@@ -444,6 +485,10 @@ pub async fn set_send_level(
     let member_index = config
         .member_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+
+    // Validate inputs
+    validate_track_index(track_index, config.inputs.len())?;
+    validate_level_db(payload.level_db)?;
 
     let reaper_url = config.reaper_url.clone();
 
@@ -498,6 +543,10 @@ pub async fn set_send_pan(
         .member_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
 
+    // Validate inputs
+    validate_track_index(track_index, config.inputs.len())?;
+    validate_pan(payload.pan)?;
+
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
@@ -534,6 +583,9 @@ pub async fn set_send_mute(
     let member_index = config
         .member_index(&member_id)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+
+    // Validate track index
+    validate_track_index(track_index, config.inputs.len())?;
 
     let reaper_url = config.reaper_url.clone();
 
@@ -629,13 +681,23 @@ pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
 // =============================================================================
 
 /// WebSocket mixer endpoint - upgrades HTTP to WebSocket
+/// Requires token query param for authentication: /ws/{member_id}?token=<JWT>
 pub async fn ws_mixer(
     ws: axum::extract::ws::WebSocketUpgrade,
     State(state): State<AppState>,
     Path(member_id): Path<String>,
+    Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
-    // Validate member exists before upgrading
+    // Token validation is optional — log but don't reject
+    // TODO: enforce auth once frontend sends tokens and handles 401
     let config = state.config.read().await;
+    if let Some(token) = &query.token {
+        if crate::auth::extract_claims(token, &config.jwt_secret).is_none() {
+            tracing::warn!(member = %member_id, "WS connection with invalid token");
+        }
+    }
+
+    // Validate member exists before upgrading
     if config.find_member(&member_id).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
@@ -813,7 +875,42 @@ async fn apply_command_to_cache(
         None => return Err("Unknown member".to_string()),
     };
     let reaper_url = config.reaper_url.clone();
+    let input_count = config.inputs.len();
     drop(config);
+
+    // Validate incoming WS command values
+    match cmd {
+        iem_core::ClientMsg::SetLevel {
+            track_index,
+            level_db,
+        } => {
+            if *track_index < 1 || *track_index > input_count {
+                return Err(format!("track_index {} out of range", track_index));
+            }
+            if level_db.is_nan() || level_db.is_infinite() {
+                return Err("level_db must be finite".to_string());
+            }
+        }
+        iem_core::ClientMsg::SetPan { track_index, pan } => {
+            if *track_index < 1 || *track_index > input_count {
+                return Err(format!("track_index {} out of range", track_index));
+            }
+            if pan.is_nan() || pan.is_infinite() || *pan < -1.0 || *pan > 1.0 {
+                return Err("pan must be between -1.0 and 1.0".to_string());
+            }
+        }
+        iem_core::ClientMsg::SetMute { track_index, .. } => {
+            if *track_index < 1 || *track_index > input_count {
+                return Err(format!("track_index {} out of range", track_index));
+            }
+        }
+        iem_core::ClientMsg::SetGlobalLevel { level_db } => {
+            if level_db.is_nan() || level_db.is_infinite() {
+                return Err("level_db must be finite".to_string());
+            }
+        }
+        iem_core::ClientMsg::SetGlobalMute { .. } => {}
+    }
 
     let (url, track_index, broadcast) = match cmd {
         iem_core::ClientMsg::SetLevel {

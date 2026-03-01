@@ -9,7 +9,6 @@ use iem_core::Config;
 use iem_server::ServerConfig;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager, WindowEvent};
-use tauri_plugin_updater::UpdaterExt;
 
 /// Global AppHandle storage for cross-thread access
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
@@ -83,9 +82,19 @@ pub fn run() {
         config,
         config_dir,
     };
+    let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
     rt_handle.spawn(async move {
-        if let Err(e) = iem_server::start_server(server_config).await {
+        if let Err(e) = iem_server::start_server(server_config, Some(ready_tx)).await {
             tracing::error!("Web server error: {}", e);
+        }
+    });
+
+    // Wait for server to be ready (with timeout)
+    rt_handle.block_on(async {
+        match tokio::time::timeout(std::time::Duration::from_secs(10), ready_rx).await {
+            Ok(Ok(())) => tracing::info!("Server ready on port {}", port),
+            Ok(Err(_)) => tracing::error!("Server startup channel dropped"),
+            Err(_) => tracing::error!("Server startup timed out after 10s"),
         }
     });
 
@@ -104,8 +113,6 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Hide instead of close
@@ -124,84 +131,8 @@ pub fn run() {
                 tracing::error!("Failed to setup tray: {}", e);
             }
 
-            // Check for updates in background
-            let update_handle = handle.clone();
-            tauri::async_runtime::spawn(async move {
-                check_for_updates(update_handle).await;
-            });
-
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running IEM Mixer");
-}
-
-/// Check for updates and prompt user if available
-async fn check_for_updates(app: AppHandle) {
-    tracing::info!("Checking for updates...");
-
-    let updater = match app.updater() {
-        Ok(u) => u,
-        Err(e) => {
-            tracing::debug!("Updater not available: {}", e);
-            return;
-        }
-    };
-
-    match updater.check().await {
-        Ok(Some(update)) => {
-            tracing::info!(
-                "Update available: {} -> {}",
-                iem_core::VERSION,
-                update.version
-            );
-
-            // Show dialog asking to update
-            let msg = format!(
-                "A new version ({}) is available.\nCurrent version: {}\n\nDo you want to download and install it?",
-                update.version,
-                iem_core::VERSION
-            );
-
-            use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
-            let confirmed = app
-                .dialog()
-                .message(msg)
-                .kind(MessageDialogKind::Info)
-                .title("Update Available")
-                .buttons(MessageDialogButtons::OkCancelCustom(
-                    "Update".to_string(),
-                    "Later".to_string(),
-                ))
-                .blocking_show();
-
-            if confirmed {
-                tracing::info!("User accepted update, downloading...");
-
-                // Download and install
-                match update.download_and_install(|_, _| {}, || {}).await {
-                    Ok(_) => {
-                        tracing::info!("Update installed, restarting...");
-                        app.restart();
-                    }
-                    Err(e) => {
-                        tracing::error!("Update failed: {}", e);
-                        app.dialog()
-                            .message(format!("Update failed: {}", e))
-                            .kind(MessageDialogKind::Error)
-                            .title("Update Error")
-                            .blocking_show();
-                    }
-                }
-            } else {
-                tracing::info!("User declined update");
-            }
-        }
-        Ok(None) => {
-            tracing::info!("No updates available");
-        }
-        Err(e) => {
-            tracing::warn!("Update check failed: {}", e);
-        }
-    }
 }

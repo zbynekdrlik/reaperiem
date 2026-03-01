@@ -115,8 +115,11 @@ impl Default for ServerConfig {
 #[folder = "../../iem-ui/dist/"]
 pub struct Assets;
 
-/// Start the server
-pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
+/// Start the server, optionally signaling readiness via a oneshot channel
+pub async fn start_server(
+    server_config: ServerConfig,
+    ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
+) -> anyhow::Result<()> {
     // Install rustls crypto provider (required when tls feature brings rustls into dep tree)
     #[cfg(feature = "tls")]
     {
@@ -131,7 +134,7 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     let cors = CorsLayer::permissive();
 
     let app = Router::new()
-        .merge(routes::api_routes())
+        .merge(routes::api_routes(state.clone()))
         .merge(routes::static_routes())
         .layer(cors)
         .with_state(state.clone());
@@ -201,6 +204,12 @@ pub async fn start_server(server_config: ServerConfig) -> anyhow::Result<()> {
     tracing::info!("Starting server on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    // Signal readiness AFTER successful bind
+    if let Some(tx) = ready_tx {
+        let _ = tx.send(());
+    }
+
     axum::serve(listener, app).await?;
 
     Ok(())

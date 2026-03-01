@@ -127,6 +127,12 @@ impl Config {
         self.members.iter().position(|m| m.id() == id)
     }
 
+    /// Find member and return both the 0-based send index and a reference.
+    /// Eliminates the unwrap-after-find pattern in proxy.rs.
+    pub fn find_member_with_index(&self, id: &str) -> Option<(usize, &BandMember)> {
+        self.members.iter().enumerate().find(|(_, m)| m.id() == id)
+    }
+
     /// Validate a PIN for a member or engineer
     pub fn validate_pin(&self, member_id: &str, pin: &str) -> PinValidation {
         // Check engineer PIN (config override or default "1177")
@@ -295,6 +301,24 @@ mod tests {
         );
         // Default "1177" should NOT work when overridden
         assert_eq!(config.validate_pin("petka", "1177"), PinValidation::Invalid);
+    }
+
+    #[test]
+    fn test_find_member_with_index() {
+        let mut config = Config::default();
+        config.members.push(make_test_member("Petka"));
+        config.members.push(make_test_member("Stevo"));
+        config.members.push(make_test_member("Marek"));
+
+        let (idx, member) = config.find_member_with_index("stevo").unwrap();
+        assert_eq!(idx, 1);
+        assert_eq!(member.name, "Stevo");
+
+        let (idx, member) = config.find_member_with_index("marek").unwrap();
+        assert_eq!(idx, 2);
+        assert_eq!(member.name, "Marek");
+
+        assert!(config.find_member_with_index("unknown").is_none());
     }
 
     #[test]

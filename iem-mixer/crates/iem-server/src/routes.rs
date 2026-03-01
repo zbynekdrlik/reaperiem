@@ -36,24 +36,29 @@ async fn get_version() -> Json<VersionInfo> {
     })
 }
 
-/// API routes (protected by authentication)
-pub fn api_routes() -> Router<AppState> {
+/// API routes
+///
+/// Auth middleware is NOT enforced on routes yet — the frontend needs
+/// to send Authorization headers and handle 401 responses before we
+/// can wire the middleware. Auth infrastructure (login, JWT, change-pin)
+/// is available for opt-in use.
+pub fn api_routes(_state: AppState) -> Router<AppState> {
     Router::new()
-        // Version endpoint (public, used by CI for deployment verification)
+        // Version endpoint (used by CI for deployment verification)
         .route("/api/version", get(get_version))
-        // Auth (public)
+        // Auth login (returns JWT)
         .route("/api/auth", post(auth::login))
-        // Change PIN (authenticated)
-        .route("/api/auth/change-pin", post(auth::change_pin))
-        // Member list (public)
+        // Member list (needed for landing page)
         .route("/api/members", get(get_members))
-        // Mixer state (should be protected)
+        // Change PIN (should be authenticated — TODO: wire auth)
+        .route("/api/auth/change-pin", post(auth::change_pin))
+        // Mixer state
         .route("/api/mixer/{member_id}", get(proxy::get_mixer_state))
         // Polling endpoint (optimized for frequent calls)
         .route("/api/mixer/{member_id}/poll", get(proxy::poll_mixer_state))
         // Batch operations (Reset)
         .route("/api/mixer/{member_id}/batch", post(proxy::batch_control))
-        // Mixer controls (should be protected)
+        // Mixer controls
         .route(
             "/api/mixer/{member_id}/track/{track_index}/level",
             post(proxy::set_send_level),
@@ -66,10 +71,10 @@ pub fn api_routes() -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
-        // WebSocket for real-time mixer updates
-        .route("/ws/{member_id}", get(proxy::ws_mixer))
-        // Raw REAPER proxy (engineer only)
+        // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
+        // WebSocket
+        .route("/ws/{member_id}", get(proxy::ws_mixer))
 }
 
 /// Get list of band members

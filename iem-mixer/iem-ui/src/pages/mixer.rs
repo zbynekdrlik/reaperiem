@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
-use crate::auth::can_access_member;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::fader::Fader;
 use crate::components::meter::Meter;
@@ -50,6 +49,7 @@ fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
     member: &str,
+    ws: ReadSignal<Option<web_sys::WebSocket>>,
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
     set_channels: WriteSignal<Vec<Channel>>,
     set_meters: WriteSignal<HashMap<usize, [f32; 2]>>,
@@ -61,6 +61,14 @@ fn connect_websocket(
     global_touched: ReadSignal<bool>,
     set_data_pulse: WriteSignal<bool>,
 ) {
+    // Close previous WebSocket if exists (prevents closure leak on reconnect)
+    if let Some(Some(old_ws)) = ws.try_get_untracked() {
+        old_ws.set_onmessage(None);
+        old_ws.set_onclose(None);
+        old_ws.set_onerror(None);
+        let _ = old_ws.close();
+    }
+
     let location = web_sys::window().unwrap().location();
     let host = location.host().unwrap_or_default();
     let protocol = if location.protocol().unwrap_or_default() == "https:" {
@@ -68,7 +76,9 @@ fn connect_websocket(
     } else {
         "ws"
     };
-    let ws_url = format!("{}://{}/ws/{}", protocol, host, member);
+    // Include JWT token in WebSocket URL for authentication
+    let token = crate::auth::get_token().unwrap_or_default();
+    let ws_url = format!("{}://{}/ws/{}?token={}", protocol, host, member, token);
 
     let ws = match web_sys::WebSocket::new(&ws_url) {
         Ok(ws) => ws,
@@ -179,8 +189,7 @@ fn connect_websocket(
 #[component]
 pub fn MixerPage() -> impl IntoView {
     let params = use_params_map();
-    let navigate = use_navigate();
-    let navigate_back = navigate.clone();
+    let navigate_back = use_navigate();
 
     // Get member ID from route params
     let member_id = move || {
@@ -190,18 +199,6 @@ pub fn MixerPage() -> impl IntoView {
             .map(|s| s.to_string())
             .unwrap_or_default()
     };
-
-    // Check auth on mount
-    Effect::new(move |_| {
-        let member = member_id();
-        if !can_access_member(&member) {
-            let nav = navigate.clone();
-            nav(
-                &format!("/login?member={}&next=/{}", member, member),
-                Default::default(),
-            );
-        }
-    });
 
     // Reactive state
     let (channels, set_channels) = signal(Vec::<Channel>::new());
@@ -236,6 +233,7 @@ pub fn MixerPage() -> impl IntoView {
 
         connect_websocket(
             &member,
+            ws,
             set_ws,
             set_channels,
             set_meters,
@@ -263,6 +261,7 @@ pub fn MixerPage() -> impl IntoView {
             if !member.is_empty() {
                 connect_websocket(
                     &member,
+                    ws,
                     set_ws,
                     set_channels,
                     set_meters,
@@ -984,7 +983,8 @@ fn ChannelList(
                         }
                     });
 
-                    // Pan change handler with cancellable guard
+                    // Pan change handler with throttling + cancellable guard
+                    // Uses pan_key = track_idx + 10000 to avoid collision with level keys
                     let on_pan_change = Callback::new(move |new_pan: f32| {
                         if !connected.get() {
                             return;
@@ -997,6 +997,7 @@ fn ChannelList(
                             }
                         });
 
+                        // Optimistic UI update at full rate
                         set_channels.update(|chs| {
                             if let Some(ch) =
                                 chs.iter_mut().find(|c| c.track_index == track_idx)
@@ -1012,25 +1013,90 @@ fn ChannelList(
                             }
                         });
 
-                        ws_send(
-                            ws,
-                            &iem_core::ClientMsg::SetPan {
-                                track_index: track_idx,
-                                pan: new_pan,
-                            },
-                        );
-                        if let Some(partner) = partner_idx {
+                        // Throttled WebSocket send (same pattern as level)
+                        let pan_key = track_idx + 10000;
+                        let now = js_sys::Date::now();
+                        let last_time =
+                            last_send_times.with(|m| m.get(&pan_key).copied().unwrap_or(0.0));
+
+                        if now - last_time >= THROTTLE_INTERVAL_MS {
+                            set_last_send_times.update(|m| {
+                                m.insert(pan_key, now);
+                            });
+                            set_pending_values.update(|m| {
+                                m.remove(&pan_key);
+                            });
+                            cancel_pending_timeout(pan_key);
+
                             ws_send(
                                 ws,
                                 &iem_core::ClientMsg::SetPan {
-                                    track_index: partner,
-                                    pan: 1.0 - new_pan,
+                                    track_index: track_idx,
+                                    pan: new_pan,
                                 },
                             );
+                            if let Some(partner) = partner_idx {
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::SetPan {
+                                        track_index: partner,
+                                        pan: 1.0 - new_pan,
+                                    },
+                                );
+                            }
+                        } else {
+                            set_pending_values.update(|m| {
+                                m.insert(pan_key, new_pan);
+                            });
+                            cancel_pending_timeout(pan_key);
+
+                            let cb = Closure::once_into_js(move || {
+                                let pending =
+                                    pending_values.with(|m| m.get(&pan_key).copied());
+                                if let Some(val) = pending {
+                                    set_last_send_times.update(|m| {
+                                        m.insert(pan_key, js_sys::Date::now());
+                                    });
+                                    set_pending_values.update(|m| {
+                                        m.remove(&pan_key);
+                                    });
+                                    set_pending_timeouts.update(|m| {
+                                        m.remove(&pan_key);
+                                    });
+                                    ws_send(
+                                        ws,
+                                        &iem_core::ClientMsg::SetPan {
+                                            track_index: track_idx,
+                                            pan: val,
+                                        },
+                                    );
+                                    if let Some(partner) = partner_idx {
+                                        ws_send(
+                                            ws,
+                                            &iem_core::ClientMsg::SetPan {
+                                                track_index: partner,
+                                                pan: 1.0 - val,
+                                            },
+                                        );
+                                    }
+                                }
+                            });
+                            if let Some(w) = web_sys::window() {
+                                if let Ok(id) =
+                                    w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        cb.unchecked_ref(),
+                                        THROTTLE_INTERVAL_MS as i32,
+                                    )
+                                {
+                                    set_pending_timeouts.update(|m| {
+                                        m.insert(pan_key, id);
+                                    });
+                                }
+                            }
                         }
 
-                        // Cancellable post-release guard (pan key = track_idx + 10000)
-                        set_guard(track_idx + 10000);
+                        // Cancellable post-release guard
+                        set_guard(pan_key);
                     });
 
                     // Mute toggle handler with cancellable guard

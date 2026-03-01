@@ -327,12 +327,14 @@ The CI version check runs FIRST to fail fast (within seconds) rather than after 
 - `iem-mixer/crates/iem-server/Cargo.toml`
 - `iem-mixer/iem-ui/Cargo.toml`
 - `iem-mixer/src-tauri/Cargo.toml`
+- `iem-mixer/src-tauri/tauri.conf.json` (NSIS installer version)
 
 **Example version bump:**
 
 ```bash
-# Bump all Cargo.toml files from 1.1.0 to 1.2.0
+# Bump all Cargo.toml files + tauri.conf.json from 1.1.0 to 1.2.0
 sed -i 's/version = "1.1.0"/version = "1.2.0"/' iem-mixer/crates/iem-core/Cargo.toml iem-mixer/Cargo.toml iem-mixer/crates/iem-server/Cargo.toml iem-mixer/iem-ui/Cargo.toml iem-mixer/src-tauri/Cargo.toml
+sed -i 's/"version": "1.1.0"/"version": "1.2.0"/' iem-mixer/src-tauri/tauri.conf.json
 ```
 
 ### ⚠️ PRE-PUSH VALIDATION CHECKLIST (MANDATORY)
