@@ -5,8 +5,8 @@
 band_members:
   # Stable members (always present)
   - id: 1
-    name: "Petka"
-    output_track_name: "PETKA inear"
+    name: "Petronela"
+    output_track_name: "PETRONELA inear"
     dante_output_L: 3
     dante_output_R: 4
     stable: true
@@ -26,8 +26,8 @@ band_members:
     stable: true
 
   - id: 4
-    name: "Zuzka"
-    output_track_name: "ZUZKA inear"
+    name: "Zuzana"
+    output_track_name: "ZUZANA inear"
     dante_output_L: 9
     dante_output_R: 10
     stable: true

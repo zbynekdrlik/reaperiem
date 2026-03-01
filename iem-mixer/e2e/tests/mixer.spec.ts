@@ -36,7 +36,7 @@ function assume(condition: unknown, message: string): condition is true {
 test.describe("Mixer Features - Must All Pass", () => {
   test("member route redirects or serves content", async ({ page }) => {
     // Member routes should either redirect to login or show mixer
-    const response = await page.goto("/petka");
+    const response = await page.goto("/petronela");
     expect(response?.status()).toBe(200);
   });
 
@@ -48,7 +48,7 @@ test.describe("Mixer Features - Must All Pass", () => {
 
   test("API mixer endpoint responds", async ({ request }) => {
     // Mixer endpoint should respond (may be 401 without auth, or 404 if member not found)
-    const response = await request.get("/api/mixer/petka");
+    const response = await request.get("/api/mixer/petronela");
     // 200 (success), 401 (unauthorized), or 404 (member not found) are all valid
     expect([200, 401, 404]).toContain(response.status());
   });
@@ -93,9 +93,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader exists and is interactive", async ({ page }) => {
     // Login first - need to navigate to a page first for localStorage
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
 
     // Wait for app to initialize - look for mixer-specific elements
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
@@ -119,9 +119,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // This test catches the v1.3.0 bug where fader-track had 0 width
     // because absolutely-positioned children don't contribute to parent size
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -156,9 +156,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // CRITICAL SAFETY: Clicking anywhere on fader must NOT cause absolute jump.
     // All movement is relative-only with 150ms activation delay.
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -194,9 +194,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader hold-and-drag activates then moves", async ({ page }) => {
     // Verifies 150ms activation delay + relative drag movement
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -251,9 +251,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // This catches the v1.4.x bug where component remounting caused is_activated
     // to reset to false after the first movement, stopping further drag.
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -322,9 +322,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader handle is visible with proper width", async ({ page }) => {
     // Verifies the handle thumb is wide enough to be a visible grab target
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -345,9 +345,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Verifies row order: controls (label, dB, mute) in Row 1, fader in Row 2
     // This catches the v1.2.0 bug where fader was on top and finger covered dB
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const channel = page.locator(".channel").first();
@@ -370,9 +370,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Login first
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     // Don't use long waits - check what's available
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
@@ -392,9 +392,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("solo button exists (S button next to M)", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Wait for channels to load
@@ -414,9 +414,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("reset button does NOT exist (removed for safety)", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header, .toolbar", {
       timeout: 10000,
     });
@@ -432,9 +432,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // CRITICAL: This test catches the snap-back bug where the fader jumps
     // to a stale position after release due to server echo broadcasts.
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -494,9 +494,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   }) => {
     // Tests that rapid back-and-forth movement doesn't cause UI stutter
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -554,9 +554,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("solo button triggers state change when clicked", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     // Don't use long waits - check what's available
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
@@ -594,9 +594,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Main tab should be active by default
@@ -616,9 +616,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Global Volume fader is draggable", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const globalVol = page.locator(".channel.global-volume");
@@ -637,9 +637,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Global Mute button toggles", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const globalVol = page.locator(".channel.global-volume");
@@ -658,9 +658,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Switching to Mics tab shows all mics", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -677,9 +677,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -710,9 +710,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Switching to Tech tab shows tech channels", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -729,9 +729,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Main tab should be active by default
@@ -749,7 +749,7 @@ test.describe("Main Tab and Global Volume", () => {
     // Bug: case mismatch means this channel never appears
     const meFader = page
       .locator(".channel .ch-name")
-      .filter({ hasText: /PETKA/i });
+      .filter({ hasText: /PETRONELA/i });
     await expect(meFader).toHaveCount(1, { timeout: 5000 });
   });
 
@@ -757,9 +757,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const globalVol = page.locator(".channel.global-volume");
@@ -807,9 +807,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("version is displayed in mixer header", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Version block in header must exist
@@ -827,9 +827,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("status dot shows connection state", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Status dot must exist in header
@@ -847,9 +847,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("disconnected banner uses amber style (not red)", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Old red warning must NOT exist
@@ -869,9 +869,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Wait for channels to load
@@ -902,9 +902,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
+    await loginAs(page, "petronela");
 
-    await page.goto("/petka");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Switch to Tech tab
@@ -940,31 +940,31 @@ test.describe("Main Tab and Global Volume", () => {
 test.describe("v1.17.0 PIN Authentication", () => {
   test("login with default PIN 7711 succeeds", async ({ request }) => {
     const resp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     expect(resp.status()).toBe(200);
     const data = await resp.json();
-    expect(data.member).toBe("petka");
+    expect(data.member).toBe("petronela");
     expect(data.engineer).toBe(false);
   });
 
   test("login with wrong PIN fails", async ({ request }) => {
     const resp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "0000" },
+      data: { member: "petronela", pin: "0000" },
     });
     expect(resp.status()).toBe(401);
   });
 
   test("login with empty PIN fails", async ({ request }) => {
     const resp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "" },
+      data: { member: "petronela", pin: "" },
     });
     expect(resp.status()).toBe(401);
   });
 
   test("engineer PIN 1177 grants engineer access", async ({ request }) => {
     const resp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "1177" },
+      data: { member: "petronela", pin: "1177" },
     });
     expect(resp.status()).toBe(200);
     const data = await resp.json();
@@ -974,7 +974,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
   test("change PIN flow works", async ({ request }) => {
     // Login with default PIN
     const loginResp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     expect(loginResp.status()).toBe(200);
     const { token } = await loginResp.json();
@@ -988,13 +988,13 @@ test.describe("v1.17.0 PIN Authentication", () => {
 
     // Login with new PIN works
     const newLoginResp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "1234" },
+      data: { member: "petronela", pin: "1234" },
     });
     expect(newLoginResp.status()).toBe(200);
 
     // Login with old default PIN fails
     const oldLoginResp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     expect(oldLoginResp.status()).toBe(401);
 
@@ -1009,8 +1009,8 @@ test.describe("v1.17.0 PIN Authentication", () => {
 
   test("settings gear icon visible in mixer header", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const settingsBtn = page.locator(".settings-btn");
@@ -1024,8 +1024,8 @@ test.describe("v1.17.0 PIN Authentication", () => {
 test.describe("v1.16.0 Hotfix Regression Tests", () => {
   test("pan double-click moves thumb to center position", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const panSlider = page.locator(".pan-slider").first();
@@ -1047,8 +1047,8 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
 
   test("status dot has pulse animation when connected", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const dot = page.locator(".status-dot");
@@ -1071,8 +1071,8 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
 
   test("version date text has readable contrast", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const versionDate = page.locator(".header-version-date");
@@ -1095,8 +1095,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("stereo meter bars visible above fader", async ({ page }) => {
     // v1.19.0: Meter redesigned as stereo (L+R) with gradient and peak hold
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const channel = page.locator(".channel").first();
@@ -1133,8 +1133,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // v1.19.0: Ballistics handled in Rust at 30fps, no CSS transition
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const meterFill = page.locator(".meter-fill").first();
@@ -1156,8 +1156,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // Issue #33: Double-click should smoothly animate the fader to 0dB
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -1203,8 +1203,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("fader touch interrupts animation", async ({ page }) => {
     // Issue #33: Touching fader during animation should stop it immediately
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const fader = page.locator(".fader-track").first();
@@ -1240,8 +1240,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("channel grid has 3 rows (controls, meter, fader)", async ({ page }) => {
     // Verify the CSS grid has 3 row areas
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const channel = page.locator(".channel").first();
@@ -1265,8 +1265,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     // This test injects a fake Meters WebSocket message with non-zero values
     // and asserts that the animation timer processes them into width > 0%.
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     // Skip the first 2 static .meter-fill elements (IEM VOL master L/R)
@@ -1337,8 +1337,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // v1.19.0: Stereo meters with REAPER meter floor (-1500 cb) = silence
     await page.goto("/");
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
     const meterFill = page.locator(".meter-fill").first();
