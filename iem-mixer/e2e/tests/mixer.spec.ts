@@ -746,10 +746,10 @@ test.describe("Main Tab and Global Volume", () => {
       return;
 
     // Member's mic fader MUST be visible (the "Me" fader)
-    // Bug: case mismatch means this channel never appears
+    // Input track name is "PETKA mic" (physical mic label, not renamed)
     const meFader = page
       .locator(".channel .ch-name")
-      .filter({ hasText: /PETRONELA/i });
+      .filter({ hasText: /PETKA/i });
     await expect(meFader).toHaveCount(1, { timeout: 5000 });
   });
 
