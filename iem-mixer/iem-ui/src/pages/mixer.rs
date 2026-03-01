@@ -63,7 +63,7 @@ fn connect_websocket(
     set_data_pulse: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
-    if let Some(old_ws) = ws.try_get_untracked() {
+    if let Some(Some(old_ws)) = ws.try_get_untracked() {
         old_ws.set_onmessage(None);
         old_ws.set_onclose(None);
         old_ws.set_onerror(None);
