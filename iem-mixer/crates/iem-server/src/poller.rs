@@ -5,12 +5,52 @@
 
 use iem_core::ServerMsg;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::proxy::{
     build_channel_templates, query_send_state, reaper_api, reaper_pan_to_ui, reaper_vol_to_db,
 };
 use crate::{AppState, GlobalVolState};
+
+/// Whether the meter bridge ReaScript has been triggered this session
+static METER_BRIDGE_STARTED: AtomicBool = AtomicBool::new(false);
+
+/// REAPER action ID for the meter bridge ReaScript
+const METER_BRIDGE_ACTION: &str = "_RS_REAPERIEM_METER_BRIDGE";
+
+/// Parse meter bridge EXTSTATE response into per-channel L/R meter data.
+/// Input format: "1:-37,-37;2:-911,-911;..." (track_idx:L_db10,R_db10)
+/// Returns HashMap<track_idx, [left_linear, right_linear]>
+pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
+    let mut meters = HashMap::new();
+    let db10_to_linear = |v: f32| -> f32 {
+        if v <= -1500.0 {
+            0.0
+        } else {
+            10.0_f32.powf(v / 10.0 / 20.0)
+        }
+    };
+    for entry in text.split(';') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        if let Some((idx_str, vals_str)) = entry.split_once(':') {
+            if let Ok(track_idx) = idx_str.parse::<usize>() {
+                if let Some((l_str, r_str)) = vals_str.split_once(',') {
+                    if let (Ok(l_db10), Ok(r_db10)) =
+                        (l_str.parse::<f32>(), r_str.parse::<f32>())
+                    {
+                        meters
+                            .insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
+                    }
+                }
+            }
+        }
+    }
+    meters
+}
 
 /// Spawn the background poller task
 pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
@@ -98,7 +138,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 }
             }
             // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
-            use std::sync::atomic::{AtomicU64, Ordering};
+            use std::sync::atomic::AtomicU64;
             static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
             let count = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
             if count % 66 == 0 {
@@ -114,6 +154,38 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     output_tracks = output_tracks.len(),
                     "Meter poll summary"
                 );
+            }
+        }
+    }
+
+    // 1b. Try to read meter bridge EXTSTATE for true L/R per-channel peaks.
+    // The meter bridge ReaScript (meter_bridge.lua) provides instantaneous
+    // Track_GetPeakInfo values per channel, unlike TRACK fields which only
+    // give combined peak-hold data.
+    if connected {
+        // Start meter bridge on first successful connection
+        if !METER_BRIDGE_STARTED.load(Ordering::Relaxed) {
+            let action_url = reaper_api::trigger_action(&reaper_url, METER_BRIDGE_ACTION);
+            if state.http_client.get(&action_url).send().await.is_ok() {
+                METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
+                tracing::info!("Triggered meter bridge ReaScript");
+            }
+        }
+
+        let extstate_url =
+            reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
+        if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
+            if let Ok(text) = resp.text().await {
+                // REAPER EXTSTATE response: "GET/EXTSTATE/SECTION/KEY\tvalue"
+                if let Some(value) = text.split('\t').nth(1) {
+                    if !value.is_empty() {
+                        let bridge_meters = parse_meter_bridge(value);
+                        if !bridge_meters.is_empty() {
+                            // Override TRACK field meters with true L/R data
+                            meters = bridge_meters;
+                        }
+                    }
+                }
             }
         }
     }
@@ -642,5 +714,66 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             l > r,
             "L (-50 = -5 dB) should be louder than R (-60 = -6 dB)"
         );
+    }
+
+    // --- Meter bridge EXTSTATE parser tests ---
+
+    /// Parse typical meter bridge output with multiple tracks
+    #[test]
+    fn test_parse_meter_bridge_basic() {
+        let input = "1:-37,-37;2:-911,-911;11:-178,-250";
+        let meters = parse_meter_bridge(input);
+        assert_eq!(meters.len(), 3);
+
+        // Track 1: -37 dB×10 = -3.7 dB → 10^(-3.7/20) ≈ 0.653
+        let [l, r] = meters[&1];
+        assert!((l - 0.653).abs() < 0.01, "Track 1 L: got {}", l);
+        assert!((r - 0.653).abs() < 0.01, "Track 1 R: got {}", r);
+
+        // Track 11: L=-178 (-17.8 dB), R=-250 (-25.0 dB) — TRUE STEREO (different L/R)
+        let [l, r] = meters[&11];
+        assert!(l > r, "Panned left: L ({}) should be > R ({})", l, r);
+        // -17.8 dB → 10^(-17.8/20) ≈ 0.1288
+        assert!((l - 0.1288).abs() < 0.01, "Track 11 L: got {}", l);
+        // -25.0 dB → 10^(-25/20) ≈ 0.0562
+        assert!((r - 0.0562).abs() < 0.01, "Track 11 R: got {}", r);
+    }
+
+    /// Parse meter bridge with floor values (silence)
+    #[test]
+    fn test_parse_meter_bridge_silence() {
+        let input = "1:-1500,-1500;2:-1500,-1500";
+        let meters = parse_meter_bridge(input);
+        assert_eq!(meters[&1], [0.0, 0.0]);
+        assert_eq!(meters[&2], [0.0, 0.0]);
+    }
+
+    /// Parse empty/missing meter bridge data
+    #[test]
+    fn test_parse_meter_bridge_empty() {
+        assert!(parse_meter_bridge("").is_empty());
+        assert!(parse_meter_bridge("  ").is_empty());
+    }
+
+    /// Parse meter bridge with noise floor values
+    #[test]
+    fn test_parse_meter_bridge_noise_floor() {
+        // -925 dB×10 = -92.5 dB → should be near-zero (preamp noise)
+        let input = "2:-925,-925";
+        let meters = parse_meter_bridge(input);
+        let [l, r] = meters[&2];
+        assert!(l < 0.001, "Noise floor L should be near-zero, got {}", l);
+        assert!(r < 0.001, "Noise floor R should be near-zero, got {}", r);
+        assert!(l > 0.0, "Above floor should be non-zero");
+    }
+
+    /// Parse meter bridge with malformed entries (graceful handling)
+    #[test]
+    fn test_parse_meter_bridge_malformed() {
+        // Mixed valid and invalid entries
+        let input = "1:-37,-37;bad;3:-50";
+        let meters = parse_meter_bridge(input);
+        assert_eq!(meters.len(), 1, "Only valid entries should be parsed");
+        assert!(meters.contains_key(&1));
     }
 }

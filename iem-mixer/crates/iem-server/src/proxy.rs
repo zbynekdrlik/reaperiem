@@ -187,6 +187,22 @@ pub async fn poll_mixer_state(
             }
             // No VU (< 14 fields) → don't insert → frontend defaults to 0.0
         }
+
+        // Try meter bridge EXTSTATE for true L/R per-channel peaks
+        let extstate_url =
+            reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
+        if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
+            if let Ok(text) = resp.text().await {
+                if let Some(value) = text.split('\t').nth(1) {
+                    if !value.is_empty() {
+                        let bridge_meters = crate::poller::parse_meter_bridge(value);
+                        if !bridge_meters.is_empty() {
+                            meters = bridge_meters;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Query send states for all channels in parallel
@@ -1166,6 +1182,16 @@ pub(crate) mod reaper_api {
         format!("{}/_/NTRACK;TRACK", base_url)
     }
 
+    /// Build URL for reading EXTSTATE (key-value store in REAPER)
+    pub fn get_extstate(base_url: &str, section: &str, key: &str) -> String {
+        format!("{}/_/GET/EXTSTATE/{}/{}", base_url, section, key)
+    }
+
+    /// Build URL for triggering a REAPER action by ID
+    pub fn trigger_action(base_url: &str, action_id: &str) -> String {
+        format!("{}/_/{}", base_url, action_id)
+    }
+
     /// Build URL for getting full send state (returns vol, mute, pan in one call)
     pub fn get_send_state(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}", base_url, track, send)
@@ -1452,6 +1478,25 @@ mod tests {
     fn test_reaper_url_set_track_mute_format() {
         let url = reaper_api::set_track_mute("http://iem.lan:8080", 23, 1);
         assert_eq!(url, "http://iem.lan:8080/_/SET/TRACK/23/MUTE/1");
+    }
+
+    #[test]
+    fn test_reaper_url_get_extstate_format() {
+        let url = reaper_api::get_extstate("http://iem.lan:8080", "REAPERIEM_METERS", "peaks");
+        assert_eq!(
+            url,
+            "http://iem.lan:8080/_/GET/EXTSTATE/REAPERIEM_METERS/peaks"
+        );
+    }
+
+    #[test]
+    fn test_reaper_url_trigger_action_format() {
+        let url =
+            reaper_api::trigger_action("http://iem.lan:8080", "_RS_REAPERIEM_METER_BRIDGE");
+        assert_eq!(
+            url,
+            "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE"
+        );
     }
 
     // ================================================================
