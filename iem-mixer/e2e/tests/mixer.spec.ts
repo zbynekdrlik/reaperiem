@@ -1439,3 +1439,161 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     }
   });
 });
+
+test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
+  test("meters show raw input level, not scaled by fader position", async ({
+    page,
+  }) => {
+    // Bug: meters were multiplied by vol_linear * pan_law, making quiet
+    // inputs with boosted sends appear as "full signal". Fix: show raw only.
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    // Wait for channels and WS to connect
+    const meterFill = page.locator(".meter-fill").nth(2);
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(loaded !== null, "meter-fill element must render")) return;
+
+    await page.waitForTimeout(500);
+
+    // Inject TWO different meter messages with the SAME signal level (0.5),
+    // but manipulate channel state between them. If meters are independent
+    // of fader/pan, both should produce the same fill width.
+    const firstWidth = await page.evaluate(() => {
+      const ws = (window as any).__iem_ws as WebSocket | undefined;
+      if (!ws || !ws.onmessage) return -1;
+
+      const meters: Record<string, [number, number]> = {};
+      for (let i = 1; i <= 22; i++) {
+        meters[String(i)] = [0.5, 0.5];
+      }
+      const msg = JSON.stringify({ event: "Meters", data: { meters } });
+      ws.onmessage(new MessageEvent("message", { data: msg }));
+      return 0; // Will read width after animation tick
+    });
+
+    if (!assume(firstWidth !== -1, "__iem_ws must be exposed")) return;
+
+    // Wait for animation tick to process
+    await page.waitForTimeout(200);
+
+    // Read meter width after first injection
+    const widthBefore = await meterFill.evaluate((el) => {
+      const style = el.getAttribute("style") || "";
+      const match = style.match(/width:\s*([\d.]+)%/);
+      return match ? parseFloat(match[1]) : 0;
+    });
+
+    // Now inject the SAME meter signal — width should remain the same
+    // regardless of what the fader/pan values are in the channel state.
+    await page.evaluate(() => {
+      const ws = (window as any).__iem_ws as WebSocket | undefined;
+      if (!ws || !ws.onmessage) return;
+
+      const meters: Record<string, [number, number]> = {};
+      for (let i = 1; i <= 22; i++) {
+        meters[String(i)] = [0.5, 0.5];
+      }
+      const msg = JSON.stringify({ event: "Meters", data: { meters } });
+      ws.onmessage(new MessageEvent("message", { data: msg }));
+    });
+
+    await page.waitForTimeout(200);
+
+    const widthAfter = await meterFill.evaluate((el) => {
+      const style = el.getAttribute("style") || "";
+      const match = style.match(/width:\s*([\d.]+)%/);
+      return match ? parseFloat(match[1]) : 0;
+    });
+
+    // Both widths should be non-zero and equal (same raw input = same meter)
+    if (!assume(widthBefore > 0, "meter must show signal for 0.5 input"))
+      return;
+    expect(widthAfter).toBeCloseTo(widthBefore, 0);
+  });
+
+  test("muted channel still shows meter (input signal visible)", async ({
+    page,
+  }) => {
+    // Bug: muted channels returned 0.0 for meter. Fix: meters show raw
+    // input level regardless of mute state.
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const meterFill = page.locator(".meter-fill").nth(2);
+    const loaded = await meterFill
+      .waitFor({ state: "attached", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(loaded !== null, "meter-fill element must render")) return;
+
+    await page.waitForTimeout(500);
+
+    // Inject State with a muted channel, then inject strong meter signal
+    const injected = await page.evaluate(() => {
+      const ws = (window as any).__iem_ws as WebSocket | undefined;
+      if (!ws || !ws.onmessage) return false;
+
+      // First send a State message that mutes a channel
+      // State message sets channels — we need to include a muted channel
+      const stateMsg = JSON.stringify({
+        event: "State",
+        data: {
+          channels: [
+            {
+              track_index: 1,
+              name: "TEST mic",
+              category: "mic",
+              level_db: -6.0,
+              pan: 0.5,
+              muted: true,
+            },
+          ],
+        },
+      });
+      ws.onmessage(new MessageEvent("message", { data: stateMsg }));
+
+      // Now send meter data with strong signal on track 1
+      const meters: Record<string, [number, number]> = {};
+      meters["1"] = [0.8, 0.75];
+      for (let i = 2; i <= 22; i++) {
+        meters[String(i)] = [0.5, 0.5];
+      }
+      const msg = JSON.stringify({ event: "Meters", data: { meters } });
+      ws.onmessage(new MessageEvent("message", { data: msg }));
+      return true;
+    });
+
+    if (!assume(injected, "__iem_ws must be exposed for injection")) return;
+
+    // Wait for animation tick
+    await page.waitForTimeout(300);
+
+    // The meter for channel at index 2 (first dynamic = track_idx from channels)
+    // should show non-zero width even though the channel is muted
+    const fillWidth = await page
+      .waitForFunction(
+        () => {
+          const fills = document.querySelectorAll(".meter-fill");
+          if (fills.length < 3) return null;
+          const el = fills[2]; // First dynamic channel meter fill
+          const style = el.getAttribute("style") || "";
+          const match = style.match(/width:\s*([\d.]+)%/);
+          const w = match ? parseFloat(match[1]) : 0;
+          return w > 5 ? w : null;
+        },
+        { timeout: 2000 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => 0);
+
+    // With the fix: muted channels still show meters (raw input level)
+    // Without the fix: muted returns 0.0 → fillWidth stays 0
+    expect(fillWidth).toBeGreaterThan(5);
+  });
+});

@@ -830,38 +830,14 @@ fn ChannelList(
                         })
                     });
 
+                    // Meters show raw input level — NOT scaled by send fader, pan, or mute.
+                    // This matches REAPER's own meter display: the meter shows what's
+                    // coming IN on the track, independent of where/how it's being sent.
                     let meter_l = Signal::derive(move || {
-                        let raw = meters.with(|m| m.get(&track_idx).map(|v| v[0]).unwrap_or(0.0));
-                        channels.with(|chs| {
-                            if let Some(ch) = chs.iter().find(|c| c.track_index == track_idx) {
-                                if ch.muted {
-                                    return 0.0;
-                                }
-                                let vol_linear = 10.0_f32.powf(ch.level_db / 20.0);
-                                // Equal-power pan law: L = cos(pan * pi/2)
-                                // ch.pan is UI format: 0.0=left, 0.5=center, 1.0=right
-                                let pan_l = (ch.pan * std::f32::consts::FRAC_PI_2).cos();
-                                raw * vol_linear * pan_l
-                            } else {
-                                raw
-                            }
-                        })
+                        meters.with(|m| m.get(&track_idx).map(|v| v[0]).unwrap_or(0.0))
                     });
                     let meter_r = Signal::derive(move || {
-                        let raw = meters.with(|m| m.get(&track_idx).map(|v| v[1]).unwrap_or(0.0));
-                        channels.with(|chs| {
-                            if let Some(ch) = chs.iter().find(|c| c.track_index == track_idx) {
-                                if ch.muted {
-                                    return 0.0;
-                                }
-                                let vol_linear = 10.0_f32.powf(ch.level_db / 20.0);
-                                // Equal-power pan law: R = sin(pan * pi/2)
-                                let pan_r = (ch.pan * std::f32::consts::FRAC_PI_2).sin();
-                                raw * vol_linear * pan_r
-                            } else {
-                                raw
-                            }
-                        })
+                        meters.with(|m| m.get(&track_idx).map(|v| v[1]).unwrap_or(0.0))
                     });
 
                     // Fader activation state for channel glow
