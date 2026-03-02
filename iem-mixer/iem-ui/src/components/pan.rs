@@ -50,9 +50,6 @@ pub fn PanKnob(
     value: Signal<f32>,
     /// Called when pan changes
     on_change: Callback<f32>,
-    /// Whether double-tap to center is enabled
-    #[prop(default = true.into())]
-    double_tap_enabled: Signal<bool>,
 ) -> impl IntoView {
     let (local_value, set_local_value) = signal(value.get_untracked());
     let (is_activated, set_is_activated) = signal(false);
@@ -210,11 +207,7 @@ pub fn PanKnob(
             let dt = now - prev_time;
             let dx = (x - prev_x).abs();
 
-            if dt < DOUBLE_TAP_MS
-                && dx < DOUBLE_TAP_DISTANCE_PX
-                && prev_time > 0.0
-                && double_tap_enabled.get_untracked()
-            {
+            if dt < DOUBLE_TAP_MS && dx < DOUBLE_TAP_DISTANCE_PX && prev_time > 0.0 {
                 // Double-tap detected → start animation to center
                 ev.prevent_default();
                 // Reset tap tracking
@@ -345,9 +338,6 @@ pub fn PanKnob(
 
     // Desktop double-click to animate to center
     let handle_dblclick = move |_ev: web_sys::MouseEvent| {
-        if !double_tap_enabled.get_untracked() {
-            return;
-        }
         // Cancel any existing animation
         cancel_animation_dbl();
         // Guard time for Effect
@@ -369,7 +359,7 @@ pub fn PanKnob(
                 }
                 min="0"
                 max="100"
-                value=move || (local_value.get() * 100.0) as i32
+                prop:value=move || (local_value.get() * 100.0) as i32
                 on:input=handle_input
                 on:touchstart=handle_touchstart
                 on:touchmove=handle_touchmove

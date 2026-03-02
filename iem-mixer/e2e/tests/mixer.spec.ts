@@ -1023,14 +1023,57 @@ test.describe("v1.17.0 PIN Authentication", () => {
     const text = await settingsBtn.textContent();
     expect(text).toContain("\u2699");
   });
-});
 
-test.describe("v1.16.0 Hotfix Regression Tests", () => {
-  test("pan double-click moves thumb to center position", async ({ page }) => {
+  test("settings modal shows fader toggle only, no pan toggle", async ({
+    page,
+  }) => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    await page.waitForSelector(".app.mixer, .mixer-header", {
+      timeout: 10000,
+    });
+
+    // Open settings modal
+    const settingsBtn = page.locator(".settings-btn");
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+
+    // Wait for modal to appear
+    const modal = page.locator(".settings-modal");
+    await expect(modal).toBeVisible({ timeout: 3000 });
+
+    // Should have "Fader double-tap" toggle
+    const faderToggle = modal.locator(".settings-name", {
+      hasText: "Fader double-tap",
+    });
+    await expect(faderToggle).toBeVisible();
+
+    // Should NOT have "Pan double-tap" toggle (pan double-tap is always enabled)
+    const panToggle = modal.locator(".settings-name", {
+      hasText: "Pan double-tap",
+    });
+    await expect(panToggle).toHaveCount(0);
+
+    // Preferences section should have exactly 1 toggle row
+    const prefsSection = modal
+      .locator(".settings-section")
+      .filter({ hasText: "Preferences" });
+    const toggleRows = prefsSection.locator(".settings-row");
+    await expect(toggleRows).toHaveCount(1);
+  });
+});
+
+test.describe("v1.16.0 Hotfix Regression Tests", () => {
+  test("pan double-click animates slider value toward center", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    await page.waitForSelector(".app.mixer, .mixer-header", {
+      timeout: 10000,
+    });
 
     const panSlider = page.locator(".pan-slider").first();
     const loaded = await panSlider
@@ -1038,13 +1081,31 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
       .catch(() => null);
     if (!assume(loaded, "pan slider must load for this test")) return;
 
-    // Double-click the pan slider
-    await panSlider.dblclick({ force: true });
-    await page.waitForTimeout(100);
+    // Read initial value before double-click
+    const valueBefore = parseInt(await panSlider.inputValue());
 
-    // The native input's value property must be 50 (center)
-    const inputValue = await panSlider.inputValue();
-    expect(parseInt(inputValue)).toBe(50);
+    // Double-click the pan slider to trigger animation toward center (50)
+    await panSlider.dblclick({ force: true });
+
+    // Wait for animation to progress (a few ticks at 50ms/tick)
+    await page.waitForTimeout(200);
+
+    // Read intermediate value — must have moved from initial toward center
+    const valueMid = parseInt(await panSlider.inputValue());
+
+    // If initial was already center, the value stays at 50 — still valid
+    if (valueBefore !== 50) {
+      // Value must have changed during animation (the bug: attribute doesn't update DOM property)
+      expect(valueMid).not.toBe(valueBefore);
+    }
+
+    // Wait for animation to fully complete (~1.25s max from extreme)
+    await page.waitForTimeout(1500);
+
+    // Final value must be exactly 50 (center)
+    const valueFinal = parseInt(await panSlider.inputValue());
+    expect(valueFinal).toBe(50);
+
     // The slider must also have the "centered" CSS class
     await expect(panSlider).toHaveClass(/centered/);
   });

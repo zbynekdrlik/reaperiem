@@ -13,15 +13,12 @@ fn default_true() -> bool {
 pub struct UserSettings {
     #[serde(default = "default_true")]
     pub double_tap_fader: bool,
-    #[serde(default = "default_true")]
-    pub double_tap_pan: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
             double_tap_fader: true,
-            double_tap_pan: true,
         }
     }
 }
@@ -52,9 +49,6 @@ pub fn SettingsModal(
     /// Signal for fader double-tap setting
     double_tap_fader: ReadSignal<bool>,
     set_double_tap_fader: WriteSignal<bool>,
-    /// Signal for pan double-tap setting
-    double_tap_pan: ReadSignal<bool>,
-    set_double_tap_pan: WriteSignal<bool>,
     /// Member ID for localStorage persistence
     member_id: String,
 ) -> impl IntoView {
@@ -86,23 +80,6 @@ pub fn SettingsModal(
                                 <div class="settings-desc">"Double-tap fader to animate to 0 dB"</div>
                             </div>
                             <div class=move || if double_tap_fader.get() { "toggle-switch on" } else { "toggle-switch" }>
-                                <div class="toggle-knob"></div>
-                            </div>
-                        </div>
-
-                        <div class="settings-row" on:click=move |_| {
-                            let new_val = !double_tap_pan.get_untracked();
-                            set_double_tap_pan.set(new_val);
-                            let mid = member_id.get_value();
-                            let mut settings = UserSettings::load(&mid);
-                            settings.double_tap_pan = new_val;
-                            settings.save(&mid);
-                        }>
-                            <div class="settings-label">
-                                <div class="settings-name">"Pan double-tap"</div>
-                                <div class="settings-desc">"Double-tap pan to animate to center"</div>
-                            </div>
-                            <div class=move || if double_tap_pan.get() { "toggle-switch on" } else { "toggle-switch" }>
                                 <div class="toggle-knob"></div>
                             </div>
                         </div>

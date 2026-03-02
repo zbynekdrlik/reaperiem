@@ -213,7 +213,6 @@ pub fn MixerPage() -> impl IntoView {
     // Load user settings from localStorage
     let user_settings = UserSettings::load(&member_id());
     let (double_tap_fader, set_double_tap_fader) = signal(user_settings.double_tap_fader);
-    let (double_tap_pan, set_double_tap_pan) = signal(user_settings.double_tap_pan);
     let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
     let (loading, set_loading) = signal(true);
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
@@ -543,7 +542,6 @@ pub fn MixerPage() -> impl IntoView {
                             connected=connected
                             ws=ws
                             double_tap_fader=double_tap_fader
-                            double_tap_pan=double_tap_pan
                         />
                     </div>
                 </div>
@@ -567,8 +565,6 @@ pub fn MixerPage() -> impl IntoView {
                 on_open_pin_change=Callback::new(move |_: ()| set_pin_modal_visible.set(true))
                 double_tap_fader=double_tap_fader
                 set_double_tap_fader=set_double_tap_fader
-                double_tap_pan=double_tap_pan
-                set_double_tap_pan=set_double_tap_pan
                 member_id=member_id()
             />
 
@@ -778,7 +774,6 @@ fn ChannelList(
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     double_tap_fader: ReadSignal<bool>,
-    double_tap_pan: ReadSignal<bool>,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
@@ -1403,7 +1398,6 @@ fn ChannelList(
                             <PanKnob
                                 value=pan_signal
                                 on_change=on_pan_change
-                                double_tap_enabled=double_tap_pan.into()
                             />
 
                             <div class="channel-btns">
