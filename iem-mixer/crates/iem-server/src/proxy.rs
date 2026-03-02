@@ -167,22 +167,22 @@ pub async fn poll_mixer_state(
             if parts.first() == Some(&"TRACK")
                 && parts.len() >= 14
                 && let Ok(track_idx) = parts[1].parse::<usize>()
-                && let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+                && let (Ok(peak_db10), Ok(pos_db10)) =
                     (parts[6].parse::<f32>(), parts[7].parse::<f32>())
             {
-                // REAPER HTTP API meter floor: -1500 centibels (-15.0 dB)
-                // Verified 2026-02-28: all 33 tracks report exactly -1500
-                // when no audio is present; REAPER's own UI shows zero.
-                let cb_to_linear = |cb: f32| -> f32 {
-                    if cb <= -1500.0 {
+                // REAPER HTTP API docs: "last_meter_peak and last_meter_pos
+                // are integers that are dB*10, so -100 would be -10dB."
+                // Floor: -1500 = -150 dB = digital silence (no signal).
+                let db10_to_linear = |v: f32| -> f32 {
+                    if v <= -1500.0 {
                         0.0
                     } else {
-                        10.0_f32.powf(cb / 100.0 / 20.0)
+                        10.0_f32.powf(v / 10.0 / 20.0)
                     }
                 };
                 meters.insert(
                     track_idx,
-                    [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                    [db10_to_linear(peak_db10), db10_to_linear(pos_db10)],
                 );
             }
             // No VU (< 14 fields) → don't insert → frontend defaults to 0.0
@@ -1672,66 +1672,63 @@ mod tests {
             if parts.first() == Some(&"TRACK")
                 && parts.len() >= 14
                 && let Ok(track_idx) = parts[1].parse::<usize>()
-                && let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+                && let (Ok(peak_db10), Ok(pos_db10)) =
                     (parts[6].parse::<f32>(), parts[7].parse::<f32>())
             {
-                let cb_to_linear = |cb: f32| -> f32 {
-                    if cb <= -1500.0 {
+                let db10_to_linear = |v: f32| -> f32 {
+                    if v <= -1500.0 {
                         0.0
                     } else {
-                        10.0_f32.powf(cb / 100.0 / 20.0)
+                        10.0_f32.powf(v / 10.0 / 20.0)
                     }
                 };
                 meters.insert(
                     track_idx,
-                    [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                    [db10_to_linear(peak_db10), db10_to_linear(pos_db10)],
                 );
             }
         }
         meters
     }
 
-    /// 14-field TRACK line (with VU) should produce stereo meter data
+    /// 14-field TRACK line should produce meter data with correct dB×10 conversion
     #[test]
     fn test_ntrack_14_fields_produces_meter() {
-        // L: -1000 centibels (-10 dB), R: -800 centibels (-8 dB)
+        // -100 dB×10 = -10 dB, -80 dB×10 = -8 dB
         let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-1000\t-800\t1.000000\t0\t9\t0\t0\t0";
+            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-100\t-80\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(meters.contains_key(&1));
         let [left, right] = meters[&1];
-        // -1000 centibels = -10.0 dB → 10^(-10/20) ≈ 0.3162
+        // -100 dB×10 = -10.0 dB → 10^(-10/20) ≈ 0.3162
         assert!(
             (left - 0.3162).abs() < 0.01,
-            "-1000 centibels L should be ~0.3162 linear, got {}",
+            "-100 (dB×10) L should be ~0.3162 linear, got {}",
             left
         );
-        // -800 centibels = -8.0 dB → 10^(-8/20) ≈ 0.3981
+        // -80 dB×10 = -8.0 dB → 10^(-8/20) ≈ 0.3981
         assert!(
             (right - 0.3981).abs() < 0.01,
-            "-800 centibels R should be ~0.3981 linear, got {}",
+            "-80 (dB×10) R should be ~0.3981 linear, got {}",
             right
         );
     }
 
-    /// 12-field TRACK line (no VU) must NOT produce meter data — this was the bug!
-    /// Without VU, field[6] is width (1.000000), which was wrongly parsed as centibels,
-    /// causing meters to show ~100% on silent tracks.
+    /// 12-field TRACK line (no meter fields) must NOT produce meter data.
+    /// Without meter fields, field[6] is width (1.000000), not a dB value.
     #[test]
     fn test_ntrack_12_fields_no_meter() {
         let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             !meters.contains_key(&1),
-            "12-field line must NOT produce meter — field[6] is width, not VU"
+            "12-field line must NOT produce meter — field[6] is width, not meter"
         );
     }
 
-    /// Regression: width value 1.000000 parsed as 1 centibel = 0.01 dB = linear ~1.0
-    /// This must NOT happen — only 14-field lines have VU data
+    /// Regression: width value 1.000000 must NOT be parsed as meter data
     #[test]
-    fn test_ntrack_width_not_parsed_as_centibels() {
-        // This is exactly the bug scenario: all tracks report width=1.0 as "signal"
+    fn test_ntrack_width_not_parsed_as_meter() {
         let text = "\
 NTRACK\t3
 TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0
@@ -1745,8 +1742,7 @@ TRACK\t3\tMAREK mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         );
     }
 
-    /// REAPER meter floor (-1500 centibels) must produce 0.0 (silence) on both channels
-    /// Verified 2026-02-28: all 33 live tracks report -1500 with no audio.
+    /// REAPER meter floor (-1500 = -150 dB) must produce 0.0 (silence)
     #[test]
     fn test_reaper_meter_floor_is_silence() {
         let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0\t24421844";
@@ -1754,18 +1750,19 @@ TRACK\t3\tMAREK mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         assert_eq!(
             meters.get(&1),
             Some(&[0.0, 0.0]),
-            "-1500 centibels (REAPER meter floor) must be silence on both channels"
+            "-1500 (dB×10 = -150 dB) must be silence"
         );
     }
 
-    /// Values above REAPER meter floor should produce signal on both channels
+    /// Values above REAPER meter floor should produce signal
     #[test]
     fn test_reaper_above_floor_shows_signal() {
-        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-1400\t-1200\t1.000000\t3\t9\t0\t0\t24421844";
+        // -140 dB×10 = -14 dB, -120 dB×10 = -12 dB
+        let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-140\t-120\t1.000000\t3\t9\t0\t0\t24421844";
         let meters = parse_meters_from_ntrack(line);
         let [left, right] = meters[&1];
-        assert!(left > 0.0, "-1400 cb L should show signal, got {}", left);
-        assert!(right > 0.0, "-1200 cb R should show signal, got {}", right);
+        assert!(left > 0.0, "-140 (dB×10) L should show signal, got {}", left);
+        assert!(right > 0.0, "-120 (dB×10) R should show signal, got {}", right);
     }
 
     /// Parse captured live NTRACK response — all tracks silent at -1500 floor

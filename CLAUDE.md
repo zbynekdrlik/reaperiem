@@ -208,7 +208,7 @@ Before ANY change to REAPER HTTP API parsing, you MUST:
 3. Capture the actual values and use them in tests
 4. NEVER assume field counts, value ranges, or sentinel values
 
-**Known REAPER meter floor:** `-1500` centibels (-15.0 dB) — this is the HTTP API's "no signal" value. REAPER's own UI shows zero at this level. All track meter parsing must treat values ≤ -1500 cb as silence (0.0 linear).
+**REAPER meter values are dB×10** (NOT centibels!). The official docs say: "last_meter_peak and last_meter_pos are integers that are dB\*10, so -100 would be -10dB." Convert: `10^(value / 10.0 / 20.0)`. Floor: `-1500` = -150 dB = digital silence. Values like -925 = -92.5 dB = preamp noise floor (invisible on meters).
 
 Integration tests exist: `cargo test -p iem-server --features integration`
 
