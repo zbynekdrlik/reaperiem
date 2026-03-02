@@ -189,8 +189,7 @@ pub async fn poll_mixer_state(
         }
 
         // Try meter bridge EXTSTATE for true L/R per-channel peaks
-        let extstate_url =
-            reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
+        let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
         if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
             if let Ok(text) = resp.text().await {
                 if let Some(value) = text.split('\t').nth(1) {
@@ -1491,12 +1490,8 @@ mod tests {
 
     #[test]
     fn test_reaper_url_trigger_action_format() {
-        let url =
-            reaper_api::trigger_action("http://iem.lan:8080", "_RS_REAPERIEM_METER_BRIDGE");
-        assert_eq!(
-            url,
-            "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE"
-        );
+        let url = reaper_api::trigger_action("http://iem.lan:8080", "_RS_REAPERIEM_METER_BRIDGE");
+        assert_eq!(url, "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE");
     }
 
     // ================================================================

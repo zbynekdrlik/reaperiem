@@ -42,8 +42,10 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
                     if let (Ok(l_db10), Ok(r_db10)) =
                         (l_str.parse::<f32>(), r_str.parse::<f32>())
                     {
-                        meters
-                            .insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
+                        meters.insert(
+                            track_idx,
+                            [db10_to_linear(l_db10), db10_to_linear(r_db10)],
+                        );
                     }
                 }
             }
@@ -172,8 +174,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             }
         }
 
-        let extstate_url =
-            reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
+        let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
         if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
             if let Ok(text) = resp.text().await {
                 // REAPER EXTSTATE response: "GET/EXTSTATE/SECTION/KEY\tvalue"
