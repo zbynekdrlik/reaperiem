@@ -199,6 +199,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     }
 
     if !connected {
+        // Reset meter bridge flag so it re-triggers on reconnection
+        METER_BRIDGE_STARTED.store(false, Ordering::Relaxed);
         return;
     }
 
@@ -771,5 +773,21 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         let meters = parse_meter_bridge(input);
         assert_eq!(meters.len(), 1, "Only valid entries should be parsed");
         assert!(meters.contains_key(&1));
+    }
+
+    /// METER_BRIDGE_STARTED resets on disconnect so bridge re-triggers on reconnect.
+    /// Without this, REAPER restarts lose the meter bridge forever.
+    #[test]
+    fn test_meter_bridge_flag_resets_on_disconnect() {
+        // Simulate: bridge was started (flag = true)
+        METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
+        assert!(METER_BRIDGE_STARTED.load(Ordering::Relaxed));
+
+        // Simulate disconnect: flag should reset
+        METER_BRIDGE_STARTED.store(false, Ordering::Relaxed);
+        assert!(
+            !METER_BRIDGE_STARTED.load(Ordering::Relaxed),
+            "Flag must reset on disconnect so bridge re-triggers on reconnect"
+        );
     }
 }
