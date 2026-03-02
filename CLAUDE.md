@@ -395,9 +395,16 @@ gh run view <run-id> --log-failed
 - ✅ Build Tauri (Windows) — PRs and main only
 - ✅ Verify Version Bump — PRs only
 
-### ⚠️ TDD MANDATORY — REPRODUCE FIRST, THEN FIX
+### ⚠️ TDD MANDATORY — NO EXCEPTIONS, NO EXCUSES
 
-**CRITICAL: Every bug fix and every feature MUST follow Test-Driven Development.**
+**THIS IS THE #1 MOST VIOLATED RULE IN THIS PROJECT. Claude has repeatedly ignored TDD and shipped broken features. This stops now.**
+
+**STRICT ENFORCEMENT:**
+
+- **Every implementation plan MUST have test steps BEFORE code steps.** A plan without test steps is rejected.
+- **Every bug fix starts with a failing test.** No test = no fix = no commit.
+- **Every new feature starts with tests describing expected behavior.** No tests = no implementation.
+- **The user is NOT your test suite.** You must catch regressions yourself through automated tests.
 
 **For bug fixes — REPRODUCE BEFORE FIXING:**
 
@@ -414,11 +421,30 @@ gh run view <run-id> --log-failed
 3. Implement until all tests pass
 4. If tests pass but the feature is broken in the real app, THE TESTS ARE WRONG — fix the tests first
 
-**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing.
+**For EVERY implementation plan — MANDATORY test steps:**
+
+```
+EVERY plan must follow this structure:
+  Step 1: Write failing tests (E2E + unit) for the feature/bug
+  Step 2: Confirm tests fail (proving they test the right thing)
+  Step 3: Implement the feature/fix
+  Step 4: Confirm tests pass
+  Step 5: Run ALL existing tests to catch regressions
+  Step 6: Push and monitor CI
+
+A plan that goes straight to "implement X" without "write tests for X" first
+is WRONG and must be rewritten.
+```
+
+**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing. Claude has shipped broken pan animations, broken settings that don't persist, and broken meters — all because tests were skipped.
 
 ```
 ❌ NEVER: Read bug report → write code fix → hope it works → push
+❌ NEVER: Write a plan with only implementation steps and no test steps
+❌ NEVER: Use the user as a tester — "verify on live app" is NOT a substitute for automated tests
 ✅ ALWAYS: Read bug report → write failing test → confirm failure → write fix → confirm pass → push
+✅ ALWAYS: Plan = test steps first, then implementation steps
+✅ ALWAYS: New E2E/integration tests for every feature, covering actual behavior not just rendering
 ```
 
 **Test comprehensiveness requirements:**
@@ -427,6 +453,8 @@ gh run view <run-id> --log-failed
 - **Integration tests must verify server-side logic** — WebSocket messages, REAPER API calls, cache behavior
 - **Unit tests must cover edge cases** — string comparisons (case sensitivity!), category classification, conversion formulas
 - **Every bug that reaches production gets a regression test** — so it never happens again
+- **Animation tests must verify intermediate values** — not just "animation class exists" but "value changed over time"
+- **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 
