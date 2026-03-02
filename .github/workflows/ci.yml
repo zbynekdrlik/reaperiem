@@ -80,6 +80,27 @@ jobs:
           fi
           echo "E2E tests exist: $E2E_COUNT test files"
 
+      - name: Ban ShowConsoleMsg in deferred ReaScripts
+        run: |
+          echo "Checking for ShowConsoleMsg in production ReaScripts..."
+          # meter_bridge.lua runs continuously via defer() — console output
+          # opens REAPER's console window, grabs focus, and blocks HTTP API.
+          # One-shot scripts (set_hardware_output, setup, test) are exempt.
+          BANNED_FILES="scripts/reascripts/meter_bridge.lua"
+          FOUND=""
+          for f in $BANNED_FILES; do
+            HITS=$(grep -n "ShowConsoleMsg" "$f" 2>/dev/null || true)
+            if [ -n "$HITS" ]; then
+              FOUND="$FOUND\n$f:\n$HITS"
+            fi
+          done
+          if [ -n "$FOUND" ]; then
+            echo "::error::ShowConsoleMsg found in deferred ReaScripts (blocks REAPER HTTP API):"
+            echo -e "$FOUND"
+            exit 1
+          fi
+          echo "No ShowConsoleMsg in deferred ReaScripts"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================

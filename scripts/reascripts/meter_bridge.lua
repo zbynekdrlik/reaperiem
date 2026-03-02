@@ -28,13 +28,13 @@ if already_running == "1" then
   -- We set a heartbeat timestamp; if it's older than 2s, assume dead
   local heartbeat = tonumber(reaper.GetExtState(SECTION, "heartbeat") or "0") or 0
   if reaper.time_precise() - heartbeat < 2.0 then
-    reaper.ShowConsoleMsg("IEM Meter Bridge: already running, skipping\n")
+    -- Already running, skip silently
     return
   end
 end
 
 reaper.SetExtState(SECTION, RUNNING_KEY, "1", false)
-reaper.ShowConsoleMsg("IEM Meter Bridge: started\n")
+-- Started silently (no console output to avoid UI interruption)
 
 -- Convert linear amplitude to dB*10 integer
 local function linear_to_db10(val)
@@ -80,7 +80,7 @@ end
 reaper.atexit(function()
   reaper.SetExtState(SECTION, RUNNING_KEY, "0", false)
   reaper.SetExtState(SECTION, KEY, "", false)
-  reaper.ShowConsoleMsg("IEM Meter Bridge: stopped\n")
+  -- Stopped silently
 end)
 
 main()
