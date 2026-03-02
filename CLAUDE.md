@@ -208,7 +208,7 @@ Before ANY change to REAPER HTTP API parsing, you MUST:
 3. Capture the actual values and use them in tests
 4. NEVER assume field counts, value ranges, or sentinel values
 
-**Known REAPER meter floor:** `-1500` centibels (-15.0 dB) — this is the HTTP API's "no signal" value. REAPER's own UI shows zero at this level. All track meter parsing must treat values ≤ -1500 cb as silence (0.0 linear).
+**REAPER meter values are dB×10** (NOT centibels!). The official docs say: "last_meter_peak and last_meter_pos are integers that are dB\*10, so -100 would be -10dB." Convert: `10^(value / 10.0 / 20.0)`. Floor: `-1500` = -150 dB = digital silence. Values like -925 = -92.5 dB = preamp noise floor (invisible on meters).
 
 Integration tests exist: `cargo test -p iem-server --features integration`
 
@@ -395,9 +395,16 @@ gh run view <run-id> --log-failed
 - ✅ Build Tauri (Windows) — PRs and main only
 - ✅ Verify Version Bump — PRs only
 
-### ⚠️ TDD MANDATORY — REPRODUCE FIRST, THEN FIX
+### ⚠️ TDD MANDATORY — NO EXCEPTIONS, NO EXCUSES
 
-**CRITICAL: Every bug fix and every feature MUST follow Test-Driven Development.**
+**THIS IS THE #1 MOST VIOLATED RULE IN THIS PROJECT. Claude has repeatedly ignored TDD and shipped broken features. This stops now.**
+
+**STRICT ENFORCEMENT:**
+
+- **Every implementation plan MUST have test steps BEFORE code steps.** A plan without test steps is rejected.
+- **Every bug fix starts with a failing test.** No test = no fix = no commit.
+- **Every new feature starts with tests describing expected behavior.** No tests = no implementation.
+- **The user is NOT your test suite.** You must catch regressions yourself through automated tests.
 
 **For bug fixes — REPRODUCE BEFORE FIXING:**
 
@@ -414,11 +421,30 @@ gh run view <run-id> --log-failed
 3. Implement until all tests pass
 4. If tests pass but the feature is broken in the real app, THE TESTS ARE WRONG — fix the tests first
 
-**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing.
+**For EVERY implementation plan — MANDATORY test steps:**
+
+```
+EVERY plan must follow this structure:
+  Step 1: Write failing tests (E2E + unit) for the feature/bug
+  Step 2: Confirm tests fail (proving they test the right thing)
+  Step 3: Implement the feature/fix
+  Step 4: Confirm tests pass
+  Step 5: Run ALL existing tests to catch regressions
+  Step 6: Push and monitor CI
+
+A plan that goes straight to "implement X" without "write tests for X" first
+is WRONG and must be rewritten.
+```
+
+**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing. Claude has shipped broken pan animations, broken settings that don't persist, and broken meters — all because tests were skipped.
 
 ```
 ❌ NEVER: Read bug report → write code fix → hope it works → push
+❌ NEVER: Write a plan with only implementation steps and no test steps
+❌ NEVER: Use the user as a tester — "verify on live app" is NOT a substitute for automated tests
 ✅ ALWAYS: Read bug report → write failing test → confirm failure → write fix → confirm pass → push
+✅ ALWAYS: Plan = test steps first, then implementation steps
+✅ ALWAYS: New E2E/integration tests for every feature, covering actual behavior not just rendering
 ```
 
 **Test comprehensiveness requirements:**
@@ -427,6 +453,8 @@ gh run view <run-id> --log-failed
 - **Integration tests must verify server-side logic** — WebSocket messages, REAPER API calls, cache behavior
 - **Unit tests must cover edge cases** — string comparisons (case sensitivity!), category classification, conversion formulas
 - **Every bug that reaches production gets a regression test** — so it never happens again
+- **Animation tests must verify intermediate values** — not just "animation class exists" but "value changed over time"
+- **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 
@@ -452,18 +480,32 @@ E2E Tests (Playwright):
   - Error states and loading spinners
 ```
 
-### ⚠️ E2E TESTS ARE HISTORICALLY WEAK - RADICAL IMPROVEMENT REQUIRED
+### ⚠️ TESTS ARE WEAK — TREAT AS UNRELIABLE UNTIL PROVEN OTHERWISE
 
-**CRITICAL: E2E tests have repeatedly allowed broken apps to deploy!**
+**STRICT RULE: Current E2E and integration tests are known to be weak. They have repeatedly allowed broken features to deploy while showing green CI. Every feature you implement or claim as "done" MUST be verified beyond what the existing tests check.**
 
-E2E tests MUST verify:
+**THE PROBLEM:** Tests mostly verify "UI renders" and "element exists" — they do NOT verify that features actually work. A green CI run does NOT mean the feature works. assume() guards hide failures instead of catching them.
 
-1. **Faders actually change REAPER values** - not just "page loads"
-2. **Mute button state persists** - click mute, verify state after poll refresh
-3. **Pan slider works end-to-end** - move slider, verify REAPER receives command
-4. **Meters show real audio** - if track has audio, meter must be > 0
-5. **Connection status accurate** - disconnected banner when REAPER unreachable
-6. **Presets persist** - save preset, reload page, preset still exists
+**MANDATORY for every feature/fix:**
+
+1. **Do NOT trust existing tests** — they are superficial. Read them critically.
+2. **Write NEW tests that verify actual behavior**, not just rendering:
+   - Does the fader actually send a value to REAPER? (not just "fader exists")
+   - Does mute actually mute? (not just "button renders")
+   - Does the animation actually animate? (not just "class exists")
+   - Does the setting actually persist? (not just "modal opens")
+3. **Verify on the live app** after deploy — open http://10.77.9.231/ in a browser and manually test every feature you changed
+4. **If you cannot write a meaningful test** (e.g., REAPER not available in CI), explicitly document what is NOT tested and flag it to the user
+5. **Never claim a feature is "done"** based solely on CI passing — CI passing means the code compiles and superficial checks pass, nothing more
+
+**Current test gaps (known):**
+
+- E2E tests run without REAPER — most mixer functionality is assume()-skipped
+- No integration tests verify WebSocket message flow end-to-end
+- No tests verify that settings actually persist across page reloads
+- No tests verify pan/fader animations actually animate (timing, intermediate values)
+- No tests verify meter values change in response to send controls
+- Mute, pan, fader commands are not verified against REAPER
 
 **After EVERY deploy, manually verify:**
 
@@ -472,7 +514,7 @@ E2E tests MUST verify:
 - Click mute → channel mutes in REAPER
 - If controls don't work, CI HAS FAILED even if green!
 
-**E2E tests must be expanded aggressively** - if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
+**E2E tests must be expanded aggressively** — if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
 
 **Test files location:**
 

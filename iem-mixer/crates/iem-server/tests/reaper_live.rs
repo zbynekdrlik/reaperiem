@@ -8,6 +8,7 @@
 use std::collections::HashMap;
 
 /// Parse stereo meters from NTRACK response using the same logic as poller/proxy.
+/// REAPER HTTP API docs: values are dB×10, so -100 = -10 dB.
 fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, [f32; 2]> {
     let mut meters = HashMap::new();
     for line in text.lines() {
@@ -15,26 +16,26 @@ fn parse_meters_from_ntrack(text: &str) -> HashMap<usize, [f32; 2]> {
         if parts.first() == Some(&"TRACK")
             && parts.len() >= 14
             && let Ok(track_idx) = parts[1].parse::<usize>()
-            && let (Ok(peak_l_cb), Ok(peak_r_cb)) =
+            && let (Ok(peak_db10), Ok(pos_db10)) =
                 (parts[6].parse::<f32>(), parts[7].parse::<f32>())
         {
-            let cb_to_linear = |cb: f32| -> f32 {
-                if cb <= -1500.0 {
+            let db10_to_linear = |v: f32| -> f32 {
+                if v <= -1500.0 {
                     0.0
                 } else {
-                    10.0_f32.powf(cb / 100.0 / 20.0)
+                    10.0_f32.powf(v / 10.0 / 20.0)
                 }
             };
             meters.insert(
                 track_idx,
-                [cb_to_linear(peak_l_cb), cb_to_linear(peak_r_cb)],
+                [db10_to_linear(peak_db10), db10_to_linear(pos_db10)],
             );
         }
     }
     meters
 }
 
-/// Verify that REAPER's meter floor (-1500 cb) produces 0.0 on live data.
+/// Verify that REAPER's meter floor (-1500 = -150 dB) produces 0.0 on live data.
 /// Requires REAPER running on iem.lan with no active audio sources.
 #[tokio::test]
 async fn test_live_meter_floor() {

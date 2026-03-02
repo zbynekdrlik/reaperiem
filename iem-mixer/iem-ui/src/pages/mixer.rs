@@ -14,6 +14,7 @@ use crate::components::meter::Meter;
 use crate::components::pan::PanKnob;
 use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
+use crate::components::settings_modal::{SettingsModal, UserSettings};
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -207,6 +208,11 @@ pub fn MixerPage() -> impl IntoView {
     let (active_category, set_active_category) = signal(Category::Main);
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
     let (pin_modal_visible, set_pin_modal_visible) = signal(false);
+    let (settings_modal_visible, set_settings_modal_visible) = signal(false);
+
+    // Load user settings from localStorage
+    let user_settings = UserSettings::load(&member_id());
+    let (double_tap_fader, set_double_tap_fader) = signal(user_settings.double_tap_fader);
     let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
     let (loading, set_loading) = signal(true);
     let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
@@ -469,7 +475,7 @@ pub fn MixerPage() -> impl IntoView {
                     <span class="header-version-number">{iem_core::version_label()}</span>
                     <span class="header-version-date">{iem_core::build_datetime()}</span>
                 </div>
-                <button class="settings-btn" on:click=move |_| set_pin_modal_visible.set(true)>
+                <button class="settings-btn" on:click=move |_| set_settings_modal_visible.set(true)>
                     "\u{2699}"
                 </button>
                 <div class=move || {
@@ -535,6 +541,7 @@ pub fn MixerPage() -> impl IntoView {
                             set_pre_solo_mutes=set_pre_solo_mutes
                             connected=connected
                             ws=ws
+                            double_tap_fader=double_tap_fader
                         />
                     </div>
                 </div>
@@ -550,6 +557,15 @@ pub fn MixerPage() -> impl IntoView {
                 on_close=on_close_modal
                 on_load=on_load_preset
                 get_current_state=get_current_state
+            />
+
+            <SettingsModal
+                visible=settings_modal_visible.into()
+                on_close=Callback::new(move |_: ()| set_settings_modal_visible.set(false))
+                on_open_pin_change=Callback::new(move |_: ()| set_pin_modal_visible.set(true))
+                double_tap_fader=double_tap_fader
+                set_double_tap_fader=set_double_tap_fader
+                member_id=member_id()
             />
 
             <PinChangeModal
@@ -757,6 +773,7 @@ fn ChannelList(
     set_pre_solo_mutes: WriteSignal<HashMap<usize, bool>>,
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
+    double_tap_fader: ReadSignal<bool>,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
@@ -813,6 +830,9 @@ fn ChannelList(
                         })
                     });
 
+                    // Meters show raw input level — NOT scaled by send fader, pan, or mute.
+                    // This matches REAPER's own meter display: the meter shows what's
+                    // coming IN on the track, independent of where/how it's being sent.
                     let meter_l = Signal::derive(move || {
                         meters.with(|m| m.get(&track_idx).map(|v| v[0]).unwrap_or(0.0))
                     });
@@ -1345,6 +1365,7 @@ fn ChannelList(
                                     on_change=on_level_change
                                     on_activate=Callback::new(move |active| set_is_fader_active.set(active))
                                     on_touch_state=on_touch_state
+                                    double_tap_enabled=double_tap_fader.into()
                                 />
                             </div>
 

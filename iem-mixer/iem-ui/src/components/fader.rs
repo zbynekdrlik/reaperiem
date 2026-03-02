@@ -69,6 +69,9 @@ pub fn Fader(
     /// Fires true on touchstart/mousedown, false on touchend/mouseup
     #[prop(optional)]
     on_touch_state: Option<Callback<bool>>,
+    /// Whether double-tap to 0dB is enabled
+    #[prop(default = true.into())]
+    double_tap_enabled: Signal<bool>,
 ) -> impl IntoView {
     let (local_value, set_local_value) = signal(value.get_untracked());
     let (is_activated, set_is_activated) = signal(false);
@@ -241,7 +244,11 @@ pub fn Fader(
             let dt = now - prev_time;
             let dx = (x - prev_x).abs();
 
-            if dt < DOUBLE_TAP_MS && dx < DOUBLE_TAP_DISTANCE_PX && prev_time > 0.0 {
+            if dt < DOUBLE_TAP_MS
+                && dx < DOUBLE_TAP_DISTANCE_PX
+                && prev_time > 0.0
+                && double_tap_enabled.get_untracked()
+            {
                 // Double-tap detected → start animation to 0dB
                 ev.prevent_default();
                 // Reset tap tracking
@@ -517,6 +524,9 @@ pub fn Fader(
 
     // Desktop double-click to animate to 0dB
     let handle_dblclick = move |_ev: web_sys::MouseEvent| {
+        if !double_tap_enabled.get_untracked() {
+            return;
+        }
         // Cancel any existing animation
         animation_handle_dbl.borrow_mut().take();
         // Guard time for Effect

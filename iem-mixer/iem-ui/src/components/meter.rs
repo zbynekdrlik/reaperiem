@@ -3,8 +3,8 @@
 use leptos::prelude::*;
 use wasm_bindgen::{JsCast, prelude::*};
 
-/// PPM-style decay rate: 26 dB/s
-const DECAY_DB_PER_SEC: f32 = 26.0;
+/// PPM-style decay rate: 20 dB/s (smooth analog VU feel)
+const DECAY_DB_PER_SEC: f32 = 20.0;
 /// Peak hold duration before decay starts (ms)
 const PEAK_HOLD_MS: f64 = 1500.0;
 /// Peak indicator decay rate: 20 dB/s

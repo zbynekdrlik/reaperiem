@@ -92,7 +92,7 @@ test.describe("UX Polish - Issue #3: Login Back Button", () => {
   test("login page has back button that navigates to landing page", async ({
     page,
   }) => {
-    await page.goto("/login?member=petka&next=/petka");
+    await page.goto("/login?member=petronela&next=/petronela");
     await page.waitForLoadState("domcontentloaded");
 
     // Back button should be visible in the header

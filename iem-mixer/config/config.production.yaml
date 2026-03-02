@@ -10,7 +10,7 @@ port: 80
 # Band members with their IEM output assignments
 # The index corresponds to the send index in REAPER
 members:
-  - name: Petka
+  - name: Petronela
     dante_output_l: 3
     dante_output_r: 4
 
@@ -22,7 +22,7 @@ members:
     dante_output_l: 7
     dante_output_r: 8
 
-  - name: Zuzka
+  - name: Zuzana
     dante_output_l: 9
     dante_output_r: 10
 

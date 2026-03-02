@@ -5,6 +5,8 @@
 //! to center for mobile (since dblclick doesn't fire on touch devices).
 //! Uses RELATIVE positioning — pan moves proportionally to finger delta,
 //! never jumps to finger position.
+//!
+//! Double-tap triggers smooth animation to center (matching fader animation pattern).
 
 use leptos::prelude::*;
 use std::cell::RefCell;
@@ -24,15 +26,24 @@ const DOUBLE_TAP_DISTANCE_PX: f64 = 30.0;
 /// Time window to ignore synthesized mouse events after touch (ms)
 const TOUCH_MOUSE_GUARD_MS: f64 = 500.0;
 
+/// Animation tick interval in ms (same as fader: 20 ticks/sec)
+const ANIMATION_TICK_MS: u32 = 50;
+
+/// Pan step per animation tick (0.02/tick — full sweep 0→1 in 2.5s, half in 1.25s)
+const ANIMATION_STEP: f32 = 0.02;
+
+/// Target pan for double-tap animation (center)
+const ANIMATION_TARGET: f32 = 0.5;
+
 /// Horizontal pan slider component with touch-safe activation
 ///
 /// Touch behavior:
 /// - Touch and release before 150ms: NO change (user was scrolling)
 /// - Touch and hold 150ms+: Pan activates with haptic feedback
 /// - Activated drag: RELATIVE movement (never jumps to finger position)
-/// - Double-tap: Centers pan (0.5)
+/// - Double-tap: Smooth animation toward center (0.5)
 /// - Mouse/desktop: Immediate response (no delay needed)
-/// - Desktop double-click: Centers pan (0.5)
+/// - Desktop double-click: Smooth animation toward center (0.5)
 #[component]
 pub fn PanKnob(
     /// Current pan value (0.0 = left, 0.5 = center, 1.0 = right) - reactive signal
@@ -45,6 +56,7 @@ pub fn PanKnob(
     let (is_pending, set_is_pending) = signal(false);
     let (is_touch_interaction, set_is_touch_interaction) = signal(false);
     let (saved_value, set_saved_value) = signal(0.0f32);
+    let (is_animating, set_is_animating) = signal(false);
 
     // Store the timeout handle so we can cancel it
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
@@ -64,22 +76,90 @@ pub fn PanKnob(
     let last_tap_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
     let last_tap_x: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
-    // Guard: blocks Effect from overwriting local_value for 300ms after double-tap center
-    let double_tap_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+    // Animation state
+    let animation_handle: Rc<RefCell<Option<gloo_timers::callback::Interval>>> =
+        Rc::new(RefCell::new(None));
 
-    let double_tap_guard_time_effect = double_tap_guard_time.clone();
-    let double_tap_guard_time_dblclick = double_tap_guard_time.clone();
-    let double_tap_guard_time_tap = double_tap_guard_time;
+    // Guard: blocks Effect from overwriting local_value for 300ms after animation completes
+    let animation_guard_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
-    // Update local value when signal changes (but only if not actively touching)
-    // Also blocked for 300ms after double-tap center to prevent Effect from overwriting
+    let animation_guard_time_effect = animation_guard_time.clone();
+    let animation_guard_time_anim = animation_guard_time.clone();
+    let animation_guard_time_dbl = animation_guard_time.clone();
+
+    // Update local value when signal changes (but only if not actively touching
+    // and not animating, and not within 300ms guard after animation)
     Effect::new(move |_| {
-        let guard_active = js_sys::Date::now() - *double_tap_guard_time_effect.borrow() < 300.0;
-        if !is_activated.get() && !is_pending.get() && !is_touch_interaction.get() && !guard_active
+        let guard_active = js_sys::Date::now() - *animation_guard_time_effect.borrow() < 300.0;
+        if !is_activated.get()
+            && !is_pending.get()
+            && !is_touch_interaction.get()
+            && !is_animating.get()
+            && !guard_active
         {
             set_local_value.set(value.get());
         }
     });
+
+    // --- Helper: start animation toward center ---
+    let start_animation = {
+        let animation_handle_start = animation_handle.clone();
+        let animation_guard_start = animation_guard_time_anim;
+        move || {
+            // Cancel any existing animation
+            animation_handle_start.borrow_mut().take();
+
+            set_is_animating.set(true);
+
+            let animation_handle_inner = animation_handle_start.clone();
+            let animation_guard_inner = animation_guard_start.clone();
+
+            let interval = gloo_timers::callback::Interval::new(ANIMATION_TICK_MS, move || {
+                let current = local_value.get_untracked();
+                let diff = ANIMATION_TARGET - current;
+
+                if diff.abs() < ANIMATION_STEP {
+                    // Close enough — snap to target and stop
+                    set_local_value.set(ANIMATION_TARGET);
+                    on_change.run(ANIMATION_TARGET);
+                    // Stop animation
+                    animation_handle_inner.borrow_mut().take();
+                    set_is_animating.set(false);
+                    // Set guard time to block Effect overwrite
+                    *animation_guard_inner.borrow_mut() = js_sys::Date::now();
+                } else {
+                    // Step toward target
+                    let step = if diff > 0.0 {
+                        ANIMATION_STEP
+                    } else {
+                        -ANIMATION_STEP
+                    };
+                    let new_val = current + step;
+                    set_local_value.set(new_val);
+                    on_change.run(new_val);
+                }
+            });
+
+            *animation_handle_start.borrow_mut() = Some(interval);
+        }
+    };
+
+    let start_animation_ts = start_animation.clone();
+    let start_animation_dbl = start_animation;
+
+    // --- Helper: cancel animation (called on touch/mouse interrupt) ---
+    let cancel_animation = {
+        let animation_handle_cancel = animation_handle.clone();
+        move || {
+            if is_animating.get_untracked() {
+                animation_handle_cancel.borrow_mut().take();
+                set_is_animating.set(false);
+            }
+        }
+    };
+
+    let cancel_animation_ts = cancel_animation.clone();
+    let cancel_animation_dbl = cancel_animation;
 
     let on_change_touch = on_change;
     let on_change_input = on_change;
@@ -114,6 +194,9 @@ pub fn PanKnob(
         let now = js_sys::Date::now();
         *last_touch_time_ts.borrow_mut() = now;
 
+        // Cancel any running animation first
+        cancel_animation_ts();
+
         if let Some(touch) = ev.touches().get(0) {
             let x = touch.client_x() as f64;
             let y = touch.client_y() as f64;
@@ -125,22 +208,12 @@ pub fn PanKnob(
             let dx = (x - prev_x).abs();
 
             if dt < DOUBLE_TAP_MS && dx < DOUBLE_TAP_DISTANCE_PX && prev_time > 0.0 {
-                // Double-tap detected → center pan
+                // Double-tap detected → start animation to center
                 ev.prevent_default();
-                set_local_value.set(0.5);
-                set_saved_value.set(0.5);
-                on_change_touch.run(0.5);
                 // Reset tap tracking
                 *last_tap_time_start.borrow_mut() = 0.0;
-                // Guard: block Effect from overwriting for 300ms
-                *double_tap_guard_time_tap.borrow_mut() = js_sys::Date::now();
-                // Force native input to update its visual thumb position
-                if let Some(target) = ev.target() {
-                    if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
-                        input.set_value("50");
-                    }
-                }
                 set_is_touch_interaction.set(true);
+                start_animation_ts();
                 return;
             }
 
@@ -263,19 +336,13 @@ pub fn PanKnob(
         *move_base_x_te.borrow_mut() = None;
     };
 
-    // Desktop double-click to center
-    let handle_dblclick = move |ev: web_sys::MouseEvent| {
-        set_local_value.set(0.5);
-        set_saved_value.set(0.5);
-        on_change.run(0.5);
-        // Guard: block Effect from overwriting for 300ms
-        *double_tap_guard_time_dblclick.borrow_mut() = js_sys::Date::now();
-        // Force native input to update its visual thumb position
-        if let Some(target) = ev.target() {
-            if let Ok(input) = target.dyn_into::<HtmlInputElement>() {
-                input.set_value("50");
-            }
-        }
+    // Desktop double-click to animate to center
+    let handle_dblclick = move |_ev: web_sys::MouseEvent| {
+        // Cancel any existing animation
+        cancel_animation_dbl();
+        // Guard time for Effect
+        *animation_guard_time_dbl.borrow_mut() = js_sys::Date::now();
+        start_animation_dbl();
     };
 
     view! {
@@ -286,12 +353,13 @@ pub fn PanKnob(
                     let mut classes = vec!["pan-slider"];
                     if is_pending.get() { classes.push("activating"); }
                     if is_activated.get() { classes.push("active"); }
+                    if is_animating.get() { classes.push("animating"); }
                     if (local_value.get() - 0.5).abs() < 0.005 { classes.push("centered"); }
                     classes.join(" ")
                 }
                 min="0"
                 max="100"
-                value=move || (local_value.get() * 100.0) as i32
+                prop:value=move || (local_value.get() * 100.0) as i32
                 on:input=handle_input
                 on:touchstart=handle_touchstart
                 on:touchmove=handle_touchmove
@@ -305,5 +373,22 @@ pub fn PanKnob(
                 title="Pan (double-tap to center)"
             />
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_animation_constants() {
+        // Animation from extreme (0.0) to center (0.5) should take ~1.25s
+        let steps = (0.5 / ANIMATION_STEP) as u32;
+        let duration_ms = steps * ANIMATION_TICK_MS;
+        assert_eq!(duration_ms, 1250);
+        // Full sweep (0.0 to 1.0) would take 2.5s
+        let full_steps = (1.0 / ANIMATION_STEP) as u32;
+        let full_duration = full_steps * ANIMATION_TICK_MS;
+        assert_eq!(full_duration, 2500);
     }
 }
