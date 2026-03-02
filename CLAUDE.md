@@ -452,18 +452,32 @@ E2E Tests (Playwright):
   - Error states and loading spinners
 ```
 
-### ⚠️ E2E TESTS ARE HISTORICALLY WEAK - RADICAL IMPROVEMENT REQUIRED
+### ⚠️ TESTS ARE WEAK — TREAT AS UNRELIABLE UNTIL PROVEN OTHERWISE
 
-**CRITICAL: E2E tests have repeatedly allowed broken apps to deploy!**
+**STRICT RULE: Current E2E and integration tests are known to be weak. They have repeatedly allowed broken features to deploy while showing green CI. Every feature you implement or claim as "done" MUST be verified beyond what the existing tests check.**
 
-E2E tests MUST verify:
+**THE PROBLEM:** Tests mostly verify "UI renders" and "element exists" — they do NOT verify that features actually work. A green CI run does NOT mean the feature works. assume() guards hide failures instead of catching them.
 
-1. **Faders actually change REAPER values** - not just "page loads"
-2. **Mute button state persists** - click mute, verify state after poll refresh
-3. **Pan slider works end-to-end** - move slider, verify REAPER receives command
-4. **Meters show real audio** - if track has audio, meter must be > 0
-5. **Connection status accurate** - disconnected banner when REAPER unreachable
-6. **Presets persist** - save preset, reload page, preset still exists
+**MANDATORY for every feature/fix:**
+
+1. **Do NOT trust existing tests** — they are superficial. Read them critically.
+2. **Write NEW tests that verify actual behavior**, not just rendering:
+   - Does the fader actually send a value to REAPER? (not just "fader exists")
+   - Does mute actually mute? (not just "button renders")
+   - Does the animation actually animate? (not just "class exists")
+   - Does the setting actually persist? (not just "modal opens")
+3. **Verify on the live app** after deploy — open http://10.77.9.231/ in a browser and manually test every feature you changed
+4. **If you cannot write a meaningful test** (e.g., REAPER not available in CI), explicitly document what is NOT tested and flag it to the user
+5. **Never claim a feature is "done"** based solely on CI passing — CI passing means the code compiles and superficial checks pass, nothing more
+
+**Current test gaps (known):**
+
+- E2E tests run without REAPER — most mixer functionality is assume()-skipped
+- No integration tests verify WebSocket message flow end-to-end
+- No tests verify that settings actually persist across page reloads
+- No tests verify pan/fader animations actually animate (timing, intermediate values)
+- No tests verify meter values change in response to send controls
+- Mute, pan, fader commands are not verified against REAPER
 
 **After EVERY deploy, manually verify:**
 
@@ -472,7 +486,7 @@ E2E tests MUST verify:
 - Click mute → channel mutes in REAPER
 - If controls don't work, CI HAS FAILED even if green!
 
-**E2E tests must be expanded aggressively** - if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
+**E2E tests must be expanded aggressively** — if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
 
 **Test files location:**
 
