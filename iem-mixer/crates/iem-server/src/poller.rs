@@ -168,8 +168,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             // Check if bridge is already running in REAPER before triggering
             let running_url =
                 reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "bridge_running");
-            let already_running = if let Ok(resp) =
-                state.http_client.get(&running_url).send().await
+            let already_running = if let Ok(resp) = state.http_client.get(&running_url).send().await
             {
                 resp.text()
                     .await
@@ -185,8 +184,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
                 tracing::info!("Meter bridge already running in REAPER");
             } else {
-                let action_url =
-                    reaper_api::trigger_action(&reaper_url, METER_BRIDGE_ACTION);
+                let action_url = reaper_api::trigger_action(&reaper_url, METER_BRIDGE_ACTION);
                 if state.http_client.get(&action_url).send().await.is_ok() {
                     METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
                     tracing::info!("Triggered meter bridge ReaScript");
