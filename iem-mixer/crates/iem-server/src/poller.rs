@@ -525,7 +525,11 @@ mod tests {
         let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-140\t-120\t1.000000\t3\t9\t0\t0\t24421844";
         let meters = parse_meters_from_ntrack(line);
         let [left, right] = meters[&1];
-        assert!(left > 0.0, "-140 (dB×10) L should show signal, got {}", left);
+        assert!(
+            left > 0.0,
+            "-140 (dB×10) L should show signal, got {}",
+            left
+        );
         assert!(
             right > 0.0,
             "-120 (dB×10) R should show signal, got {}",

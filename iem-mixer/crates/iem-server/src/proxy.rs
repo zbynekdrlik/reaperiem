@@ -1695,8 +1695,7 @@ mod tests {
     #[test]
     fn test_ntrack_14_fields_produces_meter() {
         // -100 dB×10 = -10 dB, -80 dB×10 = -8 dB
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-100\t-80\t1.000000\t0\t9\t0\t0\t0";
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-100\t-80\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(meters.contains_key(&1));
         let [left, right] = meters[&1];
@@ -1761,8 +1760,16 @@ TRACK\t3\tMAREK mic\t0\t1.000000\t0.000000\t1.000000\t0\t9\t0\t0\t0";
         let line = "TRACK\t1\tPETKA mic\t192\t1.000000\t0.000000\t-140\t-120\t1.000000\t3\t9\t0\t0\t24421844";
         let meters = parse_meters_from_ntrack(line);
         let [left, right] = meters[&1];
-        assert!(left > 0.0, "-140 (dB×10) L should show signal, got {}", left);
-        assert!(right > 0.0, "-120 (dB×10) R should show signal, got {}", right);
+        assert!(
+            left > 0.0,
+            "-140 (dB×10) L should show signal, got {}",
+            left
+        );
+        assert!(
+            right > 0.0,
+            "-120 (dB×10) R should show signal, got {}",
+            right
+        );
     }
 
     /// Parse captured live NTRACK response — all tracks silent at -1500 floor
