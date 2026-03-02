@@ -470,8 +470,7 @@ mod tests {
     fn test_ntrack_with_meter_produces_data() {
         // 14 fields: TRACK idx name flags vol pan peak pos width panmode sendcnt recvcnt hwout color
         // Use -100 (= -10 dB) and -80 (= -8 dB) — realistic signal levels
-        let line =
-            "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-100\t-80\t1.000000\t0\t9\t0\t0\t0";
+        let line = "TRACK\t1\tPETKA mic\t0\t1.000000\t0.000000\t-100\t-80\t1.000000\t0\t9\t0\t0\t0";
         let meters = parse_meters_from_ntrack(line);
         assert!(
             meters.contains_key(&1),
@@ -639,6 +638,9 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         );
         // Verify: track 23 has different peak (-50 = -5 dB) and pos (-60 = -6 dB)
         let [l, r] = meters[&23];
-        assert!(l > r, "L (-50 = -5 dB) should be louder than R (-60 = -6 dB)");
+        assert!(
+            l > r,
+            "L (-50 = -5 dB) should be louder than R (-60 = -6 dB)"
+        );
     }
 }
