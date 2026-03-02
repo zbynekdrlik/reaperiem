@@ -551,30 +551,46 @@ jobs:
           Write-Host "Ensuring port 443 URL ACL..."
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
-          # Start app via schtasks.exe (doesn't require admin, unlike Register-ScheduledTask)
-          # /it = interactive (runs in user's desktop session for tray icon)
-          # /ru USERNAME = run as current user
+          # Start app — try schtasks for interactive session (tray icon), fall back to Start-Process
           $taskName = "IEMMixerStart"
-          Write-Host "Creating scheduled task to start: $exePath"
+          Write-Host "Starting app: $exePath"
 
-          # Remove existing task
-          & schtasks /delete /tn $taskName /f 2>&1 | Out-Null
-
-          # Create one-shot task with inner quotes for paths with spaces
-          & schtasks /create /tn $taskName /tr "`"$exePath`"" /sc once /st 00:00 /ru $env:USERNAME /it /f
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Failed to create scheduled task (exit code $LASTEXITCODE)"
-            exit 1
+          $started = $false
+          try {
+            # schtasks /it runs in user's desktop session (needed for tray icon)
+            # Suppress stderr from delete (task may not exist or may need admin to delete)
+            $ErrorActionPreference = 'SilentlyContinue'
+            & cmd /c "schtasks /delete /tn $taskName /f >nul 2>&1"
+            & cmd /c "schtasks /create /tn $taskName /tr `"`"`"$exePath`"`"`" /sc once /st 00:00 /ru $env:USERNAME /it /f"
+            $ErrorActionPreference = 'Stop'
+            if ($LASTEXITCODE -eq 0) {
+              & schtasks /run /tn $taskName
+              Write-Host "Started via Task Scheduler (interactive session)"
+              Start-Sleep -Seconds 10
+              $ErrorActionPreference = 'SilentlyContinue'
+              & cmd /c "schtasks /delete /tn $taskName /f >nul 2>&1"
+              $ErrorActionPreference = 'Stop'
+              $started = $true
+            }
+          } catch {
+            Write-Host "schtasks failed: $_"
           }
-          Write-Host "Task registered successfully"
 
-          # Start the task immediately
-          & schtasks /run /tn $taskName
-          Write-Host "Task triggered, waiting for app to start..."
-          Start-Sleep -Seconds 10
-
-          # Cleanup one-shot task
-          & schtasks /delete /tn $taskName /f 2>&1 | Out-Null
+          if (-not $started) {
+            # Fallback: WMI creates a detached process that survives CI step exit
+            Write-Host "Falling back to WMI process creation..."
+            $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
+            if ($result.ReturnValue -eq 0) {
+              Write-Host "Started via WMI (PID: $($result.ProcessId))"
+              Start-Sleep -Seconds 10
+              $started = $true
+            } else {
+              Write-Host "WMI failed (return: $($result.ReturnValue)), trying Start-Process..."
+              Start-Process -FilePath $exePath -WindowStyle Hidden
+              Start-Sleep -Seconds 10
+              $started = $true
+            }
+          }
 
           # Check if process is running
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
@@ -582,7 +598,6 @@ jobs:
             Write-Host "Process running: PID $($proc.Id)"
           } else {
             Write-Host "::warning::Process not found after 10 seconds"
-            # Show user session info for debugging
             Write-Host "=== Active user sessions ==="
             & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
           }
