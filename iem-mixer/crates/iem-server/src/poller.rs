@@ -39,13 +39,8 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
         if let Some((idx_str, vals_str)) = entry.split_once(':') {
             if let Ok(track_idx) = idx_str.parse::<usize>() {
                 if let Some((l_str, r_str)) = vals_str.split_once(',') {
-                    if let (Ok(l_db10), Ok(r_db10)) =
-                        (l_str.parse::<f32>(), r_str.parse::<f32>())
-                    {
-                        meters.insert(
-                            track_idx,
-                            [db10_to_linear(l_db10), db10_to_linear(r_db10)],
-                        );
+                    if let (Ok(l_db10), Ok(r_db10)) = (l_str.parse::<f32>(), r_str.parse::<f32>()) {
+                        meters.insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
                     }
                 }
             }
