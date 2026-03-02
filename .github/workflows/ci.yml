@@ -551,30 +551,30 @@ jobs:
           Write-Host "Ensuring port 443 URL ACL..."
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
-          # Start app via Task Scheduler using PowerShell cmdlets for reliable path handling
-          # Register-ScheduledTask handles paths with spaces correctly (unlike schtasks.exe)
-          # LogonType Interactive = runs in user's desktop session (needed for tray icon)
+          # Start app via schtasks.exe (doesn't require admin, unlike Register-ScheduledTask)
+          # /it = interactive (runs in user's desktop session for tray icon)
+          # /ru USERNAME = run as current user
           $taskName = "IEMMixerStart"
-          $appDir = Split-Path $exePath
           Write-Host "Creating scheduled task to start: $exePath"
-          Write-Host "Working directory: $appDir"
 
           # Remove existing task
-          Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
+          & schtasks /delete /tn $taskName /f 2>&1 | Out-Null
 
-          # Create task with explicit working directory and interactive logon
-          $action = New-ScheduledTaskAction -Execute $exePath -WorkingDirectory $appDir
-          $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
-          $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
-          $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 365)
-
-          Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+          # Create one-shot task with inner quotes for paths with spaces
+          & schtasks /create /tn $taskName /tr "`"$exePath`"" /sc once /st 00:00 /ru $env:USERNAME /it /f
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to create scheduled task (exit code $LASTEXITCODE)"
+            exit 1
+          }
           Write-Host "Task registered successfully"
 
           # Start the task immediately
-          Start-ScheduledTask -TaskName $taskName
+          & schtasks /run /tn $taskName
           Write-Host "Task triggered, waiting for app to start..."
           Start-Sleep -Seconds 10
+
+          # Cleanup one-shot task
+          & schtasks /delete /tn $taskName /f 2>&1 | Out-Null
 
           # Check if process is running
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
@@ -582,21 +582,7 @@ jobs:
             Write-Host "Process running: PID $($proc.Id)"
           } else {
             Write-Host "::warning::Process not found after 10 seconds"
-            # Check task status for debugging
-            $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
-            if ($taskInfo) {
-              Write-Host "Task last run: $($taskInfo.LastRunTime)"
-              Write-Host "Task last result: $($taskInfo.LastTaskResult)"
-              # 0x80070002 = FILE_NOT_FOUND, 0x41301 = TASK_RUNNING, 0 = SUCCESS
-              if ($taskInfo.LastTaskResult -eq 0) {
-                Write-Host "Task completed successfully but process not found - app may have crashed"
-              } elseif ($taskInfo.LastTaskResult -eq 267009) {
-                Write-Host "Task is still running..."
-              } else {
-                Write-Host "Task failed with error code: 0x$([Convert]::ToString($taskInfo.LastTaskResult, 16))"
-              }
-            }
-            # Show user session info
+            # Show user session info for debugging
             Write-Host "=== Active user sessions ==="
             & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
           }
