@@ -192,7 +192,8 @@ pub async fn poll_mixer_state(
         let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
         if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
             if let Ok(text) = resp.text().await {
-                if let Some(value) = text.split('\t').nth(1) {
+                // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
+                if let Some(value) = text.split('\t').nth(3) {
                     if !value.is_empty() {
                         let bridge_meters = crate::poller::parse_meter_bridge(value);
                         if !bridge_meters.is_empty() {
