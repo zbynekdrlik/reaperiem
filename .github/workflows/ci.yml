@@ -626,9 +626,16 @@ jobs:
           if ($createExitCode -eq 0) {
             & schtasks.exe /run /tn $taskName 2>&1 | ForEach-Object { Write-Host "  schtasks run: $_" }
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "Started via Task Scheduler (interactive session - tray icon should appear)"
+              Write-Host "Waiting for schtasks-launched process..."
               Start-Sleep -Seconds 10
-              $started = $true
+              # Verify the process actually survived (Tauri may crash in task scheduler context)
+              $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+              if ($proc) {
+                Write-Host "Started via Task Scheduler in session $($proc.SessionId) - tray icon should appear"
+                $started = $true
+              } else {
+                Write-Host "schtasks launched process but it exited - Tauri likely crashed in scheduled task context"
+              }
             } else {
               Write-Host "schtasks /run failed (exit code: $LASTEXITCODE)"
             }
@@ -639,8 +646,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           if (-not $started) {
-            # Fallback: WMI creates a detached process (serves HTTP but no tray icon)
-            Write-Host "::warning::Falling back to WMI - app will serve HTTP but tray icon requires re-login"
+            # WMI creates a detached process in session 0 (serves HTTP, no tray icon)
+            # Tray icon will appear on next login via Startup shortcut
+            Write-Host "Starting via WMI (headless - tray icon on next login via Startup shortcut)"
             $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
             if ($result.ReturnValue -eq 0) {
               Write-Host "Started via WMI (PID: $($result.ProcessId))"
