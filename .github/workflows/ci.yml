@@ -28,6 +28,7 @@ jobs:
   test-integrity:
     name: Test Integrity Check
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -107,6 +108,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -140,6 +142,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -173,6 +176,7 @@ jobs:
   build-wasm:
     name: Build WASM Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -229,6 +233,7 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [test-integrity, build-wasm]
     steps:
       - uses: actions/checkout@v4
@@ -312,6 +317,7 @@ jobs:
   check-version-bump:
     name: Verify Version Bump
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -353,6 +359,7 @@ jobs:
   build-tauri:
     name: Build Tauri (Windows)
     runs-on: windows-latest
+    timeout-minutes: 20
     needs: [test, build-wasm]
     steps:
       - uses: actions/checkout@v4
@@ -412,6 +419,7 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
+    timeout-minutes: 10
     needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
     if: github.event_name == 'push'
     steps:
