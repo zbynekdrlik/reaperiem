@@ -600,19 +600,19 @@ jobs:
           if ($explorerProc) {
             Write-Host "Explorer session: $($explorerProc.SessionId) (interactive desktop available)"
           } else {
-            Write-Host "::warning::No explorer.exe found — no interactive desktop session"
+            Write-Host "::warning::No explorer.exe found - no interactive desktop session"
           }
           & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
           Write-Host "=== END DIAGNOSTICS ==="
 
-          # Start app — try schtasks for interactive session (tray icon)
+          # Start app - try schtasks for interactive session (tray icon)
           $taskName = "IEMMixerStart"
           Write-Host "Starting app: $exePath"
 
           $started = $false
           try {
             # schtasks /it runs in user's desktop session (needed for tray icon)
-            # Call schtasks directly — avoid cmd /c quoting issues
+            # Call schtasks directly - avoid cmd /c quoting issues
             $ErrorActionPreference = 'SilentlyContinue'
             & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
             $ErrorActionPreference = 'Stop'
@@ -623,7 +623,7 @@ jobs:
             & schtasks.exe /create /tn $taskName /tr $trArg /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
             if ($LASTEXITCODE -eq 0) {
               & schtasks.exe /run /tn $taskName
-              Write-Host "Started via Task Scheduler (interactive session — tray icon should appear)"
+              Write-Host "Started via Task Scheduler (interactive session - tray icon should appear)"
               Start-Sleep -Seconds 10
               $ErrorActionPreference = 'SilentlyContinue'
               & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
@@ -638,7 +638,7 @@ jobs:
 
           if (-not $started) {
             # Fallback: WMI creates a detached process (serves HTTP but no tray icon)
-            Write-Host "::warning::Falling back to WMI — app will serve HTTP but tray icon requires re-login"
+            Write-Host "::warning::Falling back to WMI - app will serve HTTP but tray icon requires re-login"
             $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
             if ($result.ReturnValue -eq 0) {
               Write-Host "Started via WMI (PID: $($result.ProcessId))"
