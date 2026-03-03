@@ -610,31 +610,33 @@ jobs:
           Write-Host "Starting app: $exePath"
 
           $started = $false
-          try {
-            # schtasks /it runs in user's desktop session (needed for tray icon)
-            # Call schtasks directly - avoid cmd /c quoting issues
-            $ErrorActionPreference = 'SilentlyContinue'
-            & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
-            $ErrorActionPreference = 'Stop'
 
-            # /tr needs the path in quotes when it contains spaces
-            $trArg = "`"$exePath`""
-            Write-Host "schtasks /tr argument: $trArg"
-            & schtasks.exe /create /tn $taskName /tr $trArg /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
+          # schtasks /it runs in user's desktop session (needed for tray icon)
+          # Must use SilentlyContinue because schtasks writes warnings to stderr
+          # (e.g. "ST is earlier than current time") which PowerShell treats as errors
+          $ErrorActionPreference = 'SilentlyContinue'
+          & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
+
+          $trArg = "`"$exePath`""
+          Write-Host "schtasks /tr argument: $trArg"
+          & schtasks.exe /create /tn $taskName /tr $trArg /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
+          $createExitCode = $LASTEXITCODE
+          Write-Host "schtasks /create exit code: $createExitCode"
+
+          if ($createExitCode -eq 0) {
+            & schtasks.exe /run /tn $taskName 2>&1 | ForEach-Object { Write-Host "  schtasks run: $_" }
             if ($LASTEXITCODE -eq 0) {
-              & schtasks.exe /run /tn $taskName
               Write-Host "Started via Task Scheduler (interactive session - tray icon should appear)"
               Start-Sleep -Seconds 10
-              $ErrorActionPreference = 'SilentlyContinue'
-              & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
-              $ErrorActionPreference = 'Stop'
               $started = $true
             } else {
-              Write-Host "schtasks /create failed (exit code: $LASTEXITCODE)"
+              Write-Host "schtasks /run failed (exit code: $LASTEXITCODE)"
             }
-          } catch {
-            Write-Host "schtasks failed: $_"
+            & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
+          } else {
+            Write-Host "schtasks /create failed (exit code: $createExitCode)"
           }
+          $ErrorActionPreference = 'Stop'
 
           if (-not $started) {
             # Fallback: WMI creates a detached process (serves HTTP but no tray icon)
