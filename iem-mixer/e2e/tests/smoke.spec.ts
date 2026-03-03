@@ -99,9 +99,9 @@ test.describe("UX Polish - Issue #3: Login Back Button", () => {
     const backBtn = page.locator(".back-btn");
     await expect(backBtn).toBeVisible({ timeout: 10000 });
 
-    // Header should show "IEM Mixer"
+    // Header should show "NEWLEVEL IEM MIXER"
     const header = page.locator(".mixer-header h1");
-    await expect(header).toContainText("IEM Mixer");
+    await expect(header).toContainText("NEWLEVEL IEM MIXER");
 
     // Click back button — should navigate to landing page
     await backBtn.click();
@@ -117,7 +117,7 @@ test.describe("PWA Support - Issue #19", () => {
     const response = await request.get("/manifest.json");
     expect(response.status()).toBe(200);
     const manifest = await response.json();
-    expect(manifest.name).toBe("IEM Mixer");
+    expect(manifest.name).toBe("NEWLEVEL IEM MIXER");
     expect(manifest.display).toBe("standalone");
     expect(manifest.start_url).toBe("/");
     expect(manifest.icons).toBeDefined();

@@ -34,7 +34,7 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser",
-        "startMenuFolder": "IEM Mixer"
+        "startMenuFolder": "NEWLEVEL IEM MIXER"
       }
     },
     "createUpdaterArtifacts": false

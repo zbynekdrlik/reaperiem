@@ -82,7 +82,7 @@ pub fn setup_tray(
 
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("IEM Mixer")
+        .tooltip("NEWLEVEL IEM MIXER")
         .menu(&menu)
         .on_menu_event(move |app, event| {
             let id = event.id.as_ref();
