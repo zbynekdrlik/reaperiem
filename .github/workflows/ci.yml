@@ -584,11 +584,16 @@ jobs:
           # When CI deploys, WMI starts a headless process (session 0, no tray) holding port 80.
           # On login, this launcher kills it and starts fresh in the interactive session with tray.
           $launcherPath = "$installDir\iem-mixer-launcher.bat"
+          $logPath = "$installDir\launcher.log"
           $lines = @(
             "@echo off",
+            "echo [%date% %time%] Launcher started >> `"$logPath`"",
             "taskkill /im iem-mixer-app.exe /f >nul 2>&1",
-            "timeout /t 3 /nobreak >nul",
-            "start `"`" `"$exePath`""
+            "echo [%date% %time%] Killed old process >> `"$logPath`"",
+            "ping -n 4 127.0.0.1 >nul",
+            "echo [%date% %time%] Starting app >> `"$logPath`"",
+            "start `"`" `"$exePath`"",
+            "echo [%date% %time%] Start command issued >> `"$logPath`""
           )
           [System.IO.File]::WriteAllText($launcherPath, ($lines -join "`r`n"))
           Write-Host "Launcher script created: $launcherPath"
@@ -621,14 +626,22 @@ jobs:
             & schtasks.exe /run /tn $taskName 2>&1 | ForEach-Object { Write-Host "  schtasks run: $_" }
             if ($LASTEXITCODE -eq 0) {
               Write-Host "Launched via Task Scheduler (interactive session) - waiting for startup..."
-              # Launcher: taskkill (instant) + timeout 3s + start app + app init
-              Start-Sleep -Seconds 15
+              # Launcher: taskkill + ping wait 3s + start app + app init ~10s
+              Start-Sleep -Seconds 20
               $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
               if ($proc) {
                 Write-Host "App running: PID $($proc.Id), Session $($proc.SessionId)"
                 $started = $true
               } else {
                 Write-Host "::warning::Process not found after schtasks launch"
+                # Check launcher log for diagnostics
+                if (Test-Path "$logPath") {
+                  Write-Host "=== LAUNCHER LOG ==="
+                  Get-Content "$logPath" | ForEach-Object { Write-Host "  $_" }
+                  Write-Host "=== END LAUNCHER LOG ==="
+                } else {
+                  Write-Host "Launcher log not found - batch file may not have executed"
+                }
               }
             }
             & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
