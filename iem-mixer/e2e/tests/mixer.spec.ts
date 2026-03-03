@@ -33,6 +33,15 @@ function assume(condition: unknown, message: string): condition is true {
   return true;
 }
 
+test.describe("Branding", () => {
+  test("landing page header shows NEWLEVEL IEM MIXER", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    const header = page.locator("header h1");
+    await expect(header).toHaveText("NEWLEVEL IEM MIXER");
+  });
+});
+
 test.describe("Mixer Features - Must All Pass", () => {
   test("member route redirects or serves content", async ({ page }) => {
     // Member routes should either redirect to login or show mixer

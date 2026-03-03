@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/tauri-v2.0.0/crates/tauri-utils/schema.json",
-  "productName": "IEM Mixer",
+  "productName": "NEWLEVEL IEM MIXER",
   "version": "1.27.0",
   "identifier": "com.reaperiem.mixer",
   "build": {
@@ -11,7 +11,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "IEM Mixer",
+        "title": "NEWLEVEL IEM MIXER",
         "url": "http://localhost:80",
         "width": 800,
         "height": 600,
