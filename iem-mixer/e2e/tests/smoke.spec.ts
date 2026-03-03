@@ -117,7 +117,7 @@ test.describe("PWA Support - Issue #19", () => {
     const response = await request.get("/manifest.json");
     expect(response.status()).toBe(200);
     const manifest = await response.json();
-    expect(manifest.name).toBe("NEWLEVEL IEM MIXER");
+    expect(manifest.name).toBe("IEM Mixer");
     expect(manifest.display).toBe("standalone");
     expect(manifest.start_url).toBe("/");
     expect(manifest.icons).toBeDefined();
