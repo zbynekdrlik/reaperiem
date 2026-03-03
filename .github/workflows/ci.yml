@@ -580,34 +580,65 @@ jobs:
           Write-Host "Ensuring port 443 URL ACL..."
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
-          # Start app — try schtasks for interactive session (tray icon), fall back to Start-Process
+          # Ensure Startup folder shortcut exists (tray icon on login)
+          $startupDir = [Environment]::GetFolderPath('Startup')
+          $shortcutPath = "$startupDir\IEM Mixer.lnk"
+          Write-Host "Creating Startup shortcut: $shortcutPath"
+          $ws = New-Object -ComObject WScript.Shell
+          $sc = $ws.CreateShortcut($shortcutPath)
+          $sc.TargetPath = $exePath
+          $sc.WorkingDirectory = $installDir
+          $sc.Description = "IEM Mixer - In-ear monitor mixing"
+          $sc.Save()
+          Write-Host "Startup shortcut created"
+
+          # Diagnostics: show session info for debugging tray issues
+          Write-Host "=== SESSION DIAGNOSTICS ==="
+          Write-Host "Current user: $env:USERNAME"
+          Write-Host "Current session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId)"
+          $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($explorerProc) {
+            Write-Host "Explorer session: $($explorerProc.SessionId) (interactive desktop available)"
+          } else {
+            Write-Host "::warning::No explorer.exe found — no interactive desktop session"
+          }
+          & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
+          Write-Host "=== END DIAGNOSTICS ==="
+
+          # Start app — try schtasks for interactive session (tray icon)
           $taskName = "IEMMixerStart"
           Write-Host "Starting app: $exePath"
 
           $started = $false
           try {
             # schtasks /it runs in user's desktop session (needed for tray icon)
-            # Suppress stderr from delete (task may not exist or may need admin to delete)
+            # Call schtasks directly — avoid cmd /c quoting issues
             $ErrorActionPreference = 'SilentlyContinue'
-            & cmd /c "schtasks /delete /tn $taskName /f >nul 2>&1"
-            & cmd /c "schtasks /create /tn $taskName /tr `"`"`"$exePath`"`"`" /sc once /st 00:00 /ru $env:USERNAME /it /f"
+            & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
             $ErrorActionPreference = 'Stop'
+
+            # /tr needs the path in quotes when it contains spaces
+            $trArg = "`"$exePath`""
+            Write-Host "schtasks /tr argument: $trArg"
+            & schtasks.exe /create /tn $taskName /tr $trArg /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
             if ($LASTEXITCODE -eq 0) {
-              & schtasks /run /tn $taskName
-              Write-Host "Started via Task Scheduler (interactive session)"
+              & schtasks.exe /run /tn $taskName
+              Write-Host "Started via Task Scheduler (interactive session — tray icon should appear)"
               Start-Sleep -Seconds 10
               $ErrorActionPreference = 'SilentlyContinue'
-              & cmd /c "schtasks /delete /tn $taskName /f >nul 2>&1"
+              & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
               $ErrorActionPreference = 'Stop'
               $started = $true
+            } else {
+              Write-Host "schtasks /create failed (exit code: $LASTEXITCODE)"
             }
           } catch {
             Write-Host "schtasks failed: $_"
           }
 
           if (-not $started) {
-            # Fallback: WMI creates a detached process that survives CI step exit
-            Write-Host "Falling back to WMI process creation..."
+            # Fallback: WMI creates a detached process (serves HTTP but no tray icon)
+            Write-Host "::warning::Falling back to WMI — app will serve HTTP but tray icon requires re-login"
             $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
             if ($result.ReturnValue -eq 0) {
               Write-Host "Started via WMI (PID: $($result.ProcessId))"
@@ -624,11 +655,9 @@ jobs:
           # Check if process is running
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "Process running: PID $($proc.Id)"
+            Write-Host "Process running: PID $($proc.Id), Session: $($proc.SessionId)"
           } else {
             Write-Host "::warning::Process not found after 10 seconds"
-            Write-Host "=== Active user sessions ==="
-            & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
           }
 
           # Check if port is listening
