@@ -444,7 +444,7 @@ jobs:
 
           Write-Host "=== KILLING ALL IEM PROCESSES ==="
           # Kill by multiple name patterns to catch everything
-          @("IEM Mixer", "iem-mixer", "iem-mixer-app", "iem-server") | ForEach-Object {
+          @("NEWLEVEL IEM MIXER", "IEM Mixer", "iem-mixer", "iem-mixer-app", "iem-server") | ForEach-Object {
             Get-Process -Name $_ -ErrorAction SilentlyContinue | Stop-Process -Force
           }
           # Also kill by path pattern
@@ -459,7 +459,8 @@ jobs:
             "C:\Program Files (x86)\IEM Mixer",
             "$env:USERPROFILE\iem-mixer",
             "$env:USERPROFILE\AppData\Local\IEM Mixer",
-            "$env:LOCALAPPDATA\IEM Mixer"
+            "$env:LOCALAPPDATA\IEM Mixer",
+            "$env:LOCALAPPDATA\NEWLEVEL IEM MIXER"
           )
 
           foreach ($path in $oldPaths) {
@@ -528,6 +529,8 @@ jobs:
           $installDir = $null
           $exePath = $null
           $possiblePaths = @(
+            "$appData\NEWLEVEL IEM MIXER\iem-mixer-app.exe",
+            "$appData\NEWLEVEL IEM MIXER\NEWLEVEL IEM MIXER.exe",
             "$appData\IEM Mixer\iem-mixer-app.exe",
             "$appData\IEM Mixer\IEM Mixer.exe",
             "$appData\IEM Mixer\iem-mixer.exe",
@@ -667,10 +670,13 @@ jobs:
           $installDir = "$appData\IEM Mixer"
 
           # Verify installation (binary is iem-mixer-app.exe from Cargo.toml)
-          if (Test-Path "$installDir\iem-mixer-app.exe") {
+          # Check both old and new branded install paths
+          $possibleInstallDirs = @("$appData\NEWLEVEL IEM MIXER", "$appData\IEM Mixer")
+          $installDir = $possibleInstallDirs | Where-Object { Test-Path "$_\iem-mixer-app.exe" } | Select-Object -First 1
+          if ($installDir) {
             Write-Host "App installed: $installDir\iem-mixer-app.exe"
           } else {
-            Write-Host "::error::App not installed"
+            Write-Host "::error::App not installed in any known location"
             exit 1
           }
 
