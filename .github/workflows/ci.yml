@@ -84,7 +84,7 @@ jobs:
       - name: Ban ShowConsoleMsg in deferred ReaScripts
         run: |
           echo "Checking for ShowConsoleMsg in production ReaScripts..."
-          # meter_bridge.lua runs continuously via defer() — console output
+          # meter_bridge.lua runs continuously via defer() - console output
           # opens REAPER's console window, grabs focus, and blocks HTTP API.
           # One-shot scripts (set_hardware_output, setup, test) are exempt.
           BANNED_FILES="scripts/reascripts/meter_bridge.lua"
@@ -606,7 +606,7 @@ jobs:
           $sc.Save()
           Write-Host "Startup shortcut created (uses launcher to ensure tray icon)"
 
-          # Start app via schtasks /it — runs in user's interactive desktop session (tray icon works)
+          # Start app via schtasks /it - runs in user's interactive desktop session (tray icon works)
           # The launcher script handles: kill old process, wait for port 80 to free, start fresh.
           # Previous direct-exe schtasks crashed because port 80 was still in TIME_WAIT.
           $taskName = "IEMMixerStart"
@@ -635,9 +635,9 @@ jobs:
           }
           $ErrorActionPreference = 'Stop'
 
-          # Fallback: WMI headless (HTTP works, no tray — tray on next login via Startup shortcut)
+          # Fallback: WMI headless (HTTP works, no tray - tray on next login via Startup shortcut)
           if (-not $started) {
-            Write-Host "schtasks failed — falling back to WMI (headless, tray on next login)"
+            Write-Host "schtasks failed - falling back to WMI (headless, tray on next login)"
             $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
             if ($result.ReturnValue -eq 0) {
               Write-Host "Started via WMI (PID: $($result.ProcessId))"
