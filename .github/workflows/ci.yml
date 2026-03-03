@@ -612,12 +612,46 @@ jobs:
           Write-Host "Startup shortcut created (uses launcher to ensure tray icon)"
 
           # Start app via schtasks /it - runs in user's interactive desktop session (tray icon works)
-          # The launcher script handles: kill old process, wait for port 80 to free, start fresh.
-          # Previous direct-exe schtasks crashed because port 80 was still in TIME_WAIT.
           $taskName = "IEMMixerStart"
           $ErrorActionPreference = 'SilentlyContinue'
           & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
-          & schtasks.exe /create /tn $taskName /tr "`"$launcherPath`"" /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
+
+          # Diagnostic: check who we are and who is logged in
+          Write-Host "Runner user: $env:USERNAME"
+          Write-Host "Runner session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId)"
+          $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($explorerProc) {
+            Write-Host "Explorer session: $($explorerProc.SessionId)"
+          }
+          & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+          # First test: can schtasks /it execute anything at all?
+          $testFile = "$installDir\schtasks-test.txt"
+          Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+          & schtasks.exe /create /tn "IEMTest" /tr "cmd /c echo schtasks_works > `"$testFile`"" /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  test create: $_" }
+          & schtasks.exe /run /tn "IEMTest" 2>&1 | ForEach-Object { Write-Host "  test run: $_" }
+          Start-Sleep -Seconds 5
+          if (Test-Path $testFile) {
+            Write-Host "schtasks /it CAN execute in user session - test file created"
+            Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+          } else {
+            Write-Host "schtasks /it CANNOT execute - test file not found"
+            # Try without /it flag
+            & schtasks.exe /delete /tn "IEMTest" /f 2>&1 | Out-Null
+            & schtasks.exe /create /tn "IEMTest" /tr "cmd /c echo schtasks_works > `"$testFile`"" /sc once /st 00:00 /f 2>&1 | ForEach-Object { Write-Host "  test no-it create: $_" }
+            & schtasks.exe /run /tn "IEMTest" 2>&1 | ForEach-Object { Write-Host "  test no-it run: $_" }
+            Start-Sleep -Seconds 5
+            if (Test-Path $testFile) {
+              Write-Host "schtasks WITHOUT /it works - /it flag is the problem"
+              Remove-Item $testFile -Force -ErrorAction SilentlyContinue
+            } else {
+              Write-Host "schtasks CANNOT execute at all on this runner"
+            }
+          }
+          & schtasks.exe /delete /tn "IEMTest" /f 2>&1 | Out-Null
+
+          # Now launch the app via the method that works
+          & schtasks.exe /create /tn $taskName /tr "cmd /c `"$launcherPath`"" /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
           $createExit = $LASTEXITCODE
           Write-Host "schtasks /create exit: $createExit"
 
@@ -625,22 +659,19 @@ jobs:
           if ($createExit -eq 0) {
             & schtasks.exe /run /tn $taskName 2>&1 | ForEach-Object { Write-Host "  schtasks run: $_" }
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "Launched via Task Scheduler (interactive session) - waiting for startup..."
-              # Launcher: taskkill + ping wait 3s + start app + app init ~10s
+              Write-Host "Waiting for schtasks-launched app..."
               Start-Sleep -Seconds 20
               $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
               if ($proc) {
                 Write-Host "App running: PID $($proc.Id), Session $($proc.SessionId)"
                 $started = $true
               } else {
-                Write-Host "::warning::Process not found after schtasks launch"
-                # Check launcher log for diagnostics
+                Write-Host "::warning::Process not found after schtasks"
                 if (Test-Path "$logPath") {
                   Write-Host "=== LAUNCHER LOG ==="
                   Get-Content "$logPath" | ForEach-Object { Write-Host "  $_" }
-                  Write-Host "=== END LAUNCHER LOG ==="
                 } else {
-                  Write-Host "Launcher log not found - batch file may not have executed"
+                  Write-Host "Launcher log missing - batch file did not execute"
                 }
               }
             }
