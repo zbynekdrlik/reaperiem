@@ -160,12 +160,35 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     // Track_GetPeakInfo values per channel, unlike TRACK fields which only
     // give combined peak-hold data.
     if connected {
-        // Start meter bridge on first successful connection
+        // Start meter bridge if not already running.
+        // MUST check EXTSTATE first — triggering the action while the script
+        // is already running opens REAPER's "ReaScript task control" modal dialog,
+        // which blocks the HTTP API and freezes everything.
         if !METER_BRIDGE_STARTED.load(Ordering::Relaxed) {
-            let action_url = reaper_api::trigger_action(&reaper_url, METER_BRIDGE_ACTION);
-            if state.http_client.get(&action_url).send().await.is_ok() {
+            // Check if bridge is already running in REAPER before triggering
+            let running_url =
+                reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "bridge_running");
+            let already_running = if let Ok(resp) = state.http_client.get(&running_url).send().await
+            {
+                resp.text()
+                    .await
+                    .ok()
+                    .and_then(|t| t.split('\t').nth(3).map(|v| v == "1"))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            if already_running {
+                // Bridge is running, just set our flag
                 METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
-                tracing::info!("Triggered meter bridge ReaScript");
+                tracing::info!("Meter bridge already running in REAPER");
+            } else {
+                let action_url = reaper_api::trigger_action(&reaper_url, METER_BRIDGE_ACTION);
+                if state.http_client.get(&action_url).send().await.is_ok() {
+                    METER_BRIDGE_STARTED.store(true, Ordering::Relaxed);
+                    tracing::info!("Triggered meter bridge ReaScript");
+                }
             }
         }
 
