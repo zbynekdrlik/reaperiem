@@ -437,49 +437,13 @@ jobs:
           name: tauri-installer
           path: installer/
 
-      - name: Clean ALL old installations
+      - name: Stop running IEM Mixer
         shell: powershell
         run: |
-          $ErrorActionPreference = "Continue"  # Don't fail on cleanup errors
-
-          Write-Host "=== KILLING ALL IEM PROCESSES ==="
-          # Kill by multiple name patterns to catch everything
-          @("IEM Mixer", "iem-mixer", "iem-mixer-app", "iem-server") | ForEach-Object {
-            Get-Process -Name $_ -ErrorAction SilentlyContinue | Stop-Process -Force
-          }
-          # Also kill by path pattern
-          Get-Process | Where-Object { $_.Path -match "iem" } | Stop-Process -Force -ErrorAction SilentlyContinue
+          $ErrorActionPreference = "Continue"
+          Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue | Stop-Process -Force
           Start-Sleep -Seconds 3
-
-          Write-Host "=== REMOVING ALL OLD INSTALLATIONS ==="
-          # ALL known mess locations
-          $oldPaths = @(
-            "C:\iem-mixer",
-            "C:\Program Files\IEM Mixer",
-            "C:\Program Files (x86)\IEM Mixer",
-            "$env:USERPROFILE\iem-mixer",
-            "$env:USERPROFILE\AppData\Local\IEM Mixer",
-            "$env:LOCALAPPDATA\IEM Mixer"
-          )
-
-          foreach ($path in $oldPaths) {
-            if (Test-Path $path) {
-              Write-Host "REMOVING: $path"
-              Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
-              if (Test-Path $path) {
-                Write-Host "::warning::Could not fully remove $path - may have locked files"
-              }
-            }
-          }
-
-          # Clean any Task Scheduler tasks (suppress errors properly)
-          @("IEMMixerStart", "IEMStart") | ForEach-Object {
-            & schtasks /Delete /TN $_ /F 2>&1 | Out-Null
-          }
-
-          Write-Host "=== CLEANUP COMPLETE ==="
-          # Explicitly exit with 0 - schtasks returns non-zero when task doesn't exist
-          exit 0
+          Write-Host "Old process stopped"
 
       - name: Install and start IEM Mixer
         shell: powershell
@@ -487,226 +451,106 @@ jobs:
           TLS_CERT_PEM: ${{ secrets.TLS_CERT_PEM }}
           TLS_KEY_PEM: ${{ secrets.TLS_KEY_PEM }}
         run: |
-          $ErrorActionPreference = "Stop"  # Fail on ANY error
+          $ErrorActionPreference = "Stop"
 
-          # Verify installer exists
+          # Runner MUST be in an interactive session (session 1+) for tray icon support.
+          # The runner is configured as a user-mode app via Startup shortcut, NOT a Windows service.
+          $sessionId = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+          Write-Host "Runner session: $sessionId"
+          if ($sessionId -eq 0) {
+            Write-Host "::error::Runner is in session 0 (service mode). Tray icon will not work."
+            Write-Host "::error::Reconfigure runner: stop service, use Startup shortcut for run.cmd"
+            exit 1
+          }
+
+          # Install
           $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
           if (-not $installer) {
             Write-Host "::error::No installer found in artifact!"
             exit 1
           }
           Write-Host "Running installer: $($installer.FullName)"
-
-          # Run installer with timeout
           $process = Start-Process -FilePath $installer.FullName -ArgumentList "/S" -PassThru -Wait
           if ($process.ExitCode -ne 0) {
             Write-Host "::error::Installer failed with exit code $($process.ExitCode)"
             exit 1
           }
-          Write-Host "Installation complete"
 
-          # Verify installation - find where NSIS actually installed
+          # Verify installation
           $appData = [Environment]::GetFolderPath('LocalApplicationData')
-          Write-Host "=== DEBUG: Searching for installed app ==="
-          Write-Host "LocalAppData: $appData"
-
-          # List common locations
-          @("$appData\IEM Mixer", "$appData\Programs\IEM Mixer", "$appData\iem-mixer") | ForEach-Object {
-            if (Test-Path $_) {
-              Write-Host "Found: $_"
-              Get-ChildItem $_ -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
-            }
-          }
-
-          # Also check what directories exist with "IEM" or "iem" in name
-          Get-ChildItem $appData -Directory | Where-Object { $_.Name -match "iem" } | ForEach-Object {
-            Write-Host "Directory match: $($_.FullName)"
-            Get-ChildItem $_.FullName | ForEach-Object { Write-Host "  $($_.Name)" }
-          }
-
-          # Try multiple possible paths (iem-mixer-app.exe is the actual binary name from Cargo.toml)
-          $installDir = $null
-          $exePath = $null
-          $possiblePaths = @(
-            "$appData\IEM Mixer\iem-mixer-app.exe",
-            "$appData\IEM Mixer\IEM Mixer.exe",
-            "$appData\IEM Mixer\iem-mixer.exe",
-            "$appData\Programs\IEM Mixer\IEM Mixer.exe",
-            "$appData\iem-mixer\iem-mixer.exe"
-          )
-
-          foreach ($path in $possiblePaths) {
-            if (Test-Path $path) {
-              $exePath = $path
-              $installDir = Split-Path $path
-              Write-Host "Found executable at: $exePath"
-              break
-            }
-          }
-
-          if (-not $exePath) {
-            Write-Host "::error::Installation failed - executable not found in any expected location"
-            Write-Host "Searched paths:"
-            $possiblePaths | ForEach-Object { Write-Host "  $_" }
+          $installDir = "$appData\IEM Mixer"
+          $exePath = "$installDir\iem-mixer-app.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Host "::error::Executable not found at $exePath"
             exit 1
           }
+          Write-Host "Installed: $exePath"
 
-          # Copy config to the app's expected location (%APPDATA%\iem-mixer\config.yaml)
+          # Deploy config
           $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
           if (-not (Test-Path $configDir)) {
             New-Item -ItemType Directory -Path $configDir -Force | Out-Null
           }
           Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
+          if (-not (Test-Path "$configDir\config.yaml")) {
+            Write-Host "::error::Config copy failed"
+            exit 1
+          }
+          Write-Host "Config: $configDir\config.yaml"
 
-          # Deploy TLS certificates from GitHub secrets (for HTTPS/PWA)
+          # Deploy TLS certificates
           $tlsCert = "$env:TLS_CERT_PEM"
           $tlsKey = "$env:TLS_KEY_PEM"
           if ($tlsCert -and $tlsKey) {
             [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
             [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
-            Write-Host "TLS certificates deployed to $configDir"
+            Write-Host "TLS certificates deployed"
           } else {
             Write-Host "::warning::TLS secrets not set - HTTPS will not be available"
           }
-          if (-not (Test-Path "$configDir\config.yaml")) {
-            Write-Host "::error::Config copy failed"
-            exit 1
-          }
-          Write-Host "Config deployed to $configDir\config.yaml"
 
           # Reserve ports 80 and 443 for non-admin use (idempotent)
-          Write-Host "Ensuring port 80 URL ACL..."
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
-          Write-Host "Ensuring port 443 URL ACL..."
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
 
-          # Create launcher script that kills headless instance before starting with tray
-          # When CI deploys, WMI starts a headless process (session 0, no tray) holding port 80.
-          # On login, this launcher kills it and starts fresh in the interactive session with tray.
+          # Create Startup launcher (ensures clean start on reboot)
           $launcherPath = "$installDir\iem-mixer-launcher.bat"
           $logPath = "$installDir\launcher.log"
           $lines = @(
             "@echo off",
             "echo [%date% %time%] Launcher started >> `"$logPath`"",
             "taskkill /im iem-mixer-app.exe /f >nul 2>&1",
-            "echo [%date% %time%] Killed old process >> `"$logPath`"",
             "ping -n 4 127.0.0.1 >nul",
-            "echo [%date% %time%] Starting app >> `"$logPath`"",
             "start `"`" `"$exePath`"",
-            "echo [%date% %time%] Start command issued >> `"$logPath`""
+            "echo [%date% %time%] App started >> `"$logPath`""
           )
           [System.IO.File]::WriteAllText($launcherPath, ($lines -join "`r`n"))
-          Write-Host "Launcher script created: $launcherPath"
 
-          # Startup shortcut points to the launcher (kills headless, starts with tray)
           $startupDir = [Environment]::GetFolderPath('Startup')
           $shortcutPath = "$startupDir\IEM Mixer.lnk"
-          Write-Host "Creating Startup shortcut: $shortcutPath"
           $ws = New-Object -ComObject WScript.Shell
           $sc = $ws.CreateShortcut($shortcutPath)
           $sc.TargetPath = $launcherPath
           $sc.WorkingDirectory = $installDir
           $sc.WindowStyle = 7
-          $sc.Description = "IEM Mixer - In-ear monitor mixing"
+          $sc.Description = "IEM Mixer"
           $sc.Save()
-          Write-Host "Startup shortcut created (uses launcher to ensure tray icon)"
+          Write-Host "Startup shortcut: $shortcutPath"
 
-          # Start app via schtasks /it - runs in user's interactive desktop session (tray icon works)
-          $taskName = "IEMMixerStart"
-          $ErrorActionPreference = 'SilentlyContinue'
-          & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
+          # Start app directly - runner is in interactive session, so tray icon works
+          Start-Process -FilePath $exePath
+          Start-Sleep -Seconds 8
 
-          # Diagnostic: check who we are and who is logged in
-          Write-Host "Runner user: $env:USERNAME"
-          Write-Host "Runner session: $([System.Diagnostics.Process]::GetCurrentProcess().SessionId)"
-          $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($explorerProc) {
-            Write-Host "Explorer session: $($explorerProc.SessionId)"
-          }
-          & query user 2>&1 | ForEach-Object { Write-Host "  $_" }
-
-          # First test: can schtasks /it execute anything at all?
-          $testFile = "$installDir\schtasks-test.txt"
-          Remove-Item $testFile -Force -ErrorAction SilentlyContinue
-          & schtasks.exe /create /tn "IEMTest" /tr "cmd /c echo schtasks_works > `"$testFile`"" /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  test create: $_" }
-          & schtasks.exe /run /tn "IEMTest" 2>&1 | ForEach-Object { Write-Host "  test run: $_" }
-          Start-Sleep -Seconds 5
-          if (Test-Path $testFile) {
-            Write-Host "schtasks /it CAN execute in user session - test file created"
-            Remove-Item $testFile -Force -ErrorAction SilentlyContinue
-          } else {
-            Write-Host "schtasks /it CANNOT execute - test file not found"
-            # Try without /it flag
-            & schtasks.exe /delete /tn "IEMTest" /f 2>&1 | Out-Null
-            & schtasks.exe /create /tn "IEMTest" /tr "cmd /c echo schtasks_works > `"$testFile`"" /sc once /st 00:00 /f 2>&1 | ForEach-Object { Write-Host "  test no-it create: $_" }
-            & schtasks.exe /run /tn "IEMTest" 2>&1 | ForEach-Object { Write-Host "  test no-it run: $_" }
-            Start-Sleep -Seconds 5
-            if (Test-Path $testFile) {
-              Write-Host "schtasks WITHOUT /it works - /it flag is the problem"
-              Remove-Item $testFile -Force -ErrorAction SilentlyContinue
-            } else {
-              Write-Host "schtasks CANNOT execute at all on this runner"
-            }
-          }
-          & schtasks.exe /delete /tn "IEMTest" /f 2>&1 | Out-Null
-
-          # Now launch the app via the method that works
-          & schtasks.exe /create /tn $taskName /tr "cmd /c `"$launcherPath`"" /sc once /st 00:00 /ru $env:USERNAME /it /f 2>&1 | ForEach-Object { Write-Host "  schtasks: $_" }
-          $createExit = $LASTEXITCODE
-          Write-Host "schtasks /create exit: $createExit"
-
-          $started = $false
-          if ($createExit -eq 0) {
-            & schtasks.exe /run /tn $taskName 2>&1 | ForEach-Object { Write-Host "  schtasks run: $_" }
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "Waiting for schtasks-launched app..."
-              Start-Sleep -Seconds 20
-              $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
-              if ($proc) {
-                Write-Host "App running: PID $($proc.Id), Session $($proc.SessionId)"
-                $started = $true
-              } else {
-                Write-Host "::warning::Process not found after schtasks"
-                if (Test-Path "$logPath") {
-                  Write-Host "=== LAUNCHER LOG ==="
-                  Get-Content "$logPath" | ForEach-Object { Write-Host "  $_" }
-                } else {
-                  Write-Host "Launcher log missing - batch file did not execute"
-                }
-              }
-            }
-            & schtasks.exe /delete /tn $taskName /f 2>&1 | Out-Null
-          }
-          $ErrorActionPreference = 'Stop'
-
-          # Fallback: WMI headless (HTTP works, no tray - tray on next login via Startup shortcut)
-          if (-not $started) {
-            Write-Host "schtasks failed - falling back to WMI (headless, tray on next login)"
-            $result = ([wmiclass]"Win32_Process").Create("`"$exePath`"")
-            if ($result.ReturnValue -eq 0) {
-              Write-Host "Started via WMI (PID: $($result.ProcessId))"
-              Start-Sleep -Seconds 10
-            } else {
-              Write-Host "WMI failed (return: $($result.ReturnValue))"
-              Start-Process -FilePath $exePath -WindowStyle Hidden
-              Start-Sleep -Seconds 10
-            }
-          }
-
-          # Verify
+          # Verify process started in interactive session
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
-          if ($proc) {
-            Write-Host "Process running: PID $($proc.Id), Session: $($proc.SessionId)"
-          } else {
-            Write-Host "::warning::Process not found"
+          if (-not $proc) {
+            Write-Host "::error::App process failed to start"
+            exit 1
           }
-          $portCheck = netstat -an | Select-String "LISTENING" | Select-String ":80 "
-          if ($portCheck) {
-            Write-Host "Port 80 listening"
-          } else {
-            Write-Host "::warning::Port 80 not listening yet"
+          Write-Host "App running: PID $($proc.Id), Session $($proc.SessionId)"
+          if ($proc.SessionId -eq 0) {
+            Write-Host "::warning::App started in session 0 - tray icon may not be visible"
           }
-          Write-Host "Installation and startup complete"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
@@ -725,72 +569,17 @@ jobs:
             echo WARNING: WASM not deployed to REAPER www root - requires admin access
           )
 
-      - name: Verify deployment files
+      - name: Verify deployment
         shell: powershell
         run: |
-          $appData = [Environment]::GetFolderPath('LocalApplicationData')
-          $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
-          $installDir = "$appData\IEM Mixer"
-
-          # Verify installation (binary is iem-mixer-app.exe from Cargo.toml)
-          $installDir = "$appData\IEM Mixer"
-          if (Test-Path "$installDir\iem-mixer-app.exe") {
-            Write-Host "App installed: $installDir\iem-mixer-app.exe"
-          } else {
-            Write-Host "::error::App not installed in any known location"
-            exit 1
-          }
-
-          # Verify config exists (at %APPDATA%\iem-mixer\config.yaml)
-          if (Test-Path "$configDir\config.yaml") {
-            Write-Host "Config deployed: $configDir\config.yaml"
-          } else {
-            Write-Host "::error::Config not found at $configDir\config.yaml"
-            exit 1
-          }
-
-          Write-Host "Installation verified successfully"
-
-      - name: Verify app is running and serving
-        shell: powershell
-        run: |
-          # Check if process is running (may not be if user isn't logged into desktop)
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if (-not $proc) {
-            Write-Host "::warning::App process not running locally"
-            Write-Host "Attempting HTTP verification via network IP..."
-            try {
-              $response = Invoke-WebRequest -Uri "http://10.77.9.231/api/version" -UseBasicParsing -TimeoutSec 10
-              Write-Host "App responding on network IP: OK (status $($response.StatusCode))"
-            } catch {
-              Write-Host "::error::App not running and not responding on network"
-              exit 1
-            }
+            Write-Host "::error::App process not running"
+            exit 1
           }
-          Write-Host "App running (PID: $($proc.Id))"
+          Write-Host "App running: PID $($proc.Id), Session $($proc.SessionId)"
 
-          # Dump app logs for diagnostics
-          Write-Host "=== APP LOG (last 50 lines) ==="
-          $logDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer\logs"
-          if (Test-Path $logDir) {
-            $latestLog = Get-ChildItem $logDir -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-            if ($latestLog) {
-              Write-Host "Log file: $($latestLog.FullName)"
-              Get-Content $latestLog.FullName -Tail 50 | ForEach-Object { Write-Host "  $_" }
-            } else {
-              Write-Host "No log files found in $logDir"
-            }
-          } else {
-            Write-Host "Log directory not found: $logDir"
-          }
-          Write-Host "=== END APP LOG ==="
-
-          # Check all listening ports
-          Write-Host "=== LISTENING PORTS ==="
-          netstat -an | Select-String "LISTENING" | Select-String ":80 |:443 |:8080 " | ForEach-Object { Write-Host "  $_" }
-          Write-Host "=== END PORTS ==="
-
-          # App is running - verify it's serving correctly
+          # Verify version matches this commit
           $expected_hash = (git rev-parse --short HEAD).Trim()
           $maxRetries = 8
           $retryDelay = 5
