@@ -5,6 +5,7 @@ use leptos::prelude::*;
 use crate::api::{MemberInfo, get_members_with_timeout};
 
 /// Load state for the landing page
+#[derive(Clone)]
 enum LoadState {
     Loading,
     Loaded(Vec<MemberInfo>),

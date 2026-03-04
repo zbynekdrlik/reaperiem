@@ -188,13 +188,13 @@ impl SnapshotStore {
 mod tests {
     use super::*;
 
-    fn temp_dir() -> PathBuf {
-        std::env::temp_dir().join(format!("iem_snapshot_test_{}", std::process::id()))
+    fn temp_dir(test_name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("iem_snapshot_test_{}_{}", std::process::id(), test_name))
     }
 
     #[test]
     fn test_empty_store_returns_empty() {
-        let dir = temp_dir();
+        let dir = temp_dir("empty");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
         assert!(store.list("petka").is_empty());
@@ -203,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_save_and_list() {
-        let dir = temp_dir();
+        let dir = temp_dir("save_list");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_delete_snapshot() {
-        let dir = temp_dir();
+        let dir = temp_dir("delete");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn test_pin_unpin() {
-        let dir = temp_dir();
+        let dir = temp_dir("pin");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
@@ -272,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_pruning() {
-        let dir = temp_dir();
+        let dir = temp_dir("pruning");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
@@ -291,7 +291,7 @@ mod tests {
 
     #[test]
     fn test_pinned_survives_pruning() {
-        let dir = temp_dir();
+        let dir = temp_dir("pinned_survives");
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
