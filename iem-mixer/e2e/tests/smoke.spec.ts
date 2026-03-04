@@ -234,7 +234,7 @@ test.describe("PWA Support - Issue #19", () => {
 test.describe("Auth & Token Expiry - Issue #38", () => {
   test("settings modal has logout button", async ({ page }) => {
     // First authenticate
-    await page.goto("/login?member=petka&next=/petka");
+    await page.goto("/login?member=petronela&next=/petronela");
     await page.waitForLoadState("domcontentloaded");
 
     // Enter PIN (default 7711)
@@ -245,7 +245,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
     await numpad.filter({ hasText: "1" }).click();
 
     // Should redirect to mixer page
-    await page.waitForURL("**/petka", { timeout: 5000 });
+    await page.waitForURL("**/petronela", { timeout: 5000 });
 
     // Open settings modal
     const settingsBtn = page.locator(".settings-btn");
@@ -263,7 +263,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
 
   test("logout clears auth and redirects to landing", async ({ page }) => {
     // First authenticate
-    await page.goto("/login?member=petka&next=/petka");
+    await page.goto("/login?member=petronela&next=/petronela");
     await page.waitForLoadState("domcontentloaded");
 
     // Enter PIN (default 7711)
@@ -274,7 +274,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
     await numpad.filter({ hasText: "1" }).click();
 
     // Should redirect to mixer page
-    await page.waitForURL("**/petka", { timeout: 5000 });
+    await page.waitForURL("**/petronela", { timeout: 5000 });
 
     // Open settings modal
     const settingsBtn = page.locator(".settings-btn");
@@ -298,7 +298,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
   test("engineer token has 4h expiry", async ({ request }) => {
     // Login with engineer PIN (1177)
     const response = await request.post("/api/auth", {
-      data: { member: "petka", pin: "1177" },
+      data: { member: "petronela", pin: "1177" },
     });
     expect(response.status()).toBe(200);
 
@@ -310,7 +310,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
   test("member token has 24h expiry", async ({ request }) => {
     // Login with default member PIN (7711)
     const response = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     expect(response.status()).toBe(200);
 
@@ -323,7 +323,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
 test.describe("Snapshot History - Issue #46", () => {
   test("history button is visible in toolbar", async ({ page }) => {
     // First authenticate
-    await page.goto("/login?member=petka&next=/petka");
+    await page.goto("/login?member=petronela&next=/petronela");
     await page.waitForLoadState("domcontentloaded");
 
     // Enter PIN (default 7711)
@@ -334,7 +334,7 @@ test.describe("Snapshot History - Issue #46", () => {
     await numpad.filter({ hasText: "1" }).click();
 
     // Should redirect to mixer page
-    await page.waitForURL("**/petka", { timeout: 5000 });
+    await page.waitForURL("**/petronela", { timeout: 5000 });
 
     // History button should be visible in toolbar
     const historyBtn = page.locator(".toolbar-btn", { hasText: "History" });
@@ -343,7 +343,7 @@ test.describe("Snapshot History - Issue #46", () => {
 
   test("history button opens snapshot modal", async ({ page }) => {
     // First authenticate
-    await page.goto("/login?member=petka&next=/petka");
+    await page.goto("/login?member=petronela&next=/petronela");
     await page.waitForLoadState("domcontentloaded");
 
     // Enter PIN (default 7711)
@@ -354,7 +354,7 @@ test.describe("Snapshot History - Issue #46", () => {
     await numpad.filter({ hasText: "1" }).click();
 
     // Should redirect to mixer page
-    await page.waitForURL("**/petka", { timeout: 5000 });
+    await page.waitForURL("**/petronela", { timeout: 5000 });
 
     // Click History button
     const historyBtn = page.locator(".toolbar-btn", { hasText: "History" });
@@ -370,12 +370,12 @@ test.describe("Snapshot History - Issue #46", () => {
   test("snapshot API returns list", async ({ request }) => {
     // Login first to get token
     const loginResp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     const { token } = await loginResp.json();
 
     // Get snapshots list
-    const response = await request.get("/api/snapshots/petka", {
+    const response = await request.get("/api/snapshots/petronela", {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(response.status()).toBe(200);
@@ -387,12 +387,12 @@ test.describe("Snapshot History - Issue #46", () => {
   test("can create manual snapshot", async ({ request }) => {
     // Login first to get token
     const loginResp = await request.post("/api/auth", {
-      data: { member: "petka", pin: "7711" },
+      data: { member: "petronela", pin: "7711" },
     });
     const { token } = await loginResp.json();
 
     // Create snapshot
-    const response = await request.post("/api/snapshots/petka", {
+    const response = await request.post("/api/snapshots/petronela", {
       headers: { Authorization: `Bearer ${token}` },
       data: { label: "test-snapshot" },
     });
