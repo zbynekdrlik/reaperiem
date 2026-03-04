@@ -85,8 +85,8 @@ pub async fn get_members_with_timeout() -> Result<Vec<MemberInfo>, String> {
     opts.signal(Some(&signal));
 
     let url = format!("{}/members", API_BASE);
-    let request =
-        web_sys::Request::new_with_str_and_init(&url, &opts).map_err(|_| "Failed to create request")?;
+    let request = web_sys::Request::new_with_str_and_init(&url, &opts)
+        .map_err(|_| "Failed to create request")?;
 
     // Perform fetch
     let fetch_promise = window.fetch_with_request(&request);

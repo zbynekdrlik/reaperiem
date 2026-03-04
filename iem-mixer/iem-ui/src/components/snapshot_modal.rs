@@ -144,7 +144,12 @@ async fn restore_snapshot(member_id: &str, timestamp: i64) -> Result<(), String>
 }
 
 /// Pin/unpin a snapshot
-async fn toggle_pin(member_id: &str, timestamp: i64, pin: bool, label: String) -> Result<(), String> {
+async fn toggle_pin(
+    member_id: &str,
+    timestamp: i64,
+    pin: bool,
+    label: String,
+) -> Result<(), String> {
     let token = get_token().ok_or("Not authenticated")?;
     let action = if pin { "pin" } else { "unpin" };
     let url = format!("/api/snapshots/{}/{}/{}", member_id, timestamp, action);

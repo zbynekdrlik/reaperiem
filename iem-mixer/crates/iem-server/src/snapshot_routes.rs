@@ -228,9 +228,9 @@ async fn restore_snapshot(
 
     // Get config for REAPER URL and member info
     let config = state.config.read().await;
-    let member_info = config.find_member(&member).ok_or_else(|| {
-        (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member")))
-    })?;
+    let member_info = config
+        .find_member(&member)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     let member_index = member_info.index;
     let reaper_url = config.reaper_url.clone();
     drop(config);

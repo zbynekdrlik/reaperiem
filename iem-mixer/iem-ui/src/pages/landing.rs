@@ -2,7 +2,7 @@
 
 use leptos::prelude::*;
 
-use crate::api::{get_members_with_timeout, MemberInfo};
+use crate::api::{MemberInfo, get_members_with_timeout};
 
 /// Load state for the landing page
 enum LoadState {
