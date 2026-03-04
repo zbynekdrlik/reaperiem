@@ -1,16 +1,16 @@
 //! REST API routes for snapshot management
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
-    Json, Router,
 };
 use iem_core::{ApiError, MixSnapshot};
 use serde::{Deserialize, Serialize};
 
-use crate::{snapshot_store::SnapshotStore, AppState};
+use crate::{AppState, snapshot_store::SnapshotStore};
 
 /// Snapshot info for list response
 #[derive(Serialize)]
@@ -105,7 +105,11 @@ async fn create_snapshot(
 
     // Get current mixer state from cache
     let cache = state.mixer_cache.read().await;
-    let channels = cache.member_states.get(&member).cloned().unwrap_or_default();
+    let channels = cache
+        .member_states
+        .get(&member)
+        .cloned()
+        .unwrap_or_default();
     drop(cache);
 
     if channels.is_empty() {
@@ -124,15 +128,21 @@ async fn create_snapshot(
     let snapshot = MixSnapshot::new_manual(label, channel_map);
     let timestamp = snapshot.timestamp;
 
-    state.snapshot_store.save_snapshot(&member, snapshot).map_err(|e| {
-        tracing::error!("Failed to save snapshot: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new("IO_ERROR", "Failed to save snapshot")),
-        )
-    })?;
+    state
+        .snapshot_store
+        .save_snapshot(&member, snapshot)
+        .map_err(|e| {
+            tracing::error!("Failed to save snapshot: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new("IO_ERROR", "Failed to save snapshot")),
+            )
+        })?;
 
-    Ok((StatusCode::CREATED, Json(serde_json::json!({ "timestamp": timestamp }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "timestamp": timestamp })),
+    ))
 }
 
 /// Delete a snapshot
@@ -154,10 +164,7 @@ async fn delete_snapshot(
     if deleted {
         Ok(StatusCode::NO_CONTENT)
     } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(ApiError::not_found("Snapshot")),
-        ))
+        Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Snapshot"))))
     }
 }
 
@@ -181,10 +188,7 @@ async fn pin_snapshot(
     if pinned {
         Ok(StatusCode::OK)
     } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(ApiError::not_found("Snapshot")),
-        ))
+        Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Snapshot"))))
     }
 }
 
@@ -207,10 +211,7 @@ async fn unpin_snapshot(
     if unpinned {
         Ok(StatusCode::OK)
     } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(ApiError::not_found("Snapshot")),
-        ))
+        Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Snapshot"))))
     }
 }
 
