@@ -287,12 +287,16 @@ mod tests {
 
     fn test_config() -> Config {
         Config {
-            reaper_host: "localhost".to_string(),
-            reaper_port: 8080,
-            server_port: 80,
+            reaper_url: "http://localhost:8080".to_string(),
+            port: 80,
             jwt_secret: "test_secret_for_auth_testing".to_string(),
             members: vec![],
-            input_tracks: vec![],
+            inputs: vec![],
+            tls: false,
+            https_port: 443,
+            tls_cert: "cert.pem".to_string(),
+            tls_key: "key.pem".to_string(),
+            https_domain: None,
             pins: HashMap::new(),
             engineer_pin: Some("1177".to_string()),
         }
