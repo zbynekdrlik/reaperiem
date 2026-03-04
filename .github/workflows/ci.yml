@@ -519,8 +519,11 @@ jobs:
           }
 
           # Reserve ports 80 and 443 for non-admin use (idempotent)
+          # netsh returns exit code 1 if reservation exists — suppress under SilentlyContinue
+          $ErrorActionPreference = "SilentlyContinue"
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
+          $ErrorActionPreference = "Stop"
 
           # Create Startup launcher (ensures clean start on reboot)
           $launcherPath = "$installDir\iem-mixer-launcher.bat"
@@ -567,6 +570,7 @@ jobs:
             Write-Host "::error::App started in session 0 - tray icon will not work"
             exit 1
           }
+          exit 0
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
