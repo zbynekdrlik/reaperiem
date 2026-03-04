@@ -13,7 +13,7 @@ pub fn LandingPage() -> impl IntoView {
     view! {
         <div class="app">
             <header class="header">
-                <h1>"IEM Mixer"</h1>
+                <h1>"NEWLEVEL IEM MIXER"</h1>
             </header>
             <main class="main">
                 <Suspense fallback=move || view! {

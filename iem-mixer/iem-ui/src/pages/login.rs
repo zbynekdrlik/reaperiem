@@ -88,7 +88,7 @@ pub fn LoginPage() -> impl IntoView {
                 <button class="back-btn" on:click=move |_| { navigate_back("/", Default::default()); }>
                     "\u{2190}"
                 </button>
-                <h1>"IEM Mixer"</h1>
+                <h1>"NEWLEVEL IEM MIXER"</h1>
                 <div style="width: 40px"></div>
             </header>
             <main class="main">

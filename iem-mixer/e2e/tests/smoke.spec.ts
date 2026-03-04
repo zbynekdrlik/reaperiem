@@ -99,9 +99,9 @@ test.describe("UX Polish - Issue #3: Login Back Button", () => {
     const backBtn = page.locator(".back-btn");
     await expect(backBtn).toBeVisible({ timeout: 10000 });
 
-    // Header should show "IEM Mixer"
+    // Header should show "NEWLEVEL IEM MIXER"
     const header = page.locator(".mixer-header h1");
-    await expect(header).toContainText("IEM Mixer");
+    await expect(header).toContainText("NEWLEVEL IEM MIXER");
 
     // Click back button — should navigate to landing page
     await backBtn.click();
