@@ -43,6 +43,9 @@ thiserror = "2.0"
 # Logging
 tracing = "0.1"
 
+# Date/time for daily snapshots
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+
 # System info
 local-ip-address = "0.6"
 
