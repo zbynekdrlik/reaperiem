@@ -440,23 +440,24 @@ jobs:
       - name: Stop running IEM Mixer
         shell: powershell
         run: |
-          $ErrorActionPreference = "Continue"
           # taskkill /f works across sessions (kills session 0 processes too)
+          # Suppress taskkill exit code (returns 1 if no process found, which is fine)
           & taskkill /f /im iem-mixer-app.exe 2>&1 | Out-Null
           Start-Sleep -Seconds 3
           # Verify process is actually dead
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "::warning::Process still running after taskkill, trying Stop-Process"
+            Write-Host "::warning::Process still running after taskkill, retrying"
             $proc | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
-          }
-          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
-          if ($proc) {
-            Write-Host "::error::Cannot stop iem-mixer-app (PID $($proc.Id), Session $($proc.SessionId))"
-            exit 1
+            $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+            if ($proc) {
+              Write-Host "::error::Cannot stop iem-mixer-app (PID $($proc.Id), Session $($proc.SessionId))"
+              exit 1
+            }
           }
           Write-Host "Process stopped"
+          exit 0
 
       - name: Install and start IEM Mixer
         shell: powershell
