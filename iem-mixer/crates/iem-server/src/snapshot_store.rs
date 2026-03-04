@@ -189,7 +189,11 @@ mod tests {
     use super::*;
 
     fn temp_dir(test_name: &str) -> PathBuf {
-        std::env::temp_dir().join(format!("iem_snapshot_test_{}_{}", std::process::id(), test_name))
+        std::env::temp_dir().join(format!(
+            "iem_snapshot_test_{}_{}",
+            std::process::id(),
+            test_name
+        ))
     }
 
     #[test]
