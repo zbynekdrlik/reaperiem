@@ -15,6 +15,7 @@ use crate::components::pan::PanKnob;
 use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::settings_modal::{SettingsModal, UserSettings};
+use crate::components::snapshot_modal::SnapshotModal;
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -191,6 +192,25 @@ fn connect_websocket(
 pub fn MixerPage() -> impl IntoView {
     let params = use_params_map();
     let navigate_back = use_navigate();
+    let navigate_to_login = use_navigate();
+
+    // Auth guard: check token on mount and redirect if expired
+    Effect::new(move |_| {
+        if crate::auth::is_token_expired() {
+            // Token expired or missing - redirect to login
+            let member = params
+                .get()
+                .get("member")
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            if !member.is_empty() {
+                let login_url = format!("/login?member={}&next=/{}", member, member);
+                navigate_to_login(&login_url, Default::default());
+            } else {
+                navigate_to_login("/", Default::default());
+            }
+        }
+    });
 
     // Get member ID from route params
     let member_id = move || {
@@ -209,6 +229,7 @@ pub fn MixerPage() -> impl IntoView {
     let (preset_modal_visible, set_preset_modal_visible) = signal(false);
     let (pin_modal_visible, set_pin_modal_visible) = signal(false);
     let (settings_modal_visible, set_settings_modal_visible) = signal(false);
+    let (snapshot_modal_visible, set_snapshot_modal_visible) = signal(false);
 
     // Load user settings from localStorage
     let user_settings = UserSettings::load(&member_id());
@@ -453,6 +474,10 @@ pub fn MixerPage() -> impl IntoView {
         set_preset_modal_visible.set(true);
     });
 
+    let on_history = Callback::new(move |_: ()| {
+        set_snapshot_modal_visible.set(true);
+    });
+
     let on_close_modal = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(false);
     });
@@ -549,6 +574,7 @@ pub fn MixerPage() -> impl IntoView {
 
             <Toolbar
                 on_presets=on_presets
+                on_history=on_history
             />
 
             <PresetModal
@@ -571,6 +597,12 @@ pub fn MixerPage() -> impl IntoView {
             <PinChangeModal
                 visible=pin_modal_visible.into()
                 on_close=Callback::new(move |_: ()| set_pin_modal_visible.set(false))
+            />
+
+            <SnapshotModal
+                visible=snapshot_modal_visible.into()
+                member_id=member_id()
+                on_close=Callback::new(move |_: ()| set_snapshot_modal_visible.set(false))
             />
         </div>
     }

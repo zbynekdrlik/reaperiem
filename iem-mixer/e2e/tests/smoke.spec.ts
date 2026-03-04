@@ -110,6 +110,73 @@ test.describe("UX Polish - Issue #3: Login Back Button", () => {
   });
 });
 
+test.describe("Network Error UX - Issue #56", () => {
+  test("shows error message when API is unreachable", async ({ page }) => {
+    // Block /api/members requests to simulate network failure
+    await page.route("**/api/members", (route) =>
+      route.abort("connectionfailed"),
+    );
+
+    await page.goto("/");
+
+    // Error message should appear within 6 seconds
+    const errorElement = page.locator(".network-error");
+    await expect(errorElement).toBeVisible({ timeout: 6000 });
+  });
+
+  test("error message mentions WiFi/network", async ({ page }) => {
+    await page.route("**/api/members", (route) =>
+      route.abort("connectionfailed"),
+    );
+
+    await page.goto("/");
+
+    // Wait for error to appear
+    const errorElement = page.locator(".network-error");
+    await expect(errorElement).toBeVisible({ timeout: 6000 });
+
+    // Should mention WiFi or network in the message
+    const errorText = await errorElement.textContent();
+    expect(errorText?.toLowerCase()).toMatch(/wifi|network|connection/);
+  });
+
+  test("retry button reloads members on click", async ({ page }) => {
+    let blocked = true;
+
+    // Initially block the API
+    await page.route("**/api/members", (route) => {
+      if (blocked) {
+        route.abort("connectionfailed");
+      } else {
+        route.continue();
+      }
+    });
+
+    await page.goto("/");
+
+    // Wait for error to appear
+    const errorElement = page.locator(".network-error");
+    await expect(errorElement).toBeVisible({ timeout: 6000 });
+
+    // Find retry button
+    const retryBtn = page.locator(".network-error button, .retry-btn");
+    await expect(retryBtn).toBeVisible();
+
+    // Unblock the route
+    blocked = false;
+
+    // Click retry
+    await retryBtn.click();
+
+    // Members should now load
+    const memberGrid = page.locator(".member-grid, .member-card");
+    await expect(memberGrid.first()).toBeVisible({ timeout: 6000 });
+
+    // Error should be gone
+    await expect(errorElement).not.toBeVisible();
+  });
+});
+
 test.describe("PWA Support - Issue #19", () => {
   test("manifest.json is served with valid PWA content", async ({
     request,
@@ -161,5 +228,176 @@ test.describe("PWA Support - Issue #19", () => {
     expect(response.status()).toBe(200);
     const cacheControl = response.headers()["cache-control"];
     expect(cacheControl).toContain("no-cache");
+  });
+});
+
+test.describe("Auth & Token Expiry - Issue #38", () => {
+  test("settings modal has logout button", async ({ page }) => {
+    // First authenticate
+    await page.goto("/login?member=petka&next=/petka");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Enter PIN (default 7711)
+    const numpad = page.locator(".numpad-btn");
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+
+    // Should redirect to mixer page
+    await page.waitForURL("**/petka", { timeout: 5000 });
+
+    // Open settings modal
+    const settingsBtn = page.locator(".settings-btn");
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+
+    // Settings modal should be visible with logout button
+    const settingsModal = page.locator(".settings-modal");
+    await expect(settingsModal).toBeVisible({ timeout: 3000 });
+
+    const logoutBtn = page.locator(".logout-btn");
+    await expect(logoutBtn).toBeVisible();
+    await expect(logoutBtn).toContainText("Logout");
+  });
+
+  test("logout clears auth and redirects to landing", async ({ page }) => {
+    // First authenticate
+    await page.goto("/login?member=petka&next=/petka");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Enter PIN (default 7711)
+    const numpad = page.locator(".numpad-btn");
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+
+    // Should redirect to mixer page
+    await page.waitForURL("**/petka", { timeout: 5000 });
+
+    // Open settings modal
+    const settingsBtn = page.locator(".settings-btn");
+    await expect(settingsBtn).toBeVisible({ timeout: 5000 });
+    await settingsBtn.click();
+
+    // Click logout
+    const logoutBtn = page.locator(".logout-btn");
+    await expect(logoutBtn).toBeVisible({ timeout: 3000 });
+    await logoutBtn.click();
+
+    // Should redirect to landing page
+    await page.waitForURL("**/", { timeout: 5000 });
+    expect(page.url()).toMatch(/\/$/);
+
+    // Auth should be cleared (localStorage)
+    const token = await page.evaluate(() => localStorage.getItem("iem_token"));
+    expect(token).toBeNull();
+  });
+
+  test("engineer token has 4h expiry", async ({ request }) => {
+    // Login with engineer PIN (1177)
+    const response = await request.post("/api/auth", {
+      data: { member: "petka", pin: "1177" },
+    });
+    expect(response.status()).toBe(200);
+
+    const data = await response.json();
+    expect(data.engineer).toBe(true);
+    expect(data.expires_in).toBe(4 * 60 * 60); // 4 hours in seconds
+  });
+
+  test("member token has 24h expiry", async ({ request }) => {
+    // Login with default member PIN (7711)
+    const response = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    expect(response.status()).toBe(200);
+
+    const data = await response.json();
+    expect(data.engineer).toBe(false);
+    expect(data.expires_in).toBe(24 * 60 * 60); // 24 hours in seconds
+  });
+});
+
+test.describe("Snapshot History - Issue #46", () => {
+  test("history button is visible in toolbar", async ({ page }) => {
+    // First authenticate
+    await page.goto("/login?member=petka&next=/petka");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Enter PIN (default 7711)
+    const numpad = page.locator(".numpad-btn");
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+
+    // Should redirect to mixer page
+    await page.waitForURL("**/petka", { timeout: 5000 });
+
+    // History button should be visible in toolbar
+    const historyBtn = page.locator(".toolbar-btn", { hasText: "History" });
+    await expect(historyBtn).toBeVisible({ timeout: 5000 });
+  });
+
+  test("history button opens snapshot modal", async ({ page }) => {
+    // First authenticate
+    await page.goto("/login?member=petka&next=/petka");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Enter PIN (default 7711)
+    const numpad = page.locator(".numpad-btn");
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "7" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+    await numpad.filter({ hasText: "1" }).click();
+
+    // Should redirect to mixer page
+    await page.waitForURL("**/petka", { timeout: 5000 });
+
+    // Click History button
+    const historyBtn = page.locator(".toolbar-btn", { hasText: "History" });
+    await expect(historyBtn).toBeVisible({ timeout: 5000 });
+    await historyBtn.click();
+
+    // Snapshot modal should be visible
+    const modal = page.locator(".snapshot-modal");
+    await expect(modal).toBeVisible({ timeout: 3000 });
+    await expect(modal.locator("h2")).toContainText("Mix History");
+  });
+
+  test("snapshot API returns list", async ({ request }) => {
+    // Login first to get token
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    const { token } = await loginResp.json();
+
+    // Get snapshots list
+    const response = await request.get("/api/snapshots/petka", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(response.status()).toBe(200);
+
+    const data = await response.json();
+    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test("can create manual snapshot", async ({ request }) => {
+    // Login first to get token
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "petka", pin: "7711" },
+    });
+    const { token } = await loginResp.json();
+
+    // Create snapshot
+    const response = await request.post("/api/snapshots/petka", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { label: "test-snapshot" },
+    });
+
+    // May return 201 (created) or 400 (no state available in CI)
+    expect([200, 201, 400]).toContain(response.status());
   });
 });

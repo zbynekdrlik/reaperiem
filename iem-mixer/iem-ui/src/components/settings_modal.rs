@@ -2,6 +2,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {
@@ -93,6 +94,20 @@ pub fn SettingsModal(
                             on_open_pin_change.run(());
                         }>
                             "Change PIN"
+                        </button>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-title">"Session"</div>
+
+                        <button class="settings-action-btn logout-btn" on:click=move |_| {
+                            // Clear auth state
+                            crate::auth::clear_auth();
+                            // Navigate to landing page
+                            let navigate = use_navigate();
+                            navigate("/", Default::default());
+                        }>
+                            "Logout"
                         </button>
                     </div>
                 </div>

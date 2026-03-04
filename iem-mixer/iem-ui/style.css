@@ -1497,3 +1497,199 @@ body {
   color: var(--text-muted);
   padding: 8px 4px 4px;
 }
+
+/* ================================================================
+   Network Error (Issue #56)
+   ================================================================ */
+.network-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 48px 24px;
+  min-height: 60vh;
+}
+
+.network-error-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.network-error h2 {
+  font-size: 1.5rem;
+  margin-bottom: 16px;
+  color: var(--solo-yellow);
+}
+
+.network-error-message {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+  line-height: 1.6;
+  max-width: 280px;
+}
+
+.network-error-message strong {
+  color: var(--accent);
+}
+
+.retry-btn {
+  padding: 14px 32px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    opacity 0.15s;
+}
+
+.retry-btn:hover {
+  opacity: 0.9;
+}
+
+.retry-btn:active {
+  transform: scale(0.98);
+}
+
+/* ================================================================
+   Snapshot Modal (Issue #46)
+   ================================================================ */
+.snapshot-modal {
+  max-width: 380px;
+}
+
+.snapshot-loading {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+.snapshot-error {
+  color: var(--mute-red);
+  text-align: center;
+  padding: 10px;
+  font-size: 0.85em;
+}
+
+.snapshot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.snapshot-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg-channel);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  transition: border-color 0.15s;
+}
+
+.snapshot-item.pinned {
+  border-color: var(--accent);
+  background: var(--more-me-bg);
+}
+
+.snapshot-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.snapshot-label {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.snapshot-channels {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.snapshot-time {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.snapshot-time .relative {
+  font-size: 0.75em;
+  color: var(--text-secondary);
+}
+
+.snapshot-time .absolute {
+  font-size: 0.65em;
+  color: var(--text-muted);
+}
+
+.snapshot-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.snapshot-item .restore-btn {
+  color: var(--accent);
+  font-size: 0.75em;
+  padding: 6px 10px;
+  background: rgba(78, 205, 196, 0.1);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.snapshot-item .restore-btn:active {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.snapshot-item .delete-btn {
+  color: var(--mute-red);
+  font-size: 0.75em;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid var(--mute-red-dim);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.snapshot-save-btn {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: var(--bg-primary);
+  border: none;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.95em;
+}
+
+.snapshot-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.snapshot-save-btn:active:not(:disabled) {
+  opacity: 0.9;
+}

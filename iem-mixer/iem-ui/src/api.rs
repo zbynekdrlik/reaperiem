@@ -2,11 +2,17 @@
 
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{AbortController, RequestInit, Response};
 
 use crate::auth::AuthState;
 
 /// Base URL for API calls (same origin)
 const API_BASE: &str = "/api";
+
+/// Network timeout in milliseconds
+const NETWORK_TIMEOUT_MS: i32 = 5000;
 
 /// Member info from server
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +51,67 @@ pub async fn get_members() -> Result<Vec<MemberInfo>, String> {
         resp.json().await.map_err(|e| format!("Parse error: {}", e))
     } else {
         Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Get list of band members with timeout
+/// Returns NETWORK_TIMEOUT error if fetch takes longer than timeout_ms
+pub async fn get_members_with_timeout() -> Result<Vec<MemberInfo>, String> {
+    let window = web_sys::window().ok_or("No window")?;
+
+    // Create abort controller for timeout
+    let controller = AbortController::new().map_err(|_| "Failed to create AbortController")?;
+    let signal = controller.signal();
+
+    // Set up timeout to abort the fetch
+    let controller_clone = controller.clone();
+    let timeout_closure = Closure::once(Box::new(move || {
+        controller_clone.abort();
+    }) as Box<dyn FnOnce()>);
+
+    window
+        .set_timeout_with_callback_and_timeout_and_arguments_0(
+            timeout_closure.as_ref().unchecked_ref(),
+            NETWORK_TIMEOUT_MS,
+        )
+        .map_err(|_| "Failed to set timeout")?;
+
+    // Keep closure alive until timeout fires or fetch completes
+    timeout_closure.forget();
+
+    // Create fetch request with abort signal
+    let mut opts = RequestInit::new();
+    opts.method("GET");
+    opts.signal(Some(&signal));
+
+    let url = format!("{}/members", API_BASE);
+    let request =
+        web_sys::Request::new_with_str_and_init(&url, &opts).map_err(|_| "Failed to create request")?;
+
+    // Perform fetch
+    let fetch_promise = window.fetch_with_request(&request);
+    let result = JsFuture::from(fetch_promise).await;
+
+    match result {
+        Ok(resp) => {
+            let response: Response = resp.dyn_into().map_err(|_| "Invalid response")?;
+            if !response.ok() {
+                return Err(format!("Server error: {}", response.status()));
+            }
+
+            let json_promise = response.json().map_err(|_| "Failed to get JSON")?;
+            let json = JsFuture::from(json_promise)
+                .await
+                .map_err(|_| "Failed to parse JSON")?;
+
+            let members: Vec<MemberInfo> =
+                serde_wasm_bindgen::from_value(json).map_err(|e| format!("Parse error: {}", e))?;
+            Ok(members)
+        }
+        Err(_) => {
+            // Fetch was aborted (timeout) or network error
+            Err("NETWORK_TIMEOUT".to_string())
+        }
     }
 }
 

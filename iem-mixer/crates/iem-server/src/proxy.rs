@@ -704,13 +704,31 @@ pub async fn ws_mixer(
     Path(member_id): Path<String>,
     Query(query): Query<WsQuery>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
-    // Token validation is optional — log but don't reject
-    // TODO: enforce auth once frontend sends tokens and handles 401
     let config = state.config.read().await;
-    if let Some(token) = &query.token {
-        if crate::auth::extract_claims(token, &config.jwt_secret).is_none() {
-            tracing::warn!(member = %member_id, "WS connection with invalid token");
-        }
+
+    // Token is required for WebSocket connections
+    let token = query.token.as_deref().ok_or_else(|| {
+        tracing::warn!(member = %member_id, "WS connection without token");
+        (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized()))
+    })?;
+
+    // Validate token and check expiration
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+        tracing::warn!(member = %member_id, "WS connection with invalid token");
+        (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized()))
+    })?;
+
+    // Check token expiration
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if claims.exp < now {
+        tracing::warn!(member = %member_id, "WS connection with expired token");
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new("TOKEN_EXPIRED", "Token has expired")),
+        ));
     }
 
     // Validate member exists before upgrading
