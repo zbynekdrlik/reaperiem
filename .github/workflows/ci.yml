@@ -549,8 +549,15 @@ jobs:
           $sc.Save()
           Write-Host "Startup shortcut: $shortcutPath"
 
-          # Start app directly - runner is in interactive session, so tray icon works
-          Start-Process -FilePath $exePath
+          # Start app via WMI to create a detached process that survives runner cleanup.
+          # GitHub Actions kills child processes ("orphans") when the job ends.
+          # WMI Win32_Process.Create spawns outside the runner's process tree.
+          $result = ([wmiclass]"Win32_Process").Create($exePath)
+          if ($result.ReturnValue -ne 0) {
+            Write-Host "::error::WMI process creation failed: return $($result.ReturnValue)"
+            exit 1
+          }
+          Write-Host "Started via WMI: PID $($result.ProcessId)"
           Start-Sleep -Seconds 8
 
           # Verify exactly one process started in interactive session
