@@ -226,83 +226,68 @@ async fn restore_snapshot(
         .get_snapshot(&member, timestamp)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Snapshot"))))?;
 
-    // Get config for REAPER URL and member info
+    // Get config for REAPER URL and member index
     let config = state.config.read().await;
-    let member_info = config
-        .find_member(&member)
+    let member_index = config
+        .member_index(&member)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
-    let member_index = member_info.index;
     let reaper_url = config.reaper_url.clone();
     drop(config);
 
-    // Build batch commands for all channels
-    let mut operations = Vec::new();
-    for (track_index, ch) in &snapshot.channels {
-        operations.push(iem_core::BatchOperation {
-            track_index: *track_index,
-            level: Some(ch.vol),
-            pan: Some(ch.pan),
-            mute: Some(ch.mute),
-        });
-    }
-
-    // Execute in parallel using the same pattern as batch_control
+    // Execute in parallel: send level, pan, mute for each channel
     let mut handles = Vec::new();
-    for op in operations {
+    for (track_index, ch) in &snapshot.channels {
         let url_base = reaper_url.clone();
         let client = state.http_client.clone();
         let send_index = member_index;
-        let track_index = op.track_index;
+        let track_idx = *track_index;
+        let vol = ch.vol;
+        let pan = ch.pan;
+        let mute = ch.mute;
 
         handles.push(tokio::spawn(async move {
-            let mut results = Vec::new();
+            let mut op_count = 0;
 
             // Set level
-            if let Some(level) = op.level {
-                let url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/VOL/{:.6}",
-                    url_base, track_index, send_index, level
-                );
-                if let Err(e) = client.get(&url).send().await {
-                    tracing::error!("Restore level failed: {}", e);
-                }
-                results.push(("level", track_index));
+            let url = format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/VOL/{:.6}",
+                url_base, track_idx, send_index, vol
+            );
+            if let Err(e) = client.get(&url).send().await {
+                tracing::error!("Restore level failed: {}", e);
             }
+            op_count += 1;
 
             // Set pan
-            if let Some(pan) = op.pan {
-                let url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/PAN/{:.6}",
-                    url_base, track_index, send_index, pan
-                );
-                if let Err(e) = client.get(&url).send().await {
-                    tracing::error!("Restore pan failed: {}", e);
-                }
-                results.push(("pan", track_index));
+            let url = format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/PAN/{:.6}",
+                url_base, track_idx, send_index, pan
+            );
+            if let Err(e) = client.get(&url).send().await {
+                tracing::error!("Restore pan failed: {}", e);
             }
+            op_count += 1;
 
             // Set mute
-            if let Some(mute) = op.mute {
-                let mute_val = if mute { 1 } else { 0 };
-                let url = format!(
-                    "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
-                    url_base, track_index, send_index, mute_val
-                );
-                if let Err(e) = client.get(&url).send().await {
-                    tracing::error!("Restore mute failed: {}", e);
-                }
-                results.push(("mute", track_index));
+            let mute_val = if mute { 1 } else { 0 };
+            let url = format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
+                url_base, track_idx, send_index, mute_val
+            );
+            if let Err(e) = client.get(&url).send().await {
+                tracing::error!("Restore mute failed: {}", e);
             }
+            op_count += 1;
 
-            results
+            op_count
         }));
     }
 
     // Wait for all commands to complete
     let mut total_ops = 0;
     for handle in handles {
-        if let Ok(results) = handle.await {
-            total_ops += results.len();
+        if let Ok(count) = handle.await {
+            total_ops += count;
         }
     }
 

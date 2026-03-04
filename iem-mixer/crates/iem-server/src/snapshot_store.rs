@@ -3,7 +3,7 @@
 //! Stores mix snapshots per member, following the PinStore pattern.
 //! Each member has their own JSON file in the snapshots/ directory.
 
-use iem_core::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
+use iem_core::{ChannelSnapshot, MixSnapshot, MAX_SNAPSHOTS};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -165,10 +165,16 @@ impl SnapshotStore {
         channels
             .iter()
             .map(|ch| {
+                // Convert dB to REAPER linear scale (same as db_to_reaper_vol in proxy.rs)
+                let vol = if ch.level_db <= -60.0 {
+                    0.0
+                } else {
+                    10.0_f32.powf(ch.level_db / 20.0).clamp(0.0, 4.0)
+                };
                 (
                     ch.track_index,
                     ChannelSnapshot {
-                        vol: ch.vol,
+                        vol,
                         mute: ch.muted,
                         pan: ch.pan,
                     },
