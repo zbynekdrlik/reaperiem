@@ -1,12 +1,11 @@
 //! REST API routes for snapshot management
 
 use axum::{
-    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
-    Router,
+    Json, Router,
 };
 use iem_core::{ApiError, MixSnapshot};
 use serde::{Deserialize, Serialize};
