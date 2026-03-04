@@ -80,7 +80,7 @@ pub async fn get_members_with_timeout() -> Result<Vec<MemberInfo>, String> {
     timeout_closure.forget();
 
     // Create fetch request with abort signal
-    let mut opts = RequestInit::new();
+    let opts = RequestInit::new();
     opts.set_method("GET");
     opts.set_signal(Some(&signal));
 
