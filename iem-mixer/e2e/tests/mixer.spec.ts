@@ -33,6 +33,18 @@ function assume(condition: unknown, message: string): condition is true {
   return true;
 }
 
+// Helper to wait for mixer page to load with graceful skip in CI
+// Returns true if mixer loaded, false if should skip (REAPER not connected)
+async function waitForMixer(
+  page: Page,
+  message = "Mixer must load (requires REAPER connection)",
+): Promise<boolean> {
+  const mixerLoaded = await page
+    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
+    .catch(() => null);
+  return assume(mixerLoaded, message);
+}
+
 test.describe("Branding", () => {
   test("landing page header shows NEWLEVEL IEM MIXER", async ({ page }) => {
     // Wait for network to settle - WASM app needs time to load and hydrate
@@ -121,8 +133,8 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petronela");
 
-    // Wait for app to initialize - look for mixer-specific elements
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    // Wait for app to initialize - gracefully skip if REAPER not available
+    if (!(await waitForMixer(page))) return;
 
     // Look for custom div fader (fill-bar, not native input)
     const fader = page.locator(".fader-track").first();
@@ -146,7 +158,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -183,7 +195,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -221,7 +233,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -278,7 +290,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -349,7 +361,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -372,7 +384,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
@@ -401,7 +413,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
@@ -445,7 +457,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Wait for channels to load
     try {
@@ -467,9 +479,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header, .toolbar", {
-      timeout: 10000,
-    });
+    if (!(await waitForMixer(page))) return;
 
     // Reset button must NOT be present - use exact text match
     // Note: "Presets" contains "reset" as substring, so use exact match
@@ -485,7 +495,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -547,7 +557,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -647,7 +657,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Main tab should be active by default
     const mainTab = page.locator(".category-tab.main");
@@ -669,7 +679,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
@@ -690,7 +700,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
@@ -711,7 +721,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const micsTab = page.locator(".category-tab.mics");
@@ -730,7 +740,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const stemsTab = page.locator(".category-tab.stems");
@@ -763,7 +773,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const techTab = page.locator(".category-tab.tech");
@@ -782,7 +792,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Main tab should be active by default
     const mainTab = page.locator(".category-tab.main");
@@ -814,7 +824,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
@@ -864,7 +874,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Version block in header must exist
     const versionBlock = page.locator(".header-version");
@@ -884,7 +894,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Status dot must exist in header
     const dot = page.locator(".status-dot");
@@ -904,7 +914,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Old red warning must NOT exist
     const oldWarning = page.locator(".disconnected-warning");
@@ -926,7 +936,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Wait for channels to load
     const channelsLoaded = await page
@@ -959,7 +969,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Switch to Tech tab
     const techTab = page.locator(".category-tab.tech");
@@ -1065,7 +1075,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const settingsBtn = page.locator(".settings-btn");
     await expect(settingsBtn).toBeVisible({ timeout: 5000 });
@@ -1080,9 +1090,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", {
-      timeout: 10000,
-    });
+    if (!(await waitForMixer(page))) return;
 
     // Open settings modal
     const settingsBtn = page.locator(".settings-btn");
@@ -1121,9 +1129,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", {
-      timeout: 10000,
-    });
+    if (!(await waitForMixer(page))) return;
 
     const panSlider = page.locator(".pan-slider").first();
     const loaded = await panSlider
@@ -1164,7 +1170,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const dot = page.locator(".status-dot");
     await expect(dot).toBeVisible({ timeout: 5000 });
@@ -1188,7 +1194,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const versionDate = page.locator(".header-version-date");
     await expect(versionDate).toBeVisible({ timeout: 5000 });
@@ -1212,7 +1218,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
@@ -1250,7 +1256,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const meterFill = page.locator(".meter-fill").first();
     const loaded = await meterFill
@@ -1273,7 +1279,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -1320,7 +1326,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
@@ -1357,7 +1363,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
@@ -1382,7 +1388,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Skip the first 2 static .meter-fill elements (IEM VOL master L/R)
     // which always have width:0%. Target a dynamic Meter component's fill.
@@ -1454,7 +1460,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const meterFill = page.locator(".meter-fill").first();
     const loaded = await meterFill
@@ -1499,7 +1505,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     // Wait for channels and WS to connect
     const meterFill = page.locator(".meter-fill").nth(2);
@@ -1574,7 +1580,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    if (!(await waitForMixer(page))) return;
 
     const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
