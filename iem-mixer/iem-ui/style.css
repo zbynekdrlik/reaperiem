@@ -1069,6 +1069,7 @@ body {
 
 .preset-info {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1078,6 +1079,9 @@ body {
 .preset-item .name {
   font-weight: 600;
   font-size: 0.95em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preset-timestamp {
