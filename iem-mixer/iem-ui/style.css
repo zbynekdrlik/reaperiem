@@ -25,6 +25,7 @@
   --category-tech: #f4d35e;
   --touch-min: 44px;
   --radius: 12px;
+  --radius-md: 12px;
   --radius-sm: 8px;
 }
 
@@ -529,6 +530,7 @@ body {
    Row 3: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
+  position: relative; /* Required for ::after overlay on disconnected state */
   display: grid;
   grid-template-columns: 56px 36px 40px 52px 1fr;
   grid-template-rows: 36px 8px 44px;

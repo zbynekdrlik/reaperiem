@@ -375,6 +375,32 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(dbBox!.y).toBeLessThan(faderBox!.y);
   });
 
+  test("channel has position: relative for overlay containment", async ({
+    page,
+  }) => {
+    // REGRESSION TEST: v1.28.1 fix - .channel.disconnected::after uses
+    // position: absolute, which requires the parent .channel to have
+    // position: relative. Without it, the overlay escapes to the nearest
+    // positioned ancestor and covers the entire page instead of just the channel.
+    await page.goto("/");
+    await loginAs(page, "petronela");
+
+    await page.goto("/petronela");
+    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    // Channel MUST have position: relative for ::after overlay to work
+    const position = await channel.evaluate(
+      (el) => window.getComputedStyle(el).position,
+    );
+    expect(position).toBe("relative");
+  });
+
   test("mute button exists and is clickable", async ({ page }) => {
     // Login first
     await page.goto("/");
@@ -1608,6 +1634,10 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
 });
 
 test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
+  // These tests verify the CSS fix for mobile overflow.
+  // The Presets button is in the toolbar which always renders on the mixer page.
+  // Tests MUST fail (not silently skip) if UI elements are missing.
+
   test("modal uses percentage-based width (not viewport units)", async ({
     page,
   }) => {
@@ -1617,16 +1647,13 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
 
-    // Open presets modal
+    // Wait for toolbar - it always renders on mixer page
+    await page.waitForSelector(".toolbar", { timeout: 10000 });
+
+    // Open presets modal - Presets button MUST be visible
     const presetsBtn = page.locator("button", { hasText: "Presets" });
-    const btnLoaded = await presetsBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(btnLoaded, "presets button must be visible for this test"))
-      return;
-
+    await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
     // Wait for modal to appear
@@ -1644,6 +1671,12 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
 
     // max-width should be 340px (prevents overflow on small screens)
     expect(styles.maxWidth).toBe("340px");
+
+    // BEHAVIORAL CHECK: Modal content must not overflow horizontally
+    const hasOverflow = await modal.evaluate(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
+    expect(hasOverflow).toBe(false);
   });
 
   test("preset input row has min-width: 0 for flex shrinking", async ({
@@ -1654,16 +1687,11 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    await page.waitForSelector(".toolbar", { timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
-    const btnLoaded = await presetsBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(btnLoaded, "presets button must be visible for this test"))
-      return;
-
+    await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
     const modal = page.locator(".modal");
@@ -1691,16 +1719,11 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    await page.waitForSelector(".toolbar", { timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
-    const btnLoaded = await presetsBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(btnLoaded, "presets button must be visible for this test"))
-      return;
-
+    await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
     const modal = page.locator(".modal");
@@ -1716,6 +1739,12 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     // Modal should have breathing room (not edge-to-edge)
     expect(box!.x).toBeGreaterThan(10);
     expect(375 - (box!.x + box!.width)).toBeGreaterThan(10);
+
+    // BEHAVIORAL CHECK: No horizontal overflow on modal content
+    const hasOverflow = await modal.evaluate(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
+    expect(hasOverflow).toBe(false);
   });
 
   test("save button visible within modal on mobile", async ({ page }) => {
@@ -1725,16 +1754,11 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    await page.waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 });
+    await page.waitForSelector(".toolbar", { timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
-    const btnLoaded = await presetsBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(btnLoaded, "presets button must be visible for this test"))
-      return;
-
+    await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
     const modal = page.locator(".modal");
@@ -1749,5 +1773,16 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     // Button must be fully within viewport
     expect(btnBox!.x).toBeGreaterThanOrEqual(0);
     expect(btnBox!.x + btnBox!.width).toBeLessThanOrEqual(375);
+
+    // BEHAVIORAL CHECK: Button must be fully visible (not clipped by overflow)
+    const isClipped = await saveBtn.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      const parent = el.closest(".modal");
+      if (!parent) return false;
+      const parentRect = parent.getBoundingClientRect();
+      // Button is clipped if it extends beyond parent's visible area
+      return rect.right > parentRect.right || rect.left < parentRect.left;
+    });
+    expect(isClipped).toBe(false);
   });
 });
