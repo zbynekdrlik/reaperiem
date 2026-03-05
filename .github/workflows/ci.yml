@@ -1,5 +1,4 @@
 name: CI
-# CSP fix for Trunk inline scripts
 
 on:
   push:
