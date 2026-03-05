@@ -1020,8 +1020,7 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
   padding: 24px;
-  width: 100%;
-  max-width: 340px;
+  width: min(340px, calc(100vw - 40px));
   max-height: 80vh;
   overflow-y: auto;
 }
