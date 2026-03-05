@@ -36,8 +36,9 @@ function assume(condition: unknown, message: string): condition is true {
 test.describe("Branding", () => {
   test("landing page header shows NEWLEVEL IEM MIXER", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("domcontentloaded");
+    // Wait for WASM to mount - Leptos renders after domcontentloaded
     const header = page.locator("header h1");
+    await expect(header).toBeVisible({ timeout: 10000 });
     await expect(header).toHaveText("NEWLEVEL IEM MIXER");
   });
 });
