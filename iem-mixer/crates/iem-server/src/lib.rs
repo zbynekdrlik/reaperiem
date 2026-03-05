@@ -157,7 +157,7 @@ pub async fn start_server(
         HeaderName::from_static("referrer-policy"),
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
-    // CSP allows WASM, inline styles (Leptos), and WebSocket connections
+    // CSP allows WASM + inline scripts (Trunk), inline styles (Leptos), and WebSocket connections
     let csp = SetResponseHeaderLayer::overriding(
         HeaderName::from_static("content-security-policy"),
         HeaderValue::from_static(
