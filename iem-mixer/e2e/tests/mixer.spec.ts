@@ -1635,8 +1635,8 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
 
 test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
   // These tests verify the CSS fix for mobile overflow.
-  // In CI without REAPER, the toolbar may not render - tests skip visibly.
-  // On production with REAPER, tests must pass with real assertions.
+  // In CI without REAPER, the toolbar won't render - tests exit via assume().
+  // On production with REAPER, tests run with real assertions.
 
   test("modal uses percentage-based width (not viewport units)", async ({
     page,
@@ -1652,10 +1652,13 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!toolbarLoaded) {
-      test.skip(true, "Toolbar requires REAPER connection");
+    if (
+      !assume(
+        toolbarLoaded,
+        "Toolbar must be visible (requires REAPER connection)",
+      )
+    )
       return;
-    }
 
     // Open presets modal - Presets button MUST be visible
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1697,10 +1700,13 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!toolbarLoaded) {
-      test.skip(true, "Toolbar requires REAPER connection");
+    if (
+      !assume(
+        toolbarLoaded,
+        "Toolbar must be visible (requires REAPER connection)",
+      )
+    )
       return;
-    }
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1736,10 +1742,13 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!toolbarLoaded) {
-      test.skip(true, "Toolbar requires REAPER connection");
+    if (
+      !assume(
+        toolbarLoaded,
+        "Toolbar must be visible (requires REAPER connection)",
+      )
+    )
       return;
-    }
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1778,10 +1787,13 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!toolbarLoaded) {
-      test.skip(true, "Toolbar requires REAPER connection");
+    if (
+      !assume(
+        toolbarLoaded,
+        "Toolbar must be visible (requires REAPER connection)",
+      )
+    )
       return;
-    }
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
