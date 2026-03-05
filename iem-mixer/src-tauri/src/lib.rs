@@ -66,7 +66,6 @@ pub fn run() {
     };
 
     let port = config.port;
-    let members = config.members.clone();
 
     // Create Tokio runtime
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
