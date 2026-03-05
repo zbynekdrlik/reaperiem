@@ -1686,8 +1686,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
-    // Wait for modal to appear
-    const modal = page.locator(".modal");
+    // Wait for modal to appear - use specific selector to avoid matching hidden modals
+    const modal = page.locator(".modal-overlay.visible .modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
 
     // Verify CSS properties that prevent mobile overflow
@@ -1734,7 +1734,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
-    const modal = page.locator(".modal");
+    // Use specific selector to avoid matching hidden modals
+    const modal = page.locator(".modal-overlay.visible .modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
 
     // Check preset-input-row has min-width: 0
@@ -1776,7 +1777,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
-    const modal = page.locator(".modal");
+    // Use specific selector to avoid matching hidden modals
+    const modal = page.locator(".modal-overlay.visible .modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
 
     // Modal must fit within viewport with margins
@@ -1821,7 +1823,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
-    const modal = page.locator(".modal");
+    // Use specific selector to avoid matching hidden modals
+    const modal = page.locator(".modal-overlay.visible .modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
 
     // Save button must be visible and within viewport
