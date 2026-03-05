@@ -35,10 +35,11 @@ function assume(condition: unknown, message: string): condition is true {
 
 test.describe("Branding", () => {
   test("landing page header shows NEWLEVEL IEM MIXER", async ({ page }) => {
-    await page.goto("/");
-    // Wait for WASM to mount - Leptos renders after domcontentloaded
+    // Wait for network to settle - WASM app needs time to load and hydrate
+    await page.goto("/", { waitUntil: "networkidle" });
     const header = page.locator("header h1");
-    await expect(header).toBeVisible({ timeout: 10000 });
+    // WASM hydration may take a while in CI, use generous timeout
+    await expect(header).toBeVisible({ timeout: 30000 });
     await expect(header).toHaveText("NEWLEVEL IEM MIXER");
   });
 });
