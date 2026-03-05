@@ -126,8 +126,8 @@ pub fn run() {
             // Store AppHandle globally
             let _ = APP_HANDLE.set(handle.clone());
 
-            // Setup tray with member list
-            if let Err(e) = tray::setup_tray(&handle, port, &members) {
+            // Setup tray
+            if let Err(e) = tray::setup_tray(&handle, port) {
                 tracing::error!("Failed to setup tray: {}", e);
             }
 

@@ -1,63 +1,37 @@
 //! System tray icon and menu management
 
-use iem_core::BandMember;
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
 /// Icon size in pixels
 const ICON_SIZE: u32 = 16;
 
+/// Public URL for remote access
+const REMOTE_URL: &str = "http://iem.newlevel.media";
+
 /// Set up the tray icon with menu
-pub fn setup_tray(
-    app: &AppHandle,
-    port: u16,
-    members: &[BandMember],
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn setup_tray(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
     // Display full version with git hash for unique deploy identification
     let version_label = format!("IEM Mixer v{}", iem_core::full_version());
     let version_item = MenuItem::with_id(app, "version", &version_label, false, None::<&str>)?;
 
     let separator1 = PredefinedMenuItem::separator(app)?;
 
-    // Member quick access submenu - dynamically populated
-    let members_menu = Submenu::with_id(app, "members", "Open Mixer", true)?;
+    // Simple "Open Mixer" that opens the landing page
+    let open_mixer_item = MenuItem::with_id(app, "open_mixer", "Open Mixer", true, None::<&str>)?;
 
-    if members.is_empty() {
-        let placeholder = MenuItem::with_id(
-            app,
-            "no_members",
-            "No members configured",
-            false,
-            None::<&str>,
-        )?;
-        members_menu.append(&placeholder)?;
-    } else {
-        for member in members {
-            let item_id = format!("member_{}", member.id());
-            let item = MenuItem::with_id(app, &item_id, &member.name, true, None::<&str>)?;
-            members_menu.append(&item)?;
-        }
-    }
-
-    let separator2 = PredefinedMenuItem::separator(app)?;
-
-    let dashboard_item = MenuItem::with_id(app, "dashboard", "Open Dashboard", true, None::<&str>)?;
-
-    let remote_url = get_remote_url(port);
-    let remote_item = MenuItem::with_id(
+    // Combined URL display + copy (click to copy)
+    let copy_url_item = MenuItem::with_id(
         app,
-        "remote",
-        format!("Remote: {}", remote_url),
+        "copy_url",
+        format!("📋 {}", REMOTE_URL),
         true,
         None::<&str>,
     )?;
 
-    // Copy URL to clipboard option
-    let copy_url_item = MenuItem::with_id(app, "copy_url", "Copy Remote URL", true, None::<&str>)?;
-
-    let separator3 = PredefinedMenuItem::separator(app)?;
+    let separator2 = PredefinedMenuItem::separator(app)?;
 
     let quit_item = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
 
@@ -66,12 +40,9 @@ pub fn setup_tray(
         &[
             &version_item,
             &separator1,
-            &members_menu,
-            &separator2,
-            &dashboard_item,
-            &remote_item,
+            &open_mixer_item,
             &copy_url_item,
-            &separator3,
+            &separator2,
             &quit_item,
         ],
     )?;
@@ -87,30 +58,21 @@ pub fn setup_tray(
         .on_menu_event(move |app, event| {
             let id = event.id.as_ref();
             match id {
-                "dashboard" => {
-                    open_dashboard(app, port_copy);
-                }
-                "remote" => {
-                    open_remote_in_browser(port_copy);
+                "open_mixer" => {
+                    open_mixer(app, port_copy);
                 }
                 "copy_url" => {
-                    copy_remote_url_to_clipboard(app, port_copy);
+                    copy_url_to_clipboard(app);
                 }
                 "quit" => {
                     tracing::info!("Exit requested from tray");
                     app.exit(0);
                 }
-                _ => {
-                    // Check if it's a member ID
-                    if id.starts_with("member_") {
-                        let member = &id[7..];
-                        open_member_mixer(app, port_copy, member);
-                    }
-                }
+                _ => {}
             }
         })
         .on_tray_icon_event(move |tray, event| {
-            // Left-click opens dashboard
+            // Left-click opens mixer
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
@@ -128,9 +90,9 @@ pub fn setup_tray(
     Ok(())
 }
 
-/// Open the dashboard in the main window
-fn open_dashboard(app: &AppHandle, port: u16) {
-    tracing::info!("Opening dashboard");
+/// Open the mixer landing page in the main window
+fn open_mixer(app: &AppHandle, port: u16) {
+    tracing::info!("Opening mixer");
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.navigate(format!("http://localhost:{}", port).parse().unwrap());
         let _ = window.show();
@@ -138,47 +100,13 @@ fn open_dashboard(app: &AppHandle, port: u16) {
     }
 }
 
-/// Open a specific member's mixer
-fn open_member_mixer(app: &AppHandle, port: u16, member: &str) {
-    tracing::info!(member = %member, "Opening mixer for member");
-    if let Some(window) = app.get_webview_window("main") {
-        let url = format!("http://localhost:{}/{}", port, member);
-        let _ = window.navigate(url.parse().unwrap());
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
-
-/// Get the remote access URL (IP-based for LAN access)
-fn get_remote_url(port: u16) -> String {
-    let ip = local_ip_address::local_ip()
-        .map(|ip| ip.to_string())
-        .unwrap_or_else(|_| "localhost".to_string());
-    if port == 80 {
-        format!("http://{}", ip)
-    } else {
-        format!("http://{}:{}", ip, port)
-    }
-}
-
-/// Open the remote URL in the default browser
-fn open_remote_in_browser(port: u16) {
-    let url = get_remote_url(port);
-    tracing::info!("Opening remote URL in browser: {}", url);
-    let _ = open::that(&url);
-}
-
-/// Copy remote URL to clipboard
-fn copy_remote_url_to_clipboard(app: &AppHandle, port: u16) {
-    let url = get_remote_url(port);
-    tracing::info!("Copying remote URL to clipboard: {}", url);
-
-    // Use Tauri's clipboard plugin if available, otherwise log
-    // For now, just show a notification
+/// Copy the public URL to clipboard
+fn copy_url_to_clipboard(app: &AppHandle) {
+    tracing::info!("Copying URL to clipboard: {}", REMOTE_URL);
     if let Some(window) = app.get_webview_window("main") {
         let js = format!(
             "navigator.clipboard.writeText('{}').then(() => console.log('URL copied'))",
-            url
+            REMOTE_URL
         );
         let _ = window.eval(&js);
     }
