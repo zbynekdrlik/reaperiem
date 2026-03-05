@@ -2,6 +2,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 use serde::{Deserialize, Serialize};
 
 fn default_true() -> bool {
@@ -55,6 +56,9 @@ pub fn SettingsModal(
     // StoredValue is Copy + Send + Sync — closures inside view! can use it freely
     let member_id = StoredValue::new(member_id);
 
+    // Get navigate function at component level (Leptos hooks rule)
+    let navigate = use_navigate();
+
     view! {
         <Show when=move || visible.get() fallback=|| ()>
             <div class="pin-modal-overlay" on:click=move |_| on_close.run(())>
@@ -93,6 +97,22 @@ pub fn SettingsModal(
                             on_open_pin_change.run(());
                         }>
                             "Change PIN"
+                        </button>
+                    </div>
+
+                    <div class="settings-section">
+                        <div class="settings-section-title">"Session"</div>
+
+                        <button class="settings-action-btn logout-btn" on:click={
+                            let navigate = navigate.clone();
+                            move |_| {
+                                // Clear auth state
+                                crate::auth::clear_auth();
+                                // Navigate to landing page
+                                navigate("/", Default::default());
+                            }
+                        }>
+                            "Logout"
                         </button>
                     </div>
                 </div>

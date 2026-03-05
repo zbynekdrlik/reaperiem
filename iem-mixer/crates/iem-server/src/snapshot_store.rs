@@ -1,0 +1,322 @@
+//! Snapshot storage with JSON file persistence
+//!
+//! Stores mix snapshots per member, following the PinStore pattern.
+//! Each member has their own JSON file in the snapshots/ directory.
+
+use iem_core::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+/// Snapshot storage backed by per-member JSON files
+pub struct SnapshotStore {
+    /// Base directory for snapshot files
+    snapshots_dir: PathBuf,
+}
+
+impl SnapshotStore {
+    /// Create a new snapshot store in the given config directory
+    pub fn new(config_dir: &std::path::Path) -> Self {
+        let snapshots_dir = config_dir.join("snapshots");
+        Self { snapshots_dir }
+    }
+
+    /// Get the file path for a member's snapshots
+    fn member_path(&self, member_id: &str) -> PathBuf {
+        self.snapshots_dir.join(format!("{}.json", member_id))
+    }
+
+    /// Load snapshots for a member (returns empty vec if file doesn't exist)
+    pub fn load(&self, member_id: &str) -> Vec<MixSnapshot> {
+        let path = self.member_path(member_id);
+        if !path.exists() {
+            return Vec::new();
+        }
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    }
+
+    /// Save snapshots for a member
+    fn save(&self, member_id: &str, snapshots: &[MixSnapshot]) -> Result<(), std::io::Error> {
+        std::fs::create_dir_all(&self.snapshots_dir)?;
+        let path = self.member_path(member_id);
+        let json = serde_json::to_string_pretty(snapshots)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        std::fs::write(path, json)
+    }
+
+    /// List all snapshots for a member (newest first)
+    pub fn list(&self, member_id: &str) -> Vec<MixSnapshot> {
+        let mut snapshots = self.load(member_id);
+        snapshots.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        snapshots
+    }
+
+    /// Save a new snapshot for a member
+    /// Automatically prunes oldest unpinned snapshots if over MAX_SNAPSHOTS
+    pub fn save_snapshot(
+        &self,
+        member_id: &str,
+        snapshot: MixSnapshot,
+    ) -> Result<(), std::io::Error> {
+        let mut snapshots = self.load(member_id);
+        snapshots.push(snapshot);
+
+        // Prune if over limit
+        self.prune(&mut snapshots);
+
+        self.save(member_id, &snapshots)
+    }
+
+    /// Delete a snapshot by timestamp
+    pub fn delete_snapshot(&self, member_id: &str, timestamp: i64) -> Result<bool, std::io::Error> {
+        let mut snapshots = self.load(member_id);
+        let original_len = snapshots.len();
+        snapshots.retain(|s| s.timestamp != timestamp);
+        if snapshots.len() < original_len {
+            self.save(member_id, &snapshots)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Pin a snapshot with a label
+    pub fn pin_snapshot(
+        &self,
+        member_id: &str,
+        timestamp: i64,
+        label: String,
+    ) -> Result<bool, std::io::Error> {
+        let mut snapshots = self.load(member_id);
+        let mut found = false;
+        for s in &mut snapshots {
+            if s.timestamp == timestamp {
+                s.pinned = true;
+                s.label = label;
+                found = true;
+                break;
+            }
+        }
+        if found {
+            self.save(member_id, &snapshots)?;
+        }
+        Ok(found)
+    }
+
+    /// Unpin a snapshot
+    pub fn unpin_snapshot(&self, member_id: &str, timestamp: i64) -> Result<bool, std::io::Error> {
+        let mut snapshots = self.load(member_id);
+        let mut found = false;
+        for s in &mut snapshots {
+            if s.timestamp == timestamp {
+                s.pinned = false;
+                found = true;
+                break;
+            }
+        }
+        if found {
+            self.save(member_id, &snapshots)?;
+        }
+        Ok(found)
+    }
+
+    /// Get a specific snapshot by timestamp
+    pub fn get_snapshot(&self, member_id: &str, timestamp: i64) -> Option<MixSnapshot> {
+        self.load(member_id)
+            .into_iter()
+            .find(|s| s.timestamp == timestamp)
+    }
+
+    /// Prune oldest unpinned snapshots to stay within MAX_SNAPSHOTS
+    fn prune(&self, snapshots: &mut Vec<MixSnapshot>) {
+        if snapshots.len() <= MAX_SNAPSHOTS {
+            return;
+        }
+
+        // Sort by timestamp (oldest first) for pruning
+        snapshots.sort_by_key(|s| s.timestamp);
+
+        // Keep removing oldest unpinned until under limit
+        while snapshots.len() > MAX_SNAPSHOTS {
+            if let Some(idx) = snapshots.iter().position(|s| !s.pinned) {
+                snapshots.remove(idx);
+            } else {
+                // All remaining are pinned, can't prune further
+                break;
+            }
+        }
+    }
+
+    /// Check if a snapshot for today already exists for this member
+    pub fn has_snapshot_today(&self, member_id: &str) -> bool {
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        self.load(member_id).iter().any(|s| {
+            let snapshot_date = chrono::DateTime::from_timestamp(s.timestamp, 0)
+                .map(|dt| dt.format("%Y-%m-%d").to_string())
+                .unwrap_or_default();
+            snapshot_date == today && s.label == "auto"
+        })
+    }
+
+    /// Create channels snapshot from current mixer state
+    pub fn channels_from_state(channels: &[iem_core::Channel]) -> HashMap<usize, ChannelSnapshot> {
+        channels
+            .iter()
+            .map(|ch| {
+                // Convert dB to REAPER linear scale (same as db_to_reaper_vol in proxy.rs)
+                let vol = if ch.level_db <= -60.0 {
+                    0.0
+                } else {
+                    10.0_f32.powf(ch.level_db / 20.0).clamp(0.0, 4.0)
+                };
+                (
+                    ch.track_index,
+                    ChannelSnapshot {
+                        vol,
+                        mute: ch.muted,
+                        pan: ch.pan,
+                    },
+                )
+            })
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(test_name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "iem_snapshot_test_{}_{}",
+            std::process::id(),
+            test_name
+        ))
+    }
+
+    #[test]
+    fn test_empty_store_returns_empty() {
+        let dir = temp_dir("empty");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+        assert!(store.list("petka").is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_save_and_list() {
+        let dir = temp_dir("save_list");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+
+        let mut channels = HashMap::new();
+        channels.insert(
+            1,
+            ChannelSnapshot {
+                vol: 0.5,
+                mute: false,
+                pan: 0.0,
+            },
+        );
+
+        let snapshot = MixSnapshot::new_manual("test".to_string(), channels);
+        store.save_snapshot("petka", snapshot).unwrap();
+
+        let list = store.list("petka");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].label, "test");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_delete_snapshot() {
+        let dir = temp_dir("delete");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+
+        let snapshot = MixSnapshot::new_manual("to_delete".to_string(), HashMap::new());
+        let timestamp = snapshot.timestamp;
+        store.save_snapshot("petka", snapshot).unwrap();
+
+        assert_eq!(store.list("petka").len(), 1);
+        store.delete_snapshot("petka", timestamp).unwrap();
+        assert!(store.list("petka").is_empty());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_pin_unpin() {
+        let dir = temp_dir("pin");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+
+        let snapshot = MixSnapshot::new_auto(HashMap::new());
+        let timestamp = snapshot.timestamp;
+        store.save_snapshot("petka", snapshot).unwrap();
+
+        // Pin
+        store
+            .pin_snapshot("petka", timestamp, "important".to_string())
+            .unwrap();
+        let list = store.list("petka");
+        assert!(list[0].pinned);
+        assert_eq!(list[0].label, "important");
+
+        // Unpin
+        store.unpin_snapshot("petka", timestamp).unwrap();
+        let list = store.list("petka");
+        assert!(!list[0].pinned);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_pruning() {
+        let dir = temp_dir("pruning");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+
+        // Add MAX_SNAPSHOTS + 5 snapshots
+        for i in 0..(MAX_SNAPSHOTS + 5) {
+            let mut snapshot = MixSnapshot::new_auto(HashMap::new());
+            snapshot.timestamp = i as i64;
+            store.save_snapshot("petka", snapshot).unwrap();
+        }
+
+        let list = store.list("petka");
+        assert_eq!(list.len(), MAX_SNAPSHOTS);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_pinned_survives_pruning() {
+        let dir = temp_dir("pinned_survives");
+        let _ = std::fs::remove_dir_all(&dir);
+        let store = SnapshotStore::new(&dir);
+
+        // Add a pinned snapshot with old timestamp
+        let mut pinned = MixSnapshot::new_auto(HashMap::new());
+        pinned.timestamp = 1;
+        pinned.pinned = true;
+        pinned.label = "pinned".to_string();
+        store.save_snapshot("petka", pinned).unwrap();
+
+        // Add enough to trigger pruning
+        for i in 2..=(MAX_SNAPSHOTS + 5) {
+            let mut snapshot = MixSnapshot::new_auto(HashMap::new());
+            snapshot.timestamp = i as i64;
+            store.save_snapshot("petka", snapshot).unwrap();
+        }
+
+        let list = store.list("petka");
+        // Pinned snapshot should still be there
+        assert!(list.iter().any(|s| s.label == "pinned" && s.pinned));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

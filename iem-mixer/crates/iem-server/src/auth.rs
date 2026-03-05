@@ -11,8 +11,22 @@ use iem_core::{ApiError, AuthClaims};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 use crate::AppState;
+
+/// Constant-time string comparison to prevent timing attacks on PIN verification.
+/// Returns true if both strings are equal, false otherwise.
+/// The comparison takes the same amount of time regardless of where strings differ.
+#[inline]
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    // Length check is not constant-time, but PIN length is fixed (4 digits)
+    // and the length itself is not secret
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Login request payload
 #[derive(Debug, Deserialize)]
@@ -37,8 +51,10 @@ pub struct LoginResponse {
     pub expires_in: u64,
 }
 
-/// Token expiration time (24 hours)
-const TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
+/// Token expiration for members (24 hours)
+const MEMBER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
+/// Token expiration for engineers (4 hours - shorter for elevated access)
+const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 4 * 60 * 60;
 
 /// Handle login and return JWT
 pub async fn login(
@@ -49,11 +65,12 @@ pub async fn login(
     let pin_store = state.pin_store.read().await;
 
     // 1. Check engineer PIN (config or default "1177")
+    // Uses constant-time comparison to prevent timing attacks
     let eng_pin = config
         .engineer_pin
         .as_deref()
         .unwrap_or(iem_core::config::DEFAULT_ENGINEER_PIN);
-    if req.pin == eng_pin {
+    if constant_time_eq(&req.pin, eng_pin) {
         // Verify member exists (engineer still needs a valid member target)
         if !req.member.is_empty() && config.find_member(&req.member).is_none() {
             return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
@@ -62,8 +79,9 @@ pub async fn login(
     }
 
     // 2. Check PinStore for custom PIN (member changed their PIN)
+    // Uses constant-time comparison to prevent timing attacks
     if let Some(custom_pin) = pin_store.get_pin(&req.member) {
-        if req.pin != custom_pin {
+        if !constant_time_eq(&req.pin, &custom_pin) {
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
@@ -101,10 +119,17 @@ fn issue_token(
         .unwrap()
         .as_secs();
 
+    // Use shorter expiry for engineer tokens (elevated access)
+    let expiry_secs = if engineer {
+        ENGINEER_TOKEN_EXPIRY_SECS
+    } else {
+        MEMBER_TOKEN_EXPIRY_SECS
+    };
+
     let claims = AuthClaims {
         sub: member_id.to_string(),
         engineer,
-        exp: now + TOKEN_EXPIRY_SECS,
+        exp: now + expiry_secs,
         iat: now,
     };
 
@@ -124,7 +149,7 @@ fn issue_token(
         token,
         member: member_id.to_string(),
         engineer,
-        expires_in: TOKEN_EXPIRY_SECS,
+        expires_in: expiry_secs,
     }))
 }
 
@@ -160,14 +185,14 @@ pub async fn change_pin(
         ));
     }
 
-    // Verify old_pin is correct
+    // Verify old_pin is correct (using constant-time comparison)
     let pin_store = state.pin_store.read().await;
     let old_pin_valid = if let Some(custom_pin) = pin_store.get_pin(&claims.sub) {
-        req.old_pin == custom_pin
+        constant_time_eq(&req.old_pin, &custom_pin)
     } else if let Some(config_pin) = config.pins.get(&claims.sub) {
-        req.old_pin == *config_pin
+        constant_time_eq(&req.old_pin, config_pin)
     } else {
-        req.old_pin == iem_core::config::DEFAULT_MEMBER_PIN
+        constant_time_eq(&req.old_pin, iem_core::config::DEFAULT_MEMBER_PIN)
     };
     drop(pin_store);
 
@@ -268,4 +293,90 @@ pub fn extract_claims(token: &str, secret: &str) -> Option<AuthClaims> {
     )
     .ok()
     .map(|data| data.claims)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iem_core::Config;
+    use std::collections::HashMap;
+
+    fn test_config() -> Config {
+        Config {
+            reaper_url: "http://localhost:8080".to_string(),
+            port: 80,
+            jwt_secret: "test_secret_for_auth_testing".to_string(),
+            members: vec![],
+            inputs: vec![],
+            tls: false,
+            https_port: 443,
+            tls_cert: "cert.pem".to_string(),
+            tls_key: "key.pem".to_string(),
+            https_domain: None,
+            pins: HashMap::new(),
+            engineer_pin: Some("1177".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_member_token_expiry_24h() {
+        let config = test_config();
+        let result = issue_token(&config, "petka", false);
+
+        assert!(result.is_ok());
+        let response = result.unwrap().0;
+
+        // Member tokens should have 24h expiry
+        assert!(!response.engineer);
+        assert_eq!(response.expires_in, 24 * 60 * 60);
+
+        // Verify the token claims
+        let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
+        assert_eq!(claims.sub, "petka");
+        assert!(!claims.engineer);
+
+        // Verify expiry is approximately 24h from now (within 5 sec tolerance)
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let expected_exp = now + 24 * 60 * 60;
+        assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
+    }
+
+    #[test]
+    fn test_engineer_token_expiry_4h() {
+        let config = test_config();
+        let result = issue_token(&config, "engineer", true);
+
+        assert!(result.is_ok());
+        let response = result.unwrap().0;
+
+        // Engineer tokens should have 4h expiry (shorter for elevated access)
+        assert!(response.engineer);
+        assert_eq!(response.expires_in, 4 * 60 * 60);
+
+        // Verify the token claims
+        let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
+        assert_eq!(claims.sub, "engineer");
+        assert!(claims.engineer);
+
+        // Verify expiry is approximately 4h from now (within 5 sec tolerance)
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let expected_exp = now + 4 * 60 * 60;
+        assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
+    }
+
+    #[test]
+    fn test_token_expiry_constants() {
+        // Verify expiry constants are correct
+        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60); // 24 hours
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 4 * 60 * 60); // 4 hours
+
+        // Engineer expiry should be shorter than member expiry
+        assert!(ENGINEER_TOKEN_EXPIRY_SECS < MEMBER_TOKEN_EXPIRY_SECS);
+    }
 }

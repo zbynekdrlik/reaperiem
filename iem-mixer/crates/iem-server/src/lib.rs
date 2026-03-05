@@ -11,14 +11,18 @@ pub mod pin_store;
 pub mod poller;
 pub mod proxy;
 pub mod routes;
+pub mod snapshot_routes;
+pub mod snapshot_store;
 
 use axum::Router;
+use axum::http::{HeaderName, HeaderValue};
 use iem_core::{Config, ServerMsg};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 /// Shared application state
 #[derive(Clone)]
@@ -33,6 +37,8 @@ pub struct AppState {
     pub mixer_cache: Arc<RwLock<MixerCache>>,
     /// Runtime PIN storage (persisted to pins.json)
     pub pin_store: Arc<RwLock<pin_store::PinStore>>,
+    /// Snapshot storage for mix history
+    pub snapshot_store: Arc<snapshot_store::SnapshotStore>,
 }
 
 /// Global IEM output volume state for a member
@@ -59,6 +65,9 @@ pub struct MixerCache {
     pub global_volumes: HashMap<String, GlobalVolState>,
     /// Output track indices per member (member_id -> 1-based track index)
     pub output_track_indices: HashMap<String, usize>,
+    /// Date of last auto-snapshot per member (member_id -> "YYYY-MM-DD")
+    /// Used to ensure only one auto-snapshot per day per member
+    pub snapshot_last_date: HashMap<String, String>,
 }
 
 impl MixerCache {
@@ -71,6 +80,7 @@ impl MixerCache {
             command_timestamps: HashMap::new(),
             global_volumes: HashMap::new(),
             output_track_indices: HashMap::new(),
+            snapshot_last_date: HashMap::new(),
         }
     }
 }
@@ -88,6 +98,7 @@ impl AppState {
             event_tx,
             mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
+            snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
         }
     }
 }
@@ -133,10 +144,35 @@ pub async fn start_server(
 
     let cors = CorsLayer::permissive();
 
+    // Security headers to prevent common attacks
+    let x_frame_options = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
+    let x_content_type_options = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    let referrer_policy = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    // CSP allows WASM, inline styles (Leptos), and WebSocket connections
+    let csp = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self'",
+        ),
+    );
+
     let app = Router::new()
         .merge(routes::api_routes(state.clone()))
         .merge(routes::static_routes())
         .layer(cors)
+        .layer(x_frame_options)
+        .layer(x_content_type_options)
+        .layer(referrer_policy)
+        .layer(csp)
         .with_state(state.clone());
 
     // Spawn HTTPS server on port 443 (if TLS enabled and certs exist)

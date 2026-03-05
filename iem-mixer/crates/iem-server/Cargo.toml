@@ -1,6 +1,6 @@
 [package]
 name = "iem-server"
-version = "1.27.0"
+version = "1.28.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Axum API server for IEM mixer"
@@ -28,6 +28,9 @@ futures = "0.3"
 # JWT authentication
 jsonwebtoken = "9"
 
+# Constant-time comparison for PIN verification (prevents timing attacks)
+subtle = "2"
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -42,6 +45,9 @@ thiserror = "2.0"
 
 # Logging
 tracing = "0.1"
+
+# Date/time for daily snapshots
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 
 # System info
 local-ip-address = "0.6"

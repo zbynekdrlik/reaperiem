@@ -3,7 +3,7 @@
 //! Runs every 150ms, queries REAPER for meter and send state,
 //! detects changes via cache diff, and broadcasts updates to WebSocket clients.
 
-use iem_core::ServerMsg;
+use iem_core::{MixSnapshot, ServerMsg};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -11,6 +11,7 @@ use std::time::Duration;
 use crate::proxy::{
     build_channel_templates, query_send_state, reaper_api, reaper_pan_to_ui, reaper_vol_to_db,
 };
+use crate::snapshot_store::SnapshotStore;
 use crate::{AppState, GlobalVolState};
 
 /// Whether the meter bridge ReaScript has been triggered this session
@@ -380,7 +381,26 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         // Update cache (always, even when suppressing broadcast, so it converges)
         cache
             .member_states
-            .insert(member_id.clone(), result_channels);
+            .insert(member_id.clone(), result_channels.clone());
+
+        // Daily auto-snapshot: on first channel change of the day, save a snapshot
+        // capturing the starting state before changes
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let last_date = cache.snapshot_last_date.get(member_id).cloned();
+        if last_date.as_deref() != Some(&today) {
+            // First activity today for this member - check if we need to save a snapshot
+            if !state.snapshot_store.has_snapshot_today(member_id) && !result_channels.is_empty() {
+                let channel_map = SnapshotStore::channels_from_state(&result_channels);
+                let snapshot = MixSnapshot::new_auto(channel_map);
+                if let Err(e) = state.snapshot_store.save_snapshot(member_id, snapshot) {
+                    tracing::error!(member = %member_id, error = %e, "Failed to save daily auto-snapshot");
+                } else {
+                    tracing::info!(member = %member_id, "Saved daily auto-snapshot");
+                }
+            }
+            // Update the tracking date regardless of whether we saved (to avoid repeated checks)
+            cache.snapshot_last_date.insert(member_id.clone(), today);
+        }
 
         // Periodic cleanup of stale command timestamps (>2s old)
         let stale_cutoff = Duration::from_secs(2);
