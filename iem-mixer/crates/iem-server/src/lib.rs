@@ -15,12 +15,14 @@ pub mod snapshot_routes;
 pub mod snapshot_store;
 
 use axum::Router;
+use axum::http::{HeaderName, HeaderValue};
 use iem_core::{Config, ServerMsg};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 /// Shared application state
 #[derive(Clone)]
@@ -142,10 +144,35 @@ pub async fn start_server(
 
     let cors = CorsLayer::permissive();
 
+    // Security headers to prevent common attacks
+    let x_frame_options = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-frame-options"),
+        HeaderValue::from_static("DENY"),
+    );
+    let x_content_type_options = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("x-content-type-options"),
+        HeaderValue::from_static("nosniff"),
+    );
+    let referrer_policy = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("referrer-policy"),
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    // CSP allows WASM, inline styles (Leptos), and WebSocket connections
+    let csp = SetResponseHeaderLayer::overriding(
+        HeaderName::from_static("content-security-policy"),
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self'",
+        ),
+    );
+
     let app = Router::new()
         .merge(routes::api_routes(state.clone()))
         .merge(routes::static_routes())
         .layer(cors)
+        .layer(x_frame_options)
+        .layer(x_content_type_options)
+        .layer(referrer_policy)
+        .layer(csp)
         .with_state(state.clone());
 
     // Spawn HTTPS server on port 443 (if TLS enabled and certs exist)

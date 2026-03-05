@@ -11,8 +11,22 @@ use iem_core::{ApiError, AuthClaims};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 
 use crate::AppState;
+
+/// Constant-time string comparison to prevent timing attacks on PIN verification.
+/// Returns true if both strings are equal, false otherwise.
+/// The comparison takes the same amount of time regardless of where strings differ.
+#[inline]
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    // Length check is not constant-time, but PIN length is fixed (4 digits)
+    // and the length itself is not secret
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Login request payload
 #[derive(Debug, Deserialize)]
@@ -51,11 +65,12 @@ pub async fn login(
     let pin_store = state.pin_store.read().await;
 
     // 1. Check engineer PIN (config or default "1177")
+    // Uses constant-time comparison to prevent timing attacks
     let eng_pin = config
         .engineer_pin
         .as_deref()
         .unwrap_or(iem_core::config::DEFAULT_ENGINEER_PIN);
-    if req.pin == eng_pin {
+    if constant_time_eq(&req.pin, eng_pin) {
         // Verify member exists (engineer still needs a valid member target)
         if !req.member.is_empty() && config.find_member(&req.member).is_none() {
             return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
@@ -64,8 +79,9 @@ pub async fn login(
     }
 
     // 2. Check PinStore for custom PIN (member changed their PIN)
+    // Uses constant-time comparison to prevent timing attacks
     if let Some(custom_pin) = pin_store.get_pin(&req.member) {
-        if req.pin != custom_pin {
+        if !constant_time_eq(&req.pin, &custom_pin) {
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
@@ -169,14 +185,14 @@ pub async fn change_pin(
         ));
     }
 
-    // Verify old_pin is correct
+    // Verify old_pin is correct (using constant-time comparison)
     let pin_store = state.pin_store.read().await;
     let old_pin_valid = if let Some(custom_pin) = pin_store.get_pin(&claims.sub) {
-        req.old_pin == custom_pin
+        constant_time_eq(&req.old_pin, &custom_pin)
     } else if let Some(config_pin) = config.pins.get(&claims.sub) {
-        req.old_pin == *config_pin
+        constant_time_eq(&req.old_pin, config_pin)
     } else {
-        req.old_pin == iem_core::config::DEFAULT_MEMBER_PIN
+        constant_time_eq(&req.old_pin, iem_core::config::DEFAULT_MEMBER_PIN)
     };
     drop(pin_store);
 

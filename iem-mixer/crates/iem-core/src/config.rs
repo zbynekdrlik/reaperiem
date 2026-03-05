@@ -3,12 +3,23 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
+use subtle::ConstantTimeEq;
 
 /// Default member PIN when no custom PIN is configured
 pub const DEFAULT_MEMBER_PIN: &str = "7711";
 
 /// Default engineer PIN (full access to any member's mixer)
 pub const DEFAULT_ENGINEER_PIN: &str = "1177";
+
+/// Constant-time string comparison to prevent timing attacks on PIN verification.
+/// Returns true if both strings are equal, false otherwise.
+#[inline]
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Application configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,17 +144,18 @@ impl Config {
         self.members.iter().enumerate().find(|(_, m)| m.id() == id)
     }
 
-    /// Validate a PIN for a member or engineer
+    /// Validate a PIN for a member or engineer.
+    /// Uses constant-time comparison to prevent timing attacks.
     pub fn validate_pin(&self, member_id: &str, pin: &str) -> PinValidation {
         // Check engineer PIN (config override or default "1177")
         let eng_pin = self.engineer_pin.as_deref().unwrap_or(DEFAULT_ENGINEER_PIN);
-        if pin == eng_pin {
+        if constant_time_eq(pin, eng_pin) {
             return PinValidation::Engineer;
         }
 
         // Check member-specific PIN from config
         if let Some(expected_pin) = self.pins.get(member_id) {
-            if pin == expected_pin {
+            if constant_time_eq(pin, expected_pin) {
                 return PinValidation::Member(member_id.to_string());
             }
             return PinValidation::Invalid;
@@ -151,7 +163,7 @@ impl Config {
 
         // No config PIN for this member — check default PIN "7711"
         if self.find_member(member_id).is_some() {
-            if pin == DEFAULT_MEMBER_PIN {
+            if constant_time_eq(pin, DEFAULT_MEMBER_PIN) {
                 return PinValidation::Member(member_id.to_string());
             }
             return PinValidation::Invalid;
