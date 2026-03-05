@@ -37,7 +37,8 @@ test.describe("Branding", () => {
   test("landing page header shows NEWLEVEL IEM MIXER", async ({ page }) => {
     // Wait for network to settle - WASM app needs time to load and hydrate
     await page.goto("/", { waitUntil: "networkidle" });
-    const header = page.locator("header h1");
+    // Use class selector - Leptos renders <header class="header">
+    const header = page.locator(".header h1");
     // WASM hydration may take a while in CI, use generous timeout
     await expect(header).toBeVisible({ timeout: 30000 });
     await expect(header).toHaveText("NEWLEVEL IEM MIXER");
