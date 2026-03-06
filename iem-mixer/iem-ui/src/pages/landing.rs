@@ -45,6 +45,10 @@ pub fn LandingPage() -> impl IntoView {
         <div class="app">
             <header class="header">
                 <h1>"NEWLEVEL IEM MIXER"</h1>
+                <div class="header-version">
+                    <span class="header-version-number">{iem_core::version_label()}</span>
+                    <span class="header-version-date">{iem_core::build_datetime()}</span>
+                </div>
             </header>
             <main class="main">
                 {move || {

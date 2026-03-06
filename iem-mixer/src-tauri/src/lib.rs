@@ -66,7 +66,6 @@ pub fn run() {
     };
 
     let port = config.port;
-    let members = config.members.clone();
 
     // Create Tokio runtime
     let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
@@ -126,8 +125,8 @@ pub fn run() {
             // Store AppHandle globally
             let _ = APP_HANDLE.set(handle.clone());
 
-            // Setup tray with member list
-            if let Err(e) = tray::setup_tray(&handle, port, &members) {
+            // Setup tray
+            if let Err(e) = tray::setup_tray(&handle, port) {
                 tracing::error!("Failed to setup tray: {}", e);
             }
 

@@ -1,6 +1,6 @@
 [package]
 name = "iem-mixer-app"
-version = "1.28.1"
+version = "1.29.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "IEM Mixer desktop application with Tauri 2"
@@ -36,9 +36,6 @@ anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# System
-local-ip-address = "0.6"
-open = "5"
 
 [[bin]]
 name = "iem-mixer-app"
