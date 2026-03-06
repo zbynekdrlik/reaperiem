@@ -512,3 +512,48 @@ test.describe("Snapshot History - Issue #46", () => {
     expect([200, 201, 400]).toContain(response.status());
   });
 });
+
+test.describe("Version Display - Issue #63", () => {
+  test("version text has high contrast (white)", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+
+    // Check version number styling
+    const versionColor = await page.evaluate(() => {
+      const el = document.createElement("span");
+      el.className = "header-version-number";
+      document.body.appendChild(el);
+      const style = getComputedStyle(el);
+      const color = style.color;
+      document.body.removeChild(el);
+      return color;
+    });
+
+    // Parse RGB - should be white or near-white (all channels > 200)
+    const match = versionColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    expect(match).not.toBeNull();
+    const r = parseInt(match![1]);
+    const g = parseInt(match![2]);
+    const b = parseInt(match![3]);
+    // White text should have high values in all channels
+    expect(r).toBeGreaterThan(200);
+    expect(g).toBeGreaterThan(200);
+    expect(b).toBeGreaterThan(200);
+  });
+
+  test("datetime uses Slovak format (DD.MM.YYYY)", async ({ request }) => {
+    const response = await request.get("/api/version");
+    expect(response.status()).toBe(200);
+
+    const data = await response.json();
+    // full_version contains date in parentheses: "1.30.0 (06.03.2026 10:45)"
+    // For local builds it's "1.30.0 (local)"
+    if (data.full_version && !data.full_version.includes("local")) {
+      // Extract date part from parentheses and check Slovak format
+      const dateMatch = data.full_version.match(
+        /\((\d{2}\.\d{2}\.\d{4} \d{2}:\d{2})\)/,
+      );
+      expect(dateMatch).not.toBeNull();
+    }
+  });
+});

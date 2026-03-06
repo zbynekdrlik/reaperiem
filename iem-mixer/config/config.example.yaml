@@ -9,15 +9,12 @@ port: 80
 # JWT secret - set via environment variable IEM_JWT_SECRET
 # jwt_secret: ""
 
-# Band members with their IEM output assignments
-members:
-  - name: Marek
-    dante_output_l: 25
-    dante_output_r: 26
-
-  - name: Petronela
-    dante_output_l: 27
-    dante_output_r: 28
+# Dante output channel mappings, keyed by REAPER track name prefix.
+# REAPER is the source of truth for member names - this config only provides Dante routing.
+# Example: REAPER track "MAREK inear" maps to Dante outputs 25 (L) and 26 (R).
+dante_outputs:
+  MAREK: [25, 26]
+  PETKA: [27, 28]
 
 # Input tracks from FOH
 inputs:

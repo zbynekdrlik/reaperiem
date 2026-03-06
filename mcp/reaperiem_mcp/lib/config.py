@@ -27,6 +27,7 @@ class Config:
 
     # ReaScript action IDs
     action_set_hardware_output: str = ""
+    action_rename_track: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
@@ -47,6 +48,7 @@ class Config:
             ssh_password=ssh.get("password"),
             ssh_port=ssh.get("port", 22),
             action_set_hardware_output=actions.get("set_hardware_output", ""),
+            action_rename_track=actions.get("rename_track", ""),
         )
 
     @classmethod

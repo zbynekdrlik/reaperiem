@@ -32,9 +32,16 @@ pub struct Config {
     #[serde(default = "default_port")]
     pub port: u16,
 
-    /// Band members with their output assignments
+    /// Band members with their output assignments (LEGACY - will be removed)
+    /// Members are now discovered from REAPER tracks ending in " inear"
     #[serde(default)]
     pub members: Vec<BandMember>,
+
+    /// Dante output channel mappings, keyed by REAPER track name prefix.
+    /// Example: "PETKA" -> [3, 4] maps REAPER track "PETKA inear" to Dante outputs 3 (L) and 4 (R).
+    /// REAPER is the source of truth for member names; this config only provides Dante routing.
+    #[serde(default)]
+    pub dante_outputs: HashMap<String, [u8; 2]>,
 
     /// Input tracks
     #[serde(default)]
@@ -104,6 +111,7 @@ impl Default for Config {
             reaper_url: default_reaper_url(),
             port: default_port(),
             members: Vec::new(),
+            dante_outputs: HashMap::new(),
             inputs: Vec::new(),
             pins: HashMap::new(),
             engineer_pin: None,
@@ -223,6 +231,62 @@ pub struct InputTrack {
     pub default_level_db: f32,
 }
 
+/// A band member discovered from REAPER at runtime.
+/// Created by querying REAPER for tracks ending in " inear".
+/// REAPER is the source of truth for member names.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiscoveredMember {
+    /// Member name extracted from REAPER track (e.g., "PETKA" from "PETKA inear")
+    pub name: String,
+
+    /// REAPER track index (1-based)
+    pub track_index: usize,
+
+    /// Left Dante output channel (1-indexed)
+    pub dante_output_l: u8,
+
+    /// Right Dante output channel (1-indexed)
+    pub dante_output_r: u8,
+
+    /// 0-based index in discovered members list (matches send index)
+    pub send_index: usize,
+}
+
+impl DiscoveredMember {
+    /// Get lowercase ID for URL routing and API
+    pub fn id(&self) -> String {
+        self.name.to_lowercase()
+    }
+
+    /// Get REAPER track name for this member's output
+    pub fn track_name(&self) -> String {
+        format!("{} inear", self.name)
+    }
+
+    /// Create a discovered member from a REAPER track name and config.
+    /// Returns None if the track doesn't end in " inear" or has no Dante mapping.
+    pub fn from_reaper_track(
+        track_name: &str,
+        track_index: usize,
+        send_index: usize,
+        config: &Config,
+    ) -> Option<Self> {
+        // Extract member name from track name (e.g., "PETKA" from "PETKA inear")
+        let name = track_name.strip_suffix(" inear")?;
+
+        // Look up Dante outputs from config
+        let dante_channels = config.dante_outputs.get(name)?;
+
+        Some(Self {
+            name: name.to_string(),
+            track_index,
+            dante_output_l: dante_channels[0],
+            dante_output_r: dante_channels[1],
+            send_index,
+        })
+    }
+}
+
 /// Configuration errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConfigError {
@@ -245,6 +309,19 @@ mod tests {
         };
         assert_eq!(member.id(), "marek");
         assert_eq!(member.track_name(), "MAREK inear");
+    }
+
+    #[test]
+    fn test_track_name_uses_uppercase() {
+        // Track name should use uppercase display name
+        // REAPER tracks must match config - no aliases needed
+        let member = BandMember {
+            name: "Petronela".to_string(),
+            dante_output_l: 3,
+            dante_output_r: 4,
+        };
+        assert_eq!(member.id(), "petronela");
+        assert_eq!(member.track_name(), "PETRONELA inear");
     }
 
     #[test]
@@ -345,5 +422,78 @@ mod tests {
         );
         // Default PIN "7711" should NOT work when member has config PIN
         assert_eq!(config.validate_pin("petka", "7711"), PinValidation::Invalid);
+    }
+
+    // === NEW: Tests for REAPER as source of truth architecture ===
+
+    #[test]
+    fn test_dante_outputs_lookup() {
+        // Config should have dante_outputs map keyed by REAPER track name prefix
+        let mut config = Config::default();
+        config.dante_outputs.insert("PETKA".to_string(), [3, 4]);
+        config.dante_outputs.insert("STEVO".to_string(), [5, 6]);
+
+        // Lookup should return Dante channels for a given REAPER track prefix
+        assert_eq!(config.dante_outputs.get("PETKA"), Some(&[3, 4]));
+        assert_eq!(config.dante_outputs.get("STEVO"), Some(&[5, 6]));
+        assert_eq!(config.dante_outputs.get("UNKNOWN"), None);
+    }
+
+    #[test]
+    fn test_dante_outputs_yaml_parsing() {
+        // Config YAML should parse dante_outputs map correctly
+        let yaml = r#"
+reaper_url: "http://iem.lan:8080"
+port: 80
+dante_outputs:
+  PETKA: [3, 4]
+  STEVO: [5, 6]
+  MAREK: [7, 8]
+inputs: []
+"#;
+        let config: Config = serde_yaml::from_str(yaml).expect("YAML should parse");
+        assert_eq!(config.dante_outputs.get("PETKA"), Some(&[3, 4]));
+        assert_eq!(config.dante_outputs.get("MAREK"), Some(&[7, 8]));
+    }
+
+    #[test]
+    fn test_discovered_member_from_reaper_track() {
+        // DiscoveredMember should be created from REAPER track name
+        let mut config = Config::default();
+        config.dante_outputs.insert("PETKA".to_string(), [3, 4]);
+
+        let member = DiscoveredMember::from_reaper_track("PETKA inear", 23, 0, &config)
+            .expect("should parse");
+        assert_eq!(member.name, "PETKA");
+        assert_eq!(member.id(), "petka");
+        assert_eq!(member.track_index, 23);
+        assert_eq!(member.send_index, 0);
+        assert_eq!(member.dante_output_l, 3);
+        assert_eq!(member.dante_output_r, 4);
+        assert_eq!(member.track_name(), "PETKA inear");
+    }
+
+    #[test]
+    fn test_discovered_member_no_dante_mapping() {
+        // Should return None if no Dante mapping exists
+        let config = Config::default();
+        let result = DiscoveredMember::from_reaper_track("PETKA inear", 23, 0, &config);
+        assert!(
+            result.is_none(),
+            "Should return None when no Dante mapping exists"
+        );
+    }
+
+    #[test]
+    fn test_discovered_member_not_inear_track() {
+        // Should return None for tracks that don't end in " inear"
+        let mut config = Config::default();
+        config.dante_outputs.insert("PETKA".to_string(), [3, 4]);
+
+        let result = DiscoveredMember::from_reaper_track("PETKA mic", 1, 0, &config);
+        assert!(
+            result.is_none(),
+            "Non-inear tracks should not be discovered"
+        );
     }
 }

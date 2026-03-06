@@ -9,7 +9,7 @@ pub mod types;
 pub mod ws;
 
 #[cfg(feature = "config")]
-pub use config::{BandMember, Config, InputTrack};
+pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
     ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, MixerState, PollResponse,
@@ -38,8 +38,8 @@ pub fn build_time() -> &'static str {
 }
 
 /// Full version string for display
-/// On main: "1.6.0 (2026-02-27 12:07)"
-/// On dev:  "1.6.0-dev (2026-02-27 12:07)"
+/// On main: "1.6.0 (27.02.2026 12:07)"
+/// On dev:  "1.6.0-dev (27.02.2026 12:07)"
 pub fn full_version() -> String {
     let branch = git_branch();
     let version_base = if branch != "main" && branch != "unknown" {
@@ -53,7 +53,7 @@ pub fn full_version() -> String {
         format!("{} (local)", version_base)
     } else {
         let datetime = chrono::DateTime::from_timestamp(timestamp, 0)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+            .map(|dt| dt.format("%d.%m.%Y %H:%M").to_string())
             .unwrap_or_else(|| "unknown".to_string());
         format!("{} ({})", version_base, datetime)
     }
@@ -69,14 +69,14 @@ pub fn version_label() -> String {
     }
 }
 
-/// Build datetime for display (e.g., "2026-02-28 09:47")
+/// Build datetime for display in Slovak format (e.g., "28.02.2026 09:47")
 pub fn build_datetime() -> String {
     let timestamp = build_time().parse::<i64>().unwrap_or(0);
     if timestamp == 0 {
         "local build".to_string()
     } else {
         chrono::DateTime::from_timestamp(timestamp, 0)
-            .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+            .map(|dt| dt.format("%d.%m.%Y %H:%M").to_string())
             .unwrap_or_else(|| "unknown".to_string())
     }
 }

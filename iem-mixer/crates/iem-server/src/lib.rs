@@ -16,7 +16,7 @@ pub mod snapshot_store;
 
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue};
-use iem_core::{Config, ServerMsg};
+use iem_core::{Config, DiscoveredMember, ServerMsg};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -39,6 +39,8 @@ pub struct AppState {
     pub pin_store: Arc<RwLock<pin_store::PinStore>>,
     /// Snapshot storage for mix history
     pub snapshot_store: Arc<snapshot_store::SnapshotStore>,
+    /// Band members discovered from REAPER (source of truth)
+    pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
 }
 
 /// Global IEM output volume state for a member
@@ -99,6 +101,7 @@ impl AppState {
             mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
+            discovered_members: Arc::new(RwLock::new(Vec::new())),
         }
     }
 }
@@ -138,6 +141,15 @@ pub async fn start_server(
     }
 
     let state = AppState::new(server_config.config, &server_config.config_dir);
+
+    // Discover members from REAPER (source of truth)
+    let members = poller::discover_members(&state).await;
+    {
+        let mut discovered = state.discovered_members.write().await;
+        *discovered = members;
+    }
+    let discovered_count = state.discovered_members.read().await.len();
+    tracing::info!(count = discovered_count, "Members discovered from REAPER");
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());

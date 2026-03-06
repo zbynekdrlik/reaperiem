@@ -1,5 +1,6 @@
 """MCP tools for REAPER track control."""
 
+import asyncio
 from typing import Any
 
 from ..lib.reaper_http import ReaperHTTPClient
@@ -59,3 +60,39 @@ async def solo_track(
     await client.set_track_solo(index, solo)
     state = "soloed" if solo else "unsoloed"
     return f"Track {index} {state}"
+
+
+async def rename_track(
+    client: ReaperHTTPClient,
+    track_index: int,
+    new_name: str,
+    action_id: str,
+) -> str:
+    """Rename a REAPER track via EXTSTATE + action trigger.
+
+    Args:
+        client: REAPER HTTP client
+        track_index: Track number (1-based)
+        new_name: New track name
+        action_id: ReaScript action ID (e.g., "_RSxxxx...")
+
+    Returns:
+        Result message from the script
+    """
+    section = "reaperiem"
+
+    # Set parameters via ExtState
+    await client.set_extstate(section, "rename_track_index", str(track_index))
+    await client.set_extstate(section, "rename_track_name", new_name)
+
+    # Small delay to ensure ExtState is set
+    await asyncio.sleep(0.05)
+
+    # Trigger the ReaScript
+    await client.trigger_action(action_id)
+
+    # Wait for script to complete and check result
+    await asyncio.sleep(0.1)
+    result = await client.get_extstate(section, "rename_result")
+
+    return result or "Action triggered (no result returned)"

@@ -7,8 +7,25 @@ reaper_url: "http://iem.lan:8080"
 # Server port (80 for clean URLs)
 port: 80
 
-# Band members with their IEM output assignments
-# The index corresponds to the send index in REAPER
+# Dante output channel mappings, keyed by REAPER track name prefix.
+# REAPER is the source of truth for member names - this config only provides Dante routing.
+# Example: REAPER track "PETKA inear" maps to Dante outputs 3 (L) and 4 (R).
+dante_outputs:
+  PETRONELA: [3, 4]
+  STEVO: [5, 6]
+  MAREK: [7, 8]
+  ZUZKA: [9, 10]
+  TINA: [11, 12]
+  MIREC: [13, 14]
+  ALEX: [15, 16]
+  PATRIKA: [17, 18]
+  ANI: [19, 20]
+
+# Band members - used as fallback when REAPER is unavailable (e.g., CI testing)
+# REAPER is the source of truth when available; these are used for:
+#   1. CI/E2E tests (no REAPER connection)
+#   2. Offline development
+# Note: No track_alias needed - fallback uses display name for id()
 members:
   - name: Petronela
     dante_output_l: 3
@@ -48,7 +65,7 @@ members:
 
 # Input tracks (source tracks for mixing)
 inputs:
-  - name: "PETKA mic"
+  - name: "PETRONELA mic"
     dante_input: 3
     default_level_db: 0.0
 

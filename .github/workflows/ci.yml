@@ -5,11 +5,17 @@ on:
     branches: [main, dev]
     paths:
       - "iem-mixer/**"
+      - "scripts/reascripts/**"
+      - "mcp/**"
+      - "config/**"
       - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "iem-mixer/**"
+      - "scripts/reascripts/**"
+      - "mcp/**"
+      - "config/**"
       - ".github/workflows/ci.yml"
 
 env:
@@ -578,6 +584,49 @@ jobs:
             exit 1
           }
           exit 0
+
+      - name: Backup REAPER project
+        shell: powershell
+        run: |
+          # Auto-backup any REAPER project changes during deploy
+          $repoPath = "C:\Users\newlevel\Documents\reaperiem"
+          Push-Location $repoPath
+
+          # Ensure we're on latest main
+          git fetch origin main
+          git checkout main
+          git pull origin main --rebase
+
+          # Check for uncommitted changes
+          $status = git status projects/ --porcelain
+          if ($status) {
+            Write-Host "REAPER project changes detected:"
+            Write-Host $status
+
+            # Stage and commit
+            git add projects/
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
+            git commit -m "backup: REAPER project $timestamp
+
+            Co-Authored-By: GitHub Actions <actions@github.com>"
+
+            # Push to remote
+            git push origin main
+            Write-Host "REAPER project backed up and pushed to GitHub"
+          } else {
+            Write-Host "REAPER project is clean - no backup needed"
+          }
+
+          Pop-Location
+          exit 0
+
+      - name: Deploy ReaScripts to REAPER
+        shell: cmd
+        continue-on-error: true
+        run: |
+          if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          xcopy /Y scripts\reascripts\*.lua "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          echo ReaScripts deployed
 
       - name: Deploy WASM to REAPER www root
         shell: cmd

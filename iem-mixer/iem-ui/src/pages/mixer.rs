@@ -746,13 +746,16 @@ fn GlobalVolumeFader(
     let level_signal = Signal::derive(move || level.get());
 
     view! {
-        <div class=move || {
-            let mut classes = vec!["channel", "global-volume"];
-            if muted.get() { classes.push("muted"); }
-            if !connected.get() { classes.push("disconnected"); }
-            if is_fader_active.get() { classes.push("fader-active"); }
-            classes.join(" ")
-        }>
+        <div
+            class=move || {
+                let mut classes = vec!["channel", "global-volume"];
+                if muted.get() { classes.push("muted"); }
+                if !connected.get() { classes.push("disconnected"); }
+                if is_fader_active.get() { classes.push("fader-active"); }
+                classes.join(" ")
+            }
+            data-testid="global-volume-fader"
+        >
             <div class="ch-label">
                 <div class="ch-name">"IEM VOL"</div>
                 <div class="ch-type">"master"</div>
@@ -774,7 +777,7 @@ fn GlobalVolumeFader(
                 />
             </div>
 
-            <div class="db-display">{move || format_db(level.get())}</div>
+            <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
 
             <div class="pan-container"></div>
 
