@@ -319,6 +319,7 @@ mod tests {
             jwt_secret: "test_secret_for_auth_testing".to_string(),
             members: vec![],
             inputs: vec![],
+            dante_outputs: HashMap::new(),
             tls: false,
             https_port: 443,
             tls_cert: "cert.pem".to_string(),
