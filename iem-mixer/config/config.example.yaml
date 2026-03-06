@@ -10,12 +10,15 @@ port: 80
 # jwt_secret: ""
 
 # Band members with their IEM output assignments
+# track_alias: Use when REAPER track name differs from display name
+#              (e.g., REAPER has "PETKA inear" but display shows "Petronela")
 members:
   - name: Marek
     dante_output_l: 25
     dante_output_r: 26
 
   - name: Petronela
+    track_alias: PETKA # Optional: REAPER track uses this instead of PETRONELA
     dante_output_l: 27
     dante_output_r: 28
 

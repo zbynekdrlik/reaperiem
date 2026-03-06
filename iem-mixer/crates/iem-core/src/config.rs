@@ -195,6 +195,12 @@ pub struct BandMember {
 
     /// Right Dante output channel (1-indexed)
     pub dante_output_r: u8,
+
+    /// Optional REAPER track name alias (e.g., "PETKA" for Petronela)
+    /// When set, track_name() uses this instead of uppercase display name.
+    /// Use this when REAPER track uses a nickname/abbreviation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub track_alias: Option<String>,
 }
 
 impl BandMember {
@@ -204,8 +210,16 @@ impl BandMember {
     }
 
     /// Get REAPER track name for this member's output
+    ///
+    /// Uses `track_alias` if set (for members with nicknames in REAPER),
+    /// otherwise uses uppercase display name.
     pub fn track_name(&self) -> String {
-        format!("{} inear", self.name.to_uppercase())
+        let name = self
+            .track_alias
+            .as_ref()
+            .map(|a| a.to_uppercase())
+            .unwrap_or_else(|| self.name.to_uppercase());
+        format!("{} inear", name)
     }
 }
 
@@ -242,9 +256,39 @@ mod tests {
             name: "Marek".to_string(),
             dante_output_l: 25,
             dante_output_r: 26,
+            track_alias: None,
         };
         assert_eq!(member.id(), "marek");
         assert_eq!(member.track_name(), "MAREK inear");
+    }
+
+    #[test]
+    fn test_track_alias_overrides_name() {
+        // Bug reproduction: Petronela's config uses formal name but REAPER
+        // track is named "PETKA inear" (nickname). Without alias, track_name()
+        // returns "PETRONELA inear" which doesn't match REAPER.
+        let member = BandMember {
+            name: "Petronela".to_string(),
+            dante_output_l: 3,
+            dante_output_r: 4,
+            track_alias: Some("PETKA".to_string()),
+        };
+        // ID should still use display name for URL routing
+        assert_eq!(member.id(), "petronela");
+        // Track name should use alias to match REAPER
+        assert_eq!(member.track_name(), "PETKA inear");
+    }
+
+    #[test]
+    fn test_track_alias_none_uses_name() {
+        // When no alias, track_name uses uppercase display name
+        let member = BandMember {
+            name: "Ani".to_string(),
+            dante_output_l: 19,
+            dante_output_r: 20,
+            track_alias: None,
+        };
+        assert_eq!(member.track_name(), "ANI inear");
     }
 
     #[test]
@@ -272,6 +316,7 @@ mod tests {
             name: name.to_string(),
             dante_output_l: 3,
             dante_output_r: 4,
+            track_alias: None,
         }
     }
 

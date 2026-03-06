@@ -11,6 +11,7 @@ port: 80
 # The index corresponds to the send index in REAPER
 members:
   - name: Petronela
+    track_alias: PETKA # REAPER track uses nickname
     dante_output_l: 3
     dante_output_r: 4
 
@@ -23,6 +24,7 @@ members:
     dante_output_r: 8
 
   - name: Zuzana
+    track_alias: ZUZKA # REAPER track uses nickname
     dante_output_l: 9
     dante_output_r: 10
 
