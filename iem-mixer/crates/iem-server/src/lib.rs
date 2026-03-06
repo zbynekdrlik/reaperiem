@@ -148,10 +148,8 @@ pub async fn start_server(
         let mut discovered = state.discovered_members.write().await;
         *discovered = members;
     }
-    tracing::info!(
-        count = state.discovered_members.read().await.len(),
-        "Members discovered from REAPER"
-    );
+    let discovered_count = state.discovered_members.read().await.len();
+    tracing::info!(count = discovered_count, "Members discovered from REAPER");
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
