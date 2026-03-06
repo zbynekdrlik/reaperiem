@@ -136,6 +136,30 @@ async def solo_track(index: int, solo: bool = True) -> str:
 
 
 @mcp.tool
+async def rename_track(track_index: int, new_name: str) -> str:
+    """Rename a REAPER track.
+
+    Uses a ReaScript to rename tracks LIVE without REAPER restart.
+    Note: Requires one-time REAPER restart to register the action.
+
+    Args:
+        track_index: Track number (1-based)
+        new_name: New name for the track
+
+    Returns:
+        Result message confirming the rename
+    """
+    config = get_config()
+    if not config.action_rename_track:
+        return "Error: action_rename_track not configured in reaper_config.yaml"
+
+    client = get_reaper_client()
+    return await tracks.rename_track(
+        client, track_index, new_name, config.action_rename_track
+    )
+
+
+@mcp.tool
 async def set_send_level(
     track_index: int, send_index: int, level_db: float
 ) -> str:

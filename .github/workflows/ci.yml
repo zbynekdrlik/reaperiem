@@ -5,11 +5,17 @@ on:
     branches: [main, dev]
     paths:
       - "iem-mixer/**"
+      - "scripts/reascripts/**"
+      - "mcp/**"
+      - "config/**"
       - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
     paths:
       - "iem-mixer/**"
+      - "scripts/reascripts/**"
+      - "mcp/**"
+      - "config/**"
       - ".github/workflows/ci.yml"
 
 env:
@@ -613,6 +619,14 @@ jobs:
 
           Pop-Location
           exit 0
+
+      - name: Deploy ReaScripts to REAPER
+        shell: cmd
+        continue-on-error: true
+        run: |
+          if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          xcopy /Y scripts\reascripts\*.lua "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          echo ReaScripts deployed
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
