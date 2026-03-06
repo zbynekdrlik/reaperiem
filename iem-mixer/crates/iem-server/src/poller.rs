@@ -99,7 +99,11 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
         // Fallback: create DiscoveredMember from legacy config.members
         for (idx, m) in config_ref.members.iter().enumerate() {
             members.push(DiscoveredMember {
-                name: m.track_name().strip_suffix(" inear").unwrap_or(&m.name.to_uppercase()).to_string(),
+                name: m
+                    .track_name()
+                    .strip_suffix(" inear")
+                    .unwrap_or(&m.name.to_uppercase())
+                    .to_string(),
                 track_index: 0, // Unknown
                 dante_output_l: m.dante_output_l,
                 dante_output_r: m.dante_output_r,
