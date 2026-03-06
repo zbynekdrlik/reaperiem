@@ -731,11 +731,15 @@ pub async fn ws_mixer(
         ));
     }
 
-    // Validate member exists before upgrading
-    if config.find_member(&member_id).is_none() {
+    drop(config);
+
+    // Validate member exists (from REAPER discovered members)
+    let discovered = state.discovered_members.read().await;
+    let member_exists = discovered.iter().any(|m| m.id() == member_id);
+    drop(discovered);
+    if !member_exists {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
-    drop(config);
 
     Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id)))
 }
@@ -839,11 +843,17 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
 
 /// Build full state message for initial WebSocket connection
 async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core::ServerMsg, ()> {
+    // Get member send index from discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
+        .ok_or(())?;
+    drop(discovered);
+
     let config = state.config.read().await;
-
-    let member_index = config.member_index(member_id).ok_or(())?;
     let reaper_url = config.reaper_url.clone();
-
     let channels = build_channel_templates(&config.inputs);
     drop(config);
 
@@ -903,11 +913,16 @@ async fn apply_command_to_cache(
     member_id: &str,
     cmd: &iem_core::ClientMsg,
 ) -> Result<(String, Option<iem_core::ServerMsg>), String> {
+    // Get member send index from discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
+        .ok_or_else(|| "Unknown member".to_string())?;
+    drop(discovered);
+
     let config = state.config.read().await;
-    let member_index = match config.member_index(member_id) {
-        Some(idx) => idx,
-        None => return Err("Unknown member".to_string()),
-    };
     let reaper_url = config.reaper_url.clone();
     let input_count = config.inputs.len();
     drop(config);

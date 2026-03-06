@@ -9,8 +9,8 @@ pub mod types;
 pub mod ws;
 
 #[cfg(feature = "config")]
-pub use config::{BandMember, Config, InputTrack};
-pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
+pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
+pub use snapshot::{ChannelSnapshot, MixSnapshot, MAX_SNAPSHOTS};
 pub use types::{
     ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, MixerState, PollResponse,
 };

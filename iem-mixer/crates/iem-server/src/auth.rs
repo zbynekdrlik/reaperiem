@@ -64,6 +64,12 @@ pub async fn login(
     let config = state.config.read().await;
     let pin_store = state.pin_store.read().await;
 
+    // Helper: check if member exists in discovered members
+    let member_exists = {
+        let discovered = state.discovered_members.read().await;
+        discovered.iter().any(|m| m.id() == req.member)
+    };
+
     // 1. Check engineer PIN (config or default "1177")
     // Uses constant-time comparison to prevent timing attacks
     let eng_pin = config
@@ -72,7 +78,7 @@ pub async fn login(
         .unwrap_or(iem_core::config::DEFAULT_ENGINEER_PIN);
     if constant_time_eq(&req.pin, eng_pin) {
         // Verify member exists (engineer still needs a valid member target)
-        if !req.member.is_empty() && config.find_member(&req.member).is_none() {
+        if !req.member.is_empty() && !member_exists {
             return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
         }
         return issue_token(&config, "engineer", true);
@@ -87,7 +93,7 @@ pub async fn login(
                 Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
             ));
         }
-        if config.find_member(&req.member).is_none() {
+        if !member_exists {
             return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
         }
         return issue_token(&config, &req.member, false);
@@ -95,17 +101,22 @@ pub async fn login(
 
     // 3. Fall through to config validation (config pins + default "7711")
     drop(pin_store);
-    let validation = config.validate_pin(&req.member, &req.pin);
-    match validation {
-        iem_core::config::PinValidation::Invalid => Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
-        )),
-        iem_core::config::PinValidation::Member(member_id) => {
-            issue_token(&config, &member_id, false)
-        }
-        iem_core::config::PinValidation::Engineer => issue_token(&config, "engineer", true),
+
+    // First verify member exists in discovered members (REAPER source of truth)
+    if !member_exists {
+        return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
+
+    // Check default member PIN ("7711")
+    if constant_time_eq(&req.pin, iem_core::config::DEFAULT_MEMBER_PIN) {
+        return issue_token(&config, &req.member, false);
+    }
+
+    // Invalid PIN
+    Err((
+        StatusCode::UNAUTHORIZED,
+        Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
+    ))
 }
 
 /// Issue a JWT token for the given member/engineer

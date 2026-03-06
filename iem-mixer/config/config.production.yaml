@@ -7,46 +7,23 @@ reaper_url: "http://iem.lan:8080"
 # Server port (80 for clean URLs)
 port: 80
 
-# Band members with their IEM output assignments
-# The index corresponds to the send index in REAPER
-members:
-  - name: Petronela
-    track_alias: PETKA # REAPER track uses nickname
-    dante_output_l: 3
-    dante_output_r: 4
+# Dante output channel mappings, keyed by REAPER track name prefix.
+# REAPER is the source of truth for member names - this config only provides Dante routing.
+# Example: REAPER track "PETKA inear" maps to Dante outputs 3 (L) and 4 (R).
+dante_outputs:
+  PETKA: [3, 4]
+  STEVO: [5, 6]
+  MAREK: [7, 8]
+  ZUZKA: [9, 10]
+  TINA: [11, 12]
+  MIREC: [13, 14]
+  ALEX: [15, 16]
+  PATRIKA: [17, 18]
+  ANI: [19, 20]
 
-  - name: Stevo
-    dante_output_l: 5
-    dante_output_r: 6
-
-  - name: Marek
-    dante_output_l: 7
-    dante_output_r: 8
-
-  - name: Zuzana
-    track_alias: ZUZKA # REAPER track uses nickname
-    dante_output_l: 9
-    dante_output_r: 10
-
-  - name: Tina
-    dante_output_l: 11
-    dante_output_r: 12
-
-  - name: Mirec
-    dante_output_l: 13
-    dante_output_r: 14
-
-  - name: Alex
-    dante_output_l: 15
-    dante_output_r: 16
-
-  - name: Patrika
-    dante_output_l: 17
-    dante_output_r: 18
-
-  - name: Ani
-    dante_output_l: 19
-    dante_output_r: 20
+# Legacy: Band members (DEPRECATED - members now discovered from REAPER)
+# Kept for backwards compatibility during transition
+members: []
 
 # Input tracks (source tracks for mixing)
 inputs:

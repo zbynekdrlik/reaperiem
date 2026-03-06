@@ -2,8 +2,10 @@
 //!
 //! Runs every 150ms, queries REAPER for meter and send state,
 //! detects changes via cache diff, and broadcasts updates to WebSocket clients.
+//!
+//! Also handles member discovery from REAPER at startup.
 
-use iem_core::{MixSnapshot, ServerMsg};
+use iem_core::{DiscoveredMember, MixSnapshot, ServerMsg};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -50,6 +52,65 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
     meters
 }
 
+/// Discover band members from REAPER by querying tracks ending in " inear".
+/// REAPER is the source of truth for member names.
+/// Returns the list of discovered members, or empty if REAPER is unreachable.
+pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    let config_ref = config.clone();
+    drop(config);
+
+    let tracks_url = reaper_api::query_tracks(&reaper_url);
+    let mut members = Vec::new();
+
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
+        if let Ok(text) = resp.text().await {
+            let mut send_index = 0;
+            for line in text.lines() {
+                let parts: Vec<&str> = line.split('\t').collect();
+                if parts.first() == Some(&"TRACK") && parts.len() > 2 {
+                    if let Ok(track_idx) = parts[1].parse::<usize>() {
+                        let track_name = parts[2];
+                        if let Some(member) = DiscoveredMember::from_reaper_track(
+                            track_name,
+                            track_idx,
+                            send_index,
+                            &config_ref,
+                        ) {
+                            tracing::info!(
+                                member = %member.name,
+                                track_index = member.track_index,
+                                send_index = member.send_index,
+                                dante = ?[member.dante_output_l, member.dante_output_r],
+                                "Discovered member from REAPER"
+                            );
+                            members.push(member);
+                            send_index += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if members.is_empty() {
+        tracing::warn!("No members discovered from REAPER - using fallback from config.members");
+        // Fallback: create DiscoveredMember from legacy config.members
+        for (idx, m) in config_ref.members.iter().enumerate() {
+            members.push(DiscoveredMember {
+                name: m.track_name().strip_suffix(" inear").unwrap_or(&m.name.to_uppercase()).to_string(),
+                track_index: 0, // Unknown
+                dante_output_l: m.dante_output_l,
+                dante_output_r: m.dante_output_r,
+                send_index: idx,
+            });
+        }
+    }
+
+    members
+}
+
 /// Spawn the background poller task
 pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -66,13 +127,15 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
-    // Build member track_name -> id mapping for output track discovery
-    let member_track_names: HashMap<String, String> = config
-        .members
+    drop(config);
+
+    // Build member track_name -> id mapping from discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_track_names: HashMap<String, String> = discovered
         .iter()
         .map(|m| (m.track_name(), m.id()))
         .collect();
-    drop(config);
+    drop(discovered);
 
     // Check which members have active WS connections (HashMap keys)
     let active_members: Vec<String> = {
@@ -280,14 +343,19 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     }
 
     // 2. For each active member, query send states in parallel
-    // Clone needed config data and drop lock before async work
-    let config = state.config.read().await;
+    // Use discovered members for send indices (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
     let member_indices: Vec<(String, usize)> = active_members
         .iter()
-        .filter_map(|mid| config.member_index(mid).map(|idx| (mid.clone(), idx)))
+        .filter_map(|mid| {
+            discovered
+                .iter()
+                .find(|m| m.id() == *mid)
+                .map(|m| (mid.clone(), m.send_index))
+        })
         .collect();
+    drop(discovered);
     let channel_templates = build_channel_templates(&inputs);
-    drop(config);
 
     for (member_id, member_index) in &member_indices {
         let channels = channel_templates.clone();

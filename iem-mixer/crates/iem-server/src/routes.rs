@@ -79,13 +79,12 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .merge(snapshot_routes::snapshot_routes())
 }
 
-/// Get list of band members
+/// Get list of band members (discovered from REAPER)
 async fn get_members(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
-    let config = state.config.read().await;
-    let members: Vec<MemberInfo> = config
-        .members
+    let discovered = state.discovered_members.read().await;
+    let members: Vec<MemberInfo> = discovered
         .iter()
         .map(|m| MemberInfo {
             id: m.id(),
