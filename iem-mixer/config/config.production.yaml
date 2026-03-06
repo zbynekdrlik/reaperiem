@@ -21,9 +21,47 @@ dante_outputs:
   PATRIKA: [17, 18]
   ANI: [19, 20]
 
-# Legacy: Band members (DEPRECATED - members now discovered from REAPER)
-# Kept for backwards compatibility during transition
-members: []
+# Band members - used as fallback when REAPER is unavailable (e.g., CI testing)
+# REAPER is the source of truth when available; these are used for:
+#   1. CI/E2E tests (no REAPER connection)
+#   2. Offline development
+# Note: No track_alias needed - fallback uses display name for id()
+members:
+  - name: Petronela
+    dante_output_l: 3
+    dante_output_r: 4
+
+  - name: Stevo
+    dante_output_l: 5
+    dante_output_r: 6
+
+  - name: Marek
+    dante_output_l: 7
+    dante_output_r: 8
+
+  - name: Zuzana
+    dante_output_l: 9
+    dante_output_r: 10
+
+  - name: Tina
+    dante_output_l: 11
+    dante_output_r: 12
+
+  - name: Mirec
+    dante_output_l: 13
+    dante_output_r: 14
+
+  - name: Alex
+    dante_output_l: 15
+    dante_output_r: 16
+
+  - name: Patrika
+    dante_output_l: 17
+    dante_output_r: 18
+
+  - name: Ani
+    dante_output_l: 19
+    dante_output_r: 20
 
 # Input tracks (source tracks for mixing)
 inputs:
