@@ -11,7 +11,7 @@ port: 80
 # REAPER is the source of truth for member names - this config only provides Dante routing.
 # Example: REAPER track "PETKA inear" maps to Dante outputs 3 (L) and 4 (R).
 dante_outputs:
-  PETKA: [3, 4]
+  PETRONELA: [3, 4]
   STEVO: [5, 6]
   MAREK: [7, 8]
   ZUZKA: [9, 10]
@@ -65,7 +65,7 @@ members:
 
 # Input tracks (source tracks for mixing)
 inputs:
-  - name: "PETKA mic"
+  - name: "PETRONELA mic"
     dante_input: 3
     default_level_db: 0.0
 

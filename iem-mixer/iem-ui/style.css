@@ -111,14 +111,14 @@ body {
 
 .header-version-number {
   font-size: 0.65em;
-  color: var(--text-secondary);
+  color: #fff;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .header-version-date {
   font-size: 0.55em;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.8);
   white-space: nowrap;
 }
 

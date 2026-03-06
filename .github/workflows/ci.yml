@@ -579,6 +579,41 @@ jobs:
           }
           exit 0
 
+      - name: Backup REAPER project
+        shell: powershell
+        run: |
+          # Auto-backup any REAPER project changes during deploy
+          $repoPath = "C:\Users\newlevel\Documents\reaperiem"
+          Push-Location $repoPath
+
+          # Ensure we're on latest main
+          git fetch origin main
+          git checkout main
+          git pull origin main --rebase
+
+          # Check for uncommitted changes
+          $status = git status projects/ --porcelain
+          if ($status) {
+            Write-Host "REAPER project changes detected:"
+            Write-Host $status
+
+            # Stage and commit
+            git add projects/
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
+            git commit -m "backup: REAPER project $timestamp
+
+            Co-Authored-By: GitHub Actions <actions@github.com>"
+
+            # Push to remote
+            git push origin main
+            Write-Host "REAPER project backed up and pushed to GitHub"
+          } else {
+            Write-Host "REAPER project is clean - no backup needed"
+          }
+
+          Pop-Location
+          exit 0
+
       - name: Deploy WASM to REAPER www root
         shell: cmd
         continue-on-error: true
