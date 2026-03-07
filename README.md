@@ -2,6 +2,66 @@
 
 MCP server for controlling REAPER as a personal monitor (IEM) mixer for church band.
 
+**URL:** https://iem.newlevel.media/
+
+## Changelog
+
+### v1.33.0 (2026-03-07)
+
+- **Feature**: Access from mobile data via Cloudflare Tunnel - single URL works everywhere
+- **Fix**: Tray menu shows correct HTTPS URL
+
+### v1.32.0 (2026-03-06)
+
+- **Feature**: `rename_track` MCP tool for renaming REAPER tracks
+
+### v1.31.0 (2026-03-06)
+
+- **Fix**: Member sees own fader in main section (#51)
+- **Fix**: Higher contrast for version/datetime text (#63)
+- **Fix**: Comprehensive name changes across REAPER, Dante, and mixer
+
+### v1.30.0 (2026-03-06)
+
+- **Feature**: REAPER as single source of truth for band members
+- **Feature**: Version and datetime displayed on landing page
+
+### v1.28.0 (2026-03-04)
+
+- **Feature**: Daily preset snapshots - automatic backups of mixer settings
+- **Feature**: Network error UX improvements with clear feedback
+- **Feature**: PIN re-authentication for sensitive operations
+- **Fix**: Preset modal responsive on mobile devices
+- **Security**: Constant-time PIN comparison
+
+### v1.27.0 (2026-03-03)
+
+- **Feature**: NEWLEVEL IEM MIXER branding
+- **Feature**: New app icon
+
+### v1.25.0 (2026-03-02)
+
+- **Fix**: Silent meter bridge (removed console window popup)
+- **Fix**: Auto-restart meter bridge on REAPER reconnect
+
+### v1.23.0 (2026-03-02)
+
+- **Fix**: Meters show correct L/R stereo levels
+- **Fix**: Meters display raw input levels (not affected by fader/pan)
+- **Fix**: Correct dB conversion formula
+
+### v1.21.0 (2026-03-01)
+
+- **Feature**: Settings modal with configurable options
+- **Setting**: Fader double-tap toggle (enable/disable double-tap to 0 dB)
+- **Feature**: Pan slider smooth animation
+- **Feature**: Rename band members from UI
+
+### v1.20.0 (2026-03-01)
+
+- **Feature**: Full codebase security review (P0+P1+P2 fixes)
+- **Feature**: WebSocket real-time communication
+
 ## Features
 
 - HTTP-based control of REAPER tracks and sends

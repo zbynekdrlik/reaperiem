@@ -77,8 +77,34 @@
 4. Monitor PR CI until ALL required checks pass
 5. Provide the PR URL to the user only after it is confirmed green and mergeable
 6. **The PR URL you give the user must be ready to merge — no exceptions**
+7. **After merge: Update README.md changelog** with user-facing changes from the PR
 
 If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
+
+### ⚠️ CHANGELOG MAINTENANCE (MANDATORY)
+
+**After EVERY PR merge to main, you MUST update the changelog in README.md.**
+
+Include ALL user-facing changes:
+
+- New features and settings (e.g., double-tap disable option)
+- Bug fixes that affect user experience
+- UI/UX improvements
+- New access methods or URLs
+
+**NEVER skip changelog updates.** If you merged a PR, the changelog must be updated in the same session.
+
+**Changelog format in README.md:**
+
+```markdown
+## Changelog
+
+### v1.X.0 (YYYY-MM-DD)
+
+- **Feature**: Description
+- **Fix**: Description
+- **Setting**: New option in Settings modal
+```
 
 ### NEVER DO:
 
