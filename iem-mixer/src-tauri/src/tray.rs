@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 const ICON_SIZE: u32 = 16;
 
 /// Public URL for remote access
-const REMOTE_URL: &str = "http://iem.newlevel.media";
+const REMOTE_URL: &str = "https://iem.newlevel.media";
 
 /// Set up the tray icon with menu
 pub fn setup_tray(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::Error>> {
