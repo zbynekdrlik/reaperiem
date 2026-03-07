@@ -25,10 +25,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 - **Feature**: REAPER as single source of truth for band members
 - **Feature**: Version and datetime displayed on landing page
+- **Feature**: Global volume persistence across page reloads
 
 ### v1.28.0 (2026-03-04)
 
-- **Feature**: Daily preset snapshots - automatic backups of mixer settings
+- **Feature**: Daily preset snapshots - automatic server-side backups of mixer settings
+- **Feature**: Snapshot history modal with restore, pin, and delete
 - **Feature**: Network error UX improvements with clear feedback
 - **Feature**: PIN re-authentication for sensitive operations
 - **Fix**: Preset modal responsive on mobile devices
@@ -46,21 +48,27 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ### v1.23.0 (2026-03-02)
 
+- **Feature**: ReaScript meter bridge for true L/R stereo peaks
 - **Fix**: Meters show correct L/R stereo levels
 - **Fix**: Meters display raw input levels (not affected by fader/pan)
-- **Fix**: Correct dB conversion formula
+- **Fix**: Correct dB×10 conversion formula
 
 ### v1.21.0 (2026-03-01)
 
 - **Feature**: Settings modal with configurable options
 - **Setting**: Fader double-tap toggle (enable/disable double-tap to 0 dB)
-- **Feature**: Pan slider smooth animation
+- **Feature**: Pan slider smooth animation with double-tap to center
 - **Feature**: Rename band members from UI
+- **Feature**: Change PIN from Settings modal
+- **Feature**: Logout button in Settings modal
+- **UI**: Category tabs: Main, Mics, Stems, Tech
+- **UI**: Global volume (master) fader on Main tab
+- **UI**: Presets modal - save/load/delete named presets with timestamps
 
 ### v1.20.0 (2026-03-01)
 
 - **Feature**: Full codebase security review (P0+P1+P2 fixes)
-- **Feature**: WebSocket real-time communication
+- **Feature**: WebSocket real-time communication (replaced HTTP polling)
 
 ## Features
 
