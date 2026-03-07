@@ -265,6 +265,7 @@ pub async fn start_server(
 
 /// Redirect HTTP requests to HTTPS when the Host header matches the configured domain.
 /// Requests via IP address (e.g., from Tauri desktop app) pass through unchanged.
+/// Requests proxied through Cloudflare Tunnel (X-Forwarded-Proto: https) pass through unchanged.
 #[cfg(feature = "tls")]
 async fn https_redirect(
     req: axum::extract::Request,
@@ -272,6 +273,16 @@ async fn https_redirect(
     domain: String,
 ) -> axum::response::Response {
     use axum::response::IntoResponse;
+
+    // Skip redirect if already coming through HTTPS (via Cloudflare Tunnel)
+    let forwarded_proto = req
+        .headers()
+        .get("x-forwarded-proto")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+    if forwarded_proto == "https" {
+        return next.run(req).await;
+    }
 
     let host = req
         .headers()
@@ -299,4 +310,110 @@ pub fn get_remote_url(port: u16) -> String {
         .map(|ip| ip.to_string())
         .unwrap_or_else(|_| "localhost".to_string());
     format!("http://{}:{}", ip, port)
+}
+
+#[cfg(all(test, feature = "tls"))]
+mod tests {
+    use super::*;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+        middleware,
+        routing::get,
+        Router,
+    };
+    use tower::ServiceExt;
+
+    async fn dummy_handler() -> &'static str {
+        "OK"
+    }
+
+    fn create_test_app(domain: &str) -> Router {
+        let domain = domain.to_string();
+        Router::new()
+            .route("/api/version", get(dummy_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                let d = domain.clone();
+                async move { https_redirect(req, next, d).await }
+            }))
+    }
+
+    #[tokio::test]
+    async fn test_redirect_without_forwarded_proto() {
+        // Direct HTTP request to iem.newlevel.media should redirect to HTTPS
+        let app = create_test_app("iem.newlevel.media");
+        let req = Request::builder()
+            .uri("/api/version")
+            .header("host", "iem.newlevel.media")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "https://iem.newlevel.media/api/version"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_redirect_with_forwarded_proto_https() {
+        // Request via Cloudflare Tunnel (X-Forwarded-Proto: https) should NOT redirect
+        let app = create_test_app("iem.newlevel.media");
+        let req = Request::builder()
+            .uri("/api/version")
+            .header("host", "iem.newlevel.media")
+            .header("x-forwarded-proto", "https")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_redirect_with_forwarded_proto_http() {
+        // Request with X-Forwarded-Proto: http should still redirect
+        let app = create_test_app("iem.newlevel.media");
+        let req = Request::builder()
+            .uri("/api/version")
+            .header("host", "iem.newlevel.media")
+            .header("x-forwarded-proto", "http")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+    }
+
+    #[tokio::test]
+    async fn test_no_redirect_for_different_host() {
+        // Request via IP address should pass through unchanged
+        let app = create_test_app("iem.newlevel.media");
+        let req = Request::builder()
+            .uri("/api/version")
+            .header("host", "10.77.9.231")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_redirect_preserves_path_and_query() {
+        let app = create_test_app("iem.newlevel.media");
+        let req = Request::builder()
+            .uri("/api/mixer/1?token=abc123")
+            .header("host", "iem.newlevel.media")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "https://iem.newlevel.media/api/mixer/1?token=abc123"
+        );
+    }
 }
