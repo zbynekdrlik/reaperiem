@@ -316,11 +316,11 @@ pub fn get_remote_url(port: u16) -> String {
 mod tests {
     use super::*;
     use axum::{
+        Router,
         body::Body,
         http::{Request, StatusCode},
         middleware,
         routing::get,
-        Router,
     };
     use tower::ServiceExt;
 
