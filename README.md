@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.35.0 (2026-03-08)
+
+- **Fix**: Remove explorer-killing icon cache clear from CI deploy (was causing taskbar crash-loop on iem.lan)
+- **Fix**: Headphones icon anti-aliased rendering with correct headband arc direction
+
 ### v1.34.0 (2026-03-08)
 
 - **Fix**: Version/datetime text contrast improved for better readability (#63)
