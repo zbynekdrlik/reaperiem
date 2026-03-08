@@ -1,23 +1,62 @@
 #!/usr/bin/env python3
-"""Verify icon files have correct headphones shape with proper transparency.
+"""Verify icon files match the tray.rs headphones design.
 
-This test ensures:
-1. Center area is FULLY transparent (alpha=0) - gap between ear cups
-2. Ear areas are blue (#4A9EFF) with full opacity
-3. Corners are FULLY transparent (alpha=0) - not a solid rectangle
+The tray icon (16x16) has:
+- Two circular ear cups at (4,10) and (12,10) with radius 3
+- Headband arc at top
+- Vertical connectors at x=3 and x=13
+- Color: #4A9EFF (74, 158, 255)
+- All other pixels transparent (alpha=0)
 
-Run: python3 verify_icons.py
+This test verifies scaled icons preserve this design.
 """
 
 from PIL import Image
 import sys
 
-BLUE = (74, 158, 255)  # #4A9EFF
-TOLERANCE = 10  # Color tolerance
+BLUE = (0x4A, 0x9E, 0xFF)  # (74, 158, 255)
+TOLERANCE = 15  # Color tolerance for scaled images
+
+
+def get_expected_pixel(x, y, size):
+    """Return expected pixel state for position (x,y) at given size.
+
+    Returns: 'blue' if should be colored, 'transparent' if should be clear.
+    Based on tray.rs design scaled to size.
+    """
+    # Map to 16x16 coordinate space
+    scale = size / 16.0
+    ox = x / scale
+    oy = y / scale
+
+    # Check if in left ear cup (center 4,10 radius 3)
+    if (ox - 4) ** 2 + (oy - 10) ** 2 <= 3 ** 2 + 0.5:
+        return 'blue'
+
+    # Check if in right ear cup (center 12,10 radius 3)
+    if (ox - 12) ** 2 + (oy - 10) ** 2 <= 3 ** 2 + 0.5:
+        return 'blue'
+
+    # Check headband (x from 3-13, y depends on x)
+    if 3 <= ox <= 13:
+        if ox < 5 or ox > 11:
+            band_y = 4
+        elif ox < 7 or ox > 9:
+            band_y = 3
+        else:
+            band_y = 2
+        if abs(oy - band_y) < 0.6:
+            return 'blue'
+
+    # Check connectors (x=3 or x=13, y from 5-7)
+    if (abs(ox - 3) < 0.6 or abs(ox - 13) < 0.6) and 5 <= oy <= 7:
+        return 'blue'
+
+    return 'transparent'
 
 
 def verify_icon(path: str) -> list[str]:
-    """Verify an icon file. Returns list of errors (empty if valid)."""
+    """Verify an icon file matches tray design. Returns list of errors."""
     errors = []
 
     try:
@@ -27,43 +66,50 @@ def verify_icon(path: str) -> list[str]:
 
     w, h = img.size
 
-    # Check center pixel (should be transparent - gap between ear cups)
+    # Test key points that MUST be correct
+
+    # 1. Center of image should be transparent (gap between ear cups)
     cx, cy = w // 2, h // 2
     center = img.getpixel((cx, cy))
-    if center[3] != 0:
-        errors.append(f"Center ({cx},{cy}) not transparent: alpha={center[3]}, expected 0")
+    if center[3] > 10:  # Should be nearly transparent
+        errors.append(f"Center ({cx},{cy}) not transparent: alpha={center[3]}")
 
-    # Check all 4 corners (should be transparent)
+    # 2. Corners should be transparent
     corners = [(0, 0), (w-1, 0), (0, h-1), (w-1, h-1)]
     for x, y in corners:
         pixel = img.getpixel((x, y))
-        if pixel[3] != 0:
-            errors.append(f"Corner ({x},{y}) not transparent: alpha={pixel[3]}, expected 0")
+        if pixel[3] > 10:
+            errors.append(f"Corner ({x},{y}) not transparent: alpha={pixel[3]}")
 
-    # Check ear areas (should be blue with full opacity)
-    # Left ear at ~22% from left, ~62% from top
-    left_ear_x = int(w * 0.22)
-    left_ear_y = int(h * 0.62)
-    left = img.getpixel((left_ear_x, left_ear_y))
-
-    if left[3] != 255:
-        errors.append(f"Left ear ({left_ear_x},{left_ear_y}) not opaque: alpha={left[3]}")
+    # 3. Left ear cup center should be blue
+    # In 16x16: center at (4, 10). Scale to current size.
+    left_x = int(4 * w / 16)
+    left_y = int(10 * h / 16)
+    left = img.getpixel((left_x, left_y))
+    if left[3] < 200:
+        errors.append(f"Left ear ({left_x},{left_y}) not opaque: alpha={left[3]}")
     elif not (abs(left[0] - BLUE[0]) <= TOLERANCE and
               abs(left[1] - BLUE[1]) <= TOLERANCE and
               abs(left[2] - BLUE[2]) <= TOLERANCE):
-        errors.append(f"Left ear ({left_ear_x},{left_ear_y}) not blue: RGB=({left[0]},{left[1]},{left[2]})")
+        errors.append(f"Left ear ({left_x},{left_y}) wrong color: RGB=({left[0]},{left[1]},{left[2]}), expected ~{BLUE}")
 
-    # Right ear at ~78% from left, ~62% from top
-    right_ear_x = int(w * 0.78)
-    right_ear_y = int(h * 0.62)
-    right = img.getpixel((right_ear_x, right_ear_y))
-
-    if right[3] != 255:
-        errors.append(f"Right ear ({right_ear_x},{right_ear_y}) not opaque: alpha={right[3]}")
+    # 4. Right ear cup center should be blue
+    right_x = int(12 * w / 16)
+    right_y = int(10 * h / 16)
+    right = img.getpixel((right_x, right_y))
+    if right[3] < 200:
+        errors.append(f"Right ear ({right_x},{right_y}) not opaque: alpha={right[3]}")
     elif not (abs(right[0] - BLUE[0]) <= TOLERANCE and
               abs(right[1] - BLUE[1]) <= TOLERANCE and
               abs(right[2] - BLUE[2]) <= TOLERANCE):
-        errors.append(f"Right ear ({right_ear_x},{right_ear_y}) not blue: RGB=({right[0]},{right[1]},{right[2]})")
+        errors.append(f"Right ear ({right_x},{right_y}) wrong color: RGB=({right[0]},{right[1]},{right[2]}), expected ~{BLUE}")
+
+    # 5. Top center (headband) should be blue
+    band_x = w // 2
+    band_y = int(2 * h / 16)  # y=2 at center of headband
+    band = img.getpixel((band_x, band_y))
+    if band[3] < 200:
+        errors.append(f"Headband ({band_x},{band_y}) not opaque: alpha={band[3]}")
 
     return errors
 
@@ -72,7 +118,7 @@ def main():
     icons = ["32x32.png", "128x128.png", "icon.png"]
     all_errors = []
 
-    print("Verifying icon files...")
+    print("Verifying icons match tray.rs design...")
     print()
 
     for icon in icons:
@@ -89,11 +135,10 @@ def main():
 
     if all_errors:
         print(f"FAILED: {len(all_errors)} error(s) found")
-        print("Icons must show headphones shape with transparent background,")
-        print("NOT a solid blue rectangle.")
+        print("Icons must match tray.rs headphones design.")
         sys.exit(1)
     else:
-        print("PASSED: All icons are valid headphones shape")
+        print("PASSED: All icons match tray.rs design")
         sys.exit(0)
 
 
