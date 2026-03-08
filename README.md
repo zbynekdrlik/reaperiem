@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.34.0 (2026-03-08)
+
+- **Fix**: Version/datetime text contrast improved for better readability (#63)
+- **Fix**: Snapshot history shows absolute date with Slovak day name first (#69)
+- **Fix**: App icon shows headphones matching tray icon instead of blue rectangle (#2)
+- **Feature**: Band changelog skill for user-oriented Slovak changelogs
+
 ### v1.33.0 (2026-03-07)
 
 - **Feature**: Access from mobile data via Cloudflare Tunnel - single URL works everywhere
