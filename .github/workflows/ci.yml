@@ -111,6 +111,7 @@ jobs:
       - name: Verify icon files (headphones shape)
         run: |
           echo "Verifying icon files are headphones shape (not blue rectangle)..."
+          pip install --quiet pillow
           cd iem-mixer/src-tauri/icons
           python3 verify_icons.py
 
