@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Generate icons that EXACTLY match the tray icon design from tray.rs.
+"""Generate icons that match the tray icon design with proper anti-aliasing.
 
-The tray icon is 16x16 with:
+The tray icon (16x16) design:
 - Two circular ear cups at (4,10) and (12,10) with radius 3
-- Headband arc at top (y depends on x)
-- Vertical connectors at x=3 and x=13 from y=5-7
+- Headband arc at top
+- Vertical connectors at x=3 and x=13
 - Color: #4A9EFF (74, 158, 255)
 
-This script generates scaled versions that preserve this exact design.
+For larger sizes: smooth anti-aliased rendering
+For 16x16: exact pixel match to tray.rs
 """
 
 from PIL import Image, ImageDraw
@@ -17,9 +18,6 @@ import io
 # Exact color from tray.rs
 BLUE = (0x4A, 0x9E, 0xFF)  # (74, 158, 255)
 TRANSPARENT = (0, 0, 0, 0)
-
-# Original design is 16x16
-ORIGINAL_SIZE = 16
 
 
 def draw_tray_icon_exact():
@@ -63,60 +61,71 @@ def draw_tray_icon_exact():
     return img
 
 
-def draw_headphones_at_size(size):
-    """Draw headphones at any size by scaling the design coordinates."""
-    img = Image.new('RGBA', (size, size), TRANSPARENT)
+def draw_headphones_antialiased(size):
+    """Draw smooth anti-aliased headphones at any size.
+
+    Uses supersampling: render at 4x size then downsample for smooth edges.
+    """
+    # Supersample factor for anti-aliasing
+    ss = 4
+    large_size = size * ss
+
+    img = Image.new('RGBA', (large_size, large_size), TRANSPARENT)
     draw = ImageDraw.Draw(img)
 
-    # Scale factor from 16x16
-    s = size / 16.0
+    # Scale factor from 16x16 reference
+    s = large_size / 16.0
 
-    # Draw filled circles for ear cups
-    # Left ear cup (center 4,10 radius 3)
-    left_cx, left_cy, left_r = 4 * s, 10 * s, 3 * s
+    # Ear cup parameters (from tray.rs: circles at 4,10 and 12,10 with radius 3)
+    ear_radius = 3.2 * s  # Slightly larger for better visual at high res
+    left_cx, left_cy = 4 * s, 10 * s
+    right_cx, right_cy = 12 * s, 10 * s
+
+    # Draw filled circles for ear cups with anti-aliasing
     draw.ellipse([
-        left_cx - left_r, left_cy - left_r,
-        left_cx + left_r, left_cy + left_r
+        left_cx - ear_radius, left_cy - ear_radius,
+        left_cx + ear_radius, left_cy + ear_radius
     ], fill=BLUE + (255,))
 
-    # Right ear cup (center 12,10 radius 3)
-    right_cx, right_cy, right_r = 12 * s, 10 * s, 3 * s
     draw.ellipse([
-        right_cx - right_r, right_cy - right_r,
-        right_cx + right_r, right_cy + right_r
+        right_cx - ear_radius, right_cy - ear_radius,
+        right_cx + ear_radius, right_cy + ear_radius
     ], fill=BLUE + (255,))
 
-    # Draw headband as thick arc
-    band_thickness = max(1, int(s * 1.2))
+    # Headband - draw as smooth arc using bezier-like curve
+    # From tray.rs: arc goes from x=3 to x=13, y varies 2-4
+    band_width = 1.2 * s  # Thickness of headband
 
-    # Headband points (from tray.rs design)
-    # x: 3-4,5-6,7-9,10-11,12-13 with y: 4,3,2,3,4
-    points = []
-    for x in range(3, 14):
-        if x < 5 or x > 11:
-            y = 4
-        elif x < 7 or x > 9:
-            y = 3
-        else:
-            y = 2
-        points.append((x * s, y * s))
+    # Create smooth arc points
+    arc_points = []
+    for i in range(21):  # 21 points for smooth curve
+        t = i / 20.0  # 0 to 1
+        x = 3 + t * 10  # x from 3 to 13
+        # Parabolic curve for smooth arc
+        y = 2 + 2 * (1 - (2 * (t - 0.5)) ** 2)  # y from 4 at edges to 2 at center
+        arc_points.append((x * s, y * s))
 
-    # Draw band as thick line segments
-    for i in range(len(points) - 1):
-        draw.line([points[i], points[i + 1]], fill=BLUE + (255,), width=band_thickness)
+    # Draw thick arc line
+    if len(arc_points) >= 2:
+        draw.line(arc_points, fill=BLUE + (255,), width=int(band_width), joint="curve")
 
-    # Draw connectors (x=3 and x=13, y from 5-7)
-    connector_width = max(1, int(s))
-    # Left connector
+    # Draw connectors (vertical lines from headband to ear cups)
+    connector_width = 1.0 * s
+
+    # Left connector (x=3, y from 5 to 7 in 16x16 space)
     draw.rectangle([
-        3 * s - connector_width / 2, 5 * s,
+        3 * s - connector_width / 2, 4.5 * s,
         3 * s + connector_width / 2, 7.5 * s
     ], fill=BLUE + (255,))
-    # Right connector
+
+    # Right connector (x=13, y from 5 to 7)
     draw.rectangle([
-        13 * s - connector_width / 2, 5 * s,
+        13 * s - connector_width / 2, 4.5 * s,
         13 * s + connector_width / 2, 7.5 * s
     ], fill=BLUE + (255,))
+
+    # Downsample with high-quality anti-aliasing
+    img = img.resize((size, size), Image.LANCZOS)
 
     return img
 
@@ -154,14 +163,14 @@ def create_multi_ico(images, output_path):
 
 
 def main():
-    print("Generating icons that match tray.rs design exactly...")
+    print("Generating anti-aliased icons matching tray.rs design...")
 
-    # Generate base 16x16 icon (exact match to tray icon)
+    # Generate base 16x16 icon (exact pixel match to tray icon)
     base = draw_tray_icon_exact()
     base.save('16x16-base.png', 'PNG')
     print("✓ Created 16x16-base.png (reference)")
 
-    # Generate icons at each size directly (not scaled)
+    # Generate smooth anti-aliased icons at each size
     sizes = {
         '32x32.png': 32,
         '128x128.png': 128,
@@ -169,22 +178,22 @@ def main():
     }
 
     for filename, size in sizes.items():
-        img = draw_headphones_at_size(size)
+        img = draw_headphones_antialiased(size)
         img.save(filename, 'PNG')
-        print(f"✓ Created {filename}")
+        print(f"✓ Created {filename} (anti-aliased)")
 
-    # Generate multi-resolution ICO - draw each size directly
+    # Generate multi-resolution ICO
     ico_sizes = [16, 24, 32, 48, 64, 128, 256]
     ico_images = []
     for s in ico_sizes:
         if s == 16:
             ico_images.append(draw_tray_icon_exact())
         else:
-            ico_images.append(draw_headphones_at_size(s))
+            ico_images.append(draw_headphones_antialiased(s))
     create_multi_ico(ico_images, 'headphones.ico')
-    print(f"✓ Created headphones.ico ({len(ico_sizes)} sizes)")
+    print(f"✓ Created headphones.ico ({len(ico_sizes)} sizes, anti-aliased)")
 
-    print("\nDone! Icons now match tray.rs design.")
+    print("\nDone! Icons have smooth anti-aliased edges.")
 
 
 if __name__ == "__main__":
