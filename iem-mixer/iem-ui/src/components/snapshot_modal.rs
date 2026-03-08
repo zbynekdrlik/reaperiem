@@ -19,8 +19,7 @@ pub struct SnapshotInfo {
 
 /// Slovak day names
 const SLOVAK_DAYS: [&str; 7] = [
-    "Nedeľa", "Pondelok", "Utorok", "Streda",
-    "Štvrtok", "Piatok", "Sobota"
+    "Nedeľa", "Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok", "Sobota",
 ];
 
 /// Format timestamp for display in Slovak format (DD.MM. HH:MM)
@@ -42,7 +41,10 @@ fn format_timestamp_with_day(ts: i64) -> String {
     let month = date.get_month() + 1;
     let hours = date.get_hours();
     let mins = date.get_minutes();
-    format!("{} {}.{}. {:02}:{:02}", SLOVAK_DAYS[day_of_week], day, month, hours, mins)
+    format!(
+        "{} {}.{}. {:02}:{:02}",
+        SLOVAK_DAYS[day_of_week], day, month, hours, mins
+    )
 }
 
 /// Format relative time (e.g., "2 hours ago", "yesterday")
