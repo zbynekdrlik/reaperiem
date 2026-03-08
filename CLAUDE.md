@@ -517,9 +517,12 @@ assert corner[3] == 0, f"Corner not transparent: alpha={corner[3]}"
 
 ```
 ❌ "The icon looks correct to me" — your visual inspection means nothing without pixel tests
+❌ "The icon should now appear correctly" — NEVER use "should", only verified facts
+❌ "It should work now" — this is FORBIDDEN language, you must VERIFY
 ❌ Claim fix is done after seeing a thumbnail — verify with automated test
 ❌ Ignore test results showing alpha=1 (almost transparent but wrong)
 ❌ Use the user as your visual verification tool
+❌ Report success without downloading and checking the CI screenshot artifact
 ```
 
 **ALWAYS DO:**
@@ -529,8 +532,23 @@ assert corner[3] == 0, f"Corner not transparent: alpha={corner[3]}"
 ✅ Run test and confirm it FAILS on old icon
 ✅ Generate new icon
 ✅ Run test and confirm it PASSES
-✅ Only THEN claim the fix is done
+✅ Download the CI taskbar screenshot artifact and visually verify
+✅ If Windows icon cache is persistent, add reboot step to CI
+✅ Only claim "VERIFIED: icon shows headphones" after checking screenshot
 ```
+
+**FORBIDDEN PHRASES (never use these):**
+
+- "should work" / "should appear" / "should be fixed"
+- "it will probably" / "it might"
+- "I believe" / "I think it's fixed"
+- "The fix should take effect"
+
+**REQUIRED PHRASES (use these instead):**
+
+- "VERIFIED: I checked the screenshot and saw [X]"
+- "NOT YET VERIFIED: CI is still running"
+- "FAILED: screenshot shows [X] instead of [Y]"
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 
