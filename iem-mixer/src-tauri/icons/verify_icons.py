@@ -122,6 +122,31 @@ def verify_icon(path: str) -> list[str]:
     if not band_found:
         errors.append(f"Headband region (center top) has no opaque pixels")
 
+    # 6. Headband must curve UPWARD (center y < edge y in screen coords)
+    # tray.rs: center x=7-9 at y=2 (top), edges x=3-4 at y=4 (lower)
+    # Find the y position of headband at center vs edge
+    center_x = w // 2
+    edge_x = int(3 * w / 16)
+    s = max(2, w // 16)
+
+    def find_band_y(x_pos):
+        """Find the y position of the first opaque pixel in the headband region."""
+        for y_scan in range(0, h // 2):
+            pixel = img.getpixel((x_pos, y_scan))
+            if pixel[3] > 128:
+                return y_scan
+        return None
+
+    center_band_y = find_band_y(center_x)
+    edge_band_y = find_band_y(edge_x)
+
+    if center_band_y is not None and edge_band_y is not None:
+        if center_band_y >= edge_band_y + s:
+            errors.append(
+                f"Headband is UPSIDE DOWN: center at y={center_band_y}, "
+                f"edge at y={edge_band_y}. Center should be ABOVE (lower y) edge."
+            )
+
     return errors
 
 

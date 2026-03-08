@@ -101,8 +101,8 @@ def draw_headphones_antialiased(size):
     for i in range(21):  # 21 points for smooth curve
         t = i / 20.0  # 0 to 1
         x = 3 + t * 10  # x from 3 to 13
-        # Parabolic curve for smooth arc
-        y = 2 + 2 * (1 - (2 * (t - 0.5)) ** 2)  # y from 4 at edges to 2 at center
+        # Parabolic curve: y=2 at center (top of arc), y=4 at edges (connects to cups)
+        y = 2 + 2 * (2 * (t - 0.5)) ** 2
         arc_points.append((x * s, y * s))
 
     # Draw thick arc line
