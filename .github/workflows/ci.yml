@@ -108,6 +108,12 @@ jobs:
           fi
           echo "No ShowConsoleMsg in deferred ReaScripts"
 
+      - name: Verify icon files (headphones shape)
+        run: |
+          echo "Verifying icon files are headphones shape (not blue rectangle)..."
+          cd iem-mixer/src-tauri/icons
+          python3 verify_icons.py
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================

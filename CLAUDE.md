@@ -481,6 +481,56 @@ is WRONG and must be rewritten.
 - **Every bug that reaches production gets a regression test** — so it never happens again
 - **Animation tests must verify intermediate values** — not just "animation class exists" but "value changed over time"
 - **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
+- **Visual/icon tests must verify actual pixel data** — not just "file exists" but verify specific pixel values match expected
+
+### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
+
+**NEVER claim a visual fix (icons, images, colors) is done without automated verification.**
+
+Claude has repeatedly:
+
+1. Generated icon files and claimed "headphones icon is ready"
+2. Ignored test results showing the icon had wrong transparency (alpha=1 instead of alpha=0)
+3. Made the user report the same issue 3+ times before actually fixing it
+
+**For icon/image fixes — MANDATORY verification:**
+
+```python
+# Example: Verify icon is headphones (not solid rectangle)
+from PIL import Image
+img = Image.open("icon.png").convert("RGBA")
+
+# Check center is transparent (gap between ear cups)
+center = img.getpixel((16, 16))
+assert center[3] == 0, f"Center not transparent: alpha={center[3]}"
+
+# Check ear area is blue
+ear = img.getpixel((7, 20))
+assert ear[2] > 200 and ear[3] == 255, f"Ear not blue: {ear}"
+
+# Check corner is transparent
+corner = img.getpixel((0, 0))
+assert corner[3] == 0, f"Corner not transparent: alpha={corner[3]}"
+```
+
+**NEVER DO:**
+
+```
+❌ "The icon looks correct to me" — your visual inspection means nothing without pixel tests
+❌ Claim fix is done after seeing a thumbnail — verify with automated test
+❌ Ignore test results showing alpha=1 (almost transparent but wrong)
+❌ Use the user as your visual verification tool
+```
+
+**ALWAYS DO:**
+
+```
+✅ Write pixel-level test BEFORE generating icon
+✅ Run test and confirm it FAILS on old icon
+✅ Generate new icon
+✅ Run test and confirm it PASSES
+✅ Only THEN claim the fix is done
+```
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 
