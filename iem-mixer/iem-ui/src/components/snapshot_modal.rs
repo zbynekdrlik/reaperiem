@@ -22,17 +22,6 @@ const SLOVAK_DAYS: [&str; 7] = [
     "Nedeľa", "Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok", "Sobota",
 ];
 
-/// Format timestamp for display in Slovak format (DD.MM. HH:MM)
-fn format_timestamp(ts: i64) -> String {
-    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64((ts * 1000) as f64));
-    let month = date.get_month() + 1;
-    let day = date.get_date();
-    let hours = date.get_hours();
-    let mins = date.get_minutes();
-    // Slovak uses 24-hour format: DD.MM. HH:MM
-    format!("{}.{}. {:02}:{:02}", day, month, hours, mins)
-}
-
 /// Format timestamp with Slovak day name for primary display (e.g., "Nedeľa 5.3. 14:30")
 fn format_timestamp_with_day(ts: i64) -> String {
     let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64((ts * 1000) as f64));
