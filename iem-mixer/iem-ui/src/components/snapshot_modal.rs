@@ -17,15 +17,23 @@ pub struct SnapshotInfo {
     pub channel_count: usize,
 }
 
-/// Format timestamp for display in Slovak format (DD.MM. HH:MM)
-fn format_timestamp(ts: i64) -> String {
+/// Slovak day names
+const SLOVAK_DAYS: [&str; 7] = [
+    "Nedeľa", "Pondelok", "Utorok", "Streda", "Štvrtok", "Piatok", "Sobota",
+];
+
+/// Format timestamp with Slovak day name for primary display (e.g., "Nedeľa 5.3. 14:30")
+fn format_timestamp_with_day(ts: i64) -> String {
     let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64((ts * 1000) as f64));
-    let month = date.get_month() + 1;
+    let day_of_week = date.get_day() as usize; // 0=Sunday
     let day = date.get_date();
+    let month = date.get_month() + 1;
     let hours = date.get_hours();
     let mins = date.get_minutes();
-    // Slovak uses 24-hour format: DD.MM. HH:MM
-    format!("{}.{}. {:02}:{:02}", day, month, hours, mins)
+    format!(
+        "{} {}.{}. {:02}:{:02}",
+        SLOVAK_DAYS[day_of_week], day, month, hours, mins
+    )
 }
 
 /// Format relative time (e.g., "2 hours ago", "yesterday")
@@ -243,12 +251,12 @@ pub fn SnapshotModal(
                                             <div class=move || if is_pinned { "snapshot-item pinned" } else { "snapshot-item" }>
                                                 <div class="snapshot-info">
                                                     <div class="snapshot-label">
-                                                        {if is_pinned { format!("{}", label) } else { label.clone() }}
+                                                        {format_timestamp_with_day(timestamp)}
+                                                        <span class="snapshot-type">{label.clone()}</span>
                                                         <span class="snapshot-channels">{format!("({} ch)", channel_count)}</span>
                                                     </div>
                                                     <div class="snapshot-time">
                                                         <span class="relative">{format_relative(timestamp)}</span>
-                                                        <span class="absolute">{format_timestamp(timestamp)}</span>
                                                     </div>
                                                 </div>
                                                 <div class="snapshot-actions">

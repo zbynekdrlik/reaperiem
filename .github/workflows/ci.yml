@@ -108,6 +108,13 @@ jobs:
           fi
           echo "No ShowConsoleMsg in deferred ReaScripts"
 
+      - name: Verify icon files (headphones shape)
+        run: |
+          echo "Verifying icon files are headphones shape (not blue rectangle)..."
+          pip install --quiet pillow
+          cd iem-mixer/src-tauri/icons
+          python3 verify_icons.py
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -644,6 +651,73 @@ jobs:
           ) else (
             echo WARNING: WASM not deployed to REAPER www root - requires admin access
           )
+
+      - name: Clear Windows icon cache and restart explorer
+        shell: powershell
+        run: |
+          Write-Host "Aggressively clearing Windows icon cache..."
+
+          # Stop explorer to release icon cache files
+          Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 2
+
+          # Delete all icon cache files
+          $cacheFiles = @(
+            "$env:LOCALAPPDATA\IconCache.db",
+            "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache*.db",
+            "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache*.db"
+          )
+          foreach ($pattern in $cacheFiles) {
+            Get-ChildItem -Path $pattern -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            Write-Host "Cleared: $pattern"
+          }
+
+          # Clear thumbnail cache registry
+          $ie4uinit = "$env:SystemRoot\System32\ie4uinit.exe"
+          if (Test-Path $ie4uinit) {
+            & $ie4uinit -show
+            Write-Host "Ran ie4uinit -show"
+          }
+
+          # Restart explorer
+          Start-Process explorer.exe
+          Start-Sleep -Seconds 5
+          Write-Host "Explorer restarted"
+
+      - name: Capture taskbar screenshot for icon verification
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+
+          # Wait for taskbar to fully render
+          Start-Sleep -Seconds 3
+
+          # Get screen bounds
+          $screen = [System.Windows.Forms.Screen]::PrimaryScreen
+          $bounds = $screen.Bounds
+
+          # Create bitmap and capture screen
+          $bitmap = New-Object System.Drawing.Bitmap($bounds.Width, $bounds.Height)
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+
+          # Save screenshot
+          $screenshotPath = "$env:GITHUB_WORKSPACE\taskbar-screenshot.png"
+          $bitmap.Save($screenshotPath, [System.Drawing.Imaging.ImageFormat]::Png)
+
+          $graphics.Dispose()
+          $bitmap.Dispose()
+
+          Write-Host "Screenshot saved to: $screenshotPath"
+          Write-Host "IMPORTANT: Download 'taskbar-screenshot' artifact and verify icon shows HEADPHONES!"
+
+      - name: Upload taskbar screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskbar-screenshot
+          path: taskbar-screenshot.png
+          retention-days: 7
 
       - name: Verify deployment
         shell: powershell

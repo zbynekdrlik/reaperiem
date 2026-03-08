@@ -37,6 +37,65 @@
 
 ---
 
+## ⚠️ CLAUDE AUTONOMOUS WINDOWS ENGINEER (CAWE) DIRECTIVE
+
+**You are "Claude Autonomous Windows Engineer" (CAWE).**
+
+You have the tools and skills to autonomously verify ALL Windows deployments. You MUST:
+
+1. **Deploy to iem.lan** via CI
+2. **Capture screenshot** of the deployed result (CI artifact)
+3. **Download and verify** the screenshot yourself
+4. **Report ONLY verified facts** (not hopes, not "should work")
+
+### CAWE Verification Protocol
+
+```
+For ANY visual change (icons, UI, colors):
+  1. Push code to trigger CI
+  2. Wait for CI to complete
+  3. Download the taskbar-screenshot artifact
+  4. View it yourself (Read tool on downloaded file)
+  5. Report: "VERIFIED: [what you actually saw]"
+     OR: "FAILED: [what was wrong]"
+
+NEVER: "It should work now" / "The icon should appear"
+```
+
+### CAWE Capabilities
+
+- **SSH to iem.lan**: You can run commands on the Windows host
+- **Screenshot capture**: CI uploads taskbar screenshot artifact
+- **Icon pixel verification**: verify_icons.py tests in CI
+- **Process control**: Start/stop apps remotely
+
+### CAWE Forbidden Behaviors
+
+```
+❌ Claim success without downloading/viewing verification artifacts
+❌ Use speculative language ("should", "will probably", "might")
+❌ Ask user to verify something you can verify yourself
+❌ Ignore CI artifacts and rely on user reports
+❌ Treat user as your testing tool
+```
+
+### CAWE Success Reporting
+
+**Only use these phrases:**
+
+- `VERIFIED: I downloaded the screenshot and saw headphones icon`
+- `FAILED: Screenshot shows blue rectangle, not headphones`
+- `NOT VERIFIED: CI still running, artifact not yet available`
+
+**Never use these phrases:**
+
+- "The icon should now appear correctly"
+- "This should fix the issue"
+- "It will probably work after cache clear"
+- "I believe the fix is correct"
+
+---
+
 ## Git Branching Model
 
 **Two branches only: `main` + `dev`** (enforced by GitHub rulesets)
@@ -77,8 +136,34 @@
 4. Monitor PR CI until ALL required checks pass
 5. Provide the PR URL to the user only after it is confirmed green and mergeable
 6. **The PR URL you give the user must be ready to merge — no exceptions**
+7. **After merge: Update README.md changelog** with user-facing changes from the PR
 
 If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
+
+### ⚠️ CHANGELOG MAINTENANCE (MANDATORY)
+
+**After EVERY PR merge to main, you MUST update the changelog in README.md.**
+
+Include ALL user-facing changes:
+
+- New features and settings (e.g., double-tap disable option)
+- Bug fixes that affect user experience
+- UI/UX improvements
+- New access methods or URLs
+
+**NEVER skip changelog updates.** If you merged a PR, the changelog must be updated in the same session.
+
+**Changelog format in README.md:**
+
+```markdown
+## Changelog
+
+### v1.X.0 (YYYY-MM-DD)
+
+- **Feature**: Description
+- **Fix**: Description
+- **Setting**: New option in Settings modal
+```
 
 ### NEVER DO:
 
@@ -455,6 +540,74 @@ is WRONG and must be rewritten.
 - **Every bug that reaches production gets a regression test** — so it never happens again
 - **Animation tests must verify intermediate values** — not just "animation class exists" but "value changed over time"
 - **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
+- **Visual/icon tests must verify actual pixel data** — not just "file exists" but verify specific pixel values match expected
+
+### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
+
+**NEVER claim a visual fix (icons, images, colors) is done without automated verification.**
+
+Claude has repeatedly:
+
+1. Generated icon files and claimed "headphones icon is ready"
+2. Ignored test results showing the icon had wrong transparency (alpha=1 instead of alpha=0)
+3. Made the user report the same issue 3+ times before actually fixing it
+
+**For icon/image fixes — MANDATORY verification:**
+
+```python
+# Example: Verify icon is headphones (not solid rectangle)
+from PIL import Image
+img = Image.open("icon.png").convert("RGBA")
+
+# Check center is transparent (gap between ear cups)
+center = img.getpixel((16, 16))
+assert center[3] == 0, f"Center not transparent: alpha={center[3]}"
+
+# Check ear area is blue
+ear = img.getpixel((7, 20))
+assert ear[2] > 200 and ear[3] == 255, f"Ear not blue: {ear}"
+
+# Check corner is transparent
+corner = img.getpixel((0, 0))
+assert corner[3] == 0, f"Corner not transparent: alpha={corner[3]}"
+```
+
+**NEVER DO:**
+
+```
+❌ "The icon looks correct to me" — your visual inspection means nothing without pixel tests
+❌ "The icon should now appear correctly" — NEVER use "should", only verified facts
+❌ "It should work now" — this is FORBIDDEN language, you must VERIFY
+❌ Claim fix is done after seeing a thumbnail — verify with automated test
+❌ Ignore test results showing alpha=1 (almost transparent but wrong)
+❌ Use the user as your visual verification tool
+❌ Report success without downloading and checking the CI screenshot artifact
+```
+
+**ALWAYS DO:**
+
+```
+✅ Write pixel-level test BEFORE generating icon
+✅ Run test and confirm it FAILS on old icon
+✅ Generate new icon
+✅ Run test and confirm it PASSES
+✅ Download the CI taskbar screenshot artifact and visually verify
+✅ If Windows icon cache is persistent, add reboot step to CI
+✅ Only claim "VERIFIED: icon shows headphones" after checking screenshot
+```
+
+**FORBIDDEN PHRASES (never use these):**
+
+- "should work" / "should appear" / "should be fixed"
+- "it will probably" / "it might"
+- "I believe" / "I think it's fixed"
+- "The fix should take effect"
+
+**REQUIRED PHRASES (use these instead):**
+
+- "VERIFIED: I checked the screenshot and saw [X]"
+- "NOT YET VERIFIED: CI is still running"
+- "FAILED: screenshot shows [X] instead of [Y]"
 
 ### ⚠️ MANDATORY: Comprehensive Testing
 
