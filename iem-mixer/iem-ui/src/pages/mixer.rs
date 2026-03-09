@@ -295,15 +295,8 @@ pub fn MixerPage() -> impl IntoView {
         );
     });
 
-    // Fetch network mode (local LAN vs remote internet) on page load
-    {
-        let set_nm = set_network_mode;
-        wasm_bindgen_futures::spawn_local(async move {
-            if let Ok(resp) = crate::api::get_network_mode().await {
-                set_nm.set(resp.mode);
-            }
-        });
-    }
+    // Network mode (LAN/WAN) is now sent via WebSocket on every connect/reconnect,
+    // so it automatically updates when switching between WiFi and mobile data.
 
     // Auto-reconnect: check every 2s if WebSocket is closed.
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,

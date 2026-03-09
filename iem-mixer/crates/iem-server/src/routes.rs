@@ -113,21 +113,19 @@ struct MemberInfo {
     name: String,
 }
 
-/// Detect if the client is on the local network or connecting via the internet.
+/// Detect network mode from request headers.
 ///
 /// Since all traffic goes through Cloudflare Tunnel (iem.newlevel.media),
 /// CF-Connecting-IP is always a public IP. We compare it against the
 /// configured `local_public_ip` (the church network's public IP).
 /// Match = on church WiFi, different = remote.
 /// No proxy headers = direct connection = local.
-async fn get_network_mode(
-    axum::extract::State(state): axum::extract::State<AppState>,
-    headers: axum::http::HeaderMap,
-) -> impl IntoResponse {
-    let config = state.config.read().await;
-    let local_ip = config.local_public_ip.clone();
-    drop(config);
-
+///
+/// Used by both the HTTP endpoint and WebSocket handler.
+pub fn detect_network_mode(
+    headers: &axum::http::HeaderMap,
+    local_public_ip: &Option<String>,
+) -> String {
     // Extract client IP from Cloudflare headers
     let client_ip = headers
         .get("cf-connecting-ip")
@@ -136,29 +134,41 @@ async fn get_network_mode(
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
 
-    let mode = match (&client_ip, &local_ip) {
+    match (&client_ip, local_public_ip) {
         // If we have both client IP and configured local IP, compare them
         (Some(client), Some(local)) => {
             if client == local {
-                "local"
+                "local".to_string()
             } else {
-                "remote"
+                "remote".to_string()
             }
         }
         // No proxy headers = direct connection (not through Cloudflare) = local
-        (None, _) => "local",
+        (None, _) => "local".to_string(),
         // No local_public_ip configured = fall back to private IP check
         (Some(ip), None) => {
             if is_private_ip(ip) {
-                "local"
+                "local".to_string()
             } else {
-                "remote"
+                "remote".to_string()
             }
         }
-    };
+    }
+}
+
+/// HTTP endpoint for network mode detection (kept for backwards compatibility)
+async fn get_network_mode(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    let local_ip = config.local_public_ip.clone();
+    drop(config);
+
+    let mode = detect_network_mode(&headers, &local_ip);
 
     Json(NetworkModeResponse {
-        mode: mode.to_string(),
+        mode,
     })
 }
 
@@ -350,5 +360,51 @@ mod tests {
     fn test_is_private_ip_ipv6() {
         assert!(is_private_ip("::1")); // loopback
         assert!(!is_private_ip("2001:db8::1")); // documentation range (public)
+    }
+
+    #[test]
+    fn test_detect_network_mode_matching_ip_is_local() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "203.0.113.50".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_different_ip_is_remote() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "198.51.100.10".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "remote");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_headers_is_local() {
+        let headers = axum::http::HeaderMap::new();
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_local_ip_private_is_local() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "10.77.9.100".parse().unwrap());
+        assert_eq!(detect_network_mode(&headers, &None), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_local_ip_public_is_remote() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "8.8.8.8".parse().unwrap());
+        assert_eq!(detect_network_mode(&headers, &None), "remote");
+    }
+
+    #[test]
+    fn test_detect_network_mode_x_forwarded_for_fallback() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-forwarded-for", "203.0.113.50, 10.0.0.1".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        // Should use first IP from x-forwarded-for
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
     }
 }

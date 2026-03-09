@@ -703,6 +703,7 @@ pub async fn ws_mixer(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
     Query(query): Query<WsQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
@@ -731,6 +732,9 @@ pub async fn ws_mixer(
         ));
     }
 
+    // Detect network mode before dropping config (needs local_public_ip)
+    let network_mode = crate::routes::detect_network_mode(&headers, &config.local_public_ip);
+
     drop(config);
 
     // Validate member exists (from REAPER discovered members)
@@ -741,15 +745,20 @@ pub async fn ws_mixer(
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
 
-    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id)))
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id, network_mode)))
 }
 
 /// Handle a WebSocket connection for a member
-async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, member_id: String) {
+async fn handle_ws(
+    mut socket: axum::extract::ws::WebSocket,
+    state: AppState,
+    member_id: String,
+    network_mode: String,
+) {
     use axum::extract::ws::Message;
     use iem_core::{ClientMsg, ServerMsg};
 
-    tracing::info!(member_id = %member_id, "WebSocket connected");
+    tracing::info!(member_id = %member_id, network_mode = %network_mode, "WebSocket connected");
 
     // Register this member as active (ref-counted for multi-tab support)
     {
@@ -772,6 +781,16 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
         let msg = ServerMsg::CustomizationUpdate {
             pinned: cust.pinned,
             hidden: cust.hidden,
+        };
+        let json = serde_json::to_string(&msg).unwrap_or_default();
+        let _ = socket.send(Message::Text(json.into())).await;
+    }
+
+    // Send network mode (local/remote) — updates on every WS reconnect,
+    // so switching between WiFi and mobile data triggers a fresh detection
+    {
+        let msg = ServerMsg::NetworkMode {
+            mode: network_mode,
         };
         let json = serde_json::to_string(&msg).unwrap_or_default();
         let _ = socket.send(Message::Text(json.into())).await;
