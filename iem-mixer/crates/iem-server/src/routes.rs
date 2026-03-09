@@ -10,7 +10,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{AppState, Assets, auth, proxy, snapshot_routes};
+use crate::{AppState, Assets, auth, preset_routes, proxy, snapshot_routes};
 use rust_embed::RustEmbed;
 
 /// Version information for deployment verification
@@ -77,6 +77,8 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
         .merge(snapshot_routes::snapshot_routes())
+        // Preset routes
+        .merge(preset_routes::preset_routes())
 }
 
 /// Get list of band members (discovered from REAPER)

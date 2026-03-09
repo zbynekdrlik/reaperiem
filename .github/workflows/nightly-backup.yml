@@ -1,0 +1,59 @@
+name: Nightly Backup
+
+on:
+  schedule:
+    # 2 AM UTC daily
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup REAPER & Mixer Data
+    runs-on: [self-hosted, iem-lan]
+    steps:
+      - name: Backup REAPER project, snapshots, and presets
+        shell: powershell
+        run: |
+          $repoPath = "C:\Users\newlevel\Documents\reaperiem"
+          Push-Location $repoPath
+
+          # Ensure we're on latest main
+          git fetch origin main
+          git checkout main
+          git pull origin main --rebase
+
+          # Copy snapshots and presets into repo for git tracking
+          $appData = "$env:APPDATA\iem-mixer"
+          if (Test-Path "$appData\snapshots") {
+            if (-not (Test-Path "data\snapshots")) { New-Item -ItemType Directory -Path "data\snapshots" -Force | Out-Null }
+            Copy-Item "$appData\snapshots\*" "data\snapshots\" -Force
+            Write-Host "Copied snapshots to data/snapshots/"
+          }
+          if (Test-Path "$appData\presets") {
+            if (-not (Test-Path "data\presets")) { New-Item -ItemType Directory -Path "data\presets" -Force | Out-Null }
+            Copy-Item "$appData\presets\*" "data\presets\" -Force
+            Write-Host "Copied presets to data/presets/"
+          }
+
+          # Check for uncommitted changes
+          $status = git status projects/ data/ --porcelain
+          if ($status) {
+            Write-Host "Changes detected:"
+            Write-Host $status
+
+            # Stage and commit
+            git add projects/ data/
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
+            git commit -m "backup(nightly): REAPER project + mixer data $timestamp
+
+          Co-Authored-By: GitHub Actions <actions@github.com>"
+
+            # Push to remote
+            git push origin main
+            Write-Host "Nightly backup pushed to GitHub"
+          } else {
+            Write-Host "No changes to backup"
+          }
+
+          Pop-Location
+          exit 0

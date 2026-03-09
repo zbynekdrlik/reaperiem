@@ -30,6 +30,7 @@ ALLOWED_PATTERNS=(
     "^projects/.*"
     ".*\.RPP$"
     ".*\.RPP-bak$"
+    "^data/.*"
 )
 
 is_allowed() {
