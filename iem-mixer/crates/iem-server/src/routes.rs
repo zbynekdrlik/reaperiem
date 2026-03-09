@@ -116,9 +116,7 @@ struct MemberInfo {
 /// Detect if the client is on the local network or connecting via the internet.
 /// Checks CF-Connecting-IP (Cloudflare Tunnel) and X-Forwarded-For headers
 /// to determine the real client IP, then checks if it's in a private range.
-async fn get_network_mode(
-    headers: axum::http::HeaderMap,
-) -> impl IntoResponse {
+async fn get_network_mode(headers: axum::http::HeaderMap) -> impl IntoResponse {
     // Check headers in order of reliability
     let client_ip = headers
         .get("cf-connecting-ip")
