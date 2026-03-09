@@ -54,10 +54,7 @@ pub fn preset_routes() -> Router<AppState> {
         // Delete preset
         .route("/api/presets/{member}/{name}", delete(delete_preset))
         // Restore preset (apply to REAPER)
-        .route(
-            "/api/presets/{member}/{name}/restore",
-            post(restore_preset),
-        )
+        .route("/api/presets/{member}/{name}/restore", post(restore_preset))
 }
 
 /// List all presets for a member (newest first)

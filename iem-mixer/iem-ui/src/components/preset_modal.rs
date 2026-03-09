@@ -179,7 +179,9 @@ async fn delete_preset_api(member_id: &str, name: &str) -> Result<(), String> {
 
 /// URL-encode preset name for use in path segments
 fn encode_name(name: &str) -> String {
-    js_sys::encode_uri_component(name).as_string().unwrap_or_else(|| name.to_string())
+    js_sys::encode_uri_component(name)
+        .as_string()
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// Preset modal component
