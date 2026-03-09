@@ -76,6 +76,18 @@ pub struct AuthClaims {
     pub iat: u64,
 }
 
+/// Per-member channel customization (pin/hide preferences)
+/// Stored server-side so preferences follow the member to any device
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct Customization {
+    /// Track indices that are pinned to the Main tab
+    #[serde(default)]
+    pub pinned: Vec<usize>,
+    /// Track indices that are hidden from all category tabs
+    #[serde(default)]
+    pub hidden: Vec<usize>,
+}
+
 /// API error response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
@@ -186,6 +198,37 @@ mod tests {
         };
         assert_eq!(claims.sub, "marek");
         assert!(!claims.engineer);
+    }
+
+    // ================================================================
+    // Customization type tests
+    // ================================================================
+
+    #[test]
+    fn test_customization_default_is_empty() {
+        let cust = Customization::default();
+        assert!(cust.pinned.is_empty());
+        assert!(cust.hidden.is_empty());
+    }
+
+    #[test]
+    fn test_customization_serialization_roundtrip() {
+        let cust = Customization {
+            pinned: vec![1, 5, 8],
+            hidden: vec![3, 7, 12],
+        };
+        let json = serde_json::to_string(&cust).unwrap();
+        let decoded: Customization = serde_json::from_str(&json).unwrap();
+        assert_eq!(cust, decoded);
+    }
+
+    #[test]
+    fn test_customization_deserialize_missing_fields() {
+        // Old data without pinned/hidden should default to empty
+        let json = "{}";
+        let cust: Customization = serde_json::from_str(json).unwrap();
+        assert!(cust.pinned.is_empty());
+        assert!(cust.hidden.is_empty());
     }
 
     // ================================================================

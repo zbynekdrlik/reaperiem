@@ -7,6 +7,7 @@
 //! - Provides real-time WebSocket updates
 
 pub mod auth;
+pub mod customization_store;
 pub mod pin_store;
 pub mod poller;
 pub mod preset_routes;
@@ -43,6 +44,8 @@ pub struct AppState {
     pub snapshot_store: Arc<snapshot_store::SnapshotStore>,
     /// Preset storage for saved mix configurations
     pub preset_store: Arc<preset_store::PresetStore>,
+    /// Channel customization storage (pin/hide preferences)
+    pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
 }
@@ -106,6 +109,7 @@ impl AppState {
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
+            customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
         }
     }

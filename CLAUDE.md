@@ -784,20 +784,20 @@ cd iem-mixer/src-tauri && cargo tauri build
 
 ### URLs:
 
-- `http://10.77.9.231/` - Landing page (member selection)
-- `http://10.77.9.231/login` - PIN authentication
-- `http://10.77.9.231/<member>` - Member's mixer (e.g., /petka)
+- **User-facing (band members):** `https://iem.newlevel.media/` — this is the ONLY URL band members use (Cloudflare Tunnel PWA)
+- **Internal server (infrastructure):** `http://10.77.9.231/` — direct access to iem.lan server, for CI verification and debugging
+- Routes: `/` (landing), `/login` (PIN auth), `/<member>` (mixer, e.g., /petka)
 
-**IMPORTANT: Always use IP address (10.77.9.231) instead of hostname when providing URLs to the user.**
+**IMPORTANT: Band members always access via `iem.newlevel.media`. The IP `10.77.9.231` and hostname `iem.lan` are internal infrastructure — never give these to band members.**
 
 ---
 
 ## ⚠️ END OF EACH PROMPT PROCESS
 
-After completing any task that affects the IEM Mixer application, always provide the user with the relevant URL in IP format:
+After completing any task that affects the IEM Mixer application, always provide the deployment status:
 
 ```
-✅ Deployed: http://10.77.9.231/
+✅ Deployed: http://10.77.9.231/ (internal) / https://iem.newlevel.media/ (user-facing)
 ```
 
 This ensures the user can immediately access and verify the changes.

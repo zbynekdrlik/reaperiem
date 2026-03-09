@@ -148,6 +148,26 @@ pub async fn login(member: &str, pin: &str) -> Result<AuthState, String> {
     }
 }
 
+/// Network mode response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkModeResponse {
+    pub mode: String,
+}
+
+/// Get network mode (local LAN vs remote internet)
+pub async fn get_network_mode() -> Result<NetworkModeResponse, String> {
+    let resp = Request::get(&format!("{}/network-mode", API_BASE))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
 /// Change PIN for the authenticated member
 pub async fn change_pin(old_pin: &str, new_pin: &str) -> Result<(), String> {
     let token = crate::auth::get_token().ok_or("Not authenticated")?;

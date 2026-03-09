@@ -6,9 +6,9 @@ use axum::{
     extract::Path,
     http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{any, get, post},
+    routing::{any, get, post, put},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{AppState, Assets, auth, preset_routes, proxy, snapshot_routes};
 use rust_embed::RustEmbed;
@@ -71,6 +71,17 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
+        // Network mode detection (local LAN vs remote internet)
+        .route("/api/network-mode", get(get_network_mode))
+        // Channel customization (pin/hide preferences)
+        .route(
+            "/api/mixer/{member_id}/customization",
+            get(get_customization),
+        )
+        .route(
+            "/api/mixer/{member_id}/customization",
+            put(put_customization),
+        )
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // WebSocket
@@ -100,6 +111,98 @@ async fn get_members(
 struct MemberInfo {
     id: String,
     name: String,
+}
+
+/// Detect if the client is on the local network or connecting via the internet.
+/// Checks CF-Connecting-IP (Cloudflare Tunnel) and X-Forwarded-For headers
+/// to determine the real client IP, then checks if it's in a private range.
+async fn get_network_mode(
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    // Check headers in order of reliability
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+
+    let mode = match client_ip {
+        Some(ip) => {
+            if is_private_ip(&ip) {
+                "local"
+            } else {
+                "remote"
+            }
+        }
+        // No proxy headers = direct connection = local network
+        None => "local",
+    };
+
+    Json(NetworkModeResponse {
+        mode: mode.to_string(),
+    })
+}
+
+#[derive(Serialize)]
+struct NetworkModeResponse {
+    mode: String,
+}
+
+/// Check if an IP address is in a private/local range
+fn is_private_ip(ip: &str) -> bool {
+    // Parse the IP and check against private ranges
+    if let Ok(addr) = ip.parse::<std::net::IpAddr>() {
+        match addr {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_private()         // 10.x, 172.16-31.x, 192.168.x
+                    || v4.is_loopback() // 127.x
+                    || v4.is_link_local() // 169.254.x
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() // ::1
+            }
+        }
+    } else {
+        false
+    }
+}
+
+/// Get channel customization for a member
+async fn get_customization(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    Path(member_id): Path<String>,
+) -> impl IntoResponse {
+    let cust = state.customization_store.load(&member_id);
+    Json(cust)
+}
+
+/// Update channel customization for a member
+#[derive(Deserialize)]
+struct CustomizationPayload {
+    pinned: Vec<usize>,
+    hidden: Vec<usize>,
+}
+
+async fn put_customization(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    Path(member_id): Path<String>,
+    Json(payload): Json<CustomizationPayload>,
+) -> impl IntoResponse {
+    let cust = iem_core::Customization {
+        pinned: payload.pinned,
+        hidden: payload.hidden,
+    };
+    match state.customization_store.save(&member_id, &cust) {
+        Ok(()) => (StatusCode::OK, Json(cust)),
+        Err(e) => {
+            tracing::error!("Failed to save customization: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(iem_core::Customization::default()),
+            )
+        }
+    }
 }
 
 /// REAPER proxy handler
@@ -186,4 +289,48 @@ fn serve_embedded_file(path: &str) -> Response {
         .status(StatusCode::NOT_FOUND)
         .body(Body::from("Not found"))
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_private_ip_local_ranges() {
+        // 10.x.x.x (Class A private)
+        assert!(is_private_ip("10.0.0.1"));
+        assert!(is_private_ip("10.77.9.231"));
+        assert!(is_private_ip("10.255.255.255"));
+
+        // 172.16-31.x.x (Class B private)
+        assert!(is_private_ip("172.16.0.1"));
+        assert!(is_private_ip("172.31.255.255"));
+
+        // 192.168.x.x (Class C private)
+        assert!(is_private_ip("192.168.1.1"));
+        assert!(is_private_ip("192.168.0.100"));
+
+        // Loopback
+        assert!(is_private_ip("127.0.0.1"));
+    }
+
+    #[test]
+    fn test_is_private_ip_public_ranges() {
+        assert!(!is_private_ip("8.8.8.8"));
+        assert!(!is_private_ip("1.1.1.1"));
+        assert!(!is_private_ip("203.0.113.50"));
+        assert!(!is_private_ip("172.32.0.1")); // Just outside 172.16-31 range
+    }
+
+    #[test]
+    fn test_is_private_ip_invalid() {
+        assert!(!is_private_ip("not_an_ip"));
+        assert!(!is_private_ip(""));
+    }
+
+    #[test]
+    fn test_is_private_ip_ipv6() {
+        assert!(is_private_ip("::1")); // loopback
+        assert!(!is_private_ip("2001:db8::1")); // documentation range (public)
+    }
 }

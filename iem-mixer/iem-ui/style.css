@@ -533,11 +533,12 @@ body {
   position: relative; /* Required for ::after overlay on disconnected state */
   display: grid;
   grid-template-columns: 56px 36px 40px 52px 1fr;
-  grid-template-rows: 36px 8px 44px;
+  grid-template-rows: 36px 8px 44px auto;
   grid-template-areas:
     "label  solo   mute   db     pan"
     "meter  meter  meter  meter  meter"
-    "fader  fader  fader  fader  fader";
+    "fader  fader  fader  fader  fader"
+    "actions actions actions actions actions";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -1709,4 +1710,76 @@ body {
 
 .snapshot-save-btn:active:not(:disabled) {
   opacity: 0.9;
+}
+
+/* Network mode indicator (LAN/WAN badge in header) */
+.network-indicator {
+  font-size: 0.6em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.network-indicator.local {
+  background: rgba(78, 205, 196, 0.2);
+  color: var(--accent);
+  border: 1px solid rgba(78, 205, 196, 0.4);
+}
+
+.network-indicator.remote {
+  background: rgba(124, 111, 255, 0.2);
+  color: #a094ff;
+  border: 1px solid rgba(124, 111, 255, 0.4);
+}
+
+/* Channel actions row (pin + hide buttons) */
+.channel-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px 0;
+}
+
+.pin-btn,
+.hide-btn {
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 0.75em;
+  padding: 3px 6px;
+  cursor: pointer;
+  min-width: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-btn.on {
+  color: var(--solo-yellow);
+  border-color: var(--solo-yellow);
+  background: rgba(244, 211, 94, 0.1);
+}
+
+.hide-btn:active,
+.pin-btn:active {
+  opacity: 0.7;
+}
+
+.hide-btn.unhide {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(78, 205, 196, 0.1);
+}
+
+/* Hidden category tab */
+.category-tab.hidden.active {
+  border-bottom-color: var(--text-muted);
+  color: var(--text-secondary);
 }

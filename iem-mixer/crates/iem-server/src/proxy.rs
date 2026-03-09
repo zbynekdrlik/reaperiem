@@ -766,6 +766,17 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
         let _ = socket.send(Message::Text(json.into())).await;
     }
 
+    // Send initial customization state
+    {
+        let cust = state.customization_store.load(&member_id);
+        let msg = ServerMsg::CustomizationUpdate {
+            pinned: cust.pinned,
+            hidden: cust.hidden,
+        };
+        let json = serde_json::to_string(&msg).unwrap_or_default();
+        let _ = socket.send(Message::Text(json.into())).await;
+    }
+
     loop {
         tokio::select! {
             // Client → Server: process commands
@@ -773,6 +784,25 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
+                            // Handle customization updates locally (no REAPER command)
+                            if let ClientMsg::UpdateCustomization { ref pinned, ref hidden } = cmd {
+                                let cust = iem_core::Customization {
+                                    pinned: pinned.clone(),
+                                    hidden: hidden.clone(),
+                                };
+                                if let Err(e) = state.customization_store.save(&member_id, &cust) {
+                                    tracing::error!(member_id = %member_id, "Failed to save customization: {}", e);
+                                }
+                                // Broadcast to other tabs of same member
+                                let _ = state.event_tx.send((
+                                    member_id.clone(),
+                                    ServerMsg::CustomizationUpdate {
+                                        pinned: pinned.clone(),
+                                        hidden: hidden.clone(),
+                                    },
+                                ));
+                                continue;
+                            }
                             match apply_command_to_cache(&state, &member_id, &cmd).await {
                                 Ok((url, broadcast)) => {
                                     // Broadcast to other clients of same member for cross-device sync

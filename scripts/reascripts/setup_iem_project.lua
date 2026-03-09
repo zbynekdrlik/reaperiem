@@ -142,6 +142,10 @@ local function create_send(src, dst, send_vol)
     end
     reaper.SetTrackSendInfo_Value(src, 0, send_idx, "D_VOL", send_vol or 1.0)
     reaper.SetTrackSendInfo_Value(src, 0, send_idx, "D_PAN", 0.0)
+    -- Pre-fader post-FX mode (3) so each member's mix is independent.
+    -- Without this, adjusting a member's main fader would change the
+    -- signal level sent to ALL other members' IEM mixes.
+    reaper.SetTrackSendInfo_Value(src, 0, send_idx, "I_SENDMODE", 3)
     return send_idx
 end
 

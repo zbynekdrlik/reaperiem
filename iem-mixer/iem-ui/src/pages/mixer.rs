@@ -35,6 +35,7 @@ struct DisplayChannel {
     is_stereo: bool,
     partner_index: Option<usize>,
     is_my_input: bool,
+    is_pinned: bool,
 }
 
 /// Send a command via WebSocket (synchronous, non-blocking)
@@ -62,6 +63,9 @@ fn connect_websocket(
     set_global_muted: WriteSignal<bool>,
     global_touched: ReadSignal<bool>,
     set_data_pulse: WriteSignal<bool>,
+    set_pinned_channels: WriteSignal<Vec<usize>>,
+    set_hidden_channels: WriteSignal<Vec<usize>>,
+    set_network_mode: WriteSignal<String>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -172,6 +176,13 @@ fn connect_websocket(
                     iem_core::ServerMsg::ConnectionChanged { connected: conn } => {
                         set_connected.set(conn);
                     }
+                    iem_core::ServerMsg::CustomizationUpdate { pinned, hidden } => {
+                        set_pinned_channels.set(pinned);
+                        set_hidden_channels.set(hidden);
+                    }
+                    iem_core::ServerMsg::NetworkMode { mode } => {
+                        set_network_mode.set(mode);
+                    }
                 }
             }
         }
@@ -247,6 +258,13 @@ pub fn MixerPage() -> impl IntoView {
     let (global_muted, set_global_muted) = signal(false);
     let (global_touched, set_global_touched) = signal(false);
 
+    // Channel customization (pin/hide) — loaded from server via WS
+    let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
+    let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
+
+    // Network mode indicator (local LAN vs remote internet)
+    let (network_mode, set_network_mode) = signal(String::new());
+
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
@@ -271,8 +289,21 @@ pub fn MixerPage() -> impl IntoView {
             set_global_muted,
             global_touched,
             set_data_pulse,
+            set_pinned_channels,
+            set_hidden_channels,
+            set_network_mode,
         );
     });
+
+    // Fetch network mode (local LAN vs remote internet) on page load
+    {
+        let set_nm = set_network_mode;
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Ok(resp) = crate::api::get_network_mode().await {
+                set_nm.set(resp.mode);
+            }
+        });
+    }
 
     // Auto-reconnect: check every 2s if WebSocket is closed.
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
@@ -299,6 +330,9 @@ pub fn MixerPage() -> impl IntoView {
                     set_global_muted,
                     global_touched,
                     set_data_pulse,
+                    set_pinned_channels,
+                    set_hidden_channels,
+                    set_network_mode,
                 );
             }
         }
@@ -326,12 +360,14 @@ pub fn MixerPage() -> impl IntoView {
         navigate_back("/", Default::default());
     };
 
-    // Process channels for display (handle stereo pairs)
+    // Process channels for display (handle stereo pairs, pin/hide)
     let display_channels = move || {
         let chs = channels.get();
         let member = member_id();
         let my_input = format!("{} MIC", member.to_uppercase());
         let active_cat = active_category.get();
+        let pinned = pinned_channels.get();
+        let hidden = hidden_channels.get();
 
         let mut result = Vec::new();
         let mut seen_pairs: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -342,14 +378,30 @@ pub fn MixerPage() -> impl IntoView {
             }
 
             let is_my_input = ch.name.to_uppercase() == my_input;
+            let is_pinned = pinned.contains(&ch.track_index);
+            let is_hidden = hidden.contains(&ch.track_index);
 
-            // Main tab: only show "me" channel (global volume is rendered separately)
-            if active_cat == Category::Main {
-                if !is_my_input {
+            // Hidden tab: only show hidden channels
+            if active_cat == Category::Hidden {
+                if !is_hidden {
                     continue;
                 }
-            } else if !active_cat.matches(&ch.category) {
-                continue;
+            } else if active_cat == Category::Main {
+                // Main tab: show "me" channel + pinned channels (not hidden ones)
+                if !is_my_input && !is_pinned {
+                    continue;
+                }
+                if is_hidden {
+                    continue;
+                }
+            } else {
+                // Category tabs: filter by category, skip hidden
+                if !active_cat.matches(&ch.category) {
+                    continue;
+                }
+                if is_hidden {
+                    continue;
+                }
             }
 
             let (is_stereo, partner_index) = if ch.stereo_side.as_deref() == Some("L") {
@@ -385,6 +437,7 @@ pub fn MixerPage() -> impl IntoView {
                 is_stereo,
                 partner_index,
                 is_my_input,
+                is_pinned,
             });
         }
 
@@ -503,6 +556,20 @@ pub fn MixerPage() -> impl IntoView {
                 <button class="settings-btn" on:click=move |_| set_settings_modal_visible.set(true)>
                     "\u{2699}"
                 </button>
+                <Show
+                    when=move || !network_mode.get().is_empty()
+                    fallback=|| ()
+                >
+                    <div class=move || {
+                        if network_mode.get() == "local" {
+                            "network-indicator local"
+                        } else {
+                            "network-indicator remote"
+                        }
+                    }>
+                        {move || if network_mode.get() == "local" { "LAN" } else { "WAN" }}
+                    </div>
+                </Show>
                 <div class=move || {
                     let base = if connected.get() { "status-dot connected" } else { "status-dot disconnected" };
                     if connected.get() && data_pulse.get() {
@@ -518,6 +585,7 @@ pub fn MixerPage() -> impl IntoView {
             <CategoryTabs
                 active=active_category.into()
                 on_select=move |cat| set_active_category.set(cat)
+                show_hidden=Signal::derive(move || !hidden_channels.get().is_empty())
             />
 
             <Show
@@ -567,6 +635,11 @@ pub fn MixerPage() -> impl IntoView {
                             connected=connected
                             ws=ws
                             double_tap_fader=double_tap_fader
+                            pinned_channels=pinned_channels
+                            set_pinned_channels=set_pinned_channels
+                            hidden_channels=hidden_channels
+                            set_hidden_channels=set_hidden_channels
+                            active_category=active_category
                         />
                     </div>
                 </div>
@@ -809,6 +882,11 @@ fn ChannelList(
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     double_tap_fader: ReadSignal<bool>,
+    pinned_channels: ReadSignal<Vec<usize>>,
+    set_pinned_channels: WriteSignal<Vec<usize>>,
+    hidden_channels: ReadSignal<Vec<usize>>,
+    set_hidden_channels: WriteSignal<Vec<usize>>,
+    active_category: ReadSignal<Category>,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
@@ -836,6 +914,7 @@ fn ChannelList(
                     let name = ch.display_name.clone();
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
+                    let ch_is_pinned = ch.is_pinned;
 
                     // Derived signals using .with() to avoid cloning entire collections
                     let level_signal = Signal::derive(move || {
@@ -1371,6 +1450,41 @@ fn ChannelList(
 
                     let is_soloed = move || soloed.get().contains(&track_idx);
                     let is_connected = move || connected.get();
+                    let is_hidden_tab = move || active_category.get() == Category::Hidden;
+
+                    // Pin toggle: add/remove track from pinned list
+                    let on_pin_click = move |_| {
+                        let mut pinned = pinned_channels.get();
+                        if pinned.contains(&track_idx) {
+                            pinned.retain(|&x| x != track_idx);
+                        } else {
+                            pinned.push(track_idx);
+                        }
+                        set_pinned_channels.set(pinned.clone());
+                        // Save to server via WS
+                        let hidden = hidden_channels.get();
+                        ws_send(ws, &iem_core::ClientMsg::UpdateCustomization {
+                            pinned,
+                            hidden,
+                        });
+                    };
+
+                    // Hide/unhide toggle: add/remove track from hidden list
+                    let on_hide_click = move |_| {
+                        let mut hidden = hidden_channels.get();
+                        if hidden.contains(&track_idx) {
+                            hidden.retain(|&x| x != track_idx);
+                        } else {
+                            hidden.push(track_idx);
+                        }
+                        set_hidden_channels.set(hidden.clone());
+                        // Save to server via WS
+                        let pinned = pinned_channels.get();
+                        ws_send(ws, &iem_core::ClientMsg::UpdateCustomization {
+                            pinned,
+                            hidden,
+                        });
+                    };
 
                     view! {
                         <div class=move || {
@@ -1423,6 +1537,22 @@ fn ChannelList(
                                     on:click=on_mute_click
                                 >
                                     "M"
+                                </button>
+                            </div>
+                            <div class="channel-actions">
+                                <button
+                                    class=move || if ch_is_pinned { "pin-btn on" } else { "pin-btn off" }
+                                    on:click=on_pin_click
+                                    title="Pin to Main tab"
+                                >
+                                    "\u{2606}"
+                                </button>
+                                <button
+                                    class=move || if is_hidden_tab() { "hide-btn unhide" } else { "hide-btn" }
+                                    on:click=on_hide_click
+                                    title=move || if is_hidden_tab() { "Unhide channel" } else { "Hide channel" }
+                                >
+                                    {move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}
                                 </button>
                             </div>
                         </div>
