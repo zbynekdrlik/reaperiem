@@ -525,17 +525,17 @@ body {
 
 /* ================================================================
    Channel Strip: Three-row layout (ALL screen sizes)
-   Row 1: Label | Menu(⋮) | Solo | Mute | dB | Pan
+   Row 1: Menu(⋮) | Label | Solo | Mute | dB | Pan
    Row 2: FULL-WIDTH HORIZONTAL METER
    Row 3: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
   position: relative; /* Required for ::after overlay on disconnected state */
   display: grid;
-  grid-template-columns: 1fr 28px 36px 40px 44px auto;
+  grid-template-columns: 28px 1fr 36px 40px auto auto;
   grid-template-rows: 36px 8px 44px;
   grid-template-areas:
-    "label  menu   solo   mute   db     pan"
+    "menu   label  solo   mute   db     pan"
     "meter  meter  meter  meter  meter  meter"
     "fader  fader  fader  fader  fader  fader";
   gap: 4px 6px;
@@ -777,16 +777,14 @@ body {
 /* dB display - centered for stage visibility */
 .db-display {
   grid-area: db;
-  min-width: 44px;
+  min-width: 7.5ch;
   text-align: center;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
   font-size: 0.8em;
   font-weight: 600;
   color: var(--text-primary);
   padding: 0 2px;
-  overflow: hidden;
   white-space: nowrap;
-  box-sizing: border-box;
 }
 
 /* Pan knob area */
@@ -1481,7 +1479,6 @@ body {
   }
   .db-display {
     font-size: 1em;
-    min-width: 44px;
   }
 }
 

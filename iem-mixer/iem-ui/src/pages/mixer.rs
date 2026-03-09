@@ -1608,4 +1608,16 @@ mod tests {
         assert!(format_db(-6.0).ends_with("dB"));
         assert!(format_db(-60.0).ends_with("dB")); // -inf case
     }
+
+    #[test]
+    fn test_format_db_max_length() {
+        let cases = [0.0, 6.0, 12.0, -6.0, -12.5, -59.9, -60.0, -100.0];
+        for db in cases {
+            let s = format_db(db);
+            assert!(
+                s.chars().count() <= 7,
+                "format_db({db}) = \"{s}\" exceeds 7 chars"
+            );
+        }
+    }
 }

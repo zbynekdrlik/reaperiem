@@ -402,6 +402,47 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(dbBox!.y).toBeLessThan(faderBox!.y);
   });
 
+  test("dB display text is not clipped", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    const dbDisplay = channel.locator(".db-display");
+    await expect(dbDisplay).toBeVisible();
+    // scrollWidth > clientWidth means text is clipped by overflow
+    const isClipped = await dbDisplay.evaluate(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
+    expect(isClipped).toBe(false);
+  });
+
+  test("kebab menu button is left of channel name", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    const menuBox = await channel.locator(".ch-menu-btn").boundingBox();
+    const labelBox = await channel.locator(".ch-label").boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(labelBox).not.toBeNull();
+    // Menu X position must be less than label X position (menu is to the left)
+    expect(menuBox!.x).toBeLessThan(labelBox!.x);
+  });
+
   test("channel has position: relative for overlay containment", async ({
     page,
   }) => {
