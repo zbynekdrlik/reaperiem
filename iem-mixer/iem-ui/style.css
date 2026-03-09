@@ -783,6 +783,10 @@ body {
   font-size: 0.8em;
   font-weight: 600;
   color: var(--text-primary);
+  padding: 0 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  box-sizing: border-box;
 }
 
 /* Pan knob area */
@@ -1740,10 +1744,10 @@ body {
   width: 28px;
   height: 36px;
   background: none;
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 1.1em;
+  color: var(--text-secondary);
+  font-size: 1.2em;
   cursor: pointer;
   display: flex;
   align-items: center;

@@ -1581,12 +1581,7 @@ fn ChannelList(
 fn parse_track_name(name: &str) -> (String, String) {
     let parts: Vec<&str> = name.split_whitespace().collect();
     if parts.len() >= 2 {
-        let main = if parts[0].chars().count() > 7 {
-            parts[0].chars().take(6).collect::<String>()
-        } else {
-            parts[0].to_string()
-        };
-        (main, parts[1..].join(" "))
+        (parts[0].to_string(), parts[1..].join(" "))
     } else {
         (name.to_string(), String::new())
     }
