@@ -114,10 +114,21 @@ struct MemberInfo {
 }
 
 /// Detect if the client is on the local network or connecting via the internet.
-/// Checks CF-Connecting-IP (Cloudflare Tunnel) and X-Forwarded-For headers
-/// to determine the real client IP, then checks if it's in a private range.
-async fn get_network_mode(headers: axum::http::HeaderMap) -> impl IntoResponse {
-    // Check headers in order of reliability
+///
+/// Since all traffic goes through Cloudflare Tunnel (iem.newlevel.media),
+/// CF-Connecting-IP is always a public IP. We compare it against the
+/// configured `local_public_ip` (the church network's public IP).
+/// Match = on church WiFi, different = remote.
+/// No proxy headers = direct connection = local.
+async fn get_network_mode(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    let local_ip = config.local_public_ip.clone();
+    drop(config);
+
+    // Extract client IP from Cloudflare headers
     let client_ip = headers
         .get("cf-connecting-ip")
         .or_else(|| headers.get("x-forwarded-for"))
@@ -125,16 +136,25 @@ async fn get_network_mode(headers: axum::http::HeaderMap) -> impl IntoResponse {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
 
-    let mode = match client_ip {
-        Some(ip) => {
-            if is_private_ip(&ip) {
+    let mode = match (&client_ip, &local_ip) {
+        // If we have both client IP and configured local IP, compare them
+        (Some(client), Some(local)) => {
+            if client == local {
                 "local"
             } else {
                 "remote"
             }
         }
-        // No proxy headers = direct connection = local network
-        None => "local",
+        // No proxy headers = direct connection (not through Cloudflare) = local
+        (None, _) => "local",
+        // No local_public_ip configured = fall back to private IP check
+        (Some(ip), None) => {
+            if is_private_ip(ip) {
+                "local"
+            } else {
+                "remote"
+            }
+        }
     };
 
     Json(NetworkModeResponse {
