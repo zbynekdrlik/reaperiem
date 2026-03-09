@@ -789,9 +789,7 @@ async fn handle_ws(
     // Send network mode (local/remote) — updates on every WS reconnect,
     // so switching between WiFi and mobile data triggers a fresh detection
     {
-        let msg = ServerMsg::NetworkMode {
-            mode: network_mode,
-        };
+        let msg = ServerMsg::NetworkMode { mode: network_mode };
         let json = serde_json::to_string(&msg).unwrap_or_default();
         let _ = socket.send(Message::Text(json.into())).await;
     }

@@ -167,9 +167,7 @@ async fn get_network_mode(
 
     let mode = detect_network_mode(&headers, &local_ip);
 
-    Json(NetworkModeResponse {
-        mode,
-    })
+    Json(NetworkModeResponse { mode })
 }
 
 #[derive(Serialize)]
