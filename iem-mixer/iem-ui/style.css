@@ -1783,3 +1783,7 @@ body {
   border-bottom-color: var(--text-muted);
   color: var(--text-secondary);
 }
+
+.category-tab.tab-hidden {
+  display: none;
+}

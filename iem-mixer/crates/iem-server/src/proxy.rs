@@ -989,6 +989,10 @@ async fn apply_command_to_cache(
             }
         }
         iem_core::ClientMsg::SetGlobalMute { .. } => {}
+        iem_core::ClientMsg::UpdateCustomization { .. } => {
+            // Handled in WS handler before apply_command_to_cache is called
+            return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
+        }
     }
 
     let (url, track_index, broadcast) = match cmd {
@@ -1117,6 +1121,9 @@ async fn apply_command_to_cache(
                     muted: current_muted,
                 }),
             )
+        }
+        iem_core::ClientMsg::UpdateCustomization { .. } => {
+            unreachable!("UpdateCustomization handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };

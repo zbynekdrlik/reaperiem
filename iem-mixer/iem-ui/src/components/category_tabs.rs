@@ -62,6 +62,8 @@ pub fn CategoryTabs(
         Category::Tech,
     ];
 
+    let on_select_hidden = on_select.clone();
+
     view! {
         <div class="category-tabs">
             {base_categories.into_iter().map(|cat| {
@@ -82,29 +84,21 @@ pub fn CategoryTabs(
                     </button>
                 }
             }).collect::<Vec<_>>()}
-            <Show
-                when=move || show_hidden.get()
-                fallback=|| ()
-            >
-                {
-                    let on_select = on_select.clone();
-                    view! {
-                        <button
-                            class=move || {
-                                let base = "category-tab hidden".to_string();
-                                if active.get() == Category::Hidden {
-                                    format!("{} active", base)
-                                } else {
-                                    base
-                                }
-                            }
-                            on:click=move |_| on_select(Category::Hidden)
-                        >
-                            "Hidden"
-                        </button>
+            <button
+                class=move || {
+                    let mut cls = String::from("category-tab hidden");
+                    if !show_hidden.get() {
+                        cls.push_str(" tab-hidden");
                     }
+                    if active.get() == Category::Hidden {
+                        cls.push_str(" active");
+                    }
+                    cls
                 }
-            </Show>
+                on:click=move |_| on_select_hidden(Category::Hidden)
+            >
+                "Hidden"
+            </button>
         </div>
     }
 }
