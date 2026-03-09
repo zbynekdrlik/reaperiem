@@ -110,8 +110,9 @@ NEVER: "It should work now" / "The icon should appear"
 1. Push all code to `dev`
 2. Create PR `dev` → `main` when ready to deploy
 3. CI runs all checks on PR (lint, tests, build, e2e, version bump)
-4. Merge commit (only method allowed — no squash, no rebase)
-5. Merge triggers auto-deploy to iem.lan
+4. **Wait for explicit user approval** (user must say "approved" or equivalent in the conversation)
+5. Merge commit (only method allowed — no squash, no rebase)
+6. Merge triggers auto-deploy to iem.lan
 
 ### CI Job Matrix
 
@@ -136,9 +137,20 @@ NEVER: "It should work now" / "The icon should appear"
 4. Monitor PR CI until ALL required checks pass
 5. Provide the PR URL to the user only after it is confirmed green and mergeable
 6. **The PR URL you give the user must be ready to merge — no exceptions**
-7. **After merge: Update README.md changelog** with user-facing changes from the PR
+7. **⚠️ NEVER merge the PR yourself — wait for the user's explicit approval in the conversation** (e.g., "approved, do it", "merge it", "go ahead"). Only then run `gh pr merge`.
+8. **After merge: Update README.md changelog** with user-facing changes from the PR
 
 If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
+
+### ⚠️ PR MERGE REQUIRES EXPLICIT USER APPROVAL
+
+**CRITICAL: You MUST NOT merge any PR without the user's explicit approval in the conversation.**
+
+- Present the green PR URL to the user
+- Wait for the user to explicitly approve (e.g., "approved", "merge it", "do it", "go ahead")
+- Only THEN run `gh pr merge`
+- **NEVER auto-merge, even if all CI checks pass**
+- **NEVER assume approval — silence is NOT approval**
 
 ### ⚠️ CHANGELOG MAINTENANCE (MANDATORY)
 
@@ -174,6 +186,7 @@ Include ALL user-facing changes:
 ❌ Squash or rebase merge (only merge commits allowed)
 ❌ Give the user a PR URL that has failing CI checks
 ❌ Ask the user to merge a PR that isn't green
+❌ Merge a PR without explicit user approval in the conversation (NEVER auto-merge!)
 ```
 
 ---
