@@ -327,6 +327,7 @@ mod tests {
             https_domain: None,
             pins: HashMap::new(),
             engineer_pin: Some("1177".to_string()),
+            local_public_ip: None,
         }
     }
 
