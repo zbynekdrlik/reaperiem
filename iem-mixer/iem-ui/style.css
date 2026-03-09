@@ -525,20 +525,19 @@ body {
 
 /* ================================================================
    Channel Strip: Three-row layout (ALL screen sizes)
-   Row 1: Label | Solo | Mute | dB | Pan (controls visible above fader)
+   Row 1: Label | Menu(⋮) | Solo | Mute | dB | Pan
    Row 2: FULL-WIDTH HORIZONTAL METER
    Row 3: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
   position: relative; /* Required for ::after overlay on disconnected state */
   display: grid;
-  grid-template-columns: 56px 36px 40px 52px 1fr;
-  grid-template-rows: 36px 8px 44px auto;
+  grid-template-columns: 1fr 28px 36px 40px 44px auto;
+  grid-template-rows: 36px 8px 44px;
   grid-template-areas:
-    "label  solo   mute   db     pan"
-    "meter  meter  meter  meter  meter"
-    "fader  fader  fader  fader  fader"
-    "actions actions actions actions actions";
+    "label  menu   solo   mute   db     pan"
+    "meter  meter  meter  meter  meter  meter"
+    "fader  fader  fader  fader  fader  fader";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -775,13 +774,13 @@ body {
   transition: left 0.05s linear;
 }
 
-/* dB display - Row 2, centered for stage visibility */
+/* dB display - centered for stage visibility */
 .db-display {
   grid-area: db;
-  min-width: 52px;
+  min-width: 44px;
   text-align: center;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 0.9em;
+  font-size: 0.8em;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1460,7 +1459,7 @@ body {
     font-size: 0.6em;
   }
   .db-display {
-    font-size: 0.95em;
+    font-size: 0.85em;
   }
   .pan-slider {
     width: 60px;
@@ -1477,8 +1476,8 @@ body {
     width: 100px;
   }
   .db-display {
-    font-size: 1.2em;
-    min-width: 52px;
+    font-size: 1em;
+    min-width: 44px;
   }
 }
 
@@ -1735,50 +1734,70 @@ body {
   border: 1px solid rgba(124, 111, 255, 0.4);
 }
 
-/* Channel actions row (pin + hide buttons) */
-.channel-actions {
-  grid-area: actions;
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 4px 0;
-}
-
-.pin-btn,
-.hide-btn {
+/* Kebab menu button (⋮) in channel header */
+.ch-menu-btn {
+  grid-area: menu;
+  width: 28px;
+  height: 36px;
   background: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: var(--text-muted);
-  font-size: 0.75em;
-  padding: 3px 6px;
+  font-size: 1.1em;
   cursor: pointer;
-  min-width: 28px;
-  min-height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-
-.pin-btn.on {
+.ch-menu-btn:active,
+.ch-menu-btn.open {
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.06);
+}
+.ch-menu-popup {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  z-index: 60;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.ch-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.82em;
+  cursor: pointer;
+}
+.ch-menu-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+.ch-menu-item .menu-icon {
+  font-size: 1.1em;
+  width: 20px;
+  text-align: center;
+}
+.ch-menu-item.pinned .menu-icon {
   color: var(--solo-yellow);
-  border-color: var(--solo-yellow);
-  background: rgba(244, 211, 94, 0.1);
 }
 
-.hide-btn:active,
-.pin-btn:active {
-  opacity: 0.7;
+/* Hidden category tab — compact width (icon only) */
+.category-tab.hidden {
+  flex: 0;
+  padding: 10px 12px;
 }
-
-.hide-btn.unhide {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(78, 205, 196, 0.1);
-}
-
-/* Hidden category tab */
 .category-tab.hidden.active {
   border-bottom-color: var(--text-muted);
   color: var(--text-secondary);

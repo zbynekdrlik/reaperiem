@@ -823,6 +823,8 @@ fn GlobalVolumeFader(
                 <div class="ch-type">"master"</div>
             </div>
 
+            <div style="grid-area: menu"></div>
+
             <div class="meter-stereo">
                 <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
                 <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
@@ -885,6 +887,9 @@ fn ChannelList(
     let (last_send_times, set_last_send_times) = signal(HashMap::<usize, f64>::new());
     let (pending_values, set_pending_values) = signal(HashMap::<usize, f32>::new());
     let (_pending_timeouts, set_pending_timeouts) = signal(HashMap::<usize, i32>::new());
+
+    // Shared signal: which channel's kebab menu is open (None = all closed)
+    let (open_menu, set_open_menu) = signal(Option::<usize>::None);
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
@@ -1477,15 +1482,18 @@ fn ChannelList(
                     };
 
                     view! {
-                        <div class=move || {
-                            let mut classes = vec!["channel"];
-                            if muted_signal.get() { classes.push("muted"); }
-                            if is_my { classes.push("more-me"); }
-                            if is_stereo { classes.push("stereo-pair"); }
-                            if !is_connected() { classes.push("disconnected"); }
-                            if is_fader_active.get() { classes.push("fader-active"); }
-                            classes.join(" ")
-                        }>
+                        <div
+                            class=move || {
+                                let mut classes = vec!["channel"];
+                                if muted_signal.get() { classes.push("muted"); }
+                                if is_my { classes.push("more-me"); }
+                                if is_stereo { classes.push("stereo-pair"); }
+                                if !is_connected() { classes.push("disconnected"); }
+                                if is_fader_active.get() { classes.push("fader-active"); }
+                                classes.join(" ")
+                            }
+                            on:click=move |_| set_open_menu.set(None)
+                        >
                             <div class="ch-label">
                                 <div class="ch-name">{parse_track_name(&name).0}</div>
                                 <div class="ch-type">
@@ -1529,22 +1537,38 @@ fn ChannelList(
                                     "M"
                                 </button>
                             </div>
-                            <div class="channel-actions">
-                                <button
-                                    class=move || if ch_is_pinned() { "pin-btn on" } else { "pin-btn off" }
-                                    on:click=on_pin_click
-                                    title="Pin to Main tab"
-                                >
-                                    "\u{2606}"
-                                </button>
-                                <button
-                                    class=move || if is_hidden_tab() { "hide-btn unhide" } else { "hide-btn" }
-                                    on:click=on_hide_click
-                                    title=move || if is_hidden_tab() { "Unhide channel" } else { "Hide channel" }
-                                >
-                                    {move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}
-                                </button>
-                            </div>
+                            // Kebab menu button (⋮)
+                            <button
+                                class=move || if open_menu.get() == Some(track_idx) { "ch-menu-btn open" } else { "ch-menu-btn" }
+                                on:click=move |ev: web_sys::MouseEvent| {
+                                    ev.stop_propagation();
+                                    set_open_menu.update(|v| {
+                                        *v = if *v == Some(track_idx) { None } else { Some(track_idx) };
+                                    });
+                                }
+                            >
+                                "\u{22EE}"
+                            </button>
+
+                            // Kebab menu popup (only when this channel's menu is open)
+                            <Show when=move || open_menu.get() == Some(track_idx) fallback=|| ()>
+                                <div class="ch-menu-popup" on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()>
+                                    <button
+                                        class=move || if ch_is_pinned() { "ch-menu-item pinned" } else { "ch-menu-item" }
+                                        on:click=move |ev: web_sys::MouseEvent| { on_pin_click(ev); set_open_menu.set(None); }
+                                    >
+                                        <span class="menu-icon">{move || if ch_is_pinned() { "\u{2605}" } else { "\u{2606}" }}</span>
+                                        {move || if ch_is_pinned() { "Unpin" } else { "Pin to Main" }}
+                                    </button>
+                                    <button
+                                        class="ch-menu-item"
+                                        on:click=move |ev: web_sys::MouseEvent| { on_hide_click(ev); set_open_menu.set(None); }
+                                    >
+                                        <span class="menu-icon">{move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}</span>
+                                        {move || if is_hidden_tab() { "Unhide" } else { "Hide" }}
+                                    </button>
+                                </div>
+                            </Show>
                         </div>
                     }
                 }
