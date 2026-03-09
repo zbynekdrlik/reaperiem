@@ -127,6 +127,7 @@ impl Default for Config {
             tls_cert: default_tls_cert(),
             tls_key: default_tls_key(),
             https_domain: None,
+            local_public_ip: None,
         }
     }
 }
