@@ -1,75 +1,187 @@
 //! Preset modal component
+//!
+//! Presets are stored server-side and synced across devices.
 
 use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
 
-/// Preset data stored in localStorage
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+use crate::auth::get_token;
+
+/// Preset data used by the mixer to apply channel states
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PresetData {
     /// Track index -> channel state
     pub channels: std::collections::HashMap<usize, ChannelState>,
-    /// Timestamp when preset was created (milliseconds since epoch)
+    /// Timestamp when preset was created (seconds since epoch)
     #[serde(default)]
     pub created_at: Option<i64>,
-    /// Timestamp when preset was last updated (milliseconds since epoch)
+    /// Timestamp when preset was last updated (seconds since epoch)
     #[serde(default)]
     pub updated_at: Option<i64>,
 }
 
 /// Channel state in a preset
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelState {
     pub vol: f32,
     pub mute: bool,
     pub pan: f32,
 }
 
-/// Get current timestamp in milliseconds
-fn now_ms() -> i64 {
-    js_sys::Date::now() as i64
+/// Preset info from the server API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PresetInfo {
+    name: String,
+    channel_count: usize,
+    created_at: i64,
+    updated_at: i64,
+}
+
+/// Full preset entry from the server API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PresetEntry {
+    name: String,
+    channels: std::collections::HashMap<usize, ChannelState>,
+    created_at: i64,
+    updated_at: i64,
+}
+
+/// Request to save a preset
+#[derive(Serialize)]
+struct SavePresetRequest {
+    name: String,
+    channels: std::collections::HashMap<usize, ChannelState>,
 }
 
 /// Format timestamp for display in Slovak format (DD.MM. HH:MM)
 fn format_timestamp(ts: i64) -> String {
-    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ts as f64));
+    // Server timestamps are in seconds, JS Date expects milliseconds
+    let date = js_sys::Date::new(&wasm_bindgen::JsValue::from_f64((ts * 1000) as f64));
     let month = date.get_month() + 1;
     let day = date.get_date();
     let hours = date.get_hours();
     let mins = date.get_minutes();
-    // Slovak uses 24-hour format: DD.MM. HH:MM
     format!("{}.{}. {:02}:{:02}", day, month, hours, mins)
 }
 
-/// Get localStorage key for presets
-fn presets_key(member_id: &str) -> String {
-    format!("iem_presets_{}", member_id.to_lowercase())
+/// Fetch all presets from server
+async fn fetch_presets(member_id: &str) -> Result<Vec<PresetInfo>, String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/presets/{}", member_id);
+
+    let resp = gloo_net::http::Request::get(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
 }
 
-/// Load presets from localStorage
-pub fn load_presets(member_id: &str) -> std::collections::HashMap<String, PresetData> {
-    let key = presets_key(member_id);
-    if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            if let Ok(Some(data)) = storage.get_item(&key) {
-                if let Ok(presets) = serde_json::from_str(&data) {
-                    return presets;
-                }
-            }
-        }
+/// Get a specific preset from server
+async fn fetch_preset(member_id: &str, name: &str) -> Result<PresetEntry, String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/presets/{}/{}", member_id, encode_name(name));
+
+    let resp = gloo_net::http::Request::get(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        resp.json().await.map_err(|e| format!("Parse error: {}", e))
+    } else {
+        Err(format!("Server error: {}", resp.status()))
     }
-    std::collections::HashMap::new()
 }
 
-/// Save presets to localStorage
-pub fn save_presets(member_id: &str, presets: &std::collections::HashMap<String, PresetData>) {
-    let key = presets_key(member_id);
-    if let Some(window) = web_sys::window() {
-        if let Ok(Some(storage)) = window.local_storage() {
-            if let Ok(data) = serde_json::to_string(presets) {
-                let _ = storage.set_item(&key, &data);
-            }
-        }
+/// Save a preset to server
+async fn save_preset_api(
+    member_id: &str,
+    name: &str,
+    channels: std::collections::HashMap<usize, ChannelState>,
+) -> Result<(), String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/presets/{}", member_id);
+
+    let req = SavePresetRequest {
+        name: name.to_string(),
+        channels,
+    };
+
+    let resp = gloo_net::http::Request::post(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&req)
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
     }
+}
+
+/// Update a preset on server
+async fn update_preset_api(
+    member_id: &str,
+    name: &str,
+    channels: std::collections::HashMap<usize, ChannelState>,
+) -> Result<(), String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/presets/{}/{}", member_id, encode_name(name));
+
+    let req = SavePresetRequest {
+        name: name.to_string(),
+        channels,
+    };
+
+    let resp = gloo_net::http::Request::put(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&req)
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Delete a preset from server
+async fn delete_preset_api(member_id: &str, name: &str) -> Result<(), String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/presets/{}/{}", member_id, encode_name(name));
+
+    let resp = gloo_net::http::Request::delete(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// URL-encode preset name for use in path segments
+fn encode_name(name: &str) -> String {
+    js_sys::encode_uri_component(name)
+        .as_string()
+        .unwrap_or_else(|| name.to_string())
 }
 
 /// Preset modal component
@@ -86,37 +198,57 @@ pub fn PresetModal(
     /// Called to get current channel states for saving
     get_current_state: Callback<(), PresetData>,
 ) -> impl IntoView {
-    let (presets, set_presets) = signal(load_presets(&member_id));
+    let (presets, set_presets) = signal(Vec::<PresetInfo>::new());
     let (new_name, set_new_name) = signal(String::new());
-    let member_id_clone = member_id.clone();
+    let (loading, set_loading) = signal(false);
+    let (error, set_error) = signal(Option::<String>::None);
+    let member_id_stored = StoredValue::new(member_id);
 
     // Refresh presets when modal opens
-    let member_id_effect = member_id.clone();
     Effect::new(move |_| {
         if visible.get() {
-            set_presets.set(load_presets(&member_id_effect));
+            let member_id = member_id_stored.get_value();
+            set_loading.set(true);
+            set_error.set(None);
+
+            wasm_bindgen_futures::spawn_local(async move {
+                match fetch_presets(&member_id).await {
+                    Ok(list) => {
+                        set_presets.set(list);
+                        set_loading.set(false);
+                    }
+                    Err(e) => {
+                        set_error.set(Some(e));
+                        set_loading.set(false);
+                    }
+                }
+            });
         }
     });
 
-    let handle_save = {
-        let member_id = member_id.clone();
-        move |_| {
-            let name = new_name.get().trim().to_string();
-            if name.is_empty() {
-                return;
-            }
-
-            let mut state = get_current_state.run(());
-            let ts = now_ms();
-            state.created_at = Some(ts);
-            state.updated_at = Some(ts);
-
-            let mut current_presets = presets.get();
-            current_presets.insert(name, state);
-            save_presets(&member_id, &current_presets);
-            set_presets.set(current_presets);
-            set_new_name.set(String::new());
+    let handle_save = move |_| {
+        let name = new_name.get().trim().to_string();
+        if name.is_empty() {
+            return;
         }
+
+        let state = get_current_state.run(());
+        let member_id = member_id_stored.get_value();
+        set_loading.set(true);
+
+        wasm_bindgen_futures::spawn_local(async move {
+            match save_preset_api(&member_id, &name, state.channels).await {
+                Ok(()) => {
+                    // Refresh list
+                    if let Ok(list) = fetch_presets(&member_id).await {
+                        set_presets.set(list);
+                    }
+                    set_new_name.set(String::new());
+                }
+                Err(e) => set_error.set(Some(e)),
+            }
+            set_loading.set(false);
+        });
     };
 
     let handle_input = move |ev: web_sys::Event| {
@@ -145,62 +277,84 @@ pub fn PresetModal(
                 </button>
                 <h2>"Presets"</h2>
 
+                <Show when=move || loading.get() fallback=|| ()>
+                    <div class="snapshot-loading">
+                        <div class="spinner"></div>
+                    </div>
+                </Show>
+
+                <Show when=move || error.get().is_some() fallback=|| ()>
+                    <div class="snapshot-error">
+                        {move || error.get().unwrap_or_default()}
+                    </div>
+                </Show>
+
                 <div class="preset-list">
                     {move || {
                         let current_presets = presets.get();
-                        if current_presets.is_empty() {
+                        if current_presets.is_empty() && !loading.get() {
                             view! {
                                 <div class="no-presets">"No saved presets yet"</div>
                             }.into_any()
                         } else {
                             view! {
                                 <>
-                                    {
-                                    let mut sorted: Vec<_> = current_presets.iter().collect();
-                                    sorted.sort_by(|a, b| {
-                                        let ts_a = a.1.created_at.unwrap_or(0);
-                                        let ts_b = b.1.created_at.unwrap_or(0);
-                                        ts_b.cmp(&ts_a)
-                                    });
-                                    sorted.into_iter().map(|(name, data)| {
-                                        let name_load = name.clone();
-                                        let name_update = name.clone();
-                                        let name_delete = name.clone();
-                                        let member_id_update = member_id_clone.clone();
-                                        let member_id_delete = member_id_clone.clone();
-                                        let timestamp = data.updated_at.or(data.created_at);
+                                    {current_presets.into_iter().map(|info| {
+                                        let name_load = info.name.clone();
+                                        let name_update = info.name.clone();
+                                        let name_delete = info.name.clone();
+                                        let updated_at = info.updated_at;
 
                                         view! {
                                             <div class="preset-item">
                                                 <div
                                                     class="preset-info"
                                                     on:click=move |_| {
-                                                        let p = presets.get();
-                                                        if let Some(data) = p.get(&name_load) {
-                                                            on_load.run(data.clone());
-                                                            on_close.run(());
-                                                        }
+                                                        let member_id = member_id_stored.get_value();
+                                                        let name = name_load.clone();
+                                                        wasm_bindgen_futures::spawn_local(async move {
+                                                            match fetch_preset(&member_id, &name).await {
+                                                                Ok(entry) => {
+                                                                    let data = PresetData {
+                                                                        channels: entry.channels.into_iter().map(|(k, v)| {
+                                                                            (k, ChannelState { vol: v.vol, mute: v.mute, pan: v.pan })
+                                                                        }).collect(),
+                                                                        created_at: Some(entry.created_at),
+                                                                        updated_at: Some(entry.updated_at),
+                                                                    };
+                                                                    on_load.run(data);
+                                                                    on_close.run(());
+                                                                }
+                                                                Err(e) => {
+                                                                    web_sys::console::error_1(&format!("Failed to load preset: {}", e).into());
+                                                                }
+                                                            }
+                                                        });
                                                     }
                                                 >
-                                                    <span class="name">{name.clone()}</span>
-                                                    {timestamp.map(|ts| view! {
-                                                        <span class="preset-timestamp">{format_timestamp(ts)}</span>
-                                                    })}
+                                                    <span class="name">{info.name.clone()}</span>
+                                                    <span class="preset-timestamp">{format_timestamp(updated_at)}</span>
                                                 </div>
                                                 <div class="preset-actions">
                                                     <button
                                                         class="update-preset"
                                                         on:click=move |_| {
-                                                            let mut state = get_current_state.run(());
-                                                            let mut current = presets.get();
-                                                            // Preserve created_at, update updated_at
-                                                            if let Some(existing) = current.get(&name_update) {
-                                                                state.created_at = existing.created_at;
-                                                            }
-                                                            state.updated_at = Some(now_ms());
-                                                            current.insert(name_update.clone(), state);
-                                                            save_presets(&member_id_update, &current);
-                                                            set_presets.set(current);
+                                                            let state = get_current_state.run(());
+                                                            let member_id = member_id_stored.get_value();
+                                                            let name = name_update.clone();
+                                                            set_loading.set(true);
+
+                                                            wasm_bindgen_futures::spawn_local(async move {
+                                                                match update_preset_api(&member_id, &name, state.channels).await {
+                                                                    Ok(()) => {
+                                                                        if let Ok(list) = fetch_presets(&member_id).await {
+                                                                            set_presets.set(list);
+                                                                        }
+                                                                    }
+                                                                    Err(e) => set_error.set(Some(e)),
+                                                                }
+                                                                set_loading.set(false);
+                                                            });
                                                         }
                                                     >
                                                         "Upd"
@@ -208,10 +362,21 @@ pub fn PresetModal(
                                                     <button
                                                         class="delete-preset"
                                                         on:click=move |_| {
-                                                            let mut current = presets.get();
-                                                            current.remove(&name_delete);
-                                                            save_presets(&member_id_delete, &current);
-                                                            set_presets.set(current);
+                                                            let member_id = member_id_stored.get_value();
+                                                            let name = name_delete.clone();
+                                                            set_loading.set(true);
+
+                                                            wasm_bindgen_futures::spawn_local(async move {
+                                                                match delete_preset_api(&member_id, &name).await {
+                                                                    Ok(()) => {
+                                                                        if let Ok(list) = fetch_presets(&member_id).await {
+                                                                            set_presets.set(list);
+                                                                        }
+                                                                    }
+                                                                    Err(e) => set_error.set(Some(e)),
+                                                                }
+                                                                set_loading.set(false);
+                                                            });
                                                         }
                                                     >
                                                         "Del"
@@ -219,8 +384,7 @@ pub fn PresetModal(
                                                 </div>
                                             </div>
                                         }
-                                    }).collect::<Vec<_>>()
-                                    }
+                                    }).collect::<Vec<_>>()}
                                 </>
                             }.into_any()
                         }
@@ -236,7 +400,7 @@ pub fn PresetModal(
                         prop:value=move || new_name.get()
                         on:input=handle_input
                     />
-                    <button class="preset-save-btn" on:click=handle_save>
+                    <button class="preset-save-btn" on:click=handle_save disabled=move || loading.get()>
                         "Save"
                     </button>
                 </div>

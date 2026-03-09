@@ -604,24 +604,37 @@ jobs:
           git checkout main
           git pull origin main --rebase
 
+          # Copy snapshots and presets into repo for git tracking
+          $appData = "$env:APPDATA\iem-mixer"
+          if (Test-Path "$appData\snapshots") {
+            if (-not (Test-Path "data\snapshots")) { New-Item -ItemType Directory -Path "data\snapshots" -Force | Out-Null }
+            Copy-Item "$appData\snapshots\*" "data\snapshots\" -Force
+            Write-Host "Copied snapshots to data/snapshots/"
+          }
+          if (Test-Path "$appData\presets") {
+            if (-not (Test-Path "data\presets")) { New-Item -ItemType Directory -Path "data\presets" -Force | Out-Null }
+            Copy-Item "$appData\presets\*" "data\presets\" -Force
+            Write-Host "Copied presets to data/presets/"
+          }
+
           # Check for uncommitted changes
-          $status = git status projects/ --porcelain
+          $status = git status projects/ data/ --porcelain
           if ($status) {
-            Write-Host "REAPER project changes detected:"
+            Write-Host "Changes detected:"
             Write-Host $status
 
             # Stage and commit
-            git add projects/
+            git add projects/ data/
             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
-            git commit -m "backup: REAPER project $timestamp
+            git commit -m "backup: REAPER project + mixer data $timestamp
 
             Co-Authored-By: GitHub Actions <actions@github.com>"
 
             # Push to remote
             git push origin main
-            Write-Host "REAPER project backed up and pushed to GitHub"
+            Write-Host "Backed up and pushed to GitHub"
           } else {
-            Write-Host "REAPER project is clean - no backup needed"
+            Write-Host "No changes to backup"
           }
 
           Pop-Location

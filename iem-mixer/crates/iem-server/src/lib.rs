@@ -9,6 +9,8 @@
 pub mod auth;
 pub mod pin_store;
 pub mod poller;
+pub mod preset_routes;
+pub mod preset_store;
 pub mod proxy;
 pub mod routes;
 pub mod snapshot_routes;
@@ -39,6 +41,8 @@ pub struct AppState {
     pub pin_store: Arc<RwLock<pin_store::PinStore>>,
     /// Snapshot storage for mix history
     pub snapshot_store: Arc<snapshot_store::SnapshotStore>,
+    /// Preset storage for saved mix configurations
+    pub preset_store: Arc<preset_store::PresetStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
 }
@@ -101,6 +105,7 @@ impl AppState {
             mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
+            preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
         }
     }
