@@ -161,7 +161,9 @@ pub async fn start_server(
                     state.config.write().await.local_public_ip = Some(ip);
                 }
                 None => {
-                    tracing::warn!("Could not auto-detect public IP; LAN/WAN detection will use private IP fallback");
+                    tracing::warn!(
+                        "Could not auto-detect public IP; LAN/WAN detection will use private IP fallback"
+                    );
                 }
             }
         }
@@ -339,7 +341,12 @@ async fn detect_public_ip(client: &reqwest::Client) -> Option<String> {
         "https://icanhazip.com",
     ];
     for url in services {
-        match client.get(url).timeout(std::time::Duration::from_secs(3)).send().await {
+        match client
+            .get(url)
+            .timeout(std::time::Duration::from_secs(3))
+            .send()
+            .await
+        {
             Ok(resp) if resp.status().is_success() => {
                 if let Ok(ip) = resp.text().await {
                     let ip = ip.trim().to_string();
