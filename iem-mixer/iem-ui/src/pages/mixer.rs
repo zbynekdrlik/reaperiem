@@ -35,7 +35,6 @@ struct DisplayChannel {
     is_stereo: bool,
     partner_index: Option<usize>,
     is_my_input: bool,
-    is_pinned: bool,
 }
 
 /// Send a command via WebSocket (synchronous, non-blocking)
@@ -380,11 +379,9 @@ pub fn MixerPage() -> impl IntoView {
                     continue;
                 }
             } else if active_cat == Category::Main {
-                // Main tab: show "me" channel + pinned channels (not hidden ones)
+                // Main tab: show "me" channel + pinned channels
+                // Hidden does NOT remove pinned channels from Main — only from category tabs
                 if !is_my_input && !is_pinned {
-                    continue;
-                }
-                if is_hidden {
                     continue;
                 }
             } else {
@@ -430,7 +427,6 @@ pub fn MixerPage() -> impl IntoView {
                 is_stereo,
                 partner_index,
                 is_my_input,
-                is_pinned,
             });
         }
 
@@ -907,7 +903,8 @@ fn ChannelList(
                     let name = ch.display_name.clone();
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
-                    let ch_is_pinned = ch.is_pinned;
+                    let ch_is_pinned =
+                        move || pinned_channels.get().contains(&track_idx);
 
                     // Derived signals using .with() to avoid cloning entire collections
                     let level_signal = Signal::derive(move || {
@@ -1534,7 +1531,7 @@ fn ChannelList(
                             </div>
                             <div class="channel-actions">
                                 <button
-                                    class=move || if ch_is_pinned { "pin-btn on" } else { "pin-btn off" }
+                                    class=move || if ch_is_pinned() { "pin-btn on" } else { "pin-btn off" }
                                     on:click=on_pin_click
                                     title="Pin to Main tab"
                                 >

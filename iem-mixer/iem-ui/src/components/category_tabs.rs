@@ -96,8 +96,9 @@ pub fn CategoryTabs(
                     cls
                 }
                 on:click=move |_| on_select_hidden(Category::Hidden)
+                title="Hidden channels"
             >
-                "Hidden"
+                "\u{1F441}"
             </button>
         </div>
     }
