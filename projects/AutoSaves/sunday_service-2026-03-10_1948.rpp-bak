@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.61/win64" 1773150472 0
+<REAPER_PROJECT 0.1 "7.61/win64" 1773168492 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -125,7 +125,7 @@
     <FXCHAIN
       WNDRECT 24 52 716 202
       SHOW 0
-      LASTSEL 1
+      LASTSEL 0
       DOCKED 0
       BYPASS 0 0 0
       <JS utility/volume_pan ""
@@ -133,13 +133,6 @@
       >
       FLOATPOS 0 0 0 0
       FXID {EED0CCED-FA9B-4FBF-B324-8FC9C3FE8DEB}
-      WAK 0 0
-      BYPASS 0 0 0
-      <JS sstillwell/hpflpf ""
-        150 18000 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      >
-      FLOATPOS 0 0 0 0
-      FXID {0C0BD1CC-763C-44FC-B1B2-D3D76318D046}
       WAK 0 0
     >
   >
@@ -197,9 +190,26 @@
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
-      SHOW 0
-      LASTSEL 0
+      WNDRECT 24 52 839 523
+      SHOW 2
+      LASTSEL 1
       DOCKED 0
+      BYPASS 0 0 0
+      <JS utility/volume_pan ""
+        3 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS 0 0 0 0
+      FXID {4E7A338F-AFE6-4C5B-A1D9-3FE31C4C3A2A}
+      WAK 0 0
+      BYPASS 1 0 0
+      <VST "VST: ReaFir (FFT EQ+Dynamics Processor) (Cockos)" reafir.dll 0 "" 1919247986<56535472656672726561666972666674> ""
+        cmZlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAWAAAAAEAAAAAABAA
+        nBIAAAAAtMIAAMBBABAAAAAAgD8AAAAAAgAAAAIAAADXOb9DAAAAAKUrSEUAAAAABAAAAAAAAACtVQM8AACAP7OiBDgAAAA+AAAAAAAAAAACAAACAACAPw==
+        AAAQAAAA
+      >
+      FLOATPOS 0 0 0 0
+      FXID {A537AD66-A4DE-43CD-BC79-4CE8E789108A}
+      WAK 0 0
     >
   >
   <TRACK {5D1A14E6-38B6-46CA-9DC0-59BB3ED6FD44}
@@ -467,13 +477,6 @@
       SHOW 0
       LASTSEL 0
       DOCKED 0
-      BYPASS 0 0 0
-      <JS utility/volume_pan ""
-        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      >
-      FLOATPOS 0 0 0 0
-      FXID {1A08CFC9-86D4-4D2F-8199-C62A250DE03A}
-      WAK 0 0
     >
   >
   <TRACK {6A42BE57-C198-4B3B-9A6B-B2B8E88974E2}
@@ -507,13 +510,6 @@
       SHOW 0
       LASTSEL 0
       DOCKED 0
-      BYPASS 0 0 0
-      <JS utility/volume_pan ""
-        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      >
-      FLOATPOS 24 52 505 155
-      FXID {521190FB-3705-4C7F-B13D-D8BE060FC8F6}
-      WAK 0 0
     >
   >
   <TRACK {2DA88E12-FEC7-4A3E-80B0-CDDDBA0E225A}
@@ -547,13 +543,6 @@
       SHOW 0
       LASTSEL 0
       DOCKED 0
-      BYPASS 0 0 0
-      <JS utility/volume_pan ""
-        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      >
-      FLOATPOS 0 0 0 0
-      FXID {553F3754-6190-4308-A5EF-B5F78F5A93B6}
-      WAK 0 0
     >
   >
   <TRACK {4A79AAF6-78EF-4B1A-A014-3E4863A3AAA3}
@@ -921,7 +910,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 4 0 1 0.5 0 0 0 -1:U -1
+    HWOUT 4 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
       SHOW 0
       LASTSEL 0
@@ -934,7 +923,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.4120975 0 -1 -1 1
+    VOLPAN 0.5069907 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -953,18 +942,18 @@
     TRACKID {C4C21337-5F37-4E90-B19E-57C3972E1FCB}
     PERF 0
     AUXRECV 0 3 0.32359365 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.9885531 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 3.981072 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.4216965 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.45708817 0.36666667 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.10351422 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 5 3 0.35885006 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.6024389 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.16029245 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 8 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 10 3 0.53692424 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 11 3 0.53692424 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 12 3 0.6024389 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 8 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 10 3 0.31622776 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 11 3 0.3311311 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 12 3 0.31622776 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.6381357 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.42649412 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 15 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
@@ -973,10 +962,15 @@
     AUXRECV 18 3 0.26909956 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 0.26909956 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 0.1513258 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 6 0 1 0.5 0 0 0 -1:U -1
+    HWOUT 6 0 1 0 0 0 0 -1:U -1
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+    >
   >
   <TRACK {6D4114BD-AD77-4C21-ADAF-74ACF6D6AAF7}
     NAME "ZUZKA inear"
@@ -1026,7 +1020,7 @@
     AUXRECV 21 3 0.009548013 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 8 0 1 0.5 0 0 0 -1:U -1
+    HWOUT 8 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {BBDB2FDC-86DD-4E55-9FE9-EA3A5C55CCED}
     NAME "TINA inear"
@@ -1076,7 +1070,7 @@
     AUXRECV 21 3 0.113478355 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 10 0 1 0.5 0 0 0 -1:U -1
+    HWOUT 10 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {7D97119D-82A1-42A1-B362-F3CCD9C9CB30}
     NAME "MIREC inear"
@@ -1126,7 +1120,7 @@
     AUXRECV 21 3 0.14286079 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 12 0 1 0.5 0 0 0 -1:U -1
+    HWOUT 12 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {C988DC6F-0526-4DD4-85D7-CD2E30967EF6}
     NAME "ALEX inear"
@@ -1322,7 +1316,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 0
+    SEL 1
     REC 0 -1 0 2 0 0 0 0
     VU 64
     TRACKHEIGHT 25 0 0 0 0 0 0
