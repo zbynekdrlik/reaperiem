@@ -61,8 +61,10 @@ pub fn preset_routes() -> Router<AppState> {
 async fn list_presets(
     State(state): State<AppState>,
     Path(member): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<PresetInfo>>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     if config.find_member(&member).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
@@ -77,9 +79,11 @@ async fn list_presets(
 async fn save_preset(
     State(state): State<AppState>,
     Path(member): Path<String>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<SavePresetRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     if config.find_member(&member).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
@@ -127,7 +131,11 @@ async fn save_preset(
 async fn get_preset(
     State(state): State<AppState>,
     Path((member, name)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<PresetEntry>, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     state
         .preset_store
         .get(&member, &name)
@@ -139,8 +147,12 @@ async fn get_preset(
 async fn update_preset(
     State(state): State<AppState>,
     Path((member, name)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<SavePresetRequest>,
 ) -> Result<Json<PresetEntry>, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     // Verify preset exists
     if state.preset_store.get(&member, &name).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Preset"))));
@@ -164,7 +176,11 @@ async fn update_preset(
 async fn delete_preset(
     State(state): State<AppState>,
     Path((member, name)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     let deleted = state.preset_store.delete(&member, &name).map_err(|e| {
         tracing::error!("Failed to delete preset: {}", e);
         (
@@ -184,7 +200,11 @@ async fn delete_preset(
 async fn restore_preset(
     State(state): State<AppState>,
     Path((member, name)): Path<(String, String)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     // Get the preset
     let preset = state
         .preset_store

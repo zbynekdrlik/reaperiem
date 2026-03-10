@@ -566,6 +566,14 @@ body {
   opacity: 0.4;
 }
 
+/* When a muted channel has its kebab menu open, it must stack above the
+   backdrop (z-index: 55). opacity < 1 creates a new stacking context,
+   trapping the popup's z-index inside. This z-index lifts the entire
+   channel above the backdrop so the popup remains clickable. */
+.channel.menu-open {
+  z-index: 56;
+}
+
 /* SAFETY: Disabled state when disconnected from REAPER */
 .channel.disconnected {
   opacity: 0.3;
