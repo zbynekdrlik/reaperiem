@@ -716,6 +716,53 @@ jobs:
             echo WARNING: WASM not deployed to REAPER www root - requires admin access
           )
 
+      - name: Verify send modes (pre-fader)
+        shell: powershell
+        run: |
+          # Check if REAPER is running and HTTP API is available
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            Write-Host "::error::REAPER HTTP API not responding - cannot verify send modes"
+            exit 1
+          }
+
+          # Reset check state
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/send_mode_check/pending" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 1
+
+          # Trigger check script
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_SENDS" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          # Read result
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/send_mode_check" -UseBasicParsing).Content
+          Write-Host "Send mode check result: $response"
+
+          if ($response -match "FAIL") {
+            Write-Host "::error::SEND MODE CHECK FAILED: Some sends are not pre-fader (mode 3)."
+            Write-Host "::error::Run fix_send_mode.lua in REAPER to fix: curl http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/auto_fix_sends/1 && curl http://iem.lan:8080/_/_RS_REAPERIEM_FIX_SENDS"
+            exit 1
+          }
+
+          if ($response -match "ERROR") {
+            Write-Host "::error::Send mode check script error: $response"
+            exit 1
+          }
+
+          if ($response -match "pending") {
+            Write-Host "::error::Send mode check script did not execute (still pending)"
+            exit 1
+          }
+
+          Write-Host "Send mode check: OK (all sends are pre-fader post-FX)"
+
       - name: Verify deployment
         shell: powershell
         run: |
