@@ -1574,6 +1574,10 @@ fn ChannelList(
                 }
             />
             </Show>
+            // Backdrop to close kebab menu on outside tap
+            <Show when=move || open_menu.get().is_some() fallback=|| ()>
+                <div class="ch-menu-backdrop" on:click=move |_| set_open_menu.set(None)></div>
+            </Show>
     }
 }
 

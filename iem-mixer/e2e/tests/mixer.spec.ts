@@ -443,6 +443,29 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(menuBox!.x).toBeLessThan(labelBox!.x);
   });
 
+  test("kebab menu closes when clicking outside", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    // Open the kebab menu
+    await channel.locator(".ch-menu-btn").click();
+    await expect(channel.locator(".ch-menu-popup")).toBeVisible();
+
+    // Click outside the menu (on the backdrop)
+    await page.locator(".ch-menu-backdrop").click();
+
+    // Menu should be closed
+    await expect(channel.locator(".ch-menu-popup")).not.toBeVisible();
+  });
+
   test("channel has position: relative for overlay containment", async ({
     page,
   }) => {

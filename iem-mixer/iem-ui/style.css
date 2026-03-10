@@ -1807,3 +1807,10 @@ body {
 .category-tab.tab-hidden {
   display: none;
 }
+
+/* Backdrop to close kebab menu on outside tap */
+.ch-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55; /* Below .ch-menu-popup (60), above everything else */
+}
