@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.44.0 (2026-03-10)
+
+- **Fix**: Applied pre-fader sends to REAPER — 199 sends corrected from post-fader to pre-fader post-FX mode (Issue #7)
+- **CI**: Added "Verify send modes" step that HARD FAILS pipeline if any send regresses to post-fader
+- **Script**: New `check_send_modes.lua` for automated send mode verification via EXTSTATE
+
 ### v1.43.0 (2026-03-10)
 
 - **Fix**: Own channel always appears first on Main tab (above pinned channels)
