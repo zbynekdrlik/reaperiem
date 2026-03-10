@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.43.0 (2026-03-10)
+
+- **Fix**: Own channel always appears first on Main tab (above pinned channels)
+- **Fix**: Removed "MY MIC" label clutter from Main tab
+- **Fix**: Kebab menu visual polish — wider dB column, menu positioned left of label
+- **Fix**: Channel header dB overflow, kebab visibility, name truncation improvements
+
 ### v1.36.0 (2026-03-09)
 
 - **Feature**: Server-side presets - presets now sync across all devices (#70)
