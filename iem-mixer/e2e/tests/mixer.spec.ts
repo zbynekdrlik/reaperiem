@@ -1914,3 +1914,32 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     expect(isClipped).toBe(false);
   });
 });
+
+test.describe("Main tab channel ordering", () => {
+  test("own channel appears first on Main tab, before pinned channels", async ({
+    page,
+  }) => {
+    await loginAs(page, "ani");
+    await page.goto("/ani");
+    if (!(await waitForMixer(page))) return;
+
+    // Wait for channel strips to render
+    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    const channels = page.locator(".channel:not(.global-volume)");
+    const count = await channels.count();
+    if (!assume(count >= 1, "At least one channel strip must exist")) return;
+
+    // First non-global-volume channel should be the member's own input
+    const firstName = await channels.first().locator(".ch-name").textContent();
+    expect(firstName?.toUpperCase()).toContain("ANI");
+  });
+
+  test("MY MIC label is not present on Main tab", async ({ page }) => {
+    await loginAs(page, "ani");
+    await page.goto("/ani");
+    if (!(await waitForMixer(page))) return;
+
+    const myMicLabel = page.locator(".main-section-label");
+    await expect(myMicLabel).toHaveCount(0);
+  });
+});

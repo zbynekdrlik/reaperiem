@@ -444,6 +444,11 @@ pub fn MixerPage() -> impl IntoView {
             });
         }
 
+        // Sort Main: own channel first, pinned channels after
+        if active_cat == Category::Main {
+            result.sort_by_key(|ch| if ch.is_my_input { 0 } else { 1 });
+        }
+
         result
     };
 
@@ -609,7 +614,6 @@ pub fn MixerPage() -> impl IntoView {
                                 connected=connected
                                 ws=ws
                             />
-                            <div class="main-section-label">"MY MIC"</div>
                         </Show>
                         <ChannelList
                             display_channels=Signal::derive(display_channels)

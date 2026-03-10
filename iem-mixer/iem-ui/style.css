@@ -1496,17 +1496,6 @@ body {
   font-weight: 600;
 }
 
-/* Section label in Main tab */
-.main-section-label {
-  grid-column: 1 / -1;
-  font-size: 0.7em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  padding: 8px 4px 4px;
-}
-
 /* ================================================================
    Network Error (Issue #56)
    ================================================================ */
