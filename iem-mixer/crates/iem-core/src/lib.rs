@@ -14,7 +14,8 @@ pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
 pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
-    ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, MixerState, PollResponse,
+    ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, Customization, MixerState,
+    PollResponse,
 };
 pub use ws::{ClientMsg, ServerMsg};
 

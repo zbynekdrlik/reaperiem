@@ -402,6 +402,70 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(dbBox!.y).toBeLessThan(faderBox!.y);
   });
 
+  test("dB display text is not clipped", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    const dbDisplay = channel.locator(".db-display");
+    await expect(dbDisplay).toBeVisible();
+    // scrollWidth > clientWidth means text is clipped by overflow
+    const isClipped = await dbDisplay.evaluate(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
+    expect(isClipped).toBe(false);
+  });
+
+  test("kebab menu button is left of channel name", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    const menuBox = await channel.locator(".ch-menu-btn").boundingBox();
+    const labelBox = await channel.locator(".ch-label").boundingBox();
+    expect(menuBox).not.toBeNull();
+    expect(labelBox).not.toBeNull();
+    // Menu X position must be less than label X position (menu is to the left)
+    expect(menuBox!.x).toBeLessThan(labelBox!.x);
+  });
+
+  test("kebab menu closes when clicking outside", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    const channel = page.locator(".channel").first();
+    const channelLoaded = await channel
+      .waitFor({ state: "visible", timeout: 5000 })
+      .catch(() => null);
+    if (!assume(channelLoaded, "channel must load for this test")) return;
+
+    // Open the kebab menu
+    await channel.locator(".ch-menu-btn").click();
+    await expect(channel.locator(".ch-menu-popup")).toBeVisible();
+
+    // Click outside the menu (on the backdrop)
+    await page.locator(".ch-menu-backdrop").click();
+
+    // Menu should be closed
+    await expect(channel.locator(".ch-menu-popup")).not.toBeVisible();
+  });
+
   test("channel has position: relative for overlay containment", async ({
     page,
   }) => {
@@ -1848,5 +1912,36 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
       return rect.right > parentRect.right || rect.left < parentRect.left;
     });
     expect(isClipped).toBe(false);
+  });
+});
+
+test.describe("Main tab channel ordering", () => {
+  test("own channel appears first on Main tab, before pinned channels", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "ani");
+    await page.goto("/ani");
+    if (!(await waitForMixer(page))) return;
+
+    // Wait for channel strips to render
+    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    const channels = page.locator(".channel:not(.global-volume)");
+    const count = await channels.count();
+    if (!assume(count >= 1, "At least one channel strip must exist")) return;
+
+    // First non-global-volume channel should be the member's own input
+    const firstName = await channels.first().locator(".ch-name").textContent();
+    expect(firstName?.toUpperCase()).toContain("ANI");
+  });
+
+  test("MY MIC label is not present on Main tab", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "ani");
+    await page.goto("/ani");
+    if (!(await waitForMixer(page))) return;
+
+    const myMicLabel = page.locator(".main-section-label");
+    await expect(myMicLabel).toHaveCount(0);
   });
 });

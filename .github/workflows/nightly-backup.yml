@@ -17,43 +17,93 @@ jobs:
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
           Push-Location $repoPath
 
-          # Ensure we're on latest main
-          git fetch origin main
-          git checkout main
-          git pull origin main --rebase
+          # Collect all backup data while still on main (projects/ lives here)
+          $tmpDir = "$env:TEMP\reaperiem-backup"
+          if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
-          # Copy snapshots and presets into repo for git tracking
+          # Collect REAPER projects from working tree
+          if (Test-Path "projects") {
+            Copy-Item "projects" "$tmpDir\projects" -Recurse -Force
+            Write-Host "Collected projects/"
+          }
+
+          # Collect mixer data from AppData
           $appData = "$env:APPDATA\iem-mixer"
+          New-Item -ItemType Directory -Path "$tmpDir\data" -Force | Out-Null
           if (Test-Path "$appData\snapshots") {
-            if (-not (Test-Path "data\snapshots")) { New-Item -ItemType Directory -Path "data\snapshots" -Force | Out-Null }
-            Copy-Item "$appData\snapshots\*" "data\snapshots\" -Force
-            Write-Host "Copied snapshots to data/snapshots/"
+            New-Item -ItemType Directory -Path "$tmpDir\data\snapshots" -Force | Out-Null
+            Copy-Item "$appData\snapshots\*" "$tmpDir\data\snapshots\" -Force
+            Write-Host "Collected snapshots"
           }
           if (Test-Path "$appData\presets") {
-            if (-not (Test-Path "data\presets")) { New-Item -ItemType Directory -Path "data\presets" -Force | Out-Null }
-            Copy-Item "$appData\presets\*" "data\presets\" -Force
-            Write-Host "Copied presets to data/presets/"
+            New-Item -ItemType Directory -Path "$tmpDir\data\presets" -Force | Out-Null
+            Copy-Item "$appData\presets\*" "$tmpDir\data\presets\" -Force
+            Write-Host "Collected presets"
+          }
+          if (Test-Path "$appData\pins.json") {
+            Copy-Item "$appData\pins.json" "$tmpDir\data\pins.json" -Force
+            Write-Host "Collected pins.json"
           }
 
-          # Check for uncommitted changes
-          $status = git status projects/ data/ --porcelain
+          # Switch to backup branch (create orphan if first time)
+          git fetch origin
+          $backupExists = git ls-remote --heads origin backup
+          if ($backupExists) {
+            git checkout -B backup origin/backup
+          } else {
+            git checkout --orphan backup
+            git rm -rf . 2>$null
+          }
+
+          # Restore collected data into backup branch working tree
+          if (Test-Path "projects") { Remove-Item "projects" -Recurse -Force }
+          if (Test-Path "data") { Remove-Item "data" -Recurse -Force }
+          if (Test-Path "$tmpDir\projects") {
+            Copy-Item "$tmpDir\projects" "projects" -Recurse -Force
+          }
+          if (Test-Path "$tmpDir\data") {
+            Copy-Item "$tmpDir\data" "data" -Recurse -Force
+          }
+          Remove-Item $tmpDir -Recurse -Force
+
+          # Stage and check for changes
+          git add projects/ data/
+          $status = git status --porcelain
           if ($status) {
             Write-Host "Changes detected:"
             Write-Host $status
 
-            # Stage and commit
-            git add projects/ data/
             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
             git commit -m "backup(nightly): REAPER project + mixer data $timestamp
 
           Co-Authored-By: GitHub Actions <actions@github.com>"
 
-            # Push to remote
-            git push origin main
-            Write-Host "Nightly backup pushed to GitHub"
+            # Push to backup branch (force-push is safe — this branch is only for backup state)
+            git push origin backup --force
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Failed to push nightly backup to GitHub"
+              Pop-Location
+              exit 1
+            }
+
+            # Verify push succeeded
+            $localHash = git rev-parse HEAD
+            $remoteInfo = git ls-remote origin backup
+            $remoteHash = ($remoteInfo -split "`t")[0]
+            if ($localHash -ne $remoteHash) {
+              Write-Host "::error::Backup verification failed - remote ($remoteHash) doesn't match local ($localHash)"
+              Pop-Location
+              exit 1
+            }
+            Write-Host "Nightly backup pushed and verified: $localHash"
           } else {
             Write-Host "No changes to backup"
           }
 
+          # Return to main branch and reset to origin/main
+          git checkout main
+          git fetch origin main
+          git reset --hard origin/main
           Pop-Location
           exit 0

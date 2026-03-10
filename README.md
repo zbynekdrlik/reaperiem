@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.36.0 (2026-03-09)
+
+- **Feature**: Server-side presets - presets now sync across all devices (#70)
+- **Feature**: Nightly git backup of snapshots and presets (#64, #71)
+- **Feature**: CI deploy backs up snapshots and presets to git repository
+
 ### v1.35.0 (2026-03-08)
 
 - **Fix**: Remove explorer-killing icon cache clear from CI deploy (was causing taskbar crash-loop on iem.lan)

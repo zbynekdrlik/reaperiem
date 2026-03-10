@@ -7,6 +7,7 @@
 //! - Provides real-time WebSocket updates
 
 pub mod auth;
+pub mod customization_store;
 pub mod pin_store;
 pub mod poller;
 pub mod preset_routes;
@@ -43,6 +44,8 @@ pub struct AppState {
     pub snapshot_store: Arc<snapshot_store::SnapshotStore>,
     /// Preset storage for saved mix configurations
     pub preset_store: Arc<preset_store::PresetStore>,
+    /// Channel customization storage (pin/hide preferences)
+    pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
 }
@@ -106,6 +109,7 @@ impl AppState {
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
+            customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
         }
     }
@@ -146,6 +150,24 @@ pub async fn start_server(
     }
 
     let state = AppState::new(server_config.config, &server_config.config_dir);
+
+    // Auto-detect public IP for LAN/WAN detection (if not configured)
+    {
+        let needs_detection = state.config.read().await.local_public_ip.is_none();
+        if needs_detection {
+            match detect_public_ip(&state.http_client).await {
+                Some(ip) => {
+                    tracing::info!(ip = %ip, "Auto-detected public IP for LAN/WAN detection");
+                    state.config.write().await.local_public_ip = Some(ip);
+                }
+                None => {
+                    tracing::warn!(
+                        "Could not auto-detect public IP; LAN/WAN detection will use private IP fallback"
+                    );
+                }
+            }
+        }
+    }
 
     // Discover members from REAPER (source of truth)
     let members = poller::discover_members(&state).await;
@@ -307,6 +329,36 @@ async fn https_redirect(
     } else {
         next.run(req).await
     }
+}
+
+/// Auto-detect the server's public IP by querying an external service.
+/// Used for LAN/WAN detection when `local_public_ip` is not configured.
+async fn detect_public_ip(client: &reqwest::Client) -> Option<String> {
+    // Try multiple services for reliability
+    let services = [
+        "https://api.ipify.org",
+        "https://ifconfig.me/ip",
+        "https://icanhazip.com",
+    ];
+    for url in services {
+        match client
+            .get(url)
+            .timeout(std::time::Duration::from_secs(3))
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                if let Ok(ip) = resp.text().await {
+                    let ip = ip.trim().to_string();
+                    if !ip.is_empty() && ip.len() < 46 {
+                        return Some(ip);
+                    }
+                }
+            }
+            _ => continue,
+        }
+    }
+    None
 }
 
 /// Get the local network URL for remote access

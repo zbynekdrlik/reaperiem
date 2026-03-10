@@ -525,19 +525,19 @@ body {
 
 /* ================================================================
    Channel Strip: Three-row layout (ALL screen sizes)
-   Row 1: Label | Solo | Mute | dB | Pan (controls visible above fader)
+   Row 1: Menu(⋮) | Label | Solo | Mute | dB | Pan
    Row 2: FULL-WIDTH HORIZONTAL METER
    Row 3: FULL-WIDTH FADER ONLY (maximum precision, finger doesn't cover dB)
    ================================================================ */
 .channel {
   position: relative; /* Required for ::after overlay on disconnected state */
   display: grid;
-  grid-template-columns: 56px 36px 40px 52px 1fr;
+  grid-template-columns: 28px 1fr 36px 40px auto auto;
   grid-template-rows: 36px 8px 44px;
   grid-template-areas:
-    "label  solo   mute   db     pan"
-    "meter  meter  meter  meter  meter"
-    "fader  fader  fader  fader  fader";
+    "menu   label  solo   mute   db     pan"
+    "meter  meter  meter  meter  meter  meter"
+    "fader  fader  fader  fader  fader  fader";
   gap: 4px 6px;
   padding: 8px 10px;
   background: var(--bg-channel);
@@ -774,15 +774,17 @@ body {
   transition: left 0.05s linear;
 }
 
-/* dB display - Row 2, centered for stage visibility */
+/* dB display - centered for stage visibility */
 .db-display {
   grid-area: db;
-  min-width: 52px;
+  min-width: 7.5ch;
   text-align: center;
   font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-  font-size: 0.9em;
+  font-size: 0.8em;
   font-weight: 600;
   color: var(--text-primary);
+  padding: 0 2px;
+  white-space: nowrap;
 }
 
 /* Pan knob area */
@@ -1459,7 +1461,7 @@ body {
     font-size: 0.6em;
   }
   .db-display {
-    font-size: 0.95em;
+    font-size: 0.85em;
   }
   .pan-slider {
     width: 60px;
@@ -1476,8 +1478,7 @@ body {
     width: 100px;
   }
   .db-display {
-    font-size: 1.2em;
-    min-width: 52px;
+    font-size: 1em;
   }
 }
 
@@ -1493,17 +1494,6 @@ body {
 .channel.global-volume .ch-name {
   color: var(--accent);
   font-weight: 600;
-}
-
-/* Section label in Main tab */
-.main-section-label {
-  grid-column: 1 / -1;
-  font-size: 0.7em;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  padding: 8px 4px 4px;
 }
 
 /* ================================================================
@@ -1709,4 +1699,107 @@ body {
 
 .snapshot-save-btn:active:not(:disabled) {
   opacity: 0.9;
+}
+
+/* Network mode indicator (LAN/WAN badge in header) */
+.network-indicator {
+  font-size: 0.6em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.network-indicator.local {
+  background: rgba(78, 205, 196, 0.2);
+  color: var(--accent);
+  border: 1px solid rgba(78, 205, 196, 0.4);
+}
+
+.network-indicator.remote {
+  background: rgba(124, 111, 255, 0.2);
+  color: #a094ff;
+  border: 1px solid rgba(124, 111, 255, 0.4);
+}
+
+/* Kebab menu button (⋮) in channel header */
+.ch-menu-btn {
+  grid-area: menu;
+  width: 28px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 1.2em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ch-menu-btn:active,
+.ch-menu-btn.open {
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  background: rgba(255, 255, 255, 0.06);
+}
+.ch-menu-popup {
+  position: absolute;
+  top: 40px;
+  left: 8px;
+  z-index: 60;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.ch-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.82em;
+  cursor: pointer;
+}
+.ch-menu-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+.ch-menu-item .menu-icon {
+  font-size: 1.1em;
+  width: 20px;
+  text-align: center;
+}
+.ch-menu-item.pinned .menu-icon {
+  color: var(--solo-yellow);
+}
+
+/* Hidden category tab — compact width (icon only) */
+.category-tab.hidden {
+  flex: 0;
+  padding: 10px 12px;
+}
+.category-tab.hidden.active {
+  border-bottom-color: var(--text-muted);
+  color: var(--text-secondary);
+}
+
+.category-tab.tab-hidden {
+  display: none;
+}
+
+/* Backdrop to close kebab menu on outside tap */
+.ch-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 55; /* Below .ch-menu-popup (60), above everything else */
 }

@@ -6,9 +6,9 @@ use axum::{
     extract::Path,
     http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{any, get, post},
+    routing::{any, get, post, put},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{AppState, Assets, auth, preset_routes, proxy, snapshot_routes};
 use rust_embed::RustEmbed;
@@ -71,6 +71,17 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             "/api/mixer/{member_id}/track/{track_index}/mute",
             post(proxy::set_send_mute),
         )
+        // Network mode detection (local LAN vs remote internet)
+        .route("/api/network-mode", get(get_network_mode))
+        // Channel customization (pin/hide preferences)
+        .route(
+            "/api/mixer/{member_id}/customization",
+            get(get_customization),
+        )
+        .route(
+            "/api/mixer/{member_id}/customization",
+            put(put_customization),
+        )
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // WebSocket
@@ -100,6 +111,124 @@ async fn get_members(
 struct MemberInfo {
     id: String,
     name: String,
+}
+
+/// Detect network mode from request headers.
+///
+/// Since all traffic goes through Cloudflare Tunnel (iem.newlevel.media),
+/// CF-Connecting-IP is always a public IP. We compare it against the
+/// configured `local_public_ip` (the church network's public IP).
+/// Match = on church WiFi, different = remote.
+/// No proxy headers = direct connection = local.
+///
+/// Used by both the HTTP endpoint and WebSocket handler.
+pub fn detect_network_mode(
+    headers: &axum::http::HeaderMap,
+    local_public_ip: &Option<String>,
+) -> String {
+    // Extract client IP from Cloudflare headers
+    let client_ip = headers
+        .get("cf-connecting-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .or_else(|| headers.get("x-real-ip"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string());
+
+    match (&client_ip, local_public_ip) {
+        // If we have both client IP and configured local IP, compare them
+        (Some(client), Some(local)) => {
+            if client == local {
+                "local".to_string()
+            } else {
+                "remote".to_string()
+            }
+        }
+        // No proxy headers = direct connection (not through Cloudflare) = local
+        (None, _) => "local".to_string(),
+        // No local_public_ip configured = fall back to private IP check
+        (Some(ip), None) => {
+            if is_private_ip(ip) {
+                "local".to_string()
+            } else {
+                "remote".to_string()
+            }
+        }
+    }
+}
+
+/// HTTP endpoint for network mode detection (kept for backwards compatibility)
+async fn get_network_mode(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    let local_ip = config.local_public_ip.clone();
+    drop(config);
+
+    let mode = detect_network_mode(&headers, &local_ip);
+
+    Json(NetworkModeResponse { mode })
+}
+
+#[derive(Serialize)]
+struct NetworkModeResponse {
+    mode: String,
+}
+
+/// Check if an IP address is in a private/local range
+fn is_private_ip(ip: &str) -> bool {
+    // Parse the IP and check against private ranges
+    if let Ok(addr) = ip.parse::<std::net::IpAddr>() {
+        match addr {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_private()         // 10.x, 172.16-31.x, 192.168.x
+                    || v4.is_loopback() // 127.x
+                    || v4.is_link_local() // 169.254.x
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback() // ::1
+            }
+        }
+    } else {
+        false
+    }
+}
+
+/// Get channel customization for a member
+async fn get_customization(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    Path(member_id): Path<String>,
+) -> impl IntoResponse {
+    let cust = state.customization_store.load(&member_id);
+    Json(cust)
+}
+
+/// Update channel customization for a member
+#[derive(Deserialize)]
+struct CustomizationPayload {
+    pinned: Vec<usize>,
+    hidden: Vec<usize>,
+}
+
+async fn put_customization(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    Path(member_id): Path<String>,
+    Json(payload): Json<CustomizationPayload>,
+) -> impl IntoResponse {
+    let cust = iem_core::Customization {
+        pinned: payload.pinned,
+        hidden: payload.hidden,
+    };
+    match state.customization_store.save(&member_id, &cust) {
+        Ok(()) => (StatusCode::OK, Json(cust)),
+        Err(e) => {
+            tracing::error!("Failed to save customization: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(iem_core::Customization::default()),
+            )
+        }
+    }
 }
 
 /// REAPER proxy handler
@@ -186,4 +315,94 @@ fn serve_embedded_file(path: &str) -> Response {
         .status(StatusCode::NOT_FOUND)
         .body(Body::from("Not found"))
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_private_ip_local_ranges() {
+        // 10.x.x.x (Class A private)
+        assert!(is_private_ip("10.0.0.1"));
+        assert!(is_private_ip("10.77.9.231"));
+        assert!(is_private_ip("10.255.255.255"));
+
+        // 172.16-31.x.x (Class B private)
+        assert!(is_private_ip("172.16.0.1"));
+        assert!(is_private_ip("172.31.255.255"));
+
+        // 192.168.x.x (Class C private)
+        assert!(is_private_ip("192.168.1.1"));
+        assert!(is_private_ip("192.168.0.100"));
+
+        // Loopback
+        assert!(is_private_ip("127.0.0.1"));
+    }
+
+    #[test]
+    fn test_is_private_ip_public_ranges() {
+        assert!(!is_private_ip("8.8.8.8"));
+        assert!(!is_private_ip("1.1.1.1"));
+        assert!(!is_private_ip("203.0.113.50"));
+        assert!(!is_private_ip("172.32.0.1")); // Just outside 172.16-31 range
+    }
+
+    #[test]
+    fn test_is_private_ip_invalid() {
+        assert!(!is_private_ip("not_an_ip"));
+        assert!(!is_private_ip(""));
+    }
+
+    #[test]
+    fn test_is_private_ip_ipv6() {
+        assert!(is_private_ip("::1")); // loopback
+        assert!(!is_private_ip("2001:db8::1")); // documentation range (public)
+    }
+
+    #[test]
+    fn test_detect_network_mode_matching_ip_is_local() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "203.0.113.50".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_different_ip_is_remote() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "198.51.100.10".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "remote");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_headers_is_local() {
+        let headers = axum::http::HeaderMap::new();
+        let local_ip = Some("203.0.113.50".to_string());
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_local_ip_private_is_local() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "10.77.9.100".parse().unwrap());
+        assert_eq!(detect_network_mode(&headers, &None), "local");
+    }
+
+    #[test]
+    fn test_detect_network_mode_no_local_ip_public_is_remote() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("cf-connecting-ip", "8.8.8.8".parse().unwrap());
+        assert_eq!(detect_network_mode(&headers, &None), "remote");
+    }
+
+    #[test]
+    fn test_detect_network_mode_x_forwarded_for_fallback() {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert("x-forwarded-for", "203.0.113.50, 10.0.0.1".parse().unwrap());
+        let local_ip = Some("203.0.113.50".to_string());
+        // Should use first IP from x-forwarded-for
+        assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
 }

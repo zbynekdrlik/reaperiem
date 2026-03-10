@@ -78,6 +78,12 @@ pub struct Config {
     /// Domain for HTTPS redirect (HTTP requests to this domain → HTTPS)
     #[serde(default)]
     pub https_domain: Option<String>,
+
+    /// Public IP of the local network (for LAN/WAN detection via Cloudflare Tunnel).
+    /// When a request comes through Cloudflare with CF-Connecting-IP matching this IP,
+    /// the client is on the local church WiFi. Different IP = remote.
+    #[serde(default)]
+    pub local_public_ip: Option<String>,
 }
 
 fn default_reaper_url() -> String {
@@ -121,6 +127,7 @@ impl Default for Config {
             tls_cert: default_tls_cert(),
             tls_key: default_tls_key(),
             https_domain: None,
+            local_public_ip: None,
         }
     }
 }

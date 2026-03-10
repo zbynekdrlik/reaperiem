@@ -19,6 +19,11 @@ pub enum ClientMsg {
     SetGlobalLevel { level_db: f32 },
     /// Set global IEM output mute for this member
     SetGlobalMute { muted: bool },
+    /// Update channel customization (pin/hide preferences)
+    UpdateCustomization {
+        pinned: Vec<usize>,
+        hidden: Vec<usize>,
+    },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -47,6 +52,13 @@ pub enum ServerMsg {
     GlobalVolumeUpdate { level_db: f32, muted: bool },
     /// REAPER connection status changed
     ConnectionChanged { connected: bool },
+    /// Channel customization update (sent on connect and after changes)
+    CustomizationUpdate {
+        pinned: Vec<usize>,
+        hidden: Vec<usize>,
+    },
+    /// Network mode indicator (local LAN vs remote internet)
+    NetworkMode { mode: String },
 }
 
 #[cfg(test)]
@@ -226,6 +238,44 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"GlobalVolumeUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_update_customization_serialization() {
+        let msg = ClientMsg::UpdateCustomization {
+            pinned: vec![1, 5],
+            hidden: vec![3, 7],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"UpdateCustomization\""));
+        assert!(json.contains("\"pinned\":[1,5]"));
+        assert!(json.contains("\"hidden\":[3,7]"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_customization_update_serialization() {
+        let msg = ServerMsg::CustomizationUpdate {
+            pinned: vec![1, 5, 8],
+            hidden: vec![3],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"CustomizationUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_network_mode_serialization() {
+        let msg = ServerMsg::NetworkMode {
+            mode: "local".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"NetworkMode\""));
+        assert!(json.contains("\"mode\":\"local\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

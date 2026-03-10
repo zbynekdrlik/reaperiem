@@ -703,6 +703,7 @@ pub async fn ws_mixer(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
     Query(query): Query<WsQuery>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
@@ -731,6 +732,9 @@ pub async fn ws_mixer(
         ));
     }
 
+    // Detect network mode before dropping config (needs local_public_ip)
+    let network_mode = crate::routes::detect_network_mode(&headers, &config.local_public_ip);
+
     drop(config);
 
     // Validate member exists (from REAPER discovered members)
@@ -741,15 +745,20 @@ pub async fn ws_mixer(
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
 
-    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id)))
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id, network_mode)))
 }
 
 /// Handle a WebSocket connection for a member
-async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, member_id: String) {
+async fn handle_ws(
+    mut socket: axum::extract::ws::WebSocket,
+    state: AppState,
+    member_id: String,
+    network_mode: String,
+) {
     use axum::extract::ws::Message;
     use iem_core::{ClientMsg, ServerMsg};
 
-    tracing::info!(member_id = %member_id, "WebSocket connected");
+    tracing::info!(member_id = %member_id, network_mode = %network_mode, "WebSocket connected");
 
     // Register this member as active (ref-counted for multi-tab support)
     {
@@ -766,6 +775,25 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
         let _ = socket.send(Message::Text(json.into())).await;
     }
 
+    // Send initial customization state
+    {
+        let cust = state.customization_store.load(&member_id);
+        let msg = ServerMsg::CustomizationUpdate {
+            pinned: cust.pinned,
+            hidden: cust.hidden,
+        };
+        let json = serde_json::to_string(&msg).unwrap_or_default();
+        let _ = socket.send(Message::Text(json.into())).await;
+    }
+
+    // Send network mode (local/remote) — updates on every WS reconnect,
+    // so switching between WiFi and mobile data triggers a fresh detection
+    {
+        let msg = ServerMsg::NetworkMode { mode: network_mode };
+        let json = serde_json::to_string(&msg).unwrap_or_default();
+        let _ = socket.send(Message::Text(json.into())).await;
+    }
+
     loop {
         tokio::select! {
             // Client → Server: process commands
@@ -773,6 +801,25 @@ async fn handle_ws(mut socket: axum::extract::ws::WebSocket, state: AppState, me
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
+                            // Handle customization updates locally (no REAPER command)
+                            if let ClientMsg::UpdateCustomization { ref pinned, ref hidden } = cmd {
+                                let cust = iem_core::Customization {
+                                    pinned: pinned.clone(),
+                                    hidden: hidden.clone(),
+                                };
+                                if let Err(e) = state.customization_store.save(&member_id, &cust) {
+                                    tracing::error!(member_id = %member_id, "Failed to save customization: {}", e);
+                                }
+                                // Broadcast to other tabs of same member
+                                let _ = state.event_tx.send((
+                                    member_id.clone(),
+                                    ServerMsg::CustomizationUpdate {
+                                        pinned: pinned.clone(),
+                                        hidden: hidden.clone(),
+                                    },
+                                ));
+                                continue;
+                            }
                             match apply_command_to_cache(&state, &member_id, &cmd).await {
                                 Ok((url, broadcast)) => {
                                     // Broadcast to other clients of same member for cross-device sync
@@ -959,6 +1006,10 @@ async fn apply_command_to_cache(
             }
         }
         iem_core::ClientMsg::SetGlobalMute { .. } => {}
+        iem_core::ClientMsg::UpdateCustomization { .. } => {
+            // Handled in WS handler before apply_command_to_cache is called
+            return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
+        }
     }
 
     let (url, track_index, broadcast) = match cmd {
@@ -1087,6 +1138,9 @@ async fn apply_command_to_cache(
                     muted: current_muted,
                 }),
             )
+        }
+        iem_core::ClientMsg::UpdateCustomization { .. } => {
+            unreachable!("UpdateCustomization handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };

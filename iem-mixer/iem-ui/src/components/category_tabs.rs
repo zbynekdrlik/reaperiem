@@ -9,6 +9,7 @@ pub enum Category {
     Mics,
     Stems,
     Tech,
+    Hidden,
 }
 
 impl Category {
@@ -18,12 +19,14 @@ impl Category {
             Category::Mics => "Mics",
             Category::Stems => "Stems",
             Category::Tech => "Tech",
+            Category::Hidden => "Hidden",
         }
     }
 
     pub fn matches(&self, category: &str) -> bool {
         match self {
-            Category::Main => false, // Main has special rendering, not category filtering
+            Category::Main => false,   // Main has special rendering
+            Category::Hidden => false, // Hidden has special rendering
             Category::Mics => category == "mics",
             Category::Stems => category == "stems",
             Category::Tech => category == "tech",
@@ -36,6 +39,7 @@ impl Category {
             Category::Mics => "mics",
             Category::Stems => "stems",
             Category::Tech => "tech",
+            Category::Hidden => "hidden",
         }
     }
 }
@@ -47,17 +51,22 @@ pub fn CategoryTabs(
     active: ReadSignal<Category>,
     /// Called when category changes
     on_select: impl Fn(Category) + 'static + Clone,
+    /// Whether to show the Hidden tab (only when there are hidden channels)
+    #[prop(default = false.into())]
+    show_hidden: Signal<bool>,
 ) -> impl IntoView {
-    let categories = [
+    let base_categories = [
         Category::Main,
         Category::Mics,
         Category::Stems,
         Category::Tech,
     ];
 
+    let on_select_hidden = on_select.clone();
+
     view! {
         <div class="category-tabs">
-            {categories.into_iter().map(|cat| {
+            {base_categories.into_iter().map(|cat| {
                 let on_select = on_select.clone();
                 view! {
                     <button
@@ -75,6 +84,22 @@ pub fn CategoryTabs(
                     </button>
                 }
             }).collect::<Vec<_>>()}
+            <button
+                class=move || {
+                    let mut cls = String::from("category-tab hidden");
+                    if !show_hidden.get() {
+                        cls.push_str(" tab-hidden");
+                    }
+                    if active.get() == Category::Hidden {
+                        cls.push_str(" active");
+                    }
+                    cls
+                }
+                on:click=move |_| on_select_hidden(Category::Hidden)
+                title="Hidden channels"
+            >
+                "\u{1F441}"
+            </button>
         </div>
     }
 }
