@@ -19,7 +19,9 @@ if AUTO_MODE then
 end
 
 local function log(msg)
-    reaper.ShowConsoleMsg(msg .. "\n")
+    if not AUTO_MODE then
+        reaper.ShowConsoleMsg(msg .. "\n")
+    end
 end
 
 local function fix_all_sends()
@@ -73,6 +75,10 @@ local function fix_all_sends()
     log(string.format("Already correct: %d", total_sends - fixed_sends))
     log("========================================")
 
+    -- Write result to EXTSTATE for automated callers
+    reaper.SetExtState("reaperiem", "fix_sends_result",
+        string.format("OK:fixed=%d,total=%d", fixed_sends, total_sends), false)
+
     if not AUTO_MODE then
         reaper.ShowMessageBox(
             string.format("Fixed %d of %d sends to pre-fader post-FX mode.", fixed_sends, total_sends),
@@ -84,8 +90,8 @@ end
 
 local ok, err = pcall(fix_all_sends)
 if not ok then
-    log("FATAL ERROR: " .. tostring(err))
     if not AUTO_MODE then
+        reaper.ShowConsoleMsg("FATAL ERROR: " .. tostring(err) .. "\n")
         reaper.ShowMessageBox("Fix failed!\n\n" .. tostring(err), "Error", 0)
     end
 end
