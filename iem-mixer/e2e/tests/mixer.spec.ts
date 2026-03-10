@@ -1966,6 +1966,16 @@ test.describe("Main tab channel ordering", () => {
     // Get the first channel
     const firstChannel = page.locator(".channel").first();
 
+    // Skip if channel is disconnected (no REAPER in CI)
+    const classes = await firstChannel.getAttribute("class");
+    if (
+      !assume(
+        !classes?.includes("disconnected"),
+        "Channel must be connected to REAPER for mute test",
+      )
+    )
+      return;
+
     // Mute the channel
     const muteBtn = firstChannel.locator(".mute-btn");
     if (!assume((await muteBtn.count()) > 0, "Mute button must exist")) return;
