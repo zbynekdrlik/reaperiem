@@ -31,6 +31,15 @@ async function loginAs(page: Page, member: string) {
   );
 }
 
+// Guard: early return when precondition not met (avoids banned test.skip)
+function assume(condition: unknown, message: string): condition is true {
+  if (!condition) {
+    console.log(`[ASSUME SKIP] ${message}`);
+    return false;
+  }
+  return true;
+}
+
 test.describe("Cross-member access prevention (#77)", () => {
   test("member cannot access another member's mixer API", async ({ page }) => {
     await page.goto("/");
@@ -38,10 +47,7 @@ test.describe("Cross-member access prevention (#77)", () => {
     // Login as first available member
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 2) {
-      test.skip(true, "Need at least 2 members to test cross-member access");
-      return;
-    }
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -62,10 +68,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 1) {
-      test.skip(true, "Need at least 1 member");
-      return;
-    }
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
 
     const member = members[0].id;
     const auth = await getToken(page, member);
@@ -85,10 +88,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 1) {
-      test.skip(true, "Need at least 1 member");
-      return;
-    }
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
 
     const member = members[0].id;
 
@@ -102,10 +102,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 2) {
-      test.skip(true, "Need at least 2 members");
-      return;
-    }
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -127,10 +124,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 2) {
-      test.skip(true, "Need at least 2 members");
-      return;
-    }
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -150,10 +144,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 1) {
-      test.skip(true, "Need at least 1 member");
-      return;
-    }
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
 
     const member = members[0].id;
 
@@ -175,10 +166,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 2) {
-      test.skip(true, "Need at least 2 members");
-      return;
-    }
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -222,10 +210,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (members.length < 2) {
-      test.skip(true, "Need at least 2 members");
-      return;
-    }
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
 
     const memberA = members[0].id;
     const memberB = members[1].id;

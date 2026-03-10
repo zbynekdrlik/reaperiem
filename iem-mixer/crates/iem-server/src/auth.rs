@@ -313,7 +313,10 @@ pub fn verify_member_access(
     } else {
         Err((
             StatusCode::FORBIDDEN,
-            Json(ApiError::new("FORBIDDEN", "Access denied to this member's mixer")),
+            Json(ApiError::new(
+                "FORBIDDEN",
+                "Access denied to this member's mixer",
+            )),
         ))
     }
 }
@@ -418,7 +421,11 @@ mod tests {
 
     /// Helper to create a JWT token for testing
     fn make_token(config: &Config, member: &str, engineer: bool) -> String {
-        issue_token(config, member, engineer).unwrap().0.token.clone()
+        issue_token(config, member, engineer)
+            .unwrap()
+            .0
+            .token
+            .clone()
     }
 
     /// Helper to build headers with a Bearer token

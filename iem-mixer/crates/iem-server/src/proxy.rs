@@ -753,7 +753,10 @@ pub async fn ws_mixer(
         );
         return Err((
             StatusCode::FORBIDDEN,
-            Json(ApiError::new("FORBIDDEN", "Access denied to this member's mixer")),
+            Json(ApiError::new(
+                "FORBIDDEN",
+                "Access denied to this member's mixer",
+            )),
         ));
     }
 

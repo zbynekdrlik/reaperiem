@@ -233,7 +233,10 @@ async fn put_customization(
             tracing::error!("Failed to save customization: {}", e);
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(iem_core::ApiError::new("IO_ERROR", "Failed to save customization")),
+                Json(iem_core::ApiError::new(
+                    "IO_ERROR",
+                    "Failed to save customization",
+                )),
             ))
         }
     }
