@@ -1919,6 +1919,7 @@ test.describe("Main tab channel ordering", () => {
   test("own channel appears first on Main tab, before pinned channels", async ({
     page,
   }) => {
+    await page.goto("/");
     await loginAs(page, "ani");
     await page.goto("/ani");
     if (!(await waitForMixer(page))) return;
@@ -1935,6 +1936,7 @@ test.describe("Main tab channel ordering", () => {
   });
 
   test("MY MIC label is not present on Main tab", async ({ page }) => {
+    await page.goto("/");
     await loginAs(page, "ani");
     await page.goto("/ani");
     if (!(await waitForMixer(page))) return;
