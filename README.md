@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.46.0 (2026-03-11)
+
+- **Security**: Enforce member access control — members can only access their own mixer, engineers can access any (Issue #77)
+- **Fix**: Hide button now works on muted channels (Issue #78)
+- **Fix**: Cross-member navigation redirects to login page with correct member pre-selected instead of blinking back to landing
+
 ### v1.44.0 (2026-03-10)
 
 - **Fix**: Applied pre-fader sends to REAPER — 199 sends corrected from post-fader to pre-fader post-FX mode (Issue #7)
