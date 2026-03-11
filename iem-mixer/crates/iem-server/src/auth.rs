@@ -218,10 +218,7 @@ pub async fn change_pin(
         if old_pin.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiError::new(
-                    "MISSING_OLD_PIN",
-                    "Current PIN is required",
-                )),
+                Json(ApiError::new("MISSING_OLD_PIN", "Current PIN is required")),
             ));
         }
 

@@ -16,9 +16,7 @@ pub fn PinChangeModal(
     member_id: String,
 ) -> impl IntoView {
     let member_id_for_api = member_id.clone();
-    let is_engineer = crate::auth::get_auth()
-        .map(|a| a.engineer)
-        .unwrap_or(false);
+    let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
 
     let (current_pin, set_current_pin) = signal(String::new());
     let (new_pin, set_new_pin) = signal(String::new());

@@ -167,7 +167,11 @@ pub async fn change_pin(old_pin: &str, new_pin: &str, member: &str) -> Result<()
     let resp = Request::post(&format!("{}/auth/change-pin", API_BASE))
         .header("Authorization", &format!("Bearer {}", token))
         .json(&ChangePinRequest {
-            old_pin: if old_pin.is_empty() { None } else { Some(old_pin) },
+            old_pin: if old_pin.is_empty() {
+                None
+            } else {
+                Some(old_pin)
+            },
             new_pin,
             member,
         })
