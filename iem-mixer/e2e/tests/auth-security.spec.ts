@@ -205,7 +205,9 @@ test.describe("Cross-member access prevention (#77)", () => {
     expect(panResp.status()).toBe(403);
   });
 
-  test("frontend redirects to landing page on 403", async ({ page }) => {
+  test("frontend redirects to login page on cross-member access", async ({
+    page,
+  }) => {
     await page.goto("/");
 
     const membersResp = await page.request.get("/api/members");
@@ -221,15 +223,12 @@ test.describe("Cross-member access prevention (#77)", () => {
     // Try to navigate to member B's mixer page
     await page.goto(`/${memberB}`);
 
-    // Should be redirected to landing page (/) due to JWT sub mismatch
-    // Wait for navigation - the frontend should detect the 403 and redirect
-    await page.waitForURL("/", { timeout: 5000 }).catch(() => {
-      // If no redirect, check if we're still on memberB's page
-      // The WS connection should fail with 403, triggering redirect
-    });
+    // Should be redirected to login page with member param due to JWT sub mismatch
+    await page.waitForURL(/\/login/, { timeout: 5000 });
 
-    // Verify we're not on member B's mixer page
+    // Verify we're on the login page with correct member param
     const url = page.url();
-    expect(url).not.toContain(`/${memberB}`);
+    expect(url).toContain("/login");
+    expect(url).toContain(`member=${memberB}`);
   });
 });

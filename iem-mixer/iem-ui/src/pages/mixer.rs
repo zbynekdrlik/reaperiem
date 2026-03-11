@@ -226,8 +226,10 @@ pub fn MixerPage() -> impl IntoView {
         // Cross-member access check: only allow access to own mixer (or engineer)
         if let Some(auth) = crate::auth::get_auth() {
             if !auth.engineer && auth.member != member && !member.is_empty() {
-                // Not authorized for this member's mixer - redirect to landing
-                navigate_to_login("/", Default::default());
+                // Clear stale auth and redirect to login for the target member
+                crate::auth::clear_auth();
+                let login_url = format!("/login?member={}&next=/{}", member, member);
+                navigate_to_login(&login_url, Default::default());
             }
         }
     });
