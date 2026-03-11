@@ -15,8 +15,9 @@ pub fn PinChangeModal(
     /// Target member ID (whose PIN is being changed)
     member_id: String,
 ) -> impl IntoView {
-    let member_id_for_api = member_id.clone();
     let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
+    // StoredValue is Copy, so closures capturing it remain Fn (not FnOnce)
+    let member_stored = StoredValue::new(member_id);
 
     let (current_pin, set_current_pin) = signal(String::new());
     let (new_pin, set_new_pin) = signal(String::new());
@@ -96,7 +97,6 @@ pub fn PinChangeModal(
         }
     };
 
-    let member_for_save = member_id_for_api.clone();
     let on_save = move |_| {
         let cur = current_pin.get();
         let new = new_pin.get();
@@ -123,7 +123,7 @@ pub fn PinChangeModal(
         set_loading.set(true);
         set_error_msg.set(String::new());
 
-        let member = member_for_save.clone();
+        let member = member_stored.get_value();
         let old_pin = if is_engineer {
             String::new()
         } else {
@@ -184,14 +184,10 @@ pub fn PinChangeModal(
                                 <h2>"Change PIN"</h2>
 
                                 <div class="pin-form">
-                                    {if !is_engineer {
-                                        Some(view! {
-                                            <label>"Current PIN"</label>
-                                            {pin_dots(current_pin, 0)}
-                                        })
-                                    } else {
-                                        None
-                                    }}
+                                    <Show when=move || !is_engineer fallback=|| ()>
+                                        <label>"Current PIN"</label>
+                                        {pin_dots(current_pin, 0)}
+                                    </Show>
 
                                     <label>"New PIN"</label>
                                     {pin_dots(new_pin, 1)}
