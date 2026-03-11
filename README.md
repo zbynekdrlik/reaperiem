@@ -8,38 +8,32 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ### v1.46.0 (2026-03-11)
 
-- **Security**: Enforce member access control — members can only access their own mixer, engineers can access any (Issue #77)
-- **Fix**: Hide button now works on muted channels (Issue #78)
-- **Fix**: Cross-member navigation redirects to login page with correct member pre-selected instead of blinking back to landing
+- **Fix**: Každý člen vidí len svoj vlastný mix — cudzie linky presmerujú na prihlásenie
+- **Fix**: Tlačidlo "skryť kanál" funguje aj keď je kanál stlmený
+- **Fix**: Prepínanie medzi členmi zobrazí prihlásenie namiesto blikania
 
 ### v1.44.0 (2026-03-10)
 
-- **Fix**: Applied pre-fader sends to REAPER — 199 sends corrected from post-fader to pre-fader post-FX mode (Issue #7)
-- **CI**: Added "Verify send modes" step that HARD FAILS pipeline if any send regresses to post-fader
-- **Script**: New `check_send_modes.lua` for automated send mode verification via EXTSTATE
+- **Fix**: Opravené pre-fader sendy — zvuk v ušiach teraz správne reaguje na fadery
 
 ### v1.43.0 (2026-03-10)
 
-- **Fix**: Own channel always appears first on Main tab (above pinned channels)
-- **Fix**: Removed "MY MIC" label clutter from Main tab
-- **Fix**: Kebab menu visual polish — wider dB column, menu positioned left of label
-- **Fix**: Channel header dB overflow, kebab visibility, name truncation improvements
+- **Fix**: Vlastný kanál je vždy prvý na Main záložke
+- **Fix**: Vylepšený kebab menu dizajn — širší dB stĺpec, lepšie umiestnenie
 
 ### v1.36.0 (2026-03-09)
 
-- **Feature**: Server-side presets - presets now sync across all devices (#70)
-- **Feature**: Nightly git backup of snapshots and presets (#64, #71)
-- **Feature**: CI deploy backs up snapshots and presets to git repository
+- **Feature**: Presety sa ukladajú na server — fungujú z akéhokoľvek zariadenia
+- **Feature**: Automatická nočná záloha snapshotov a presetov
 
 ### v1.35.0 (2026-03-08)
 
-- **Fix**: Remove explorer-killing icon cache clear from CI deploy (was causing taskbar crash-loop on iem.lan)
-- **Fix**: Headphones icon anti-aliased rendering with correct headband arc direction
+- **Fix**: Opravená ikona slúchadiel v systémovej lište
 
 ### v1.34.0 (2026-03-08)
 
-- **Fix**: Version/datetime text contrast improved for better readability (#63)
-- **Fix**: Snapshot history shows absolute date with Slovak day name first (#69)
+- **Fix**: Lepšia čitateľnosť verzie a dátumu na obrazovke
+- **Fix**: Snapshot história zobrazuje slovenský dátum
 - **Fix**: App icon shows headphones matching tray icon instead of blue rectangle (#2)
 - **Feature**: Band changelog skill for user-oriented Slovak changelogs
 
