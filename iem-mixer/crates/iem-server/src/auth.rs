@@ -38,8 +38,11 @@ pub struct LoginRequest {
 /// Change PIN request payload
 #[derive(Debug, Deserialize)]
 pub struct ChangePinRequest {
-    pub old_pin: String,
+    /// Required for members (verify current PIN), skipped for engineers
+    pub old_pin: Option<String>,
     pub new_pin: String,
+    /// Target member — required for engineers, ignored for regular members (uses JWT sub)
+    pub member: Option<String>,
 }
 
 /// Login response with JWT token
@@ -164,7 +167,10 @@ fn issue_token(
     }))
 }
 
-/// Change PIN for the authenticated member
+/// Change PIN for a member.
+///
+/// - **Engineers**: can change any member's PIN. `member` field required, `old_pin` skipped.
+/// - **Members**: can only change their own PIN. `old_pin` required, `member` field ignored.
 pub async fn change_pin(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
@@ -172,18 +178,8 @@ pub async fn change_pin(
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
 
-    // Extract member from JWT
+    // Extract caller identity from JWT
     let claims = extract_claims_from_header(&headers, &config.jwt_secret)?;
-
-    if claims.engineer {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(ApiError::new(
-                "FORBIDDEN",
-                "Engineers cannot change PIN via this endpoint",
-            )),
-        ));
-    }
 
     // Validate new_pin is exactly 4 digits
     if req.new_pin.len() != 4 || !req.new_pin.chars().all(|c| c.is_ascii_digit()) {
@@ -196,35 +192,77 @@ pub async fn change_pin(
         ));
     }
 
-    // Verify old_pin is correct (using constant-time comparison)
-    let pin_store = state.pin_store.read().await;
-    let old_pin_valid = if let Some(custom_pin) = pin_store.get_pin(&claims.sub) {
-        constant_time_eq(&req.old_pin, &custom_pin)
-    } else if let Some(config_pin) = config.pins.get(&claims.sub) {
-        constant_time_eq(&req.old_pin, config_pin)
+    // Determine target member and verify authorization
+    let target_member = if claims.engineer {
+        // Engineers must specify which member's PIN to change
+        let member = req.member.as_deref().unwrap_or("").to_string();
+        if member.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new(
+                    "MISSING_MEMBER",
+                    "Engineer must specify target member",
+                )),
+            ));
+        }
+        // Verify member exists
+        let discovered = state.discovered_members.read().await;
+        if !discovered.iter().any(|m| m.id() == member) {
+            return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+        }
+        // Engineers skip old_pin verification
+        member
     } else {
-        constant_time_eq(&req.old_pin, iem_core::config::DEFAULT_MEMBER_PIN)
-    };
-    drop(pin_store);
+        // Regular members change their own PIN — old_pin required
+        let old_pin = req.old_pin.as_deref().unwrap_or("");
+        if old_pin.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new("MISSING_OLD_PIN", "Current PIN is required")),
+            ));
+        }
 
-    if !old_pin_valid {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ApiError::new("INVALID_PIN", "Current PIN is incorrect")),
-        ));
-    }
+        let pin_store = state.pin_store.read().await;
+        let old_pin_valid = if let Some(custom_pin) = pin_store.get_pin(&claims.sub) {
+            constant_time_eq(old_pin, &custom_pin)
+        } else if let Some(config_pin) = config.pins.get(&claims.sub) {
+            constant_time_eq(old_pin, config_pin)
+        } else {
+            constant_time_eq(old_pin, iem_core::config::DEFAULT_MEMBER_PIN)
+        };
+        drop(pin_store);
+
+        if !old_pin_valid {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                Json(ApiError::new("INVALID_PIN", "Current PIN is incorrect")),
+            ));
+        }
+
+        claims.sub.clone()
+    };
 
     // Save new PIN
     let mut pin_store = state.pin_store.write().await;
-    pin_store.set_pin(&claims.sub, &req.new_pin).map_err(|e| {
-        tracing::error!("Failed to save PIN: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new("IO_ERROR", "Failed to save PIN")),
-        )
-    })?;
+    pin_store
+        .set_pin(&target_member, &req.new_pin)
+        .map_err(|e| {
+            tracing::error!("Failed to save PIN: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiError::new("IO_ERROR", "Failed to save PIN")),
+            )
+        })?;
 
-    tracing::info!("PIN changed for member: {}", claims.sub);
+    tracing::info!(
+        "PIN changed for member: {} (by: {})",
+        target_member,
+        if claims.engineer {
+            "engineer"
+        } else {
+            &claims.sub
+        }
+    );
     Ok(StatusCode::OK)
 }
 

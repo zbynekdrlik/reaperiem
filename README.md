@@ -6,10 +6,16 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.46.0 (2026-03-11)
+
+- **Security**: Enforce member access control — members can only access their own mixer, engineers can access any (Issue #77)
+- **Fix**: Hide button now works on muted channels (Issue #78)
+- **Fix**: Cross-member navigation redirects to login page with correct member pre-selected instead of blinking back to landing
+
 ### v1.44.0 (2026-03-10)
 
 - **Fix**: Applied pre-fader sends to REAPER — 199 sends corrected from post-fader to pre-fader post-FX mode (Issue #7)
-- **CI**: Added "Verify send modes" step that HARD FAILS pipeline if any send regresses to post-fader
+- **CI**: Added "Verify send modes" step that fails pipeline if any send regresses to post-fader
 - **Script**: New `check_send_modes.lua` for automated send mode verification via EXTSTATE
 
 ### v1.43.0 (2026-03-10)
@@ -21,7 +27,7 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ### v1.36.0 (2026-03-09)
 
-- **Feature**: Server-side presets - presets now sync across all devices (#70)
+- **Feature**: Server-side presets — presets now sync across all devices (#70)
 - **Feature**: Nightly git backup of snapshots and presets (#64, #71)
 - **Feature**: CI deploy backs up snapshots and presets to git repository
 
