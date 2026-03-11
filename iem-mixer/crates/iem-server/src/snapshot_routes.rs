@@ -77,9 +77,11 @@ pub fn snapshot_routes() -> Router<AppState> {
 async fn list_snapshots(
     State(state): State<AppState>,
     Path(member): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<SnapshotInfo>>, (StatusCode, Json<ApiError>)> {
-    // Verify member exists
+    // Verify member exists and auth
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     if config.find_member(&member).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
@@ -94,10 +96,12 @@ async fn list_snapshots(
 async fn create_snapshot(
     State(state): State<AppState>,
     Path(member): Path<String>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<CreateSnapshotRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
-    // Verify member exists
+    // Verify member exists and auth
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     if config.find_member(&member).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
@@ -149,7 +153,11 @@ async fn create_snapshot(
 async fn delete_snapshot(
     State(state): State<AppState>,
     Path((member, timestamp)): Path<(String, i64)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     let deleted = state
         .snapshot_store
         .delete_snapshot(&member, timestamp)
@@ -172,8 +180,12 @@ async fn delete_snapshot(
 async fn pin_snapshot(
     State(state): State<AppState>,
     Path((member, timestamp)): Path<(String, i64)>,
+    headers: axum::http::HeaderMap,
     Json(req): Json<PinRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     let pinned = state
         .snapshot_store
         .pin_snapshot(&member, timestamp, req.label)
@@ -196,7 +208,11 @@ async fn pin_snapshot(
 async fn unpin_snapshot(
     State(state): State<AppState>,
     Path((member, timestamp)): Path<(String, i64)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     let unpinned = state
         .snapshot_store
         .unpin_snapshot(&member, timestamp)
@@ -219,7 +235,11 @@ async fn unpin_snapshot(
 async fn restore_snapshot(
     State(state): State<AppState>,
     Path((member, timestamp)): Path<(String, i64)>,
+    headers: axum::http::HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
+    drop(config);
     // Get the snapshot
     let snapshot = state
         .snapshot_store

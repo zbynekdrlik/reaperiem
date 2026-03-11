@@ -1944,4 +1944,69 @@ test.describe("Main tab channel ordering", () => {
     const myMicLabel = page.locator(".main-section-label");
     await expect(myMicLabel).toHaveCount(0);
   });
+
+  test("hide works on muted channel (#78)", async ({ page }) => {
+    // Login and navigate to mixer
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    // Switch to Mics tab (NOT Main — Main doesn't filter hidden channels)
+    const micsTab = page.locator(".category-tab.mics");
+    if (!(await micsTab.count())) return;
+    await micsTab.click();
+
+    // Wait for channels to appear
+    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    const initialChannels = await page.locator(".channel").count();
+    if (!assume(initialChannels > 0, "Need at least one channel on Mics tab"))
+      return;
+
+    // Get the first channel
+    const firstChannel = page.locator(".channel").first();
+
+    // Skip if channel is disconnected (no REAPER in CI)
+    const classes = await firstChannel.getAttribute("class");
+    if (
+      !assume(
+        !classes?.includes("disconnected"),
+        "Channel must be connected to REAPER for mute test",
+      )
+    )
+      return;
+
+    // Mute the channel
+    const muteBtn = firstChannel.locator(".mute-btn");
+    if (!assume((await muteBtn.count()) > 0, "Mute button must exist")) return;
+    await muteBtn.click({ force: true });
+
+    // Verify the channel has the muted class
+    await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
+
+    // Open kebab menu on the muted channel
+    const kebabBtn = firstChannel.locator(".ch-menu-btn");
+    await kebabBtn.click();
+
+    // Verify popup is visible
+    const popup = firstChannel.locator(".ch-menu-popup");
+    await expect(popup).toBeVisible({ timeout: 2000 });
+
+    // Click Hide button (second menu item)
+    const hideBtn = popup.locator(".ch-menu-item").last();
+    await hideBtn.click();
+
+    // Verify channel count decreased — the hidden channel should disappear from Mics tab
+    await expect(page.locator(".channel")).toHaveCount(initialChannels - 1, {
+      timeout: 3000,
+    });
+
+    // Switch to Hidden tab to verify the channel is there
+    const hiddenTab = page.locator(".category-tab.hidden");
+    if ((await hiddenTab.count()) > 0) {
+      await hiddenTab.click();
+      // The hidden channel should appear on the Hidden tab
+      await expect(page.locator(".channel")).toHaveCount(1, { timeout: 3000 });
+    }
+  });
 });

@@ -204,20 +204,32 @@ pub fn MixerPage() -> impl IntoView {
     let navigate_back = use_navigate();
     let navigate_to_login = use_navigate();
 
-    // Auth guard: check token on mount and redirect if expired
+    // Auth guard: check token expiry AND cross-member access
     Effect::new(move |_| {
+        let member = params
+            .get()
+            .get("member")
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
         if crate::auth::is_token_expired() {
             // Token expired or missing - redirect to login
-            let member = params
-                .get()
-                .get("member")
-                .map(|s| s.to_string())
-                .unwrap_or_default();
             if !member.is_empty() {
                 let login_url = format!("/login?member={}&next=/{}", member, member);
                 navigate_to_login(&login_url, Default::default());
             } else {
                 navigate_to_login("/", Default::default());
+            }
+            return;
+        }
+
+        // Cross-member access check: only allow access to own mixer (or engineer)
+        if let Some(auth) = crate::auth::get_auth() {
+            if !auth.engineer && auth.member != member && !member.is_empty() {
+                // Clear stale auth and redirect to login for the target member
+                crate::auth::clear_auth();
+                let login_url = format!("/login?member={}&next=/{}", member, member);
+                navigate_to_login(&login_url, Default::default());
             }
         }
     });
@@ -1494,6 +1506,7 @@ fn ChannelList(
                                 if is_stereo { classes.push("stereo-pair"); }
                                 if !is_connected() { classes.push("disconnected"); }
                                 if is_fader_active.get() { classes.push("fader-active"); }
+                                if open_menu.get() == Some(track_idx) { classes.push("menu-open"); }
                                 classes.join(" ")
                             }
                             on:click=move |_| set_open_menu.set(None)

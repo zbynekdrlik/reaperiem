@@ -295,6 +295,32 @@ pub async fn verify_token(
     Ok(next.run(req).await)
 }
 
+/// Verify that the authenticated user has access to the specified member's mixer.
+///
+/// Rules:
+/// - Engineer tokens (`claims.engineer == true`) can access any member
+/// - Member tokens can only access their own mixer (`claims.sub == member_id`)
+/// - Missing or invalid tokens return 401 Unauthorized
+/// - Access to another member's mixer returns 403 Forbidden
+pub fn verify_member_access(
+    headers: &axum::http::HeaderMap,
+    member_id: &str,
+    jwt_secret: &str,
+) -> Result<AuthClaims, (StatusCode, Json<ApiError>)> {
+    let claims = extract_claims_from_header(headers, jwt_secret)?;
+    if claims.engineer || claims.sub == member_id {
+        Ok(claims)
+    } else {
+        Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                "FORBIDDEN",
+                "Access denied to this member's mixer",
+            )),
+        ))
+    }
+}
+
 /// Extract claims from a valid JWT token
 pub fn extract_claims(token: &str, secret: &str) -> Option<AuthClaims> {
     decode::<AuthClaims>(
@@ -391,5 +417,114 @@ mod tests {
 
         // Engineer expiry should be shorter than member expiry
         assert!(ENGINEER_TOKEN_EXPIRY_SECS < MEMBER_TOKEN_EXPIRY_SECS);
+    }
+
+    /// Helper to create a JWT token for testing
+    fn make_token(config: &Config, member: &str, engineer: bool) -> String {
+        issue_token(config, member, engineer)
+            .unwrap()
+            .0
+            .token
+            .clone()
+    }
+
+    /// Helper to build headers with a Bearer token
+    fn headers_with_token(token: &str) -> axum::http::HeaderMap {
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token).parse().unwrap(),
+        );
+        headers
+    }
+
+    #[test]
+    fn test_verify_member_access_own_member() {
+        let config = test_config();
+        let token = make_token(&config, "petka", false);
+        let headers = headers_with_token(&token);
+
+        let result = verify_member_access(&headers, "petka", &config.jwt_secret);
+        assert!(result.is_ok());
+        let claims = result.unwrap();
+        assert_eq!(claims.sub, "petka");
+        assert!(!claims.engineer);
+    }
+
+    #[test]
+    fn test_verify_member_access_other_member_forbidden() {
+        let config = test_config();
+        let token = make_token(&config, "petka", false);
+        let headers = headers_with_token(&token);
+
+        let result = verify_member_access(&headers, "marek", &config.jwt_secret);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::FORBIDDEN);
+    }
+
+    #[test]
+    fn test_verify_member_access_engineer_any_member() {
+        let config = test_config();
+        let token = make_token(&config, "engineer", true);
+        let headers = headers_with_token(&token);
+
+        // Engineer can access any member
+        let result = verify_member_access(&headers, "petka", &config.jwt_secret);
+        assert!(result.is_ok());
+        assert!(result.unwrap().engineer);
+
+        let result = verify_member_access(&headers, "marek", &config.jwt_secret);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_verify_member_access_no_token() {
+        let config = test_config();
+        let headers = axum::http::HeaderMap::new();
+
+        let result = verify_member_access(&headers, "petka", &config.jwt_secret);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_verify_member_access_invalid_token() {
+        let config = test_config();
+        let headers = headers_with_token("invalid.jwt.token");
+
+        let result = verify_member_access(&headers, "petka", &config.jwt_secret);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_verify_member_access_expired_token() {
+        let config = test_config();
+        // Create an expired token manually
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = AuthClaims {
+            sub: "petka".to_string(),
+            engineer: false,
+            exp: now - 3600, // expired 1 hour ago
+            iat: now - 7200,
+        };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(config.jwt_secret.as_bytes()),
+        )
+        .unwrap();
+        let headers = headers_with_token(&token);
+
+        let result = verify_member_access(&headers, "petka", &config.jwt_secret);
+        assert!(result.is_err());
+        let (status, _) = result.unwrap_err();
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 }

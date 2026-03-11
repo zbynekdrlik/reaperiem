@@ -83,8 +83,10 @@ pub async fn proxy_reaper(
 pub async fn get_mixer_state(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<iem_core::MixerState>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     // Verify member exists and get send index in one call
     let (member_index, _member) = config
@@ -134,8 +136,10 @@ pub async fn get_mixer_state(
 pub async fn poll_mixer_state(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<PollResponse>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     // Verify member exists and get send index in one call
     let (member_index, _member) = config
@@ -246,9 +250,11 @@ pub async fn poll_mixer_state(
 pub async fn batch_control(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<BatchControlRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     // Verify member exists and get send index in one call
     let (member_index, _member) = config
@@ -493,9 +499,11 @@ fn validate_pan(pan: f32) -> Result<(), (StatusCode, Json<ApiError>)> {
 pub async fn set_send_level(
     State(state): State<AppState>,
     Path((member_id, track_index)): Path<(String, usize)>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<SetLevelRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     // Verify member exists
     let member_index = config
@@ -551,9 +559,11 @@ pub async fn set_send_level(
 pub async fn set_send_pan(
     State(state): State<AppState>,
     Path((member_id, track_index)): Path<(String, usize)>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<SetPanRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     let member_index = config
         .member_index(&member_id)
@@ -592,9 +602,11 @@ pub async fn set_send_pan(
 pub async fn set_send_mute(
     State(state): State<AppState>,
     Path((member_id, track_index)): Path<(String, usize)>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<SetMuteRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
     let member_index = config
         .member_index(&member_id)
@@ -729,6 +741,22 @@ pub async fn ws_mixer(
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ApiError::new("TOKEN_EXPIRED", "Token has expired")),
+        ));
+    }
+
+    // Verify member access: member can only connect to own mixer, engineer can access any
+    if !claims.engineer && claims.sub != member_id {
+        tracing::warn!(
+            member = %member_id,
+            token_sub = %claims.sub,
+            "WS connection denied: cross-member access"
+        );
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                "FORBIDDEN",
+                "Access denied to this member's mixer",
+            )),
         ));
     }
 

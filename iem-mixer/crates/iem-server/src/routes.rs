@@ -198,9 +198,13 @@ fn is_private_ip(ip: &str) -> bool {
 async fn get_customization(
     axum::extract::State(state): axum::extract::State<AppState>,
     Path(member_id): Path<String>,
-) -> impl IntoResponse {
+    headers: axum::http::HeaderMap,
+) -> Result<Json<iem_core::Customization>, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
     let cust = state.customization_store.load(&member_id);
-    Json(cust)
+    Ok(Json(cust))
 }
 
 /// Update channel customization for a member
@@ -213,20 +217,27 @@ struct CustomizationPayload {
 async fn put_customization(
     axum::extract::State(state): axum::extract::State<AppState>,
     Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
     Json(payload): Json<CustomizationPayload>,
-) -> impl IntoResponse {
+) -> Result<(StatusCode, Json<iem_core::Customization>), (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
     let cust = iem_core::Customization {
         pinned: payload.pinned,
         hidden: payload.hidden,
     };
     match state.customization_store.save(&member_id, &cust) {
-        Ok(()) => (StatusCode::OK, Json(cust)),
+        Ok(()) => Ok((StatusCode::OK, Json(cust))),
         Err(e) => {
             tracing::error!("Failed to save customization: {}", e);
-            (
+            Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(iem_core::Customization::default()),
-            )
+                Json(iem_core::ApiError::new(
+                    "IO_ERROR",
+                    "Failed to save customization",
+                )),
+            ))
         }
     }
 }
