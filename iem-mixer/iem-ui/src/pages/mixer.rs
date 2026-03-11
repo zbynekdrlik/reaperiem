@@ -359,6 +359,36 @@ pub fn MixerPage() -> impl IntoView {
         }
     });
 
+    // Periodic token expiry check (every 60 seconds).
+    // Catches expired tokens while the page is open (engineer 4h, member 24h).
+    let navigate_expired = use_navigate();
+    let member_for_expiry = member_id.clone();
+    let expiry_closure = Closure::wrap(Box::new(move || {
+        if crate::auth::is_token_expired() {
+            crate::auth::clear_auth();
+            let m = member_for_expiry();
+            if !m.is_empty() {
+                let url = format!("/login?member={}&next=/{}", m, m);
+                navigate_expired(&url, Default::default());
+            } else {
+                navigate_expired("/", Default::default());
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    let expiry_interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            expiry_closure.as_ref().unchecked_ref(),
+            60_000, // Check every 60 seconds
+        )
+        .unwrap();
+    expiry_closure.forget();
+    on_cleanup(move || {
+        if let Some(w) = web_sys::window() {
+            w.clear_interval_with_handle(expiry_interval_id);
+        }
+    });
+
     // Handle back button
     let on_back = move |_| {
         navigate_back("/", Default::default());
@@ -675,6 +705,7 @@ pub fn MixerPage() -> impl IntoView {
             <PinChangeModal
                 visible=pin_modal_visible.into()
                 on_close=Callback::new(move |_: ()| set_pin_modal_visible.set(false))
+                member_id=member_id()
             />
 
             <SnapshotModal

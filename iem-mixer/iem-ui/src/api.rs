@@ -148,19 +148,29 @@ pub async fn login(member: &str, pin: &str) -> Result<AuthState, String> {
     }
 }
 
-/// Change PIN for the authenticated member
-pub async fn change_pin(old_pin: &str, new_pin: &str) -> Result<(), String> {
+/// Change PIN for a member.
+///
+/// - `old_pin`: current PIN (required for regular members, empty for engineers)
+/// - `new_pin`: the new 4-digit PIN
+/// - `member`: target member ID (used by engineers, also sent by members for consistency)
+pub async fn change_pin(old_pin: &str, new_pin: &str, member: &str) -> Result<(), String> {
     let token = crate::auth::get_token().ok_or("Not authenticated")?;
 
     #[derive(Serialize)]
     struct ChangePinRequest<'a> {
-        old_pin: &'a str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        old_pin: Option<&'a str>,
         new_pin: &'a str,
+        member: &'a str,
     }
 
     let resp = Request::post(&format!("{}/auth/change-pin", API_BASE))
         .header("Authorization", &format!("Bearer {}", token))
-        .json(&ChangePinRequest { old_pin, new_pin })
+        .json(&ChangePinRequest {
+            old_pin: if old_pin.is_empty() { None } else { Some(old_pin) },
+            new_pin,
+            member,
+        })
         .map_err(|e| format!("Request error: {}", e))?
         .send()
         .await

@@ -12,7 +12,14 @@ pub fn PinChangeModal(
     visible: ReadSignal<bool>,
     /// Callback when the modal should close
     on_close: Callback<()>,
+    /// Target member ID (whose PIN is being changed)
+    member_id: String,
 ) -> impl IntoView {
+    let member_id_for_api = member_id.clone();
+    let is_engineer = crate::auth::get_auth()
+        .map(|a| a.engineer)
+        .unwrap_or(false);
+
     let (current_pin, set_current_pin) = signal(String::new());
     let (new_pin, set_new_pin) = signal(String::new());
     let (confirm_pin, set_confirm_pin) = signal(String::new());
@@ -20,7 +27,9 @@ pub fn PinChangeModal(
     let (success, set_success) = signal(false);
     let (loading, set_loading) = signal(false);
     // 0 = current PIN, 1 = new PIN, 2 = confirm PIN
-    let (active_field, set_active_field) = signal(0u8);
+    // Engineers skip field 0 (they don't know the member's current PIN)
+    let initial_field: u8 = if is_engineer { 1 } else { 0 };
+    let (active_field, set_active_field) = signal(initial_field);
 
     // Reset state when modal opens
     Effect::new(move |_| {
@@ -31,7 +40,7 @@ pub fn PinChangeModal(
             set_error_msg.set(String::new());
             set_success.set(false);
             set_loading.set(false);
-            set_active_field.set(0);
+            set_active_field.set(initial_field);
         }
     });
 
@@ -71,7 +80,10 @@ pub fn PinChangeModal(
             }),
             1 => set_new_pin.update(|p| {
                 if p.is_empty() {
-                    set_active_field.set(0);
+                    // Engineers have no field 0, so stay on field 1
+                    if !is_engineer {
+                        set_active_field.set(0);
+                    }
                 } else {
                     p.pop();
                 }
@@ -86,12 +98,14 @@ pub fn PinChangeModal(
         }
     };
 
+    let member_for_save = member_id_for_api.clone();
     let on_save = move |_| {
         let cur = current_pin.get();
         let new = new_pin.get();
         let confirm = confirm_pin.get();
 
-        if cur.len() != 4 {
+        // Engineers skip current PIN validation
+        if !is_engineer && cur.len() != 4 {
             set_error_msg.set("Enter current PIN".to_string());
             set_active_field.set(0);
             return;
@@ -111,8 +125,14 @@ pub fn PinChangeModal(
         set_loading.set(true);
         set_error_msg.set(String::new());
 
+        let member = member_for_save.clone();
+        let old_pin = if is_engineer {
+            String::new()
+        } else {
+            cur.clone()
+        };
         spawn_local(async move {
-            match crate::api::change_pin(&cur, &new).await {
+            match crate::api::change_pin(&old_pin, &new, &member).await {
                 Ok(()) => {
                     set_success.set(true);
                     set_loading.set(false);
@@ -120,8 +140,14 @@ pub fn PinChangeModal(
                 Err(e) => {
                     set_error_msg.set(e);
                     set_loading.set(false);
-                    set_current_pin.set(String::new());
-                    set_active_field.set(0);
+                    if !is_engineer {
+                        set_current_pin.set(String::new());
+                        set_active_field.set(0);
+                    } else {
+                        set_new_pin.set(String::new());
+                        set_confirm_pin.set(String::new());
+                        set_active_field.set(1);
+                    }
                 }
             }
         });
@@ -160,8 +186,14 @@ pub fn PinChangeModal(
                                 <h2>"Change PIN"</h2>
 
                                 <div class="pin-form">
-                                    <label>"Current PIN"</label>
-                                    {pin_dots(current_pin, 0)}
+                                    {if !is_engineer {
+                                        Some(view! {
+                                            <label>"Current PIN"</label>
+                                            {pin_dots(current_pin, 0)}
+                                        })
+                                    } else {
+                                        None
+                                    }}
 
                                     <label>"New PIN"</label>
                                     {pin_dots(new_pin, 1)}

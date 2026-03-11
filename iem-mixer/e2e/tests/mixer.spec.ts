@@ -1107,10 +1107,10 @@ test.describe("v1.17.0 PIN Authentication", () => {
     expect(loginResp.status()).toBe(200);
     const { token } = await loginResp.json();
 
-    // Change PIN
+    // Change PIN (member field included for new API contract)
     const changeResp = await request.post("/api/auth/change-pin", {
       headers: { Authorization: `Bearer ${token}` },
-      data: { old_pin: "7711", new_pin: "1234" },
+      data: { member: "petronela", old_pin: "7711", new_pin: "1234" },
     });
     expect(changeResp.status()).toBe(200);
 
@@ -1130,7 +1130,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
     const { token: newToken } = await newLoginResp.json();
     const resetResp = await request.post("/api/auth/change-pin", {
       headers: { Authorization: `Bearer ${newToken}` },
-      data: { old_pin: "1234", new_pin: "7711" },
+      data: { member: "petronela", old_pin: "1234", new_pin: "7711" },
     });
     expect(resetResp.status()).toBe(200);
   });
@@ -1183,6 +1183,82 @@ test.describe("v1.17.0 PIN Authentication", () => {
       .filter({ hasText: "Preferences" });
     const toggleRows = prefsSection.locator(".settings-row");
     await expect(toggleRows).toHaveCount(1);
+  });
+
+  test("engineer can change member PIN via API", async ({ request }) => {
+    // Login as engineer on behalf of petronela
+    const engLogin = await request.post("/api/auth", {
+      data: { member: "petronela", pin: "1177" },
+    });
+    expect(engLogin.status()).toBe(200);
+    const { token } = await engLogin.json();
+
+    // Engineer changes member's PIN (no old_pin needed)
+    const changeResp = await request.post("/api/auth/change-pin", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { member: "petronela", new_pin: "9999" },
+    });
+    expect(changeResp.status()).toBe(200);
+
+    // Member can login with new PIN
+    const newLogin = await request.post("/api/auth", {
+      data: { member: "petronela", pin: "9999" },
+    });
+    expect(newLogin.status()).toBe(200);
+
+    // Old default PIN no longer works
+    const oldLogin = await request.post("/api/auth", {
+      data: { member: "petronela", pin: "7711" },
+    });
+    expect(oldLogin.status()).toBe(401);
+
+    // Reset PIN back to default using engineer token
+    const resetResp = await request.post("/api/auth/change-pin", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { member: "petronela", new_pin: "7711" },
+    });
+    expect(resetResp.status()).toBe(200);
+  });
+
+  test("expired token redirects to login page", async ({ page }) => {
+    // Create a fake expired auth state and set it in localStorage
+    await page.goto("/");
+    await page.evaluate(() => {
+      // Build a JWT with exp in the past (header.payload.signature)
+      // Header: {"alg":"HS256","typ":"JWT"}
+      const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+      // Payload with exp = 1000 (long expired)
+      const payload = btoa(
+        JSON.stringify({
+          sub: "petronela",
+          engineer: false,
+          exp: 1000,
+          iat: 900,
+        }),
+      )
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+      const fakeToken = `${header}.${payload}.fakesignature`;
+      localStorage.setItem(
+        "iem_token",
+        JSON.stringify({
+          token: fakeToken,
+          member: "petronela",
+          engineer: false,
+        }),
+      );
+    });
+
+    // Navigate to mixer page — should redirect to login since token is expired
+    await page.goto("/petronela");
+    await page.waitForURL(/\/login/, { timeout: 5000 });
+    const url = page.url();
+    expect(url).toContain("/login");
+    expect(url).toContain("member=petronela");
   });
 });
 
