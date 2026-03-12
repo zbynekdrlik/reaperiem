@@ -20,6 +20,7 @@ dante_outputs:
   ALEX: [15, 16]
   PATRIKA: [17, 18]
   ANI: [19, 20]
+  ENGINEER: [33, 34]
 
 # Band members - used as fallback when REAPER is unavailable (e.g., CI testing)
 # REAPER is the source of truth when available; these are used for:
@@ -62,6 +63,10 @@ members:
   - name: Ani
     dante_output_l: 19
     dante_output_r: 20
+
+  - name: Engineer
+    dante_output_l: 33
+    dante_output_r: 34
 
 # Input tracks (source tracks for mixing)
 inputs:

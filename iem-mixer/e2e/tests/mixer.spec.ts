@@ -98,6 +98,51 @@ test.describe("Mixer Features - Must All Pass", () => {
   });
 });
 
+test.describe("v1.48.0 Engineer IEM Mixer", () => {
+  test("engineer appears in fallback member list", async ({ request }) => {
+    const resp = await request.get("/api/members");
+    expect(resp.status()).toBe(200);
+    const members = await resp.json();
+    const eng = members.find((m: { id: string }) => m.id === "engineer");
+    // Engineer should be in fallback config (always available even without REAPER)
+    expect(eng).toBeDefined();
+    expect(eng.name).toMatch(/engineer/i);
+  });
+
+  test("engineer login with PIN 1177 returns engineer member", async ({
+    request,
+  }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(resp.status()).toBe(200);
+    const data = await resp.json();
+    expect(data.member).toBe("engineer");
+    expect(data.engineer).toBe(true);
+  });
+
+  test("engineer mixer API responds with auth", async ({ request }) => {
+    // Login as engineer
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(loginResp.status()).toBe(200);
+    const { token } = await loginResp.json();
+
+    // Access engineer mixer endpoint
+    const mixerResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // 200 if REAPER connected, 404 if not (engineer not discovered without REAPER)
+    expect([200, 404]).toContain(mixerResp.status());
+  });
+
+  test("engineer route serves content", async ({ page }) => {
+    const response = await page.goto("/engineer");
+    expect(response?.status()).toBe(200);
+  });
+});
+
 test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("version endpoint returns build info with valid git hash", async ({
     request,
