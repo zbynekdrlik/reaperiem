@@ -34,8 +34,7 @@ pub fn LandingPage() -> impl IntoView {
                         let target = format!("/{}", auth.member);
                         navigate(&target, Default::default());
                     } else {
-                        let target =
-                            format!("/login?member={m}&next=/{m}", m = auth.member);
+                        let target = format!("/login?member={m}&next=/{m}", m = auth.member);
                         navigate(&target, Default::default());
                     }
                 }
