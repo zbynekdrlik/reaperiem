@@ -2126,6 +2126,69 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
   });
 });
 
+test.describe("v1.50.0 Muted channel readability", () => {
+  test("muted channel has no global opacity — only audio elements are dimmed", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    // Wait for channels to render
+    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    const firstChannel = page.locator(".channel").first();
+    const classes = await firstChannel.getAttribute("class");
+    if (
+      !assume(
+        !classes?.includes("disconnected"),
+        "Channel must be connected to REAPER for mute test",
+      )
+    )
+      return;
+
+    // Mute the first channel
+    const muteBtn = firstChannel.locator(".mute-btn");
+    if (!assume((await muteBtn.count()) > 0, "Mute button must exist")) return;
+    await muteBtn.click({ force: true });
+    await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
+
+    // .channel.muted must NOT have global opacity
+    const channelOpacity = await firstChannel.evaluate(
+      (el) => getComputedStyle(el).opacity,
+    );
+    expect(channelOpacity).toBe("1");
+
+    // .fader-area inside muted channel MUST be dimmed
+    const faderArea = firstChannel.locator(".fader-area");
+    if ((await faderArea.count()) > 0) {
+      const faderOpacity = await faderArea.evaluate(
+        (el) => getComputedStyle(el).opacity,
+      );
+      expect(parseFloat(faderOpacity)).toBeLessThan(0.5);
+    }
+
+    // .ch-name must remain fully readable (opacity 1)
+    const chName = firstChannel.locator(".ch-name");
+    if ((await chName.count()) > 0) {
+      const nameOpacity = await chName.evaluate(
+        (el) => getComputedStyle(el).opacity,
+      );
+      expect(nameOpacity).toBe("1");
+    }
+
+    // Muted channel should have a red left indicator (inset box-shadow)
+    const boxShadow = await firstChannel.evaluate(
+      (el) => getComputedStyle(el).boxShadow,
+    );
+    // --mute-red-dim: #5a1a1f → rgb(90, 26, 31)
+    expect(boxShadow).toContain("rgb(90, 26, 31)");
+
+    // Unmute to restore state
+    await muteBtn.click({ force: true });
+  });
+});
+
 test.describe("Main tab channel ordering", () => {
   test("own channel appears first on Main tab, before pinned channels", async ({
     page,

@@ -563,13 +563,25 @@ body {
 }
 
 .channel.muted {
-  opacity: 0.4;
+  box-shadow: inset 3px 0 0 var(--mute-red-dim);
+  background: #1a1a28;
 }
 
-/* When a muted channel has its kebab menu open, it must stack above the
-   backdrop (z-index: 55). opacity < 1 creates a new stacking context,
-   trapping the popup's z-index inside. This z-index lifts the entire
-   channel above the backdrop so the popup remains clickable. */
+/* Dim audio elements only — header row stays fully readable */
+.channel.muted .fader-area {
+  opacity: 0.35;
+}
+.channel.muted .meter-stereo {
+  opacity: 0.3;
+}
+.channel.muted .db-display {
+  color: var(--text-muted);
+}
+.channel.muted .pan-container {
+  opacity: 0.35;
+}
+
+/* Kebab menu popup must stack above the backdrop (z-index: 55). */
 .channel.menu-open {
   z-index: 56;
 }
@@ -621,7 +633,12 @@ body {
 }
 
 .channel.stereo-pair {
-  border-left: 3px solid var(--category-stems);
+  box-shadow: inset 3px 0 0 var(--category-stems);
+}
+
+/* Muted state overrides stereo-pair indicator colour */
+.channel.muted.stereo-pair {
+  box-shadow: inset 3px 0 0 var(--mute-red-dim);
 }
 
 /* Channel label */

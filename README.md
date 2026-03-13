@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.49.0 (2026-03-13)
+
+- **Feature**: Engineer Mixes tab — monitor each band member's in-ear mix with individual faders
+- **Fix**: All engineer channels default-muted (engineer unmutes selectively)
+- **Fix**: CI backup handles dirty REAPER project without failing deploy
+
 ### v1.47.0 (2026-03-11)
 
 - **Fix**: Engineer PIN change — engineers on member phones can now change the member's PIN (was returning 403)
