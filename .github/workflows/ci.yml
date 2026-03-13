@@ -629,6 +629,9 @@ jobs:
           }
 
           # Switch to backup branch (create orphan if first time)
+          # Discard working tree changes first — data already collected to tmpDir
+          git checkout -- . 2>$null
+          git clean -fd 2>$null
           git fetch origin
           $backupExists = git ls-remote --heads origin backup
           if ($backupExists) {
