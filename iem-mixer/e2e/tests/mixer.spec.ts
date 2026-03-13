@@ -2120,9 +2120,9 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     await page.goto("/petronela");
     if (!(await waitForMixer(page))) return;
 
-    // Regular member should NOT see Mixes tab
+    // Regular member should NOT see Mixes tab (hidden via CSS display:none)
     const mixesTab = page.locator(".category-tab.mixes");
-    await expect(mixesTab).toHaveCount(0);
+    await expect(mixesTab).not.toBeVisible();
   });
 });
 
