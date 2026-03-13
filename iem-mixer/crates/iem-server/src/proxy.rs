@@ -1118,9 +1118,8 @@ async fn apply_command_to_cache(
     drop(config);
 
     // Helper: check if a track_index is valid (input range OR engineer mix channel)
-    let is_valid_track = |ti: usize| -> bool {
-        (ti >= 1 && ti <= input_count) || mix_track_indices.contains(&ti)
-    };
+    let is_valid_track =
+        |ti: usize| -> bool { (ti >= 1 && ti <= input_count) || mix_track_indices.contains(&ti) };
 
     // Helper: determine REAPER send_index for a given track_index.
     // Mix channels (member inear tracks) use send_index=0 (send to ENGINEER).
@@ -1197,8 +1196,9 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
+            let si = send_index_for(*track_index);
             (
-                reaper_api::set_send_vol(&reaper_url, *track_index, send_index_for(*track_index), vol),
+                reaper_api::set_send_vol(&reaper_url, *track_index, si, vol),
                 *track_index,
                 event,
             )
@@ -1223,8 +1223,9 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
+            let si = send_index_for(*track_index);
             (
-                reaper_api::set_send_mute(&reaper_url, *track_index, send_index_for(*track_index), mute_val),
+                reaper_api::set_send_mute(&reaper_url, *track_index, si, mute_val),
                 *track_index,
                 event,
             )
@@ -1250,8 +1251,9 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
+            let si = send_index_for(*track_index);
             (
-                reaper_api::set_send_pan(&reaper_url, *track_index, send_index_for(*track_index), reaper_pan),
+                reaper_api::set_send_pan(&reaper_url, *track_index, si, reaper_pan),
                 *track_index,
                 event,
             )
@@ -2133,7 +2135,10 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         let discovered = make_discovered_members();
         let mix = build_mix_channel_templates(&discovered, "engineer");
         for ch in &mix {
-            assert_eq!(ch.category, "mixes", "Mix channels must have category 'mixes'");
+            assert_eq!(
+                ch.category, "mixes",
+                "Mix channels must have category 'mixes'"
+            );
         }
     }
 
