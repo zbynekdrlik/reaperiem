@@ -92,21 +92,21 @@ pub fn CategoryTabs(
                     </button>
                 }
             }).collect::<Vec<_>>()}
-            <Show when=move || show_mixes.get()>
-                <button
-                    class=move || {
-                        let base = String::from("category-tab mixes");
-                        if active.get() == Category::Mixes {
-                            format!("{} active", base)
-                        } else {
-                            base
-                        }
+            <button
+                class=move || {
+                    let mut cls = String::from("category-tab mixes");
+                    if !show_mixes.get() {
+                        cls.push_str(" tab-hidden");
                     }
-                    on:click=move |_| on_select_mixes(Category::Mixes)
-                >
-                    "Mixes"
-                </button>
-            </Show>
+                    if active.get() == Category::Mixes {
+                        cls.push_str(" active");
+                    }
+                    cls
+                }
+                on:click=move |_| on_select_mixes(Category::Mixes)
+            >
+                "Mixes"
+            </button>
             <button
                 class=move || {
                     let mut cls = String::from("category-tab hidden");
