@@ -206,9 +206,10 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
       { token: auth.token, member: auth.member, engineer: auth.engineer },
     );
 
-    // Navigate to landing page — should redirect to /{member}
+    // Navigate to landing page — should redirect to /{auth.member}
+    // Engineer token's member field may differ from the requested member
     await page.goto("/");
-    await page.waitForURL(`**/${member}`, { timeout: 10000 });
-    expect(page.url()).toContain(`/${member}`);
+    await page.waitForURL(`**/${auth.member}`, { timeout: 10000 });
+    expect(page.url()).toContain(`/${auth.member}`);
   });
 });
