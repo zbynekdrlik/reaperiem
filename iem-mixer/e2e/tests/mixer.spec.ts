@@ -2177,12 +2177,12 @@ test.describe("v1.50.0 Muted channel readability", () => {
       expect(nameOpacity).toBe("1");
     }
 
-    // Muted channel should have a red left border
-    const borderLeft = await firstChannel.evaluate(
-      (el) => getComputedStyle(el).borderLeftColor,
+    // Muted channel should have a red left indicator (inset box-shadow)
+    const boxShadow = await firstChannel.evaluate(
+      (el) => getComputedStyle(el).boxShadow,
     );
     // --mute-red-dim: #5a1a1f → rgb(90, 26, 31)
-    expect(borderLeft).toBe("rgb(90, 26, 31)");
+    expect(boxShadow).toContain("rgb(90, 26, 31)");
 
     // Unmute to restore state
     await muteBtn.click({ force: true });

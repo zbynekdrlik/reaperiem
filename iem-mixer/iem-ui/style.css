@@ -563,7 +563,7 @@ body {
 }
 
 .channel.muted {
-  border-left: 3px solid var(--mute-red-dim);
+  box-shadow: inset 3px 0 0 var(--mute-red-dim);
   background: #1a1a28;
 }
 
@@ -633,12 +633,12 @@ body {
 }
 
 .channel.stereo-pair {
-  border-left: 3px solid var(--category-stems);
+  box-shadow: inset 3px 0 0 var(--category-stems);
 }
 
-/* Muted state overrides stereo-pair border colour */
+/* Muted state overrides stereo-pair indicator colour */
 .channel.muted.stereo-pair {
-  border-left: 3px solid var(--mute-red-dim);
+  box-shadow: inset 3px 0 0 var(--mute-red-dim);
 }
 
 /* Channel label */
