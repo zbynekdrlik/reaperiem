@@ -2,12 +2,19 @@
 -- Creates sends from all input tracks to a specified output track.
 --
 -- Triggered via HTTP API after setting EXTSTATE parameters:
---   REAPERIEM_SETUP/target_track  = target track name (e.g., "ENGINEER inear")
---   REAPERIEM_SETUP/input_count   = number of input tracks (e.g., "22")
+--   REAPERIEM_SETUP/target_track   = target track name (e.g., "ENGINEER inear")
+--   REAPERIEM_SETUP/input_count    = number of input tracks (e.g., "22")
+--   REAPERIEM_SETUP/source_tracks  = (optional) comma-separated source track names
+--                                    When set, uses these tracks instead of auto-detecting
 --
--- Usage:
+-- Usage (auto-detect input tracks):
 --   curl "http://iem.lan:8080/_/SET/EXTSTATE/REAPERIEM_SETUP/target_track/ENGINEER%20inear"
 --   curl "http://iem.lan:8080/_/SET/EXTSTATE/REAPERIEM_SETUP/input_count/22"
+--   curl "http://iem.lan:8080/_/_RS_REAPERIEM_CREATE_SENDS"
+--
+-- Usage (explicit source tracks — e.g., mix sends from inear tracks):
+--   curl "http://iem.lan:8080/_/SET/EXTSTATE/REAPERIEM_SETUP/target_track/ENGINEER%20inear"
+--   curl "http://iem.lan:8080/_/SET/EXTSTATE/REAPERIEM_SETUP/source_tracks/PETRONELA%20inear,STEVO%20inear,..."
 --   curl "http://iem.lan:8080/_/_RS_REAPERIEM_CREATE_SENDS"
 
 local function log(msg)
@@ -100,6 +107,10 @@ local function main()
     -- Read parameters from EXTSTATE
     target_name = reaper.GetExtState("REAPERIEM_SETUP", "target_track")
     local input_count_str = reaper.GetExtState("REAPERIEM_SETUP", "input_count")
+    local source_tracks_str = reaper.GetExtState("REAPERIEM_SETUP", "source_tracks")
+
+    -- Clear source_tracks after reading (one-shot parameter)
+    reaper.SetExtState("REAPERIEM_SETUP", "source_tracks", "", false)
 
     if target_name == "" then
         log("ERROR: REAPERIEM_SETUP/target_track not set")
@@ -107,15 +118,7 @@ local function main()
         return
     end
 
-    local input_count = tonumber(input_count_str)
-    if not input_count or input_count < 1 then
-        log("ERROR: REAPERIEM_SETUP/input_count invalid: " .. tostring(input_count_str))
-        reaper.SetExtState("REAPERIEM_SETUP", "result", "ERROR: invalid input_count", false)
-        return
-    end
-
     log("Target track: " .. target_name)
-    log("Input count: " .. input_count)
 
     -- Find target track
     local dst_track, dst_idx = find_track_by_name(target_name)
@@ -126,40 +129,53 @@ local function main()
     end
     log("Found target at track index " .. (dst_idx + 1))
 
-    -- Build send queue: input tracks 1..input_count → target
-    -- Track indices in REAPER are 0-based internally, but input tracks
-    -- start at index 2 (after INPUTS folder at 0, MICS folder at 1)
-    -- However, we don't hardcode indices — we iterate tracks 0..input_count
-    -- and pick the first input_count non-folder, non-output tracks.
-    --
-    -- Simpler approach: iterate tracks 1 through input_count (1-based REAPER display)
-    -- These are the tracks that have sends to band members already.
-    -- We find them by checking: does this track have sends to category 0 (track sends)?
-    local num_tracks = reaper.CountTracks(0)
-
-    -- Collect input tracks: any track that has at least one send to another track
-    -- and is NOT the target track itself, and is NOT a folder track
     local input_tracks = {}
-    for i = 0, num_tracks - 1 do
-        local track = reaper.GetTrack(0, i)
-        if track ~= dst_track then
-            local num_sends = reaper.GetTrackNumSends(track, 0) -- category 0 = track sends
-            local folder_depth = reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH")
-            -- Input tracks have sends to band member inear tracks and are not folders
-            if num_sends > 0 and folder_depth <= 0 then
+
+    if source_tracks_str ~= "" then
+        -- Explicit source tracks mode: parse comma-separated track names
+        log("Using explicit source tracks: " .. source_tracks_str)
+        for name in source_tracks_str:gmatch("[^,]+") do
+            name = name:match("^%s*(.-)%s*$") -- trim whitespace
+            local track, idx = find_track_by_name(name)
+            if track then
+                log("  Found source: " .. name .. " at index " .. (idx + 1))
                 input_tracks[#input_tracks + 1] = track
+            else
+                log("  WARNING: source track not found: " .. name)
             end
         end
-        if #input_tracks >= input_count then
-            break
+    else
+        -- Auto-detect mode: find input tracks by send count
+        local input_count = tonumber(input_count_str)
+        if not input_count or input_count < 1 then
+            log("ERROR: REAPERIEM_SETUP/input_count invalid: " .. tostring(input_count_str))
+            reaper.SetExtState("REAPERIEM_SETUP", "result", "ERROR: invalid input_count", false)
+            return
         end
+
+        log("Input count: " .. input_count)
+
+        local num_tracks = reaper.CountTracks(0)
+        for i = 0, num_tracks - 1 do
+            local track = reaper.GetTrack(0, i)
+            if track ~= dst_track then
+                local num_sends = reaper.GetTrackNumSends(track, 0)
+                local folder_depth = reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH")
+                if num_sends > 0 and folder_depth <= 0 then
+                    input_tracks[#input_tracks + 1] = track
+                end
+            end
+            if #input_tracks >= input_count then
+                break
+            end
+        end
+
+        log("Found " .. #input_tracks .. " input tracks with existing sends")
     end
 
-    log("Found " .. #input_tracks .. " input tracks with existing sends")
-
     if #input_tracks == 0 then
-        log("ERROR: no input tracks found with sends")
-        reaper.SetExtState("REAPERIEM_SETUP", "result", "ERROR: no input tracks with sends", false)
+        log("ERROR: no source tracks found")
+        reaper.SetExtState("REAPERIEM_SETUP", "result", "ERROR: no source tracks found", false)
         return
     end
 
