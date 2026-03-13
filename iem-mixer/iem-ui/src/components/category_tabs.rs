@@ -9,6 +9,7 @@ pub enum Category {
     Mics,
     Stems,
     Tech,
+    Mixes,
     Hidden,
 }
 
@@ -19,6 +20,7 @@ impl Category {
             Category::Mics => "Mics",
             Category::Stems => "Stems",
             Category::Tech => "Tech",
+            Category::Mixes => "Mixes",
             Category::Hidden => "Hidden",
         }
     }
@@ -30,6 +32,7 @@ impl Category {
             Category::Mics => category == "mics",
             Category::Stems => category == "stems",
             Category::Tech => category == "tech",
+            Category::Mixes => category == "mixes",
         }
     }
 
@@ -39,6 +42,7 @@ impl Category {
             Category::Mics => "mics",
             Category::Stems => "stems",
             Category::Tech => "tech",
+            Category::Mixes => "mixes",
             Category::Hidden => "hidden",
         }
     }
@@ -54,6 +58,9 @@ pub fn CategoryTabs(
     /// Whether to show the Hidden tab (only when there are hidden channels)
     #[prop(default = false.into())]
     show_hidden: Signal<bool>,
+    /// Whether to show the Mixes tab (only when mix channels exist, engineer only)
+    #[prop(default = false.into())]
+    show_mixes: Signal<bool>,
 ) -> impl IntoView {
     let base_categories = [
         Category::Main,
@@ -62,6 +69,7 @@ pub fn CategoryTabs(
         Category::Tech,
     ];
 
+    let on_select_mixes = on_select.clone();
     let on_select_hidden = on_select.clone();
 
     view! {
@@ -84,6 +92,21 @@ pub fn CategoryTabs(
                     </button>
                 }
             }).collect::<Vec<_>>()}
+            <Show when=move || show_mixes.get()>
+                <button
+                    class=move || {
+                        let base = String::from("category-tab mixes");
+                        if active.get() == Category::Mixes {
+                            format!("{} active", base)
+                        } else {
+                            base
+                        }
+                    }
+                    on:click=move |_| on_select_mixes(Category::Mixes)
+                >
+                    "Mixes"
+                </button>
+            </Show>
             <button
                 class=move || {
                     let mut cls = String::from("category-tab hidden");

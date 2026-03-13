@@ -126,6 +126,43 @@ pub async fn get_mixer_state(
         }
     }
 
+    // For engineer: append mix channels (member inear → ENGINEER sends)
+    if member_id == "engineer" {
+        let discovered = state.discovered_members.read().await;
+        let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
+        drop(discovered);
+
+        // Query mix send states (send_index=0 on each member inear track)
+        let mix_futures: Vec<_> = mix_channels
+            .iter()
+            .map(|ch| {
+                let client = state.http_client.clone();
+                let url = reaper_url.clone();
+                let track_index = ch.track_index;
+                async move {
+                    let result = query_send_state(&client, &url, track_index, 0).await;
+                    (track_index, result)
+                }
+            })
+            .collect();
+
+        let mix_results = futures::future::join_all(mix_futures).await;
+        for (track_index, result) in mix_results {
+            if let Ok((level, mute, pan)) = result {
+                if let Some(ch) = mix_channels
+                    .iter_mut()
+                    .find(|c| c.track_index == track_index)
+                {
+                    ch.level_db = reaper_vol_to_db(level);
+                    ch.muted = mute;
+                    ch.pan = reaper_pan_to_ui(pan);
+                }
+            }
+        }
+
+        result_channels.extend(mix_channels);
+    }
+
     Ok(Json(iem_core::MixerState {
         member_id: member_id.clone(),
         channels: result_channels,
@@ -423,6 +460,37 @@ pub(crate) fn build_channel_templates(
                 category,
                 stereo_pair,
                 stereo_side,
+            }
+        })
+        .collect()
+}
+
+/// Build channel templates for member mix monitoring (engineer only).
+/// Each discovered member (except engineer) becomes a "mixes" channel
+/// with track_index = member's inear track index.
+pub(crate) fn build_mix_channel_templates(
+    discovered: &[iem_core::DiscoveredMember],
+    engineer_id: &str,
+) -> Vec<iem_core::Channel> {
+    discovered
+        .iter()
+        .filter(|m| m.id() != engineer_id)
+        .map(|m| {
+            let name = m
+                .name
+                .strip_suffix(" inear")
+                .or_else(|| m.name.strip_suffix(" INEAR"))
+                .unwrap_or(&m.name)
+                .to_string();
+            iem_core::Channel {
+                track_index: m.track_index,
+                name,
+                level_db: 0.0,
+                pan: 0.5,
+                muted: false,
+                category: "mixes".to_string(),
+                stereo_pair: None,
+                stereo_side: None,
             }
         })
         .collect()
@@ -964,6 +1032,43 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         }
     }
 
+    // For engineer: append mix channels (member inear → ENGINEER sends)
+    if member_id == "engineer" {
+        let discovered = state.discovered_members.read().await;
+        let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
+        drop(discovered);
+
+        let mix_futures: Vec<_> = mix_channels
+            .iter()
+            .map(|ch| {
+                let client = state.http_client.clone();
+                let url = reaper_url.clone();
+                let track_index = ch.track_index;
+                async move {
+                    let result = query_send_state(&client, &url, track_index, 0).await;
+                    (track_index, result)
+                }
+            })
+            .collect();
+
+        let mix_results = futures::future::join_all(mix_futures).await;
+        for (track_index, result) in mix_results {
+            if let Ok((level, mute, pan)) = result {
+                if let Some(ch) = mix_channels
+                    .iter_mut()
+                    .find(|c| c.track_index == track_index)
+                {
+                    ch.level_db = reaper_vol_to_db(level);
+                    ch.muted = mute;
+                    ch.pan = reaper_pan_to_ui(pan);
+                }
+                connected = true;
+            }
+        }
+
+        result_channels.extend(mix_channels);
+    }
+
     // Read cached global volume for this member
     let cache = state.mixer_cache.read().await;
     let (global_level_db, global_muted) = match cache.global_volumes.get(member_id) {
@@ -995,6 +1100,16 @@ async fn apply_command_to_cache(
         .find(|m| m.id() == member_id)
         .map(|m| m.send_index)
         .ok_or_else(|| "Unknown member".to_string())?;
+    // Collect mix channel track indices for engineer validation
+    let mix_track_indices: Vec<usize> = if member_id == "engineer" {
+        discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .map(|m| m.track_index)
+            .collect()
+    } else {
+        Vec::new()
+    };
     drop(discovered);
 
     let config = state.config.read().await;
@@ -1002,13 +1117,29 @@ async fn apply_command_to_cache(
     let input_count = config.inputs.len();
     drop(config);
 
+    // Helper: check if a track_index is valid (input range OR engineer mix channel)
+    let is_valid_track = |ti: usize| -> bool {
+        (ti >= 1 && ti <= input_count) || mix_track_indices.contains(&ti)
+    };
+
+    // Helper: determine REAPER send_index for a given track_index.
+    // Mix channels (member inear tracks) use send_index=0 (send to ENGINEER).
+    // Regular input channels use the member's send_index.
+    let send_index_for = |ti: usize| -> usize {
+        if mix_track_indices.contains(&ti) {
+            0
+        } else {
+            member_index
+        }
+    };
+
     // Validate incoming WS command values
     match cmd {
         iem_core::ClientMsg::SetLevel {
             track_index,
             level_db,
         } => {
-            if *track_index < 1 || *track_index > input_count {
+            if !is_valid_track(*track_index) {
                 return Err(format!("track_index {} out of range", track_index));
             }
             if level_db.is_nan() || level_db.is_infinite() {
@@ -1016,7 +1147,7 @@ async fn apply_command_to_cache(
             }
         }
         iem_core::ClientMsg::SetPan { track_index, pan } => {
-            if *track_index < 1 || *track_index > input_count {
+            if !is_valid_track(*track_index) {
                 return Err(format!("track_index {} out of range", track_index));
             }
             if pan.is_nan() || pan.is_infinite() || *pan < -1.0 || *pan > 1.0 {
@@ -1024,7 +1155,7 @@ async fn apply_command_to_cache(
             }
         }
         iem_core::ClientMsg::SetMute { track_index, .. } => {
-            if *track_index < 1 || *track_index > input_count {
+            if !is_valid_track(*track_index) {
                 return Err(format!("track_index {} out of range", track_index));
             }
         }
@@ -1067,7 +1198,7 @@ async fn apply_command_to_cache(
             );
             drop(cache);
             (
-                reaper_api::set_send_vol(&reaper_url, *track_index, member_index, vol),
+                reaper_api::set_send_vol(&reaper_url, *track_index, send_index_for(*track_index), vol),
                 *track_index,
                 event,
             )
@@ -1093,7 +1224,7 @@ async fn apply_command_to_cache(
             );
             drop(cache);
             (
-                reaper_api::set_send_mute(&reaper_url, *track_index, member_index, mute_val),
+                reaper_api::set_send_mute(&reaper_url, *track_index, send_index_for(*track_index), mute_val),
                 *track_index,
                 event,
             )
@@ -1120,7 +1251,7 @@ async fn apply_command_to_cache(
             );
             drop(cache);
             (
-                reaper_api::set_send_pan(&reaper_url, *track_index, member_index, reaper_pan),
+                reaper_api::set_send_pan(&reaper_url, *track_index, send_index_for(*track_index), reaper_pan),
                 *track_index,
                 event,
             )
@@ -1946,5 +2077,114 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 idx, right
             );
         }
+    }
+
+    // ================================================================
+    // build_mix_channel_templates tests (v1.49.0 Engineer Mixes Tab)
+    // ================================================================
+
+    fn make_discovered_members() -> Vec<iem_core::DiscoveredMember> {
+        vec![
+            iem_core::DiscoveredMember {
+                name: "PETRONELA".to_string(),
+                track_index: 23,
+                dante_output_l: 1,
+                dante_output_r: 2,
+                send_index: 0,
+            },
+            iem_core::DiscoveredMember {
+                name: "STEVO".to_string(),
+                track_index: 24,
+                dante_output_l: 3,
+                dante_output_r: 4,
+                send_index: 1,
+            },
+            iem_core::DiscoveredMember {
+                name: "MAREK".to_string(),
+                track_index: 25,
+                dante_output_l: 5,
+                dante_output_r: 6,
+                send_index: 2,
+            },
+            iem_core::DiscoveredMember {
+                name: "ENGINEER".to_string(),
+                track_index: 32,
+                dante_output_l: 19,
+                dante_output_r: 20,
+                send_index: 9,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_mix_channels_exclude_engineer() {
+        let discovered = make_discovered_members();
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        // Should have 3 channels (PETRONELA, STEVO, MAREK) — engineer excluded
+        assert_eq!(mix.len(), 3);
+        assert!(
+            !mix.iter().any(|ch| ch.name == "ENGINEER"),
+            "Engineer should be excluded from mix channels"
+        );
+    }
+
+    #[test]
+    fn test_mix_channels_have_correct_category() {
+        let discovered = make_discovered_members();
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        for ch in &mix {
+            assert_eq!(ch.category, "mixes", "Mix channels must have category 'mixes'");
+        }
+    }
+
+    #[test]
+    fn test_mix_channels_use_member_track_index() {
+        let discovered = make_discovered_members();
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        assert_eq!(mix[0].track_index, 23, "PETRONELA track_index");
+        assert_eq!(mix[1].track_index, 24, "STEVO track_index");
+        assert_eq!(mix[2].track_index, 25, "MAREK track_index");
+    }
+
+    #[test]
+    fn test_mix_channels_name_strips_inear_suffix() {
+        // DiscoveredMember.name already excludes " inear" — just the uppercase name
+        let discovered = make_discovered_members();
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        assert_eq!(mix[0].name, "PETRONELA");
+        assert_eq!(mix[1].name, "STEVO");
+        assert_eq!(mix[2].name, "MAREK");
+    }
+
+    #[test]
+    fn test_mix_channels_default_values() {
+        let discovered = make_discovered_members();
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        for ch in &mix {
+            assert_eq!(ch.level_db, 0.0, "Default level should be 0 dB");
+            assert_eq!(ch.pan, 0.5, "Default pan should be 0.5 (center)");
+            assert!(!ch.muted, "Default muted should be false");
+            assert!(ch.stereo_pair.is_none(), "No stereo pair");
+            assert!(ch.stereo_side.is_none(), "No stereo side");
+        }
+    }
+
+    #[test]
+    fn test_mix_channels_empty_when_no_members() {
+        let mix = build_mix_channel_templates(&[], "engineer");
+        assert!(mix.is_empty());
+    }
+
+    #[test]
+    fn test_mix_channels_empty_when_only_engineer() {
+        let discovered = vec![iem_core::DiscoveredMember {
+            name: "ENGINEER".to_string(),
+            track_index: 32,
+            dante_output_l: 19,
+            dante_output_r: 20,
+            send_index: 9,
+        }];
+        let mix = build_mix_channel_templates(&discovered, "engineer");
+        assert!(mix.is_empty(), "No mix channels when only engineer exists");
     }
 }

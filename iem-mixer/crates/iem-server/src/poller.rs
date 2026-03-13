@@ -358,6 +358,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .map(|m| (mid.clone(), m.send_index))
         })
         .collect();
+    let discovered_snapshot = discovered.clone();
     drop(discovered);
     let channel_templates = build_channel_templates(&inputs);
 
@@ -392,6 +393,42 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     ch.pan = reaper_pan_to_ui(pan);
                 }
             }
+        }
+
+        // For engineer: also query mix channels (member inear → ENGINEER sends)
+        if member_id == "engineer" {
+            let mut mix_channels =
+                crate::proxy::build_mix_channel_templates(&discovered_snapshot, "engineer");
+
+            let mix_futures: Vec<_> = mix_channels
+                .iter()
+                .map(|ch| {
+                    let client = state.http_client.clone();
+                    let url = reaper_url.clone();
+                    let track_index = ch.track_index;
+                    async move {
+                        // Send 0 on each member inear track goes to ENGINEER
+                        let result = query_send_state(&client, &url, track_index, 0).await;
+                        (track_index, result)
+                    }
+                })
+                .collect();
+
+            let mix_results = futures::future::join_all(mix_futures).await;
+            for (track_index, result) in mix_results {
+                if let Ok((level, mute, pan)) = result {
+                    if let Some(ch) = mix_channels
+                        .iter_mut()
+                        .find(|c| c.track_index == track_index)
+                    {
+                        ch.level_db = reaper_vol_to_db(level);
+                        ch.muted = mute;
+                        ch.pan = reaper_pan_to_ui(pan);
+                    }
+                }
+            }
+
+            result_channels.extend(mix_channels);
         }
 
         // Diff against cached state and broadcast changes
