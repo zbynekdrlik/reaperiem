@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.61/win64" 1773391225 0
+<REAPER_PROJECT 0.1 "7.61/win64" 1773386428 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -845,7 +845,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 2 0 1 0 1 0 0 -1:U -1
+    HWOUT 2 0 0.37149253786936 0 0 0 0 -1:U -1
     <FXCHAIN
       WNDRECT 24 52 655 408
       SHOW 0
@@ -901,7 +901,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 4 0 1 0 1 0 0 -1:U -1
+    HWOUT 4 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
       SHOW 0
       LASTSEL 0
@@ -956,7 +956,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 6 0 1 0 1 0 0 -1:U -1
+    HWOUT 6 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
       SHOW 0
       LASTSEL 0
@@ -1011,7 +1011,7 @@
     AUXRECV 21 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 8 0 1 0 1 0 0 -1:U -1
+    HWOUT 8 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {BBDB2FDC-86DD-4E55-9FE9-EA3A5C55CCED}
     NAME "TINA inear"
@@ -1061,7 +1061,7 @@
     AUXRECV 21 3 0.113478355 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 10 0 1 0 1 0 0 -1:U -1
+    HWOUT 10 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {7D97119D-82A1-42A1-B362-F3CCD9C9CB30}
     NAME "MIREC inear"
@@ -1111,7 +1111,7 @@
     AUXRECV 21 3 0.14286079 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 12 0 1 0 1 0 0 -1:U -1
+    HWOUT 12 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {C988DC6F-0526-4DD4-85D7-CD2E30967EF6}
     NAME "ALEX inear"
@@ -1161,7 +1161,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 14 0 1 0 1 0 0 -1:U -1
+    HWOUT 14 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {67F6FBF1-BC04-4153-BEDC-584248F3F48E}
     NAME "PATRIKA inear"
@@ -1211,7 +1211,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 16 0 1 0 1 0 0 -1:U -1
+    HWOUT 16 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {E2E68799-1B9D-498F-A2B7-EA9C72EB54A6}
     NAME "ANI inear"
@@ -1261,7 +1261,7 @@
     AUXRECV 21 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
-    HWOUT 18 0 1 0 1 0 0 -1:U -1
+    HWOUT 18 0 1 0 0 0 0 -1:U -1
   >
   <TRACK {BB7BB7CA-A675-4639-A353-359B00245678}
     NAME "ENGINEER inear"
@@ -1288,28 +1288,28 @@
     FX 1
     TRACKID {BB7BB7CA-A675-4639-A353-359B00245678}
     PERF 0
-    AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 4 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 6 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 7 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 8 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 10 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 11 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 12 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 13 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 14 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 16 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 17 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 18 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 4 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 6 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 7 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 8 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 10 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 11 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 12 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 13 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 14 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 16 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 17 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 18 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 22 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
