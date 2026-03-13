@@ -32,6 +32,11 @@ local function create_send(src, dst, send_vol)
     reaper.SetTrackSendInfo_Value(src, 0, send_idx, "D_PAN", 0.0)
     -- Pre-fader post-FX mode (3) so each member's mix is independent
     reaper.SetTrackSendInfo_Value(src, 0, send_idx, "I_SENDMODE", 3)
+    -- Mute sends to ENGINEER by default (engineer unmutes selectively)
+    local _, dst_name = reaper.GetTrackName(dst)
+    if dst_name:lower():find("engineer") then
+        reaper.SetTrackSendInfo_Value(src, 0, send_idx, "B_MUTE", 1)
+    end
     return send_idx
 end
 
