@@ -98,6 +98,51 @@ test.describe("Mixer Features - Must All Pass", () => {
   });
 });
 
+test.describe("v1.48.0 Engineer IEM Mixer", () => {
+  test("engineer appears in fallback member list", async ({ request }) => {
+    const resp = await request.get("/api/members");
+    expect(resp.status()).toBe(200);
+    const members = await resp.json();
+    const eng = members.find((m: { id: string }) => m.id === "engineer");
+    // Engineer should be in fallback config (always available even without REAPER)
+    expect(eng).toBeDefined();
+    expect(eng.name).toMatch(/engineer/i);
+  });
+
+  test("engineer login with PIN 1177 returns engineer member", async ({
+    request,
+  }) => {
+    const resp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(resp.status()).toBe(200);
+    const data = await resp.json();
+    expect(data.member).toBe("engineer");
+    expect(data.engineer).toBe(true);
+  });
+
+  test("engineer mixer API responds with auth", async ({ request }) => {
+    // Login as engineer
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(loginResp.status()).toBe(200);
+    const { token } = await loginResp.json();
+
+    // Access engineer mixer endpoint
+    const mixerResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // 200 if REAPER connected, 404 if not (engineer not discovered without REAPER)
+    expect([200, 404]).toContain(mixerResp.status());
+  });
+
+  test("engineer route serves content", async ({ page }) => {
+    const response = await page.goto("/engineer");
+    expect(response?.status()).toBe(200);
+  });
+});
+
 test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("version endpoint returns build info with valid git hash", async ({
     request,
@@ -1988,6 +2033,96 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
       return rect.right > parentRect.right || rect.left < parentRect.left;
     });
     expect(isClipped).toBe(false);
+  });
+});
+
+test.describe("v1.49.0 Engineer Mixes Tab", () => {
+  test("engineer mixer includes mix channels with category mixes", async ({
+    request,
+  }) => {
+    // Login as engineer
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(loginResp.status()).toBe(200);
+    const { token } = await loginResp.json();
+
+    // Engineer mixer should include mix channels
+    const mixerResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!assume(mixerResp.ok(), "Engineer mixer endpoint must respond")) return;
+
+    const data = await mixerResp.json();
+    const mixChannels = data.channels.filter(
+      (c: { category: string }) => c.category === "mixes",
+    );
+    // Should have 9 mix channels (one per band member, excluding engineer)
+    expect(mixChannels.length).toBe(9);
+    // Mix channel names should be member names (not "X inear")
+    for (const ch of mixChannels) {
+      expect(ch.name).not.toContain("inear");
+    }
+  });
+
+  test("regular member mixer does NOT include mix channels", async ({
+    request,
+  }) => {
+    const loginResp = await request.post("/api/auth", {
+      data: { member: "petronela", pin: "7711" },
+    });
+    expect(loginResp.status()).toBe(200);
+    const { token } = await loginResp.json();
+
+    const mixerResp = await request.get("/api/mixer/petronela", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!assume(mixerResp.ok(), "Petronela mixer endpoint must respond"))
+      return;
+
+    const data = await mixerResp.json();
+    const mixChannels = data.channels.filter(
+      (c: { category: string }) => c.category === "mixes",
+    );
+    expect(mixChannels.length).toBe(0);
+  });
+
+  test("engineer sees Mixes tab in UI", async ({ page }) => {
+    await page.goto("/");
+    // Login as engineer
+    const loginResp = await page.request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    if (!assume(loginResp.status() === 200, "Engineer login must succeed"))
+      return;
+    const data = await loginResp.json();
+    await page.evaluate(
+      ({ token, member, engineer }) => {
+        localStorage.setItem(
+          "iem_token",
+          JSON.stringify({ token, member, engineer }),
+        );
+      },
+      { token: data.token, member: data.member, engineer: data.engineer },
+    );
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    // Engineer should see the Mixes tab
+    const mixesTab = page.locator(".category-tab.mixes");
+    await expect(mixesTab).toBeVisible({ timeout: 5000 });
+    expect(await mixesTab.textContent()).toBe("Mixes");
+  });
+
+  test("regular member does NOT see Mixes tab", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) return;
+
+    // Regular member should NOT see Mixes tab (hidden via CSS display:none)
+    const mixesTab = page.locator(".category-tab.mixes");
+    await expect(mixesTab).not.toBeVisible();
   });
 });
 

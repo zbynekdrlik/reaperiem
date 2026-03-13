@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.47.0 (2026-03-11)
+
+- **Fix**: Engineer PIN change — engineers on member phones can now change the member's PIN (was returning 403)
+- **Fix**: Token expiry enforcement — expired tokens are now detected every 60s and redirect to login (was silently failing)
+- **UI**: PIN change modal hides "Current PIN" field for engineers (they don't know the member's PIN)
+
 ### v1.46.0 (2026-03-11)
 
 - **Security**: Enforce member access control — members can only access their own mixer, engineers can access any (Issue #77)

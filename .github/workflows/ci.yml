@@ -297,14 +297,14 @@ jobs:
         run: |
           cargo run --package iem-server --features standalone --release &
           # Wait for server to be ready (may take a while if compiling)
-          for i in {1..60}; do
+          for i in {1..120}; do
             if curl -sf http://localhost:8080/ > /dev/null 2>&1; then
               echo "Server ready after $i seconds"
               exit 0
             fi
             sleep 1
           done
-          echo "Server failed to start within 60 seconds"
+          echo "Server failed to start within 120 seconds"
           exit 1
         env:
           RUST_LOG: info
@@ -629,6 +629,9 @@ jobs:
           }
 
           # Switch to backup branch (create orphan if first time)
+          # Discard working tree changes first — data already collected to tmpDir
+          git checkout -- . 2>$null
+          git clean -fd 2>$null
           git fetch origin
           $backupExists = git ls-remote --heads origin backup
           if ($backupExists) {

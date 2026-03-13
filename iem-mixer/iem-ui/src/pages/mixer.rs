@@ -622,6 +622,7 @@ pub fn MixerPage() -> impl IntoView {
                 active=active_category.into()
                 on_select=move |cat| set_active_category.set(cat)
                 show_hidden=Signal::derive(move || !hidden_channels.get().is_empty())
+                show_mixes=Signal::derive(move || channels.get().iter().any(|ch| ch.category == "mixes"))
             />
 
             <Show
