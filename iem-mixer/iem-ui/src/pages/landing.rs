@@ -1,8 +1,10 @@
 //! Landing page with member grid
 
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 
 use crate::api::{MemberInfo, get_members_with_timeout};
+use crate::auth::{get_auth, is_token_expired};
 
 /// Load state for the landing page
 #[derive(Clone)]
@@ -15,6 +17,32 @@ enum LoadState {
 /// Landing page showing all band members
 #[component]
 pub fn LandingPage() -> impl IntoView {
+    let navigate = use_navigate();
+
+    // Auto-redirect: remember last member, get to mixer ASAP (#84).
+    // - Valid token → straight to mixer
+    // - Expired token → PIN login for remembered member (skip member grid)
+    // - No auth → show member grid (first-time user)
+    // sessionStorage flag prevents re-redirect when user navigates back.
+    Effect::new(move |_| {
+        if let Some(auth) = get_auth() {
+            let window = web_sys::window().unwrap();
+            if let Ok(Some(storage)) = window.session_storage() {
+                if storage.get_item("iem_redirected").ok().flatten().is_none() {
+                    let _ = storage.set_item("iem_redirected", "1");
+                    if !is_token_expired() {
+                        let target = format!("/{}", auth.member);
+                        navigate(&target, Default::default());
+                    } else {
+                        let target =
+                            format!("/login?member={m}&next=/{m}", m = auth.member);
+                        navigate(&target, Default::default());
+                    }
+                }
+            }
+        }
+    });
+
     // State signal for loading/loaded/error
     let (state, set_state) = signal(LoadState::Loading);
     // Retry trigger - incrementing this refetches
