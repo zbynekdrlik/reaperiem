@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.56.0 (2026-03-14)
+
+- **Fix**: Fader now reaches exact whole-number dB values (e.g., -4.0) — switched to 0.2 dB steps with integer boundary snapping
+- **Fix**: Bottom toolbar (Mute All, Snapshots, Presets) no longer disappears on mobile when address bar shows/hides
+
 ### v1.54.0 (2026-03-14)
 
 - **Fix**: Mute All button on engineer mixer now mutes all 31 channels (previously only muted 22 input channels, leaving 9 mix channels unmuted)
