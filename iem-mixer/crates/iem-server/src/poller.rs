@@ -316,11 +316,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .output_track_indices
                 .insert(member_id.clone(), *track_idx);
 
-            let level_db = reaper_vol_to_db(*vol_linear);
+            let level_db = crate::proxy::quantize_02(reaper_vol_to_db(*vol_linear));
             let muted = (*flags & 8) != 0;
 
             let changed = match cache.global_volumes.get(member_id) {
-                Some(gv) => (gv.level_db - level_db).abs() > 0.01 || gv.muted != muted,
+                Some(gv) => (gv.level_db - level_db).abs() > 0.05 || gv.muted != muted,
                 None => true,
             };
 
@@ -388,7 +388,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     .iter_mut()
                     .find(|c| c.track_index == track_index)
                 {
-                    ch.level_db = reaper_vol_to_db(level);
+                    ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
                     ch.muted = mute;
                     ch.pan = reaper_pan_to_ui(pan);
                 }
@@ -421,7 +421,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         .iter_mut()
                         .find(|c| c.track_index == track_index)
                     {
-                        ch.level_db = reaper_vol_to_db(level);
+                        ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
                         ch.muted = mute;
                         ch.pan = reaper_pan_to_ui(pan);
                     }
@@ -443,7 +443,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     .iter()
                     .find(|c| c.track_index == new_ch.track_index)
                 {
-                    let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.01
+                    let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.05
                         || old_ch.muted != new_ch.muted
                         || (old_ch.pan - new_ch.pan).abs() > 0.001;
 

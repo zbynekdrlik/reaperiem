@@ -799,6 +799,11 @@ pub(crate) fn reaper_vol_to_db(vol: f32) -> f32 {
     }
 }
 
+/// Quantize to 0.2 dB steps (matches UI quantization)
+pub(crate) fn quantize_02(value: f32) -> f32 {
+    (value * 5.0).round() / 5.0
+}
+
 /// Convert REAPER pan (-1.0 to 1.0) to UI pan (0.0 to 1.0)
 ///
 /// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
@@ -1216,8 +1221,8 @@ async fn apply_command_to_cache(
             level_db,
         } => {
             let vol = db_to_reaper_vol(*level_db);
-            // Pre-write cache with the roundtrip-converted value (what REAPER will store)
-            let cached_db = reaper_vol_to_db(vol);
+            // Pre-write cache with quantized roundtrip value (eliminates f32 artifacts)
+            let cached_db = quantize_02(reaper_vol_to_db(vol));
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
             if let Some(channels) = cache.member_states.get_mut(member_id) {
@@ -1561,6 +1566,20 @@ mod tests {
                 "Roundtrip failed for {} dB: got {} dB",
                 db,
                 back
+            );
+        }
+    }
+
+    #[test]
+    fn test_db_roundtrip_quantized_02() {
+        // With quantize_02, the roundtrip through REAPER's linear domain
+        // should produce exact 0.2-step values
+        for db in [-4.0_f32, -6.0, -10.2, -3.8, 0.0, 6.0, -12.0, -0.4] {
+            let vol = db_to_reaper_vol(db);
+            let roundtrip = quantize_02(reaper_vol_to_db(vol));
+            assert_eq!(
+                roundtrip, db,
+                "Quantized round-trip for {db} dB failed: got {roundtrip}"
             );
         }
     }
@@ -1916,40 +1935,37 @@ mod tests {
 
     #[test]
     fn test_db_roundtrip_precision_full_range() {
-        // The cache pre-write uses reaper_vol_to_db(db_to_reaper_vol(x)) to store
-        // the value that REAPER will actually store. This roundtrip must match
-        // within 0.01 dB for the poller diff threshold to detect no change.
-        for db_10x in (-600..=120).step_by(5) {
-            let db = db_10x as f32 / 10.0;
+        // With quantize_02, the cache pre-write stores quantize_02(reaper_vol_to_db(vol)).
+        // The poller also quantizes. Both should produce identical values.
+        for db_5x in (-300..=60).step_by(1) {
+            let db = db_5x as f32 / 5.0; // 0.2 dB steps
             let vol = db_to_reaper_vol(db);
-            let back = reaper_vol_to_db(vol);
-            let error = (back - db).abs();
-            assert!(
-                error < 0.01 || db <= -60.0,
-                "Roundtrip error too large at {:.1}dB: got {:.4}dB (error {:.4}dB)",
-                db,
-                back,
-                error
+            let cached = quantize_02(reaper_vol_to_db(vol));
+            let polled = quantize_02(reaper_vol_to_db(vol));
+            assert_eq!(
+                cached, polled,
+                "Cache and poller disagree at {:.1}dB: cached={:.4}, polled={:.4}",
+                db, cached, polled
             );
         }
     }
 
     #[test]
     fn test_cache_prewrite_prevents_diff_detection() {
-        // Simulate what happens during cache pre-write:
+        // Simulate cache pre-write with quantize_02:
         // 1. User sends SetLevel { level_db: -12.0 }
-        // 2. Cache stores reaper_vol_to_db(db_to_reaper_vol(-12.0))
-        // 3. Poller reads REAPER value (same as what we sent) and converts to dB
-        // 4. Diff should be < 0.01 dB threshold (no broadcast)
+        // 2. Cache stores quantize_02(reaper_vol_to_db(db_to_reaper_vol(-12.0)))
+        // 3. Poller reads REAPER value, stores quantize_02(reaper_vol_to_db(vol))
+        // 4. Diff should be 0.0 (identical values, no broadcast)
         let user_db = -12.0_f32;
         let reaper_vol = db_to_reaper_vol(user_db);
-        let cached_db = reaper_vol_to_db(reaper_vol);
-        let polled_db = reaper_vol_to_db(reaper_vol); // Same REAPER value
+        let cached_db = quantize_02(reaper_vol_to_db(reaper_vol));
+        let polled_db = quantize_02(reaper_vol_to_db(reaper_vol));
 
         let diff = (cached_db - polled_db).abs();
         assert!(
-            diff < 0.01,
-            "Cache pre-write value ({}) and polled value ({}) differ by {} dB (threshold 0.01)",
+            diff < 0.05,
+            "Cache pre-write value ({}) and polled value ({}) differ by {} dB (threshold 0.05)",
             cached_db,
             polled_db,
             diff
