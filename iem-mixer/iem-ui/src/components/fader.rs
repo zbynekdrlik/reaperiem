@@ -8,7 +8,7 @@
 //! Double-tap (touch) or double-click (mouse) triggers smooth animation to 0dB.
 
 use leptos::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::TouchEvent;
@@ -79,6 +79,10 @@ pub fn Fader(
     let (is_touch_interaction, set_is_touch_interaction) = signal(false);
     let (saved_value, set_saved_value) = signal(0.0f32);
     let (is_animating, set_is_animating) = signal(false);
+
+    // Raw (unquantized) drag accumulator — prevents quantization error compounding
+    // that causes integer dB values (e.g., -4.0) to be skipped during drag
+    let raw_drag_value: Rc<Cell<f32>> = Rc::new(Cell::new(0.0));
 
     // Store the timeout handle so we can cancel it
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
@@ -223,6 +227,10 @@ pub fn Fader(
     let last_touch_time_tc = last_touch_time.clone();
     let last_touch_time_md = last_touch_time; // mousedown (last user)
 
+    let raw_drag_value_ts = raw_drag_value.clone();
+    let raw_drag_value_tm = raw_drag_value.clone();
+    let raw_drag_value_md = raw_drag_value; // mousedown (cloned inside for inner closures)
+
     let last_tap_time_ts = last_tap_time.clone();
     let last_tap_x_ts = last_tap_x.clone();
 
@@ -268,7 +276,9 @@ pub fn Fader(
         }
 
         set_is_touch_interaction.set(true);
-        set_saved_value.set(local_value.get_untracked());
+        let current_val = local_value.get_untracked();
+        set_saved_value.set(current_val);
+        raw_drag_value_ts.set(current_val);
         set_is_pending.set(true);
 
         if let Some(cb) = on_touch_state {
@@ -330,9 +340,11 @@ pub fn Fader(
                 if let Some(base_x) = base_x_opt {
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
-                    let base = saved_value.get_untracked();
-                    let new_value =
-                        quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
+                    // Use raw (unquantized) accumulator to prevent skipping integer dB values
+                    let raw = raw_drag_value_tm.get();
+                    let new_raw = (raw + (delta_ratio as f32) * (max - min)).clamp(min, max);
+                    raw_drag_value_tm.set(new_raw);
+                    let new_value = quantize(new_raw);
                     set_local_value.set(new_value);
                     on_change.run(new_value);
                     // Update base for next incremental move
@@ -430,7 +442,9 @@ pub fn Fader(
         }
 
         // Save current value and mouse position — NO JUMP, relative only
-        set_saved_value.set(local_value.get_untracked());
+        let current_val = local_value.get_untracked();
+        set_saved_value.set(current_val);
+        raw_drag_value_md.set(current_val);
         *move_base_x_md.borrow_mut() = Some(ev.client_x() as f64);
         set_is_pending.set(true);
 
@@ -453,6 +467,7 @@ pub fn Fader(
         // Clone Rcs for inner closures
         let move_base_x_mm = move_base_x_md.clone();
         let move_base_x_mu = move_base_x_md.clone();
+        let raw_drag_value_mm = raw_drag_value_md.clone();
         let timeout_handle_mu = timeout_handle_md.clone();
         let mm_cleanup = mm_closure_md.clone();
         let mu_cleanup = mu_closure_md.clone();
@@ -476,9 +491,11 @@ pub fn Fader(
                     let rect = el.get_bounding_client_rect();
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
-                    let base = saved_value.get_untracked();
-                    let new_value =
-                        quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
+                    // Use raw (unquantized) accumulator to prevent skipping integer dB values
+                    let raw = raw_drag_value_mm.get();
+                    let new_raw = (raw + (delta_ratio as f32) * (max - min)).clamp(min, max);
+                    raw_drag_value_mm.set(new_raw);
+                    let new_value = quantize(new_raw);
                     set_local_value.set(new_value);
                     on_change.run(new_value);
                     *move_base_x_mm.borrow_mut() = Some(current_x);
@@ -588,6 +605,74 @@ mod tests {
         assert_eq!(quantize(-12.0), -12.0);
         assert_eq!(quantize(-0.05), -0.1);
         assert_eq!(quantize(-0.04), 0.0);
+    }
+
+    #[test]
+    fn test_integer_db_values_reachable_with_raw_accumulator() {
+        // Simulate a drag across -5.0 to -3.0 with per-pixel step of 0.257 dB
+        // (typical phone: 280px wide, 72 dB range)
+        let step = 72.0 / 280.0; // ~0.2571 dB per pixel
+        let mut raw = -5.0_f32;
+        let mut seen_values: Vec<f32> = vec![quantize(raw)];
+
+        // Drag 8 pixels (covers ~2 dB)
+        for _ in 0..8 {
+            raw += step;
+            seen_values.push(quantize(raw));
+        }
+
+        // -4.0 MUST appear in the sequence
+        assert!(
+            seen_values.iter().any(|v| (*v - -4.0).abs() < f32::EPSILON),
+            "Must reach -4.0 dB, but got: {:?}",
+            seen_values
+        );
+    }
+
+    #[test]
+    fn test_quantized_base_skips_integer_values() {
+        // Demonstrate the bug: using quantized value as base for next step
+        let step = 72.0 / 280.0;
+        let mut quantized_base = -5.0_f32;
+        let mut seen_values: Vec<f32> = vec![quantized_base];
+
+        for _ in 0..12 {
+            quantized_base = quantize(quantized_base + step);
+            seen_values.push(quantized_base);
+        }
+
+        // With the old quantized-base approach, -4.0 is skipped
+        let has_minus_4 = seen_values.iter().any(|v| (*v - -4.0).abs() < f32::EPSILON);
+        assert!(
+            !has_minus_4,
+            "Bug demonstration: -4.0 should be SKIPPED with quantized base. Got: {:?}",
+            seen_values
+        );
+    }
+
+    #[test]
+    fn test_all_integer_db_values_reachable_across_range() {
+        // Verify that sweeping the full range with a raw accumulator
+        // hits every integer dB value from -59 to 12
+        let step = 72.0 / 280.0;
+        let mut raw = -60.0_f32;
+        let mut seen_values: Vec<f32> = Vec::new();
+
+        while raw <= 12.0 {
+            seen_values.push(quantize(raw));
+            raw += step;
+        }
+
+        // Check every integer from -59 to 11
+        for target in -59..=11 {
+            let target_f = target as f32;
+            assert!(
+                seen_values
+                    .iter()
+                    .any(|v| (*v - target_f).abs() < f32::EPSILON),
+                "Must reach {target_f} dB, but it was skipped",
+            );
+        }
     }
 
     #[test]
