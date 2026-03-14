@@ -368,11 +368,7 @@ pub async fn batch_control(
                     StatusCode::BAD_GATEWAY,
                     Json(ApiError::new(
                         "REAPER_ERROR",
-                        format!(
-                            "{} of {} mute commands failed",
-                            errors.len(),
-                            results.len()
-                        ),
+                        format!("{} of {} mute commands failed", errors.len(), results.len()),
                     )),
                 ));
             }
