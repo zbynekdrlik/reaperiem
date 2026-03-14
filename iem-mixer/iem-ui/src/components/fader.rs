@@ -77,7 +77,6 @@ pub fn Fader(
     let (is_activated, set_is_activated) = signal(false);
     let (is_pending, set_is_pending) = signal(false);
     let (is_touch_interaction, set_is_touch_interaction) = signal(false);
-    let (saved_value, set_saved_value) = signal(0.0f32);
     let (is_animating, set_is_animating) = signal(false);
 
     // Raw (unquantized) drag accumulator — prevents quantization error compounding
@@ -276,9 +275,7 @@ pub fn Fader(
         }
 
         set_is_touch_interaction.set(true);
-        let current_val = local_value.get_untracked();
-        set_saved_value.set(current_val);
-        raw_drag_value_ts.set(current_val);
+        raw_drag_value_ts.set(local_value.get_untracked());
         set_is_pending.set(true);
 
         if let Some(cb) = on_touch_state {
@@ -349,7 +346,6 @@ pub fn Fader(
                     on_change.run(new_value);
                     // Update base for next incremental move
                     *move_base_x_tm.borrow_mut() = Some(current_x);
-                    set_saved_value.set(new_value);
                 }
             }
         }
@@ -442,9 +438,7 @@ pub fn Fader(
         }
 
         // Save current value and mouse position — NO JUMP, relative only
-        let current_val = local_value.get_untracked();
-        set_saved_value.set(current_val);
-        raw_drag_value_md.set(current_val);
+        raw_drag_value_md.set(local_value.get_untracked());
         *move_base_x_md.borrow_mut() = Some(ev.client_x() as f64);
         set_is_pending.set(true);
 
@@ -499,7 +493,6 @@ pub fn Fader(
                     set_local_value.set(new_value);
                     on_change.run(new_value);
                     *move_base_x_mm.borrow_mut() = Some(current_x);
-                    set_saved_value.set(new_value);
                 }
             }
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
