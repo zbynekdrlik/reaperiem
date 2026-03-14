@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.51.0 (2026-03-13)
+
+- **Fix**: Channel name truncation — long names like "Petronela" no longer get cut off when muted or stereo-paired (replaced `border-left` with `box-shadow: inset`)
+
 ### v1.49.0 (2026-03-13)
 
 - **Feature**: Engineer Mixes tab — monitor each band member's in-ear mix with individual faders
