@@ -102,11 +102,8 @@ test.describe("Engineer Mute All (#88)", () => {
     if (!assume(mixerResp.ok(), "Mixer state query must succeed")) return;
 
     const data = await mixerResp.json();
-    // All non-mix channels should be muted
-    const inputChannels = data.channels.filter(
-      (c: { category: string }) => c.category !== "mixes",
-    );
-    for (const ch of inputChannels) {
+    // ALL channels (input + mix) must be muted
+    for (const ch of data.channels) {
       expect(ch.muted).toBe(true);
     }
   });
@@ -220,13 +217,9 @@ test.describe("Engineer Mute All (#88)", () => {
     if (!assume(mixerResp.ok(), "Mixer state query must succeed")) return;
     const data = await mixerResp.json();
 
-    const inputChannels = data.channels.filter(
-      (c: { category: string }) => c.category !== "mixes",
-    );
-    if (!assume(inputChannels.length > 0, "Need at least 1 input channel"))
-      return;
+    if (!assume(data.channels.length > 0, "Need at least 1 channel")) return;
 
-    const firstTrack = inputChannels[0].track_index;
+    const firstTrack = data.channels[0].track_index;
 
     // Unmute the first channel
     const unmuteResp = await request.post(
@@ -246,16 +239,13 @@ test.describe("Engineer Mute All (#88)", () => {
     if (!assume(verifyResp.ok(), "Verify mixer state must succeed")) return;
     const verifyData = await verifyResp.json();
 
-    const verifyInputs = verifyData.channels.filter(
-      (c: { category: string }) => c.category !== "mixes",
-    );
-    const firstChannel = verifyInputs.find(
+    const firstChannel = verifyData.channels.find(
       (c: { track_index: number }) => c.track_index === firstTrack,
     );
     expect(firstChannel.muted).toBe(false);
 
     // At least some other channels should still be muted
-    const stillMuted = verifyInputs.filter(
+    const stillMuted = verifyData.channels.filter(
       (c: { track_index: number; muted: boolean }) =>
         c.track_index !== firstTrack && c.muted,
     );

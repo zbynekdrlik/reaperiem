@@ -346,7 +346,7 @@ pub async fn batch_control(
         }
         BatchOperation::MuteAll => {
             // Mute all input channels for this member
-            let urls: Vec<String> = inputs
+            let mut urls: Vec<String> = inputs
                 .iter()
                 .enumerate()
                 .map(|(i, _)| {
@@ -354,6 +354,17 @@ pub async fn batch_control(
                     reaper_api::set_send_mute(&reaper_url, t, member_index, 1)
                 })
                 .collect();
+
+            // For engineer: also mute mix channels (member inear → ENGINEER sends)
+            if member_id == "engineer" {
+                let discovered = state.discovered_members.read().await;
+                let mix_urls: Vec<String> = discovered
+                    .iter()
+                    .filter(|m| m.id() != "engineer")
+                    .map(|m| reaper_api::set_send_mute(&reaper_url, m.track_index, 0, 1))
+                    .collect();
+                urls.extend(mix_urls);
+            }
 
             let results =
                 futures::future::join_all(urls.iter().map(|url| state.http_client.get(url).send()))

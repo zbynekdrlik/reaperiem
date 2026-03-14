@@ -9,7 +9,7 @@ resolver = "2"
 
 [package]
 name = "iem-mixer"
-version = "1.53.0"
+version = "1.54.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "In-ear monitor mixing system for REAPER"
