@@ -110,6 +110,15 @@ pub async fn login(
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
 
+    // Block "engineer" from using default member PIN — engineer MUST use engineer PIN (step 1)
+    // If we reach here, the engineer PIN didn't match, so reject.
+    if req.member == "engineer" {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
+        ));
+    }
+
     // Check default member PIN ("7711")
     if constant_time_eq(&req.pin, iem_core::config::DEFAULT_MEMBER_PIN) {
         return issue_token(&config, &req.member, false);

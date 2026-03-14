@@ -35,18 +35,22 @@ pub fn Toolbar(
                     </button>
                 }
             })}
-            <button
-                class="toolbar-btn"
-                on:click=move |_| on_presets.run(())
-            >
-                "Presets"
-            </button>
-            <button
-                class="toolbar-btn"
-                on:click=move |_| on_history.run(())
-            >
-                "History"
-            </button>
+            {(!is_engineer).then(|| {
+                view! {
+                    <button
+                        class="toolbar-btn"
+                        on:click=move |_| on_presets.run(())
+                    >
+                        "Presets"
+                    </button>
+                    <button
+                        class="toolbar-btn"
+                        on:click=move |_| on_history.run(())
+                    >
+                        "History"
+                    </button>
+                }
+            })}
         </div>
     }
 }

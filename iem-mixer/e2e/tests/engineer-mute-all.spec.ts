@@ -111,6 +111,89 @@ test.describe("Engineer Mute All (#88)", () => {
     }
   });
 
+  test("clicking Mute All button fires batch API call", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const muteAllBtn = page.locator(".toolbar-btn-mute-all");
+    if (
+      !assume(await muteAllBtn.isVisible(), "Mute All button must be visible")
+    )
+      return;
+
+    const requestPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes("/api/mixer/engineer/batch") &&
+        req.method() === "POST",
+      { timeout: 5000 },
+    );
+
+    await muteAllBtn.click();
+
+    const request = await requestPromise;
+    const body = request.postDataJSON();
+    expect(body.operation).toBe("mute_all");
+  });
+
+  test("Mute All hidden + Presets/History shown when engineer views member mixer", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    await loginAs(page, "engineer", "1177");
+    await page.goto(`/${members[0].id}`);
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    // No Mute All on member's mixer
+    await expect(page.locator(".toolbar-btn-mute-all")).toHaveCount(0);
+    // Presets and History should be visible
+    await expect(
+      page.locator(".toolbar-btn", { hasText: "Presets" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".toolbar-btn", { hasText: "History" }),
+    ).toBeVisible();
+  });
+
+  test("engineer own mixer shows Mute All, no Presets/History", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    // Mute All visible
+    await expect(page.locator(".toolbar-btn-mute-all")).toBeVisible();
+    // No Presets or History
+    await expect(
+      page.locator(".toolbar-btn", { hasText: "Presets" }),
+    ).toHaveCount(0);
+    await expect(
+      page.locator(".toolbar-btn", { hasText: "History" }),
+    ).toHaveCount(0);
+  });
+
   test("can unmute individual channel after Mute All", async ({ request }) => {
     // Login as engineer
     const loginResp = await request.post("/api/auth", {

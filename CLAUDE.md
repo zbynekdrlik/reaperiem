@@ -555,6 +555,13 @@ is WRONG and must be rewritten.
 - **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
 - **Visual/icon tests must verify actual pixel data** — not just "file exists" but verify specific pixel values match expected
 
+**UI E2E tests MUST test interactions, not just DOM:**
+
+- Button test = click it + verify the side effect (API call, state change, navigation)
+- Fader test = drag it + verify the value sent via WebSocket
+- "Element exists" tests prove rendering, NOT functionality
+- Use `page.waitForRequest()` to verify API calls fire without needing REAPER
+
 ### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
 
 **NEVER claim a visual fix (icons, images, colors) is done without automated verification.**

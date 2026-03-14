@@ -559,7 +559,10 @@ pub fn MixerPage() -> impl IntoView {
     });
 
     // Toolbar callbacks
-    let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
+    // Only show engineer-specific toolbar (Mute All, no Presets/History) on /engineer
+    let is_engineer_own_mixer = crate::auth::get_auth()
+        .map(|a| a.engineer && member_id() == "engineer")
+        .unwrap_or(false);
 
     let on_presets = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(true);
@@ -696,7 +699,7 @@ pub fn MixerPage() -> impl IntoView {
             <Toolbar
                 on_presets=on_presets
                 on_history=on_history
-                is_engineer=is_engineer
+                is_engineer=is_engineer_own_mixer
                 on_mute_all=on_mute_all
             />
 
