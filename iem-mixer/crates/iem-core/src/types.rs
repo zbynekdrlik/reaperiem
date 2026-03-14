@@ -61,6 +61,8 @@ pub struct BatchControlRequest {
 pub enum BatchOperation {
     /// Reset: all to 0dB, unmuted, centered pan
     Reset,
+    /// MuteAll: mute all input channels (engineer default state — safe, produces silence)
+    MuteAll,
 }
 
 /// Authentication token payload
@@ -186,6 +188,19 @@ mod tests {
     fn test_batch_operation_deserialization() {
         let op: BatchOperation = serde_json::from_str("\"reset\"").unwrap();
         assert!(matches!(op, BatchOperation::Reset));
+    }
+
+    #[test]
+    fn test_batch_operation_mute_all_serialization() {
+        let op = BatchOperation::MuteAll;
+        let json = serde_json::to_string(&op).unwrap();
+        assert_eq!(json, "\"mute_all\"");
+    }
+
+    #[test]
+    fn test_batch_operation_mute_all_deserialization() {
+        let op: BatchOperation = serde_json::from_str("\"mute_all\"").unwrap();
+        assert!(matches!(op, BatchOperation::MuteAll));
     }
 
     #[test]

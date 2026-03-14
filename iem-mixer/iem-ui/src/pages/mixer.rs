@@ -559,12 +559,24 @@ pub fn MixerPage() -> impl IntoView {
     });
 
     // Toolbar callbacks
+    let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
+
     let on_presets = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(true);
     });
 
     let on_history = Callback::new(move |_: ()| {
         set_snapshot_modal_visible.set(true);
+    });
+
+    let mute_all_member = member_id.clone();
+    let on_mute_all = Callback::new(move |_: ()| {
+        let member = mute_all_member();
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Err(e) = crate::api::batch_mute_all(&member).await {
+                web_sys::console::error_1(&format!("Mute all failed: {}", e).into());
+            }
+        });
     });
 
     let on_close_modal = Callback::new(move |_: ()| {
@@ -684,6 +696,8 @@ pub fn MixerPage() -> impl IntoView {
             <Toolbar
                 on_presets=on_presets
                 on_history=on_history
+                is_engineer=is_engineer
+                on_mute_all=Some(on_mute_all)
             />
 
             <PresetModal

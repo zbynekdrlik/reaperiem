@@ -283,7 +283,7 @@ pub async fn poll_mixer_state(
     }))
 }
 
-/// Batch control operations (Reset)
+/// Batch control operations (Reset, MuteAll)
 pub async fn batch_control(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
@@ -337,6 +337,39 @@ pub async fn batch_control(
                         "REAPER_ERROR",
                         format!(
                             "{} of {} reset commands failed",
+                            errors.len(),
+                            results.len()
+                        ),
+                    )),
+                ));
+            }
+        }
+        BatchOperation::MuteAll => {
+            // Mute all input channels for this member
+            let urls: Vec<String> = inputs
+                .iter()
+                .enumerate()
+                .map(|(i, _)| {
+                    let t = i + 1;
+                    reaper_api::set_send_mute(&reaper_url, t, member_index, 1)
+                })
+                .collect();
+
+            let results =
+                futures::future::join_all(urls.iter().map(|url| state.http_client.get(url).send()))
+                    .await;
+            let errors: Vec<_> = results.iter().filter(|r| r.is_err()).collect();
+            if !errors.is_empty() {
+                tracing::warn!(
+                    error_count = errors.len(),
+                    "Batch mute_all: some REAPER calls failed"
+                );
+                return Err((
+                    StatusCode::BAD_GATEWAY,
+                    Json(ApiError::new(
+                        "REAPER_ERROR",
+                        format!(
+                            "{} of {} mute commands failed",
                             errors.len(),
                             results.len()
                         ),
