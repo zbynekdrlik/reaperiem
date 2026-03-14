@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.52.0 (2026-03-14)
+
+- **Feature**: Auto-redirect — returning users skip the member grid and go straight to their mixer (valid token) or PIN login (expired token)
+- **UX**: Back button still works — navigating back shows the member grid within the same session
+
 ### v1.51.0 (2026-03-13)
 
 - **Fix**: Channel name truncation — long names like "Petronela" no longer get cut off when muted or stereo-paired (replaced `border-left` with `box-shadow: inset`)
