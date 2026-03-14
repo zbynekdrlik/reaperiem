@@ -148,6 +148,25 @@ pub async fn login(member: &str, pin: &str) -> Result<AuthState, String> {
     }
 }
 
+/// Mute all channels for a member (batch operation)
+pub async fn batch_mute_all(member: &str) -> Result<(), String> {
+    let token = crate::auth::get_token().ok_or("Not authenticated")?;
+
+    let resp = Request::post(&format!("{}/mixer/{}/batch", API_BASE, member))
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&serde_json::json!({ "operation": "mute_all" }))
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
 /// Change PIN for a member.
 ///
 /// - `old_pin`: current PIN (required for regular members, empty for engineers)

@@ -1,6 +1,6 @@
 [package]
 name = "iem-ui"
-version = "1.52.0"
+version = "1.54.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Leptos WASM frontend for IEM mixer"

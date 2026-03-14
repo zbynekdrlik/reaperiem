@@ -161,6 +161,32 @@ test.describe("Cross-member access prevention (#77)", () => {
     expect(resp.status()).not.toBe(403);
   });
 
+  test("engineer member rejects default member PIN", async ({ page }) => {
+    await page.goto("/");
+
+    // Try to login as "engineer" with the default member PIN (7711)
+    const resp = await page.request.post("/api/auth", {
+      data: { member: "engineer", pin: "7711" },
+    });
+
+    // Must be rejected — engineer requires engineer PIN (1177)
+    expect(resp.status()).toBe(401);
+  });
+
+  test("engineer member accepts engineer PIN", async ({ page }) => {
+    await page.goto("/");
+
+    // Login as "engineer" with engineer PIN (1177)
+    const resp = await page.request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+
+    // Must succeed with engineer flag
+    expect(resp.status()).toBe(200);
+    const body = await resp.json();
+    expect(body.engineer).toBe(true);
+  });
+
   test("cross-member access blocked on control endpoints", async ({ page }) => {
     await page.goto("/");
 
