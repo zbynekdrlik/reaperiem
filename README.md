@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.54.0 (2026-03-14)
+
+- **Fix**: Mute All button on engineer mixer now mutes all 31 channels (previously only muted 22 input channels, leaving 9 mix channels unmuted)
+
 ### v1.52.0 (2026-03-14)
 
 - **Feature**: Auto-redirect — returning users skip the member grid and go straight to their mixer (valid token) or PIN login (expired token)

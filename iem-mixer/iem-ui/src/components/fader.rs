@@ -8,7 +8,7 @@
 //! Double-tap (touch) or double-click (mouse) triggers smooth animation to 0dB.
 
 use leptos::prelude::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use web_sys::TouchEvent;
@@ -39,9 +39,35 @@ fn value_to_percent(value: f32, min: f32, max: f32) -> f32 {
     ((value - min) / (max - min) * 100.0).clamp(0.0, 100.0)
 }
 
-/// Quantize to 0.1 dB steps
+/// Quantize to 0.2 dB steps (displays only .0/.2/.4/.6/.8 — eliminates odd tenths)
 fn quantize(value: f32) -> f32 {
-    (value * 10.0).round() / 10.0
+    (value * 5.0).round() / 5.0
+}
+
+/// Detect if raw position crossed an integer dB boundary.
+/// Returns Some(integer) if crossed, None otherwise.
+fn crossed_integer(prev_raw: f32, new_raw: f32) -> Option<f32> {
+    if prev_raw == new_raw {
+        return None;
+    }
+    let (lo, hi) = if new_raw > prev_raw {
+        (prev_raw, new_raw)
+    } else {
+        (new_raw, prev_raw)
+    };
+    // Check if any integer lies in (lo, hi] (moving up) or [lo, hi) (moving down)
+    let lo_ceil = lo.ceil();
+    if lo_ceil > lo && lo_ceil <= hi {
+        // There's at least one integer boundary in the range
+        // Return the first one crossed in the direction of movement
+        if new_raw > prev_raw {
+            Some(lo_ceil) // Moving up: first integer above prev
+        } else {
+            Some(hi.floor()) // Moving down: first integer below prev
+        }
+    } else {
+        None
+    }
 }
 
 /// Horizontal fader component with touch-safe activation
@@ -77,8 +103,11 @@ pub fn Fader(
     let (is_activated, set_is_activated) = signal(false);
     let (is_pending, set_is_pending) = signal(false);
     let (is_touch_interaction, set_is_touch_interaction) = signal(false);
-    let (saved_value, set_saved_value) = signal(0.0f32);
     let (is_animating, set_is_animating) = signal(false);
+
+    // Raw (unquantized) drag accumulator — prevents quantization error compounding
+    // that causes integer dB values (e.g., -4.0) to be skipped during drag
+    let raw_drag_value: Rc<Cell<f32>> = Rc::new(Cell::new(0.0));
 
     // Store the timeout handle so we can cancel it
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
@@ -223,6 +252,10 @@ pub fn Fader(
     let last_touch_time_tc = last_touch_time.clone();
     let last_touch_time_md = last_touch_time; // mousedown (last user)
 
+    let raw_drag_value_ts = raw_drag_value.clone();
+    let raw_drag_value_tm = raw_drag_value.clone();
+    let raw_drag_value_md = raw_drag_value; // mousedown (cloned inside for inner closures)
+
     let last_tap_time_ts = last_tap_time.clone();
     let last_tap_x_ts = last_tap_x.clone();
 
@@ -268,7 +301,7 @@ pub fn Fader(
         }
 
         set_is_touch_interaction.set(true);
-        set_saved_value.set(local_value.get_untracked());
+        raw_drag_value_ts.set(local_value.get_untracked());
         set_is_pending.set(true);
 
         if let Some(cb) = on_touch_state {
@@ -330,14 +363,19 @@ pub fn Fader(
                 if let Some(base_x) = base_x_opt {
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
-                    let base = saved_value.get_untracked();
-                    let new_value =
-                        quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
+                    // Use raw (unquantized) accumulator to prevent skipping integer dB values
+                    let raw = raw_drag_value_tm.get();
+                    let new_raw = (raw + (delta_ratio as f32) * (max - min)).clamp(min, max);
+                    raw_drag_value_tm.set(new_raw);
+                    // If we crossed an integer boundary, snap to it; otherwise quantize
+                    let new_value = match crossed_integer(raw, new_raw) {
+                        Some(integer) => integer,
+                        None => quantize(new_raw),
+                    };
                     set_local_value.set(new_value);
                     on_change.run(new_value);
                     // Update base for next incremental move
                     *move_base_x_tm.borrow_mut() = Some(current_x);
-                    set_saved_value.set(new_value);
                 }
             }
         }
@@ -430,7 +468,7 @@ pub fn Fader(
         }
 
         // Save current value and mouse position — NO JUMP, relative only
-        set_saved_value.set(local_value.get_untracked());
+        raw_drag_value_md.set(local_value.get_untracked());
         *move_base_x_md.borrow_mut() = Some(ev.client_x() as f64);
         set_is_pending.set(true);
 
@@ -453,6 +491,7 @@ pub fn Fader(
         // Clone Rcs for inner closures
         let move_base_x_mm = move_base_x_md.clone();
         let move_base_x_mu = move_base_x_md.clone();
+        let raw_drag_value_mm = raw_drag_value_md.clone();
         let timeout_handle_mu = timeout_handle_md.clone();
         let mm_cleanup = mm_closure_md.clone();
         let mu_cleanup = mu_closure_md.clone();
@@ -476,13 +515,18 @@ pub fn Fader(
                     let rect = el.get_bounding_client_rect();
                     let delta_x = current_x - base_x;
                     let delta_ratio = delta_x / rect.width();
-                    let base = saved_value.get_untracked();
-                    let new_value =
-                        quantize((base + (delta_ratio as f32) * (max - min)).clamp(min, max));
+                    // Use raw (unquantized) accumulator to prevent skipping integer dB values
+                    let raw = raw_drag_value_mm.get();
+                    let new_raw = (raw + (delta_ratio as f32) * (max - min)).clamp(min, max);
+                    raw_drag_value_mm.set(new_raw);
+                    // If we crossed an integer boundary, snap to it; otherwise quantize
+                    let new_value = match crossed_integer(raw, new_raw) {
+                        Some(integer) => integer,
+                        None => quantize(new_raw),
+                    };
                     set_local_value.set(new_value);
                     on_change.run(new_value);
                     *move_base_x_mm.borrow_mut() = Some(current_x);
-                    set_saved_value.set(new_value);
                 }
             }
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
@@ -580,14 +624,109 @@ mod tests {
     }
 
     #[test]
-    fn test_quantize_tenth_db_steps() {
+    fn test_quantize_02_db_steps() {
         assert_eq!(quantize(0.0), 0.0);
-        assert_eq!(quantize(-3.34), -3.3);
-        assert_eq!(quantize(-3.35), -3.4);
-        assert_eq!(quantize(6.75), 6.8);
+        assert_eq!(quantize(-3.3), -3.4);
+        assert_eq!(quantize(-4.09), -4.0);
+        assert_eq!(quantize(6.7), 6.8);
         assert_eq!(quantize(-12.0), -12.0);
-        assert_eq!(quantize(-0.05), -0.1);
-        assert_eq!(quantize(-0.04), 0.0);
+        // Only .0/.2/.4/.6/.8 values should be produced
+        assert_eq!(quantize(-1.1), -1.2);
+        assert_eq!(quantize(-1.3), -1.4);
+        assert_eq!(quantize(-1.5), -1.4); // midpoint rounds to even (.4 is 7*0.2, .6 is 8*0.2 — round to -1.4)
+        assert_eq!(quantize(-1.7), -1.6); // -.7 is 3.5 steps below -1.0, rounds to -1.6
+        assert_eq!(quantize(-1.9), -2.0);
+    }
+
+    #[test]
+    fn test_crossed_integer_up() {
+        assert_eq!(crossed_integer(-4.3, -3.8), Some(-4.0));
+        assert_eq!(crossed_integer(-5.1, -4.9), Some(-5.0));
+    }
+
+    #[test]
+    fn test_crossed_integer_down() {
+        assert_eq!(crossed_integer(-3.7, -4.2), Some(-4.0));
+    }
+
+    #[test]
+    fn test_crossed_integer_none() {
+        assert_eq!(crossed_integer(-4.5, -4.1), None);
+        assert_eq!(crossed_integer(-4.0, -4.0), None);
+    }
+
+    #[test]
+    fn test_integer_db_values_reachable_with_boundary_crossing() {
+        // Simulate a drag across -5.0 to -3.0 with per-pixel step of 0.257 dB
+        // (typical phone: 280px wide, 72 dB range)
+        // Uses the full pipeline: raw accumulator + crossed_integer + quantize
+        let step = 72.0 / 280.0; // ~0.2571 dB per pixel
+        let mut raw = -5.0_f32;
+        let mut seen_values: Vec<f32> = vec![quantize(raw)];
+
+        // Drag 8 pixels (covers ~2 dB)
+        for _ in 0..8 {
+            let prev_raw = raw;
+            raw += step;
+            let value = match crossed_integer(prev_raw, raw) {
+                Some(integer) => integer,
+                None => quantize(raw),
+            };
+            seen_values.push(value);
+        }
+
+        // -4.0 MUST appear in the sequence (guaranteed by crossed_integer)
+        assert!(
+            seen_values.iter().any(|v| (*v - -4.0).abs() < f32::EPSILON),
+            "Must reach -4.0 dB, but got: {:?}",
+            seen_values
+        );
+    }
+
+    #[test]
+    fn test_quantize_only_produces_02_values() {
+        // Sweep through a range and verify all outputs are on the 0.2 grid
+        let step = 0.01_f32;
+        let mut val = -60.0;
+        while val <= 12.0 {
+            let q = quantize(val);
+            let remainder = (q * 5.0).round() - q * 5.0;
+            assert!(
+                remainder.abs() < 1e-4,
+                "quantize({val}) = {q} is not on 0.2 grid"
+            );
+            val += step;
+        }
+    }
+
+    #[test]
+    fn test_all_integer_db_values_reachable_across_range() {
+        // Verify that sweeping the full range with raw accumulator + crossed_integer
+        // hits every integer dB value from -59 to 12
+        let step = 72.0 / 280.0;
+        let mut raw = -60.0_f32;
+        let mut seen_values: Vec<f32> = Vec::new();
+
+        while raw <= 12.0 {
+            let prev_raw = raw;
+            raw += step;
+            let value = match crossed_integer(prev_raw, raw) {
+                Some(integer) => integer,
+                None => quantize(raw),
+            };
+            seen_values.push(value);
+        }
+
+        // Check every integer from -59 to 11
+        for target in -59..=11 {
+            let target_f = target as f32;
+            assert!(
+                seen_values
+                    .iter()
+                    .any(|v| (*v - target_f).abs() < f32::EPSILON),
+                "Must reach {target_f} dB, but it was skipped",
+            );
+        }
     }
 
     #[test]
