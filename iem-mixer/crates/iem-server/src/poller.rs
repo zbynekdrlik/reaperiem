@@ -469,7 +469,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let discovered_snapshot = discovered.clone();
     drop(discovered);
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let resolved_ref = if resolved.is_empty() { None } else { Some(&resolved) };
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
     let channel_templates = build_channel_templates(&inputs, resolved_ref);
 
     for (member_id, member_index) in &member_indices {
@@ -1115,7 +1119,9 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
 
         // Track inserted → count changes
         let new_count: usize = 34;
-        let changed = cache.last_track_count.map_or(false, |prev| prev != new_count);
+        let changed = cache
+            .last_track_count
+            .map_or(false, |prev| prev != new_count);
         assert!(changed, "Should detect track count change from 33 to 34");
         cache.last_track_count = Some(new_count);
         assert_eq!(cache.last_track_count, Some(34));

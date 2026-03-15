@@ -95,7 +95,11 @@ pub async fn get_mixer_state(
     let reaper_url = config.reaper_url.clone();
 
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let resolved_ref = if resolved.is_empty() { None } else { Some(&resolved) };
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
     let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
@@ -191,7 +195,11 @@ pub async fn poll_mixer_state(
     let reaper_url = config.reaper_url.clone();
 
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let resolved_ref = if resolved.is_empty() { None } else { Some(&resolved) };
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
     let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
@@ -1091,7 +1099,11 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let resolved_ref = if resolved.is_empty() { None } else { Some(&resolved) };
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
     let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
