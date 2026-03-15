@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1773609928 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1773606215 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1313,15 +1313,15 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 23 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 24 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 25 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 26 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 27 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 28 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 29 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 30 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 32 0 1 0 0 0 0 -1:U -1
