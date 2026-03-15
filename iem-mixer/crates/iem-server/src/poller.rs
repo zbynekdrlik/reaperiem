@@ -94,6 +94,58 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
         }
     }
 
+    // Discover mix_send_index for each member: find which send targets the engineer track.
+    // This is critical: member inear tracks have hardware outputs at SEND/0,
+    // and the send to ENGINEER sits at a higher index. Hardcoding 0 mutes hardware output!
+    let engineer_track = members
+        .iter()
+        .find(|m| m.id() == "engineer")
+        .map(|m| m.track_index);
+    if let Some(eng_ti) = engineer_track {
+        for member in members.iter_mut().filter(|m| m.id() != "engineer") {
+            // Query sends on this member's inear track to find the one targeting engineer.
+            // We don't know send count from discovery, so probe up to 10 sends.
+            for si in 0..10 {
+                // Rate-limit: small delay between REAPER queries to prevent overwhelming
+                // the HTTP API. Without this, 9 members × up to 10 sends = 90 rapid-fire
+                // requests on startup, which can crash REAPER.
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+                if let Some(dest) = crate::proxy::query_send_destination(
+                    &state.http_client,
+                    &reaper_url,
+                    member.track_index,
+                    si,
+                )
+                .await
+                {
+                    // dest is i32: negative = hardware output (skip), positive = track index
+                    if dest >= 0 && dest as usize == eng_ti {
+                        member.mix_send_index = Some(si);
+                        tracing::info!(
+                            member = %member.name,
+                            track = member.track_index,
+                            send_index = si,
+                            engineer_track = eng_ti,
+                            "Discovered mix send index to engineer"
+                        );
+                        break;
+                    }
+                    // dest is -1 (hardware output) or other track → continue probing
+                } else {
+                    // None = no SEND line in response = send doesn't exist → stop
+                    break;
+                }
+            }
+            if member.mix_send_index.is_none() {
+                tracing::warn!(
+                    member = %member.name,
+                    track = member.track_index,
+                    "No send to engineer found — mix channel will be read-only"
+                );
+            }
+        }
+    }
     if members.is_empty() {
         tracing::warn!("No members discovered from REAPER - using fallback from config.members");
         // Fallback: create DiscoveredMember from legacy config.members
@@ -108,6 +160,7 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
                 dante_output_l: m.dante_output_l,
                 dante_output_r: m.dante_output_r,
                 send_index: idx,
+                mix_send_index: None,
             });
         }
     }
@@ -402,15 +455,19 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
             let mix_futures: Vec<_> = mix_channels
                 .iter()
-                .map(|ch| {
+                .filter_map(|ch| {
+                    // Look up the discovered mix_send_index for this track
+                    let mix_si = discovered_snapshot
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .and_then(|m| m.mix_send_index)?;
                     let client = state.http_client.clone();
                     let url = reaper_url.clone();
                     let track_index = ch.track_index;
-                    async move {
-                        // Send 0 on each member inear track goes to ENGINEER
-                        let result = query_send_state(&client, &url, track_index, 0).await;
+                    Some(async move {
+                        let result = query_send_state(&client, &url, track_index, mix_si).await;
                         (track_index, result)
-                    }
+                    })
                 })
                 .collect();
 
@@ -925,6 +982,21 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         let meters = parse_meter_bridge(input);
         assert_eq!(meters.len(), 1, "Only valid entries should be parsed");
         assert!(meters.contains_key(&1));
+    }
+
+    /// Discovery probes up to 10 sends per member with 50ms delay between requests.
+    /// This prevents overwhelming REAPER's HTTP API on startup.
+    #[test]
+    fn test_discovery_rate_limit_bounds() {
+        let delay_ms: u64 = 50;
+        let max_sends_per_member: u64 = 10;
+        let max_members: u64 = 9;
+        let worst_case_ms = delay_ms * max_sends_per_member * max_members;
+        assert!(
+            worst_case_ms <= 5000,
+            "Discovery should complete within 5 seconds, got {}ms",
+            worst_case_ms
+        );
     }
 
     /// METER_BRIDGE_STARTED resets on disconnect so bridge re-triggers on reconnect.

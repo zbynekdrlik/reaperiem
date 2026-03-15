@@ -257,6 +257,12 @@ pub struct DiscoveredMember {
 
     /// 0-based index in discovered members list (matches send index)
     pub send_index: usize,
+
+    /// Send index on this member's inear track that routes to ENGINEER.
+    /// Discovered dynamically by querying REAPER send destinations.
+    /// None if no send to engineer exists (e.g., engineer's own track).
+    #[serde(default)]
+    pub mix_send_index: Option<usize>,
 }
 
 impl DiscoveredMember {
@@ -290,6 +296,7 @@ impl DiscoveredMember {
             dante_output_l: dante_channels[0],
             dante_output_r: dante_channels[1],
             send_index,
+            mix_send_index: None, // Discovered later by querying REAPER send destinations
         })
     }
 }

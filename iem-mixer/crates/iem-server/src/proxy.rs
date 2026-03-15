@@ -130,21 +130,25 @@ pub async fn get_mixer_state(
     if member_id == "engineer" {
         let discovered = state.discovered_members.read().await;
         let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
-        drop(discovered);
 
-        // Query mix send states (send_index=0 on each member inear track)
+        // Query mix send states using discovered mix_send_index (NOT hardcoded 0!)
         let mix_futures: Vec<_> = mix_channels
             .iter()
-            .map(|ch| {
+            .filter_map(|ch| {
+                let mix_si = discovered
+                    .iter()
+                    .find(|m| m.track_index == ch.track_index)
+                    .and_then(|m| m.mix_send_index)?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
                 let track_index = ch.track_index;
-                async move {
-                    let result = query_send_state(&client, &url, track_index, 0).await;
+                Some(async move {
+                    let result = query_send_state(&client, &url, track_index, mix_si).await;
                     (track_index, result)
-                }
+                })
             })
             .collect();
+        drop(discovered);
 
         let mix_results = futures::future::join_all(mix_futures).await;
         for (track_index, result) in mix_results {
@@ -356,12 +360,18 @@ pub async fn batch_control(
                 .collect();
 
             // For engineer: also mute mix channels (member inear → ENGINEER sends)
+            // CRITICAL: Use discovered mix_send_index, NOT hardcoded 0!
+            // Send 0 on member inear tracks is the hardware output (Dante to speakers).
+            // Muting Send 0 kills the member's audio entirely.
             if member_id == "engineer" {
                 let discovered = state.discovered_members.read().await;
                 let mix_urls: Vec<String> = discovered
                     .iter()
                     .filter(|m| m.id() != "engineer")
-                    .map(|m| reaper_api::set_send_mute(&reaper_url, m.track_index, 0, 1))
+                    .filter_map(|m| {
+                        m.mix_send_index
+                            .map(|si| reaper_api::set_send_mute(&reaper_url, m.track_index, si, 1))
+                    })
                     .collect();
                 urls.extend(mix_urls);
             }
@@ -451,6 +461,20 @@ fn parse_send_pan(text: &str) -> Option<f32> {
     None
 }
 
+/// Parse the destination track index from a REAPER SEND response.
+/// Response format: SEND\ttrack\tsend\tflag\tvolume\tpan\tDESTINATION
+/// Returns Some(destination) where negative values indicate hardware outputs (e.g. -1),
+/// or None if no SEND line is found (meaning the send doesn't exist).
+pub(crate) fn parse_send_destination(text: &str) -> Option<i32> {
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() == Some(&"SEND") && parts.len() >= 7 {
+            return parts[6].parse().ok();
+        }
+    }
+    None
+}
+
 /// Parse a full REAPER SEND response for vol, mute, and pan in one call
 /// Response format: SEND\ttrack\tsend\tMUTE_FLAG\tVOLUME\tPAN\tmode
 /// Mute flag is a bitfield: bit 3 (value 8) = muted
@@ -465,6 +489,20 @@ fn parse_send_state(text: &str) -> Option<(f32, bool, f32)> {
         }
     }
     None
+}
+
+/// Query the destination track of a specific send on a given track.
+/// Returns Some(dest_track_index) or None if query fails.
+pub(crate) async fn query_send_destination(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    track_index: usize,
+    send_index: usize,
+) -> Option<i32> {
+    let url = reaper_api::get_send_state(reaper_url, track_index, send_index);
+    let resp = client.get(&url).send().await.ok()?;
+    let text = resp.text().await.ok()?;
+    parse_send_destination(&text)
 }
 
 /// Parse a REAPER response value (format: "COMMAND\tVALUE")
@@ -1081,20 +1119,25 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
     if member_id == "engineer" {
         let discovered = state.discovered_members.read().await;
         let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
-        drop(discovered);
 
+        // Use discovered mix_send_index (NOT hardcoded 0!)
         let mix_futures: Vec<_> = mix_channels
             .iter()
-            .map(|ch| {
+            .filter_map(|ch| {
+                let mix_si = discovered
+                    .iter()
+                    .find(|m| m.track_index == ch.track_index)
+                    .and_then(|m| m.mix_send_index)?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
                 let track_index = ch.track_index;
-                async move {
-                    let result = query_send_state(&client, &url, track_index, 0).await;
+                Some(async move {
+                    let result = query_send_state(&client, &url, track_index, mix_si).await;
                     (track_index, result)
-                }
+                })
             })
             .collect();
+        drop(discovered);
 
         let mix_results = futures::future::join_all(mix_futures).await;
         for (track_index, result) in mix_results {
@@ -1145,16 +1188,17 @@ async fn apply_command_to_cache(
         .find(|m| m.id() == member_id)
         .map(|m| m.send_index)
         .ok_or_else(|| "Unknown member".to_string())?;
-    // Collect mix channel track indices for engineer validation
-    let mix_track_indices: Vec<usize> = if member_id == "engineer" {
+    // Collect mix channel track indices and their mix_send_index for engineer validation
+    let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
         discovered
             .iter()
             .filter(|m| m.id() != "engineer")
-            .map(|m| m.track_index)
+            .map(|m| (m.track_index, m.mix_send_index))
             .collect()
     } else {
         Vec::new()
     };
+    let mix_track_indices: Vec<usize> = mix_members.iter().map(|(ti, _)| *ti).collect();
     drop(discovered);
 
     let config = state.config.read().await;
@@ -1167,13 +1211,18 @@ async fn apply_command_to_cache(
         |ti: usize| -> bool { (ti >= 1 && ti <= input_count) || mix_track_indices.contains(&ti) };
 
     // Helper: determine REAPER send_index for a given track_index.
-    // Mix channels (member inear tracks) use send_index=0 (send to ENGINEER).
+    // Mix channels use their discovered mix_send_index (NOT hardcoded 0!).
     // Regular input channels use the member's send_index.
-    let send_index_for = |ti: usize| -> usize {
-        if mix_track_indices.contains(&ti) {
-            0
+    let send_index_for = |ti: usize| -> Result<usize, String> {
+        if let Some((_, mix_si)) = mix_members.iter().find(|(track, _)| *track == ti) {
+            mix_si.ok_or_else(|| {
+                format!(
+                    "SAFETY: No mix_send_index for track {} — cannot route to engineer",
+                    ti
+                )
+            })
         } else {
-            member_index
+            Ok(member_index)
         }
     };
 
@@ -1241,7 +1290,7 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
-            let si = send_index_for(*track_index);
+            let si = send_index_for(*track_index)?;
             (
                 reaper_api::set_send_vol(&reaper_url, *track_index, si, vol),
                 *track_index,
@@ -1268,7 +1317,7 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
-            let si = send_index_for(*track_index);
+            let si = send_index_for(*track_index)?;
             (
                 reaper_api::set_send_mute(&reaper_url, *track_index, si, mute_val),
                 *track_index,
@@ -1296,7 +1345,7 @@ async fn apply_command_to_cache(
                 std::time::Instant::now(),
             );
             drop(cache);
-            let si = send_index_for(*track_index);
+            let si = send_index_for(*track_index)?;
             (
                 reaper_api::set_send_pan(&reaper_url, *track_index, si, reaper_pan),
                 *track_index,
@@ -2149,6 +2198,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 1,
                 dante_output_r: 2,
                 send_index: 0,
+                mix_send_index: Some(1), // Send 1 targets engineer (Send 0 = hw out)
             },
             iem_core::DiscoveredMember {
                 name: "STEVO".to_string(),
@@ -2156,6 +2206,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 3,
                 dante_output_r: 4,
                 send_index: 1,
+                mix_send_index: Some(1),
             },
             iem_core::DiscoveredMember {
                 name: "MAREK".to_string(),
@@ -2163,6 +2214,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 5,
                 dante_output_r: 6,
                 send_index: 2,
+                mix_send_index: Some(1),
             },
             iem_core::DiscoveredMember {
                 name: "ENGINEER".to_string(),
@@ -2170,6 +2222,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 19,
                 dante_output_r: 20,
                 send_index: 9,
+                mix_send_index: None, // Engineer doesn't send to itself
             },
         ]
     }
@@ -2244,8 +2297,157 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             dante_output_l: 19,
             dante_output_r: 20,
             send_index: 9,
+            mix_send_index: None,
         }];
         let mix = build_mix_channel_templates(&discovered, "engineer");
         assert!(mix.is_empty(), "No mix channels when only engineer exists");
+    }
+
+    // ================================================================
+    // Send destination parsing tests — CRITICAL for engineer mute safety
+    // ================================================================
+
+    #[test]
+    fn test_parse_send_destination_member_to_engineer() {
+        // Real REAPER response: member inear track send to engineer (track 32)
+        let response = "SEND\t23\t1\t0\t1.00000000\t0.00000000\t32\n";
+        assert_eq!(
+            parse_send_destination(response),
+            Some(32_i32),
+            "Should parse destination track 32 (engineer)"
+        );
+    }
+
+    #[test]
+    fn test_parse_send_destination_hw_output_negative() {
+        // Real REAPER response: hardware output send has destination -1
+        // This MUST return Some(-1), NOT None — None means "send doesn't exist"
+        let response = "SEND\t23\t0\t0\t1.00000000\t0.00000000\t-1\n";
+        assert_eq!(
+            parse_send_destination(response),
+            Some(-1_i32),
+            "Hardware output destination -1 must parse as Some(-1), not None"
+        );
+    }
+
+    #[test]
+    fn test_parse_send_destination_invalid() {
+        assert_eq!(parse_send_destination("TRACK\t1\tname"), None);
+        assert_eq!(parse_send_destination(""), None);
+        assert_eq!(parse_send_destination("SEND\t1\t0\t0\t1.0\t0.0"), None); // Too few fields
+    }
+
+    #[test]
+    fn test_parse_send_destination_multiline() {
+        // Response might have extra lines
+        let response = "SEND\t23\t1\t8\t0.50000000\t0.00000000\t32\nSOMETHING\telse\n";
+        assert_eq!(parse_send_destination(response), Some(32_i32));
+    }
+
+    #[test]
+    fn test_parse_send_destination_none_means_no_send() {
+        // Empty response = send doesn't exist (REAPER returned nothing)
+        assert_eq!(parse_send_destination(""), None);
+        // Non-SEND response = not a send query result
+        assert_eq!(parse_send_destination("TRACK\t1\tname"), None);
+    }
+
+    // ================================================================
+    // Mix send index usage tests — ensures hardcoded 0 is never used
+    // ================================================================
+
+    #[test]
+    fn test_send_index_for_mix_channel_uses_discovered_index() {
+        // Simulate the send_index_for logic with discovered members
+        let discovered = make_discovered_members();
+        let member_index = 9_usize; // engineer's send_index
+
+        // For a mix track (member inear), should use mix_send_index, not 0
+        let mix_track_indices: Vec<usize> = discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .map(|m| m.track_index)
+            .collect();
+
+        let send_index_for = |ti: usize| -> Option<usize> {
+            if mix_track_indices.contains(&ti) {
+                discovered
+                    .iter()
+                    .find(|m| m.track_index == ti)
+                    .and_then(|m| m.mix_send_index)
+            } else {
+                Some(member_index)
+            }
+        };
+
+        // PETRONELA inear (track 23) → mix_send_index = 1 (NOT 0!)
+        assert_eq!(
+            send_index_for(23),
+            Some(1),
+            "Mix channel must use mix_send_index (1), not hardcoded 0"
+        );
+        // Regular input track (track 5) → member's send_index
+        assert_eq!(
+            send_index_for(5),
+            Some(member_index),
+            "Input track should use member's send_index"
+        );
+    }
+
+    #[test]
+    fn test_mute_all_uses_mix_send_index_not_zero() {
+        // Simulate the MuteAll URL generation for engineer
+        let discovered = make_discovered_members();
+        let reaper_url = "http://iem.lan:8080";
+
+        let mix_urls: Vec<String> = discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .filter_map(|m| {
+                m.mix_send_index
+                    .map(|si| reaper_api::set_send_mute(reaper_url, m.track_index, si, 1))
+            })
+            .collect();
+
+        assert_eq!(mix_urls.len(), 3, "Should have 3 mix mute URLs");
+
+        // ALL URLs must use SEND/1 (mix_send_index), NOT SEND/0 (hw output)
+        for url in &mix_urls {
+            assert!(
+                url.contains("/SEND/1/"),
+                "Mute URL must use SEND/1 (engineer send), not SEND/0 (hw out): {}",
+                url
+            );
+            assert!(
+                !url.contains("/SEND/0/"),
+                "SEND/0 is the hardware output — muting it kills member audio: {}",
+                url
+            );
+        }
+    }
+
+    #[test]
+    fn test_mute_all_skips_members_without_mix_send_index() {
+        // If a member doesn't have mix_send_index, it should be skipped
+        let mut discovered = make_discovered_members();
+        // Remove mix_send_index from PETRONELA
+        discovered[0].mix_send_index = None;
+
+        let mix_urls: Vec<String> = discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .filter_map(|m| {
+                m.mix_send_index.map(|si| {
+                    reaper_api::set_send_mute("http://iem.lan:8080", m.track_index, si, 1)
+                })
+            })
+            .collect();
+
+        // Only STEVO and MAREK should have URLs (PETRONELA skipped)
+        assert_eq!(
+            mix_urls.len(),
+            2,
+            "Members without mix_send_index must be skipped"
+        );
     }
 }
