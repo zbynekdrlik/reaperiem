@@ -644,64 +644,63 @@ jobs:
       - name: Backup REAPER project
         shell: powershell
         run: |
-          # Auto-backup REAPER project + mixer data to the 'backup' branch
+          # Auto-backup REAPER project + mixer data to the 'backup' branch.
+          # CRITICAL: Uses a separate git worktree so the main repo working tree
+          # is NEVER switched away from main. Previous approach used git checkout
+          # to switch branches in-place, which DELETED projects/sunday_service.RPP
+          # from disk every deploy — causing total mix loss on REAPER restart.
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
+          $wtPath = "$env:TEMP\reaperiem-backup-wt"
+
           Push-Location $repoPath
 
-          # Collect all backup data while still on main (projects/ lives here)
-          $tmpDir = "$env:TEMP\reaperiem-backup"
-          if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
-          New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+          # Clean up any stale worktree from a previous failed run
+          git worktree prune 2>$null
+          if (Test-Path $wtPath) { Remove-Item $wtPath -Recurse -Force }
 
-          # Collect REAPER projects from working tree
+          # Delete local backup branch if it exists (we recreate from origin)
+          $ErrorActionPreference = "SilentlyContinue"
+          git branch -D backup 2>&1 | Out-Null
+          $ErrorActionPreference = "Stop"
+
+          git fetch origin
+
+          # Create a temporary worktree for the backup branch
+          $backupExists = git ls-remote --heads origin backup
+          if ($backupExists) {
+            git worktree add -b backup $wtPath origin/backup
+          } else {
+            git worktree add --orphan -b backup $wtPath
+          }
+
+          # Copy REAPER projects into the worktree (main repo is untouched)
           if (Test-Path "projects") {
-            Copy-Item "projects" "$tmpDir\projects" -Recurse -Force
+            if (Test-Path "$wtPath\projects") { Remove-Item "$wtPath\projects" -Recurse -Force }
+            Copy-Item "projects" "$wtPath\projects" -Recurse -Force
             Write-Host "Collected projects/"
           }
 
-          # Collect mixer data from AppData
+          # Copy mixer data into the worktree
           $appData = "$env:APPDATA\iem-mixer"
-          New-Item -ItemType Directory -Path "$tmpDir\data" -Force | Out-Null
+          if (Test-Path "$wtPath\data") { Remove-Item "$wtPath\data" -Recurse -Force }
+          New-Item -ItemType Directory -Path "$wtPath\data" -Force | Out-Null
           if (Test-Path "$appData\snapshots") {
-            New-Item -ItemType Directory -Path "$tmpDir\data\snapshots" -Force | Out-Null
-            Copy-Item "$appData\snapshots\*" "$tmpDir\data\snapshots\" -Force
+            New-Item -ItemType Directory -Path "$wtPath\data\snapshots" -Force | Out-Null
+            Copy-Item "$appData\snapshots\*" "$wtPath\data\snapshots\" -Force
             Write-Host "Collected snapshots"
           }
           if (Test-Path "$appData\presets") {
-            New-Item -ItemType Directory -Path "$tmpDir\data\presets" -Force | Out-Null
-            Copy-Item "$appData\presets\*" "$tmpDir\data\presets\" -Force
+            New-Item -ItemType Directory -Path "$wtPath\data\presets" -Force | Out-Null
+            Copy-Item "$appData\presets\*" "$wtPath\data\presets\" -Force
             Write-Host "Collected presets"
           }
           if (Test-Path "$appData\pins.json") {
-            Copy-Item "$appData\pins.json" "$tmpDir\data\pins.json" -Force
+            Copy-Item "$appData\pins.json" "$wtPath\data\pins.json" -Force
             Write-Host "Collected pins.json"
           }
 
-          # Switch to backup branch (create orphan if first time)
-          # Discard working tree changes first — data already collected to tmpDir
-          git checkout -- . 2>$null
-          git clean -fd 2>$null
-          git fetch origin
-          $backupExists = git ls-remote --heads origin backup
-          if ($backupExists) {
-            git checkout -B backup origin/backup
-          } else {
-            git checkout --orphan backup
-            git rm -rf . 2>$null
-          }
-
-          # Restore collected data into backup branch working tree
-          if (Test-Path "projects") { Remove-Item "projects" -Recurse -Force }
-          if (Test-Path "data") { Remove-Item "data" -Recurse -Force }
-          if (Test-Path "$tmpDir\projects") {
-            Copy-Item "$tmpDir\projects" "projects" -Recurse -Force
-          }
-          if (Test-Path "$tmpDir\data") {
-            Copy-Item "$tmpDir\data" "data" -Recurse -Force
-          }
-          Remove-Item $tmpDir -Recurse -Force
-
-          # Stage and check for changes
+          # Commit and push from the worktree
+          Push-Location $wtPath
           git add projects/ data/
           $status = git status --porcelain
           if ($status) {
@@ -713,11 +712,10 @@ jobs:
 
           Co-Authored-By: GitHub Actions <actions@github.com>"
 
-            # Push to backup branch (force-push is safe — this branch is only for backup state)
             git push origin backup --force
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::Failed to push backup to GitHub"
-              Pop-Location
+              Pop-Location; Pop-Location
               exit 1
             }
 
@@ -727,19 +725,23 @@ jobs:
             $remoteHash = ($remoteInfo -split "`t")[0]
             if ($localHash -ne $remoteHash) {
               Write-Host "::error::Backup verification failed - remote ($remoteHash) doesn't match local ($localHash)"
-              Pop-Location
+              Pop-Location; Pop-Location
               exit 1
             }
             Write-Host "Backup pushed and verified: $localHash"
           } else {
             Write-Host "No changes to backup"
           }
+          Pop-Location
 
-          # Return to main branch and reset to origin/main
-          # (discards any orphan backup commits stuck on local main)
-          git checkout main
-          git fetch origin main
-          git reset --hard origin/main
+          # Clean up: remove worktree and local backup branch
+          # Main repo stays on main, project files on disk are UNTOUCHED
+          git worktree remove $wtPath --force 2>$null
+          if (Test-Path $wtPath) { Remove-Item $wtPath -Recurse -Force }
+          $ErrorActionPreference = "SilentlyContinue"
+          git branch -D backup 2>&1 | Out-Null
+          $ErrorActionPreference = "Stop"
+
           Pop-Location
           exit 0
 
