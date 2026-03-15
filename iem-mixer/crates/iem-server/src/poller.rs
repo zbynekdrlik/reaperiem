@@ -94,6 +94,48 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
         }
     }
 
+    // Discover mix_send_index for each member: find which send targets the engineer track.
+    // This is critical: member inear tracks have hardware outputs at SEND/0,
+    // and the send to ENGINEER sits at a higher index. Hardcoding 0 mutes hardware output!
+    let engineer_track = members.iter().find(|m| m.id() == "engineer").map(|m| m.track_index);
+    if let Some(eng_ti) = engineer_track {
+        for member in members.iter_mut().filter(|m| m.id() != "engineer") {
+            // Query sends on this member's inear track to find the one targeting engineer.
+            // We don't know send count from discovery, so probe up to 10 sends.
+            for si in 0..10 {
+                if let Some(dest) = crate::proxy::query_send_destination(
+                    &state.http_client,
+                    &reaper_url,
+                    member.track_index,
+                    si,
+                )
+                .await
+                {
+                    if dest == eng_ti {
+                        member.mix_send_index = Some(si);
+                        tracing::info!(
+                            member = %member.name,
+                            track = member.track_index,
+                            send_index = si,
+                            engineer_track = eng_ti,
+                            "Discovered mix send index to engineer"
+                        );
+                        break;
+                    }
+                } else {
+                    // No more sends on this track
+                    break;
+                }
+            }
+            if member.mix_send_index.is_none() {
+                tracing::warn!(
+                    member = %member.name,
+                    track = member.track_index,
+                    "No send to engineer found — mix channel will be read-only"
+                );
+            }
+        }
+    }
     if members.is_empty() {
         tracing::warn!("No members discovered from REAPER - using fallback from config.members");
         // Fallback: create DiscoveredMember from legacy config.members
@@ -108,6 +150,7 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
                 dante_output_l: m.dante_output_l,
                 dante_output_r: m.dante_output_r,
                 send_index: idx,
+                mix_send_index: None,
             });
         }
     }
@@ -402,15 +445,19 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
             let mix_futures: Vec<_> = mix_channels
                 .iter()
-                .map(|ch| {
+                .filter_map(|ch| {
+                    // Look up the discovered mix_send_index for this track
+                    let mix_si = discovered_snapshot
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .and_then(|m| m.mix_send_index)?;
                     let client = state.http_client.clone();
                     let url = reaper_url.clone();
                     let track_index = ch.track_index;
-                    async move {
-                        // Send 0 on each member inear track goes to ENGINEER
-                        let result = query_send_state(&client, &url, track_index, 0).await;
+                    Some(async move {
+                        let result = query_send_state(&client, &url, track_index, mix_si).await;
                         (track_index, result)
-                    }
+                    })
                 })
                 .collect();
 
