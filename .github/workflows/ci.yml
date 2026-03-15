@@ -450,6 +450,19 @@ jobs:
           name: tauri-installer
           path: installer/
 
+      - name: Verify REAPER health (pre-deploy)
+        id: reaper-pre
+        shell: powershell
+        run: |
+          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if ($reaper) {
+            Write-Host "REAPER running: PID $($reaper.Id)"
+            echo "was_running=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "::warning::REAPER not running before deploy"
+            echo "was_running=false" >> $env:GITHUB_OUTPUT
+          }
+
       - name: Stop running IEM Mixer
         shell: powershell
         run: |
@@ -592,6 +605,42 @@ jobs:
           }
           exit 0
 
+      - name: Verify REAPER health (post-deploy)
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Wait for app startup to complete (discovery sends requests to REAPER)
+          Start-Sleep -Seconds 15
+
+          # Check REAPER process
+          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if (-not $reaper) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER CRASHED after IEM Mixer started!"
+              Write-Host "::error::REAPER was running before deploy but is now gone."
+              Write-Host "::error::The app's startup discovery may have overwhelmed REAPER."
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER is not running (was not running before deploy either)"
+            }
+          } else {
+            Write-Host "REAPER still running: PID $($reaper.Id)"
+          }
+
+          # Check REAPER HTTP API responds
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            Write-Host "REAPER HTTP API: OK ($($resp.StatusCode))"
+          } catch {
+            if ($reaper) {
+              Write-Host "::warning::REAPER process alive but HTTP API not responding (may have modal dialog)"
+            } else {
+              Write-Host "::error::REAPER HTTP API not responding and process is dead"
+              if ($wasRunning -eq "true") { exit 1 }
+            }
+          }
+
       - name: Backup REAPER project
         shell: powershell
         run: |
@@ -722,6 +771,8 @@ jobs:
       - name: Verify send modes (pre-fader)
         shell: powershell
         run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
           # Check if REAPER is running and HTTP API is available
           $reaperAvailable = $false
           try {
@@ -732,8 +783,14 @@ jobs:
           }
 
           if (-not $reaperAvailable) {
-            Write-Host "::error::REAPER HTTP API not responding - cannot verify send modes"
-            exit 1
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running before deploy but is now unreachable!"
+              Write-Host "::error::Deploy likely crashed REAPER. Check iem.lan immediately."
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available (was not running before deploy). Skipping send mode check."
+              exit 0
+            }
           }
 
           # Reset check state

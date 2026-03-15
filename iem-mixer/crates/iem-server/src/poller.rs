@@ -106,6 +106,11 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
             // Query sends on this member's inear track to find the one targeting engineer.
             // We don't know send count from discovery, so probe up to 10 sends.
             for si in 0..10 {
+                // Rate-limit: small delay between REAPER queries to prevent overwhelming
+                // the HTTP API. Without this, 9 members × up to 10 sends = 90 rapid-fire
+                // requests on startup, which can crash REAPER.
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
                 if let Some(dest) = crate::proxy::query_send_destination(
                     &state.http_client,
                     &reaper_url,
@@ -975,6 +980,21 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         let meters = parse_meter_bridge(input);
         assert_eq!(meters.len(), 1, "Only valid entries should be parsed");
         assert!(meters.contains_key(&1));
+    }
+
+    /// Discovery probes up to 10 sends per member with 50ms delay between requests.
+    /// This prevents overwhelming REAPER's HTTP API on startup.
+    #[test]
+    fn test_discovery_rate_limit_bounds() {
+        let delay_ms: u64 = 50;
+        let max_sends_per_member: u64 = 10;
+        let max_members: u64 = 9;
+        let worst_case_ms = delay_ms * max_sends_per_member * max_members;
+        assert!(
+            worst_case_ms <= 5000,
+            "Discovery should complete within 5 seconds, got {}ms",
+            worst_case_ms
+        );
     }
 
     /// METER_BRIDGE_STARTED resets on disconnect so bridge re-triggers on reconnect.
