@@ -74,6 +74,10 @@ pub struct MixerCache {
     pub global_volumes: HashMap<String, GlobalVolState>,
     /// Output track indices per member (member_id -> 1-based track index)
     pub output_track_indices: HashMap<String, usize>,
+    /// Input track indices resolved by name from REAPER (track_name -> 1-based track index)
+    pub input_track_indices: HashMap<String, usize>,
+    /// Last known REAPER track count (for change detection)
+    pub last_track_count: Option<usize>,
     /// Date of last auto-snapshot per member (member_id -> "YYYY-MM-DD")
     /// Used to ensure only one auto-snapshot per day per member
     pub snapshot_last_date: HashMap<String, String>,
@@ -89,6 +93,8 @@ impl MixerCache {
             command_timestamps: HashMap::new(),
             global_volumes: HashMap::new(),
             output_track_indices: HashMap::new(),
+            input_track_indices: HashMap::new(),
+            last_track_count: None,
             snapshot_last_date: HashMap::new(),
         }
     }
