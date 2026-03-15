@@ -2427,8 +2427,9 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             .iter()
             .filter(|m| m.id() != "engineer")
             .filter_map(|m| {
-                m.mix_send_index
-                    .map(|si| reaper_api::set_send_mute("http://iem.lan:8080", m.track_index, si, 1))
+                m.mix_send_index.map(|si| {
+                    reaper_api::set_send_mute("http://iem.lan:8080", m.track_index, si, 1)
+                })
             })
             .collect();
 
