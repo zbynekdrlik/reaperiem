@@ -97,7 +97,10 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     // Discover mix_send_index for each member: find which send targets the engineer track.
     // This is critical: member inear tracks have hardware outputs at SEND/0,
     // and the send to ENGINEER sits at a higher index. Hardcoding 0 mutes hardware output!
-    let engineer_track = members.iter().find(|m| m.id() == "engineer").map(|m| m.track_index);
+    let engineer_track = members
+        .iter()
+        .find(|m| m.id() == "engineer")
+        .map(|m| m.track_index);
     if let Some(eng_ti) = engineer_track {
         for member in members.iter_mut().filter(|m| m.id() != "engineer") {
             // Query sends on this member's inear track to find the one targeting engineer.
