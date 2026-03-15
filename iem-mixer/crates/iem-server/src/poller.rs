@@ -119,7 +119,8 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
                 )
                 .await
                 {
-                    if dest == eng_ti {
+                    // dest is i32: negative = hardware output (skip), positive = track index
+                    if dest >= 0 && dest as usize == eng_ti {
                         member.mix_send_index = Some(si);
                         tracing::info!(
                             member = %member.name,
@@ -130,8 +131,9 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
                         );
                         break;
                     }
+                    // dest is -1 (hardware output) or other track → continue probing
                 } else {
-                    // No more sends on this track
+                    // None = no SEND line in response = send doesn't exist → stop
                     break;
                 }
             }

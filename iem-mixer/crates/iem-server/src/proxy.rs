@@ -463,8 +463,9 @@ fn parse_send_pan(text: &str) -> Option<f32> {
 
 /// Parse the destination track index from a REAPER SEND response.
 /// Response format: SEND\ttrack\tsend\tflag\tvolume\tpan\tDESTINATION
-/// Returns Some(destination_track_index) or None if parsing fails.
-pub(crate) fn parse_send_destination(text: &str) -> Option<usize> {
+/// Returns Some(destination) where negative values indicate hardware outputs (e.g. -1),
+/// or None if no SEND line is found (meaning the send doesn't exist).
+pub(crate) fn parse_send_destination(text: &str) -> Option<i32> {
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.first() == Some(&"SEND") && parts.len() >= 7 {
@@ -497,7 +498,7 @@ pub(crate) async fn query_send_destination(
     reaper_url: &str,
     track_index: usize,
     send_index: usize,
-) -> Option<usize> {
+) -> Option<i32> {
     let url = reaper_api::get_send_state(reaper_url, track_index, send_index);
     let resp = client.get(&url).send().await.ok()?;
     let text = resp.text().await.ok()?;
@@ -2312,19 +2313,20 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         let response = "SEND\t23\t1\t0\t1.00000000\t0.00000000\t32\n";
         assert_eq!(
             parse_send_destination(response),
-            Some(32),
+            Some(32_i32),
             "Should parse destination track 32 (engineer)"
         );
     }
 
     #[test]
-    fn test_parse_send_destination_hw_output() {
-        // Hardware output send — destination 0 = master track
-        let response = "SEND\t23\t0\t0\t1.00000000\t0.00000000\t0\n";
+    fn test_parse_send_destination_hw_output_negative() {
+        // Real REAPER response: hardware output send has destination -1
+        // This MUST return Some(-1), NOT None — None means "send doesn't exist"
+        let response = "SEND\t23\t0\t0\t1.00000000\t0.00000000\t-1\n";
         assert_eq!(
             parse_send_destination(response),
-            Some(0),
-            "Hardware output destination should be 0 (master)"
+            Some(-1_i32),
+            "Hardware output destination -1 must parse as Some(-1), not None"
         );
     }
 
@@ -2339,7 +2341,15 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
     fn test_parse_send_destination_multiline() {
         // Response might have extra lines
         let response = "SEND\t23\t1\t8\t0.50000000\t0.00000000\t32\nSOMETHING\telse\n";
-        assert_eq!(parse_send_destination(response), Some(32));
+        assert_eq!(parse_send_destination(response), Some(32_i32));
+    }
+
+    #[test]
+    fn test_parse_send_destination_none_means_no_send() {
+        // Empty response = send doesn't exist (REAPER returned nothing)
+        assert_eq!(parse_send_destination(""), None);
+        // Non-SEND response = not a send query result
+        assert_eq!(parse_send_destination("TRACK\t1\tname"), None);
     }
 
     // ================================================================
