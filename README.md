@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.58.0 (2026-03-15)
+
+- **Fix**: Engineer mixer now shows all member mix faders — hardware output destination (-1) was breaking send discovery, preventing mix channels from appearing
+- **Fix**: Engineer mute no longer shuts down member hardware outputs — mute now targets the correct mix send index instead of hardcoded send 0
+- **Fix**: Rate-limited REAPER discovery requests (50ms delay) to prevent HTTP API crashes on startup
+- **Fix**: Removed test_setup.lua script that could create random tracks in REAPER
+- **Fix**: CI backup step now uses git worktrees to prevent project file deletion
+
 ### v1.56.0 (2026-03-14)
 
 - **Fix**: Fader now reaches exact whole-number dB values (e.g., -4.0) — switched to 0.2 dB steps with integer boundary snapping

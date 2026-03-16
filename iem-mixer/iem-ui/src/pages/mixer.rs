@@ -115,24 +115,9 @@ fn connect_websocket(
                         global_muted,
                     } => {
                         set_channels.update(|chs| {
-                            if chs.is_empty() {
-                                // First state — populate
-                                *chs = new_chs;
-                            } else {
-                                // Update non-touched channels
-                                for new_ch in &new_chs {
-                                    if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
-                                        if let Some(ch) = chs
-                                            .iter_mut()
-                                            .find(|c| c.track_index == new_ch.track_index)
-                                        {
-                                            ch.level_db = new_ch.level_db;
-                                            ch.muted = new_ch.muted;
-                                            ch.pan = new_ch.pan;
-                                        }
-                                    }
-                                }
-                            }
+                            let touched_snapshot: std::collections::HashMap<usize, bool> =
+                                touched.iter().map(|(k, v)| (*k, *v)).collect();
+                            iem_core::merge_or_replace_channels(chs, new_chs, &touched_snapshot);
                         });
                         // Update global volume from initial state
                         if let Some(lvl) = global_level_db {
@@ -966,7 +951,7 @@ fn ChannelList(
         >
             <For
                 each=move || display_channels.get()
-                key=|ch| ch.track_index
+                key=|ch| (ch.display_name.clone(), ch.track_index)
                 children=move |ch| {
                     let track_idx = ch.track_index;
                     let partner_idx = ch.partner_index;

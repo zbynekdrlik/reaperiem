@@ -94,7 +94,13 @@ pub async fn get_mixer_state(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     let reaper_url = config.reaper_url.clone();
 
-    let channels = build_channel_templates(&config.inputs);
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
+    let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
     // Try to get actual levels from REAPER (all channels in parallel)
@@ -188,7 +194,13 @@ pub async fn poll_mixer_state(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     let reaper_url = config.reaper_url.clone();
 
-    let channels = build_channel_templates(&config.inputs);
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
+    let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
     let mut result_channels = channels;
@@ -520,17 +532,23 @@ fn parse_reaper_value(text: &str) -> Option<f32> {
     None
 }
 
-/// Build channel templates from config inputs with category and stereo info
+/// Build channel templates from config inputs with category and stereo info.
+/// If `resolved_indices` is provided, track indices are looked up by name
+/// (handling REAPER track insertions/reordering). Falls back to sequential i+1.
 pub(crate) fn build_channel_templates(
     inputs: &[iem_core::config::InputTrack],
+    resolved_indices: Option<&HashMap<String, usize>>,
 ) -> Vec<iem_core::Channel> {
     inputs
         .iter()
         .enumerate()
         .map(|(i, input)| {
+            let track_index = resolved_indices
+                .and_then(|m| m.get(&input.name).copied())
+                .unwrap_or(i + 1);
             let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
             iem_core::Channel {
-                track_index: i + 1,
+                track_index,
                 name: input.name.clone(),
                 level_db: 0.0,
                 pan: 0.5,
@@ -1080,7 +1098,13 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
 
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
-    let channels = build_channel_templates(&config.inputs);
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
+    let channels = build_channel_templates(&config.inputs, resolved_ref);
     drop(config);
 
     // Query all send states in parallel
@@ -2449,5 +2473,66 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             2,
             "Members without mix_send_index must be skipped"
         );
+    }
+
+    // ================================================================
+    // build_channel_templates resolved indices tests (Issue #85)
+    // ================================================================
+
+    fn make_test_inputs() -> Vec<iem_core::config::InputTrack> {
+        vec![
+            iem_core::config::InputTrack {
+                name: "PETKA mic".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+            },
+            iem_core::config::InputTrack {
+                name: "STEVO mic".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+            },
+            iem_core::config::InputTrack {
+                name: "DRUMS".to_string(),
+                dante_input: 3,
+                default_level_db: 0.0,
+            },
+        ]
+    }
+
+    #[test]
+    fn test_build_channel_templates_fallback_without_resolved() {
+        // No resolved map (None) → sequential i+1 (backward compat)
+        let inputs = make_test_inputs();
+        let channels = build_channel_templates(&inputs, None);
+        assert_eq!(channels[0].track_index, 1);
+        assert_eq!(channels[1].track_index, 2);
+        assert_eq!(channels[2].track_index, 3);
+    }
+
+    #[test]
+    fn test_build_channel_templates_with_resolved_indices() {
+        // Resolved map shifts indices (e.g., track inserted at position 1)
+        let inputs = make_test_inputs();
+        let mut resolved = std::collections::HashMap::new();
+        resolved.insert("PETKA mic".to_string(), 2_usize);
+        resolved.insert("STEVO mic".to_string(), 3);
+        resolved.insert("DRUMS".to_string(), 4);
+        let channels = build_channel_templates(&inputs, Some(&resolved));
+        assert_eq!(channels[0].track_index, 2, "PETKA mic should be at 2");
+        assert_eq!(channels[1].track_index, 3, "STEVO mic should be at 3");
+        assert_eq!(channels[2].track_index, 4, "DRUMS should be at 4");
+    }
+
+    #[test]
+    fn test_build_channel_templates_partial_resolution() {
+        // Some names resolved, others fall back to sequential
+        let inputs = make_test_inputs();
+        let mut resolved = std::collections::HashMap::new();
+        resolved.insert("PETKA mic".to_string(), 5_usize);
+        // STEVO mic and DRUMS not in resolved map
+        let channels = build_channel_templates(&inputs, Some(&resolved));
+        assert_eq!(channels[0].track_index, 5, "PETKA mic resolved to 5");
+        assert_eq!(channels[1].track_index, 2, "STEVO mic falls back to i+1=2");
+        assert_eq!(channels[2].track_index, 3, "DRUMS falls back to i+1=3");
     }
 }

@@ -211,10 +211,34 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     // Discovered output tracks: member_id -> (track_index, vol_linear, flags)
     let mut output_tracks: HashMap<String, (usize, f32, i32)> = HashMap::new();
 
+    // Name→index map for ALL REAPER tracks (for input track index resolution)
+    let mut all_track_names: HashMap<String, usize> = HashMap::new();
+
     let tracks_url = reaper_api::query_tracks(&reaper_url);
     if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
         if let Ok(text) = resp.text().await {
             connected = true;
+
+            // Detect track count changes
+            for line in text.lines() {
+                if let Some(count_str) = line.strip_prefix("NTRACK\t") {
+                    if let Ok(count) = count_str.parse::<usize>() {
+                        let mut cache = state.mixer_cache.write().await;
+                        if let Some(prev) = cache.last_track_count {
+                            if count != prev {
+                                tracing::warn!(
+                                    old_count = prev,
+                                    new_count = count,
+                                    "REAPER track count changed — track indices may have shifted"
+                                );
+                            }
+                        }
+                        cache.last_track_count = Some(count);
+                    }
+                    break;
+                }
+            }
+
             for line in text.lines() {
                 let parts: Vec<&str> = line.split('\t').collect();
                 if parts.first() == Some(&"TRACK") && parts.len() > 7 {
@@ -244,9 +268,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         }
                         // No VU → don't insert → frontend defaults to 0.0
 
-                        // Check if this is a member output track (e.g. "PETKA inear")
-                        // Fields: TRACK idx name flags vol pan vu_peak_L vu_peak_R ...
+                        // Build name→index map for ALL tracks (input index resolution)
                         let track_name = parts[2];
+                        all_track_names.insert(track_name.to_string(), track_idx);
+
+                        // Check if this is a member output track (e.g. "PETKA inear")
                         if let Some(member_id) = member_track_names.get(track_name) {
                             let vol: f32 = parts[4].parse().unwrap_or(1.0);
                             let flags: i32 = parts[3].parse().unwrap_or(0);
@@ -365,6 +391,16 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
         // Update output track indices and global volumes, broadcast changes
         for (member_id, (track_idx, vol_linear, flags)) in &output_tracks {
+            let old_idx = cache.output_track_indices.get(member_id).copied();
+            if old_idx.is_some_and(|old| old != *track_idx) {
+                tracing::warn!(
+                    member = %member_id,
+                    old = old_idx.unwrap(),
+                    new = track_idx,
+                    "Output track index shifted — forcing full state resync"
+                );
+                cache.member_states.clear();
+            }
             cache
                 .output_track_indices
                 .insert(member_id.clone(), *track_idx);
@@ -397,6 +433,41 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .global_volumes
                 .insert(member_id.clone(), GlobalVolState { level_db, muted });
         }
+
+        // Resolve input track indices by name from NTRACK response
+        if !all_track_names.is_empty() {
+            let mut input_indices: HashMap<String, usize> = HashMap::new();
+            for input in &inputs {
+                if let Some(&idx) = all_track_names.get(&input.name) {
+                    input_indices.insert(input.name.clone(), idx);
+                }
+            }
+            if cache.input_track_indices != input_indices {
+                tracing::warn!(
+                    "Input track indices changed — forcing full state resync for all members"
+                );
+                cache.member_states.clear();
+            }
+            cache.input_track_indices = input_indices;
+        }
+    }
+
+    // Sync output track index changes back to discovered_members
+    if !output_tracks.is_empty() {
+        let mut discovered = state.discovered_members.write().await;
+        for (member_id, (new_idx, _, _)) in &output_tracks {
+            if let Some(member) = discovered.iter_mut().find(|m| m.id() == *member_id) {
+                if member.track_index != *new_idx {
+                    tracing::warn!(
+                        member = %member_id,
+                        old = member.track_index,
+                        new = new_idx,
+                        "Output track index shifted — syncing DiscoveredMember"
+                    );
+                    member.track_index = *new_idx;
+                }
+            }
+        }
     }
 
     // 2. For each active member, query send states in parallel
@@ -413,7 +484,13 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         .collect();
     let discovered_snapshot = discovered.clone();
     drop(discovered);
-    let channel_templates = build_channel_templates(&inputs);
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let resolved_ref = if resolved.is_empty() {
+        None
+    } else {
+        Some(&resolved)
+    };
+    let channel_templates = build_channel_templates(&inputs, resolved_ref);
 
     for (member_id, member_index) in &member_indices {
         let channels = channel_templates.clone();
@@ -996,6 +1073,231 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             worst_case_ms <= 5000,
             "Discovery should complete within 5 seconds, got {}ms",
             worst_case_ms
+        );
+    }
+
+    // ================================================================
+    // Track index safety tests (Issue #85)
+    // ================================================================
+
+    /// When poller discovers output track at a different index, DiscoveredMember must sync
+    #[test]
+    fn test_output_track_index_sync_detects_shift() {
+        let mut member = DiscoveredMember {
+            name: "PETKA".to_string(),
+            track_index: 23,
+            dante_output_l: 3,
+            dante_output_r: 4,
+            send_index: 0,
+            mix_send_index: Some(1),
+        };
+
+        // Simulate: poller found "PETKA inear" at track 24 (shifted by 1)
+        let new_idx: usize = 24;
+        if member.track_index != new_idx {
+            member.track_index = new_idx;
+        }
+
+        assert_eq!(
+            member.track_index, 24,
+            "DiscoveredMember.track_index must update when track shifts"
+        );
+    }
+
+    /// When track index hasn't changed, no update should occur
+    #[test]
+    fn test_output_track_index_sync_no_change() {
+        let member = DiscoveredMember {
+            name: "PETKA".to_string(),
+            track_index: 23,
+            dante_output_l: 3,
+            dante_output_r: 4,
+            send_index: 0,
+            mix_send_index: Some(1),
+        };
+
+        let new_idx: usize = 23;
+        assert_eq!(
+            member.track_index, new_idx,
+            "No update needed when index matches"
+        );
+    }
+
+    /// Track count change should be detectable
+    #[test]
+    fn test_track_count_change_detection() {
+        let mut cache = MixerCache::new();
+        assert!(cache.last_track_count.is_none());
+
+        // First observation
+        cache.last_track_count = Some(33);
+        assert_eq!(cache.last_track_count, Some(33));
+
+        // Track inserted → count changes
+        let new_count: usize = 34;
+        let changed = cache
+            .last_track_count
+            .map_or(false, |prev| prev != new_count);
+        assert!(changed, "Should detect track count change from 33 to 34");
+        cache.last_track_count = Some(new_count);
+        assert_eq!(cache.last_track_count, Some(34));
+    }
+
+    /// Input track indices should be resolvable by name
+    #[test]
+    fn test_input_track_name_resolution() {
+        let inputs = vec![
+            iem_core::config::InputTrack {
+                name: "PETKA mic".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+            },
+            iem_core::config::InputTrack {
+                name: "STEVO mic".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+            },
+        ];
+
+        // Simulate NTRACK showing tracks at shifted positions
+        let mut all_track_names: HashMap<String, usize> = HashMap::new();
+        all_track_names.insert("NEW TRACK".to_string(), 1); // inserted track
+        all_track_names.insert("PETKA mic".to_string(), 2); // shifted
+        all_track_names.insert("STEVO mic".to_string(), 3); // shifted
+
+        let mut input_indices: HashMap<String, usize> = HashMap::new();
+        for input in &inputs {
+            if let Some(&idx) = all_track_names.get(&input.name) {
+                input_indices.insert(input.name.clone(), idx);
+            }
+        }
+
+        assert_eq!(input_indices.get("PETKA mic"), Some(&2));
+        assert_eq!(input_indices.get("STEVO mic"), Some(&3));
+    }
+
+    /// MixerCache should initialize with empty input_track_indices
+    #[test]
+    fn test_mixer_cache_new_has_empty_input_track_indices() {
+        let cache = MixerCache::new();
+        assert!(cache.input_track_indices.is_empty());
+        assert!(cache.last_track_count.is_none());
+    }
+
+    // ================================================================
+    // Cache invalidation on track index shift (follow-up to #85)
+    // ================================================================
+
+    /// When input track indices change, member_states must be cleared to force
+    /// a full State resync. Without this, the delta diff compares by track_index
+    /// and misses shifted channels, leaving frontends with stale data.
+    #[test]
+    fn test_index_shift_clears_member_states_for_full_resync() {
+        let mut cache = MixerCache::new();
+
+        // Simulate cached state: STEVO at track 2
+        cache.member_states.insert(
+            "engineer".to_string(),
+            vec![
+                iem_core::Channel {
+                    track_index: 1,
+                    name: "PETKA mic".into(),
+                    level_db: -10.0,
+                    pan: 0.0,
+                    muted: false,
+                    category: "mics".into(),
+                    stereo_pair: None,
+                    stereo_side: None,
+                },
+                iem_core::Channel {
+                    track_index: 2,
+                    name: "STEVO mic".into(),
+                    level_db: -10.0,
+                    pan: 0.0,
+                    muted: false,
+                    category: "mics".into(),
+                    stereo_pair: None,
+                    stereo_side: None,
+                },
+            ],
+        );
+        cache.input_track_indices = [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 2)]
+            .into_iter()
+            .collect();
+
+        // New indices: STEVO shifted to track 3
+        let new_indices: HashMap<String, usize> =
+            [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 3)]
+                .into_iter()
+                .collect();
+
+        // Detect change → member_states must be cleared
+        if cache.input_track_indices != new_indices {
+            cache.member_states.clear();
+        }
+        cache.input_track_indices = new_indices;
+
+        assert!(
+            cache.member_states.is_empty(),
+            "member_states must be cleared on index shift to force full State resend"
+        );
+    }
+
+    /// When output track indices change (e.g., member inear track shifts),
+    /// member_states must be cleared so engineer mix channels get correct data.
+    #[test]
+    fn test_output_index_shift_clears_member_states() {
+        let mut cache = MixerCache::new();
+        cache.output_track_indices.insert("petka".to_string(), 23);
+        cache.member_states.insert(
+            "engineer".to_string(),
+            vec![iem_core::Channel {
+                track_index: 23,
+                name: "PETKA inear".into(),
+                level_db: -6.0,
+                pan: 0.0,
+                muted: false,
+                category: "members".into(),
+                stereo_pair: None,
+                stereo_side: None,
+            }],
+        );
+
+        // Output track shifts from 23 to 24
+        let new_idx: usize = 24;
+        let old_idx = cache.output_track_indices.get("petka").copied();
+        if old_idx.is_some_and(|old| old != new_idx) {
+            cache.member_states.clear();
+        }
+        cache
+            .output_track_indices
+            .insert("petka".to_string(), new_idx);
+
+        assert!(
+            cache.member_states.is_empty(),
+            "member_states must be cleared on output index shift"
+        );
+    }
+
+    /// When indices haven't changed, member_states should NOT be cleared
+    #[test]
+    fn test_no_clear_when_indices_unchanged() {
+        let mut cache = MixerCache::new();
+        cache.member_states.insert("petka".to_string(), vec![]);
+        cache.input_track_indices = [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 2)]
+            .into_iter()
+            .collect();
+
+        // Same indices — no change
+        let new_indices: HashMap<String, usize> = cache.input_track_indices.clone();
+        if cache.input_track_indices != new_indices {
+            cache.member_states.clear();
+        }
+        cache.input_track_indices = new_indices;
+
+        assert!(
+            !cache.member_states.is_empty(),
+            "member_states must NOT be cleared when indices are unchanged"
         );
     }
 

@@ -15,8 +15,9 @@ pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
     ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, Customization, MixerState,
-    PollResponse,
+    PollResponse, merge_or_replace_channels,
 };
+
 pub use ws::{ClientMsg, ServerMsg};
 
 /// Application version (from Cargo.toml)
