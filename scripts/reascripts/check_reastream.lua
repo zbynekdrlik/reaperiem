@@ -40,7 +40,7 @@ for i = 0, fx_count - 1 do
     -- Found ReaStream — check mode parameter
     local mode_val = reaper.TrackFX_GetParam(track, i, 0)
     local mode_str = "unknown"
-    if mode_val < 0.5 then
+    if mode_val > 0.5 then
       mode_str = "send"
     else
       mode_str = "receive"

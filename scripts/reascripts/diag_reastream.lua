@@ -110,7 +110,7 @@ end
 
 -- Basic info
 local mode_val = reaper.TrackFX_GetParam(track, fx_idx, 0)
-local mode_str = mode_val < 0.5 and "send" or "receive"
+local mode_str = mode_val > 0.5 and "send" or "receive"
 local enabled = reaper.TrackFX_GetEnabled(track, fx_idx)
 
 -- Read track state chunk to find ReaStream configuration

@@ -287,8 +287,8 @@ if new_fx < 0 then
 end
 
 -- Configure ReaStream:
--- Parameter 0: Mode (0.0 = Send, 1.0 = Receive)
-reaper.TrackFX_SetParam(track, new_fx, 0, 0.0)
+-- Parameter 0: Mode (0.0 = Receive, 1.0 = Send)
+reaper.TrackFX_SetParam(track, new_fx, 0, 1.0)
 
 -- Attempt to configure IP to 127.0.0.1 via chunk manipulation
 -- This changes the send target from broadcast (255.255.255.255) to localhost
