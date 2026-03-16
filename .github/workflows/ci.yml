@@ -148,6 +148,11 @@ jobs:
         working-directory: iem-mixer
         run: cargo fmt --all -- --check
 
+      - name: Create minimal dist folder for rust-embed
+        run: |
+          mkdir -p iem-mixer/iem-ui/dist
+          echo "placeholder" > iem-mixer/iem-ui/dist/index.html
+
       - name: Clippy (strict - deny warnings)
         working-directory: iem-mixer
         run: |

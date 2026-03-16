@@ -4,6 +4,7 @@
 //! resamples from 96kHz to 48kHz, encodes to Opus, and broadcasts as binary frames.
 
 use bytes::Bytes;
+use rubato::Resampler;
 use tokio::sync::broadcast;
 
 /// ReaStream magic bytes: "MRSR" (little-endian u32)
@@ -163,7 +164,7 @@ impl AudioPipeline {
                 .collect();
 
             // Resample
-            let resampled = match self.resampler.process(&input, None) {
+            let resampled: Vec<Vec<f32>> = match self.resampler.process(&input, None) {
                 Ok(r) => r,
                 Err(e) => {
                     tracing::warn!("resample error: {}", e);
