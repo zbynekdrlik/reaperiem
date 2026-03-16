@@ -97,8 +97,10 @@ pub fn parse_reastream_packet(data: &[u8]) -> Result<ReaStreamPacket, &'static s
 pub struct AudioPipeline {
     resampler: rubato::FftFixedIn<f32>,
     encoder: opus::Encoder,
-    /// Accumulation buffer per channel [channel][samples]
+    /// Accumulation buffer per channel for resampler input [channel][samples]
     channel_buffers: Vec<Vec<f32>>,
+    /// Accumulation buffer for resampled interleaved output awaiting Opus encoding
+    opus_buffer: Vec<f32>,
     channels: usize,
 }
 
@@ -137,6 +139,7 @@ impl AudioPipeline {
             resampler,
             encoder,
             channel_buffers,
+            opus_buffer: Vec::new(),
             channels: ch,
         })
     }
@@ -172,31 +175,29 @@ impl AudioPipeline {
                 }
             };
 
-            // Re-interleave the resampled output and buffer for Opus
+            // Re-interleave the resampled output into the persistent opus buffer
             let out_frames = resampled[0].len();
-            let mut interleaved_48k = Vec::with_capacity(out_frames * self.channels);
             for i in 0..out_frames {
                 for ch_buf in &resampled {
-                    interleaved_48k.push(if i < ch_buf.len() { ch_buf[i] } else { 0.0 });
+                    self.opus_buffer
+                        .push(if i < ch_buf.len() { ch_buf[i] } else { 0.0 });
                 }
             }
+        }
 
-            // Encode Opus frames (960 samples per channel = 20ms at 48kHz)
-            let frame_size = OPUS_FRAME_SAMPLES * self.channels;
-            let mut offset = 0;
-            while offset + frame_size <= interleaved_48k.len() {
-                let frame = &interleaved_48k[offset..offset + frame_size];
-                let mut output = vec![0u8; 4000]; // max Opus packet
-                match self.encoder.encode_float(frame, &mut output) {
-                    Ok(len) => {
-                        output.truncate(len);
-                        opus_frames.push(Bytes::from(output));
-                    }
-                    Err(e) => {
-                        tracing::warn!("opus encode error: {}", e);
-                    }
+        // Encode Opus frames from accumulated resampled data
+        let frame_size = OPUS_FRAME_SAMPLES * self.channels;
+        while self.opus_buffer.len() >= frame_size {
+            let frame: Vec<f32> = self.opus_buffer.drain(..frame_size).collect();
+            let mut output = vec![0u8; 4000]; // max Opus packet
+            match self.encoder.encode_float(&frame, &mut output) {
+                Ok(len) => {
+                    output.truncate(len);
+                    opus_frames.push(Bytes::from(output));
                 }
-                offset += frame_size;
+                Err(e) => {
+                    tracing::warn!("opus encode error: {}", e);
+                }
             }
         }
 
