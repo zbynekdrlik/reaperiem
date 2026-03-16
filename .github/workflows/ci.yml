@@ -888,14 +888,32 @@ jobs:
         continue-on-error: true
         run: |
           try {
-            # Trigger setup_reastream to insert/verify ReaStream VST on engineer inear track
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_SETUP_REASTREAM" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            # After dynamic registration, meter_bridge writes numeric action IDs to EXTSTATE
+            # Read the action IDs for setup_reastream and check_reastream
+            $setupId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_reastream" -UseBasicParsing -TimeoutSec 5).Content
+            $checkId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_check_reastream" -UseBasicParsing -TimeoutSec 5).Content
+
+            # Extract numeric ID from EXTSTATE response (format: "EXTSTATE\treaperiem\taction_*\tID")
+            $setupActionId = ($setupId -split "`t")[-1]
+            $checkActionId = ($checkId -split "`t")[-1]
+
+            if (-not $setupActionId -or -not $checkActionId) {
+              Write-Host "::warning::Action IDs not found — scripts may not be registered yet"
+              Write-Host "setup_reastream action: $setupActionId"
+              Write-Host "check_reastream action: $checkActionId"
+              exit 0
+            }
+
+            Write-Host "Action IDs: setup=$setupActionId, check=$checkActionId"
+
+            # Trigger setup_reastream using numeric action ID
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$setupActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
             Start-Sleep -Seconds 3
             $setup = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/setup_reastream" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "ReaStream setup result: $setup"
 
-            # Verify ReaStream status
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_REASTREAM" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            # Trigger check_reastream using numeric action ID
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$checkActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
             Start-Sleep -Seconds 2
             $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "ReaStream status: $status"

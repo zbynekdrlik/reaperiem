@@ -81,12 +81,20 @@ function main()
   if reg_request ~= "" then
     local scripts_dir = reaper.GetResourcePath() .. "/Scripts/reaperiem/"
     local count = 0
+    local ids = {}
     for filename in reg_request:gmatch("[^|]+") do
       local full_path = scripts_dir .. filename
       local cmd_id = reaper.AddRemoveReaScript(true, 0, full_path, true)
-      if cmd_id ~= 0 then count = count + 1 end
+      if cmd_id ~= 0 then
+        count = count + 1
+        -- Store numeric action ID so CI can trigger the script
+        -- Key: "action_<basename>" e.g. "action_setup_reastream"
+        local base = filename:gsub("%.lua$", "")
+        reaper.SetExtState("reaperiem", "action_" .. base, tostring(cmd_id), false)
+        ids[#ids + 1] = base .. "=" .. cmd_id
+      end
     end
-    reaper.SetExtState("reaperiem", "register_result", "OK:" .. count, false)
+    reaper.SetExtState("reaperiem", "register_result", "OK:" .. count .. ":" .. table.concat(ids, "|"), false)
     reaper.SetExtState("reaperiem", "register_scripts", "", false)
   end
 
