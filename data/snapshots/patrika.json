@@ -4,84 +4,9 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "13": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
       "19": {
         "vol": 1.0,
         "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
         "pan": 0.5
       },
       "3": {
@@ -94,12 +19,77 @@
         "mute": true,
         "pan": 0.5
       },
+      "13": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
       "12": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
       },
-      "14": {
+      "8": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -109,9 +99,19 @@
         "mute": true,
         "pan": 0.5
       },
-      "17": {
+      "14": {
         "vol": 1.0,
         "mute": true,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 1.0,
+        "mute": false,
         "pan": 0.5
       }
     }
@@ -121,6 +121,66 @@
     "label": "auto",
     "pinned": false,
     "channels": {
+      "1": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
       "13": {
         "vol": 1.0,
         "mute": true,
@@ -136,12 +196,17 @@
         "mute": true,
         "pan": 0.5
       },
-      "17": {
+      "12": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
       },
-      "5": {
+      "3": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -151,14 +216,9 @@
         "mute": true,
         "pan": 0.5
       },
-      "8": {
+      "7": {
         "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 1.0,
-        "mute": true,
+        "mute": false,
         "pan": 0.5
       },
       "19": {
@@ -166,69 +226,9 @@
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
       "22": {
         "vol": 1.0,
         "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 1.0,
-        "mute": true,
         "pan": 0.5
       }
     }
@@ -238,37 +238,7 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "19": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
       "14": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -278,6 +248,46 @@
         "mute": true,
         "pan": 0.5
       },
+      "18": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
       "22": {
         "vol": 1.0,
         "mute": false,
@@ -288,104 +298,17 @@
         "mute": true,
         "pan": 0.5
       },
-      "20": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
       "9": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
-      "17": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      }
-    }
-  },
-  {
-    "timestamp": 1773389828,
-    "label": "auto",
-    "pinned": false,
-    "channels": {
       "20": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
-      "17": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "2": {
+      "1": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -395,7 +318,44 @@
         "mute": false,
         "pan": 0.5
       },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
       "4": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      }
+    }
+  },
+  {
+    "timestamp": 1773389828,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "14": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -410,12 +370,77 @@
         "mute": true,
         "pan": 0.5
       },
-      "11": {
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "4": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
       },
       "21": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
@@ -431,31 +456,6 @@
         "pan": 0.5
       },
       "3": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -472,22 +472,7 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "2": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
+      "18": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -497,17 +482,77 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
       "4": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
       },
-      "8": {
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -517,52 +562,7 @@
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "15": {
+      "8": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -577,9 +577,9 @@
         "mute": true,
         "pan": 0.5
       },
-      "18": {
+      "20": {
         "vol": 1.0,
-        "mute": true,
+        "mute": false,
         "pan": 0.5
       }
     }
@@ -589,32 +589,17 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "20": {
+      "11": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
+      "12": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -624,7 +609,7 @@
         "mute": false,
         "pan": 0.5
       },
-      "11": {
+      "8": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -634,14 +619,39 @@
         "mute": true,
         "pan": 0.5
       },
-      "22": {
+      "6": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
-      "6": {
+      "16": {
         "vol": 1.0,
         "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
         "pan": 0.5
       },
       "9": {
@@ -649,17 +659,7 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
       "5": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "14": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -674,17 +674,12 @@
         "mute": true,
         "pan": 0.5
       },
-      "3": {
+      "18": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
       },
-      "19": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
+      "3": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
@@ -694,7 +689,129 @@
         "mute": true,
         "pan": 0.5
       },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      }
+    }
+  },
+  {
+    "timestamp": 1773641424,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "23": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
       "12": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.1,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
         "vol": 1.0,
         "mute": true,
         "pan": 0.5
