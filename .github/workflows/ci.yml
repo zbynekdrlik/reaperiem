@@ -796,6 +796,21 @@ jobs:
             Write-Host "check_reastream.lua already registered"
           }
 
+      - name: Register scripts dynamically via meter_bridge
+        shell: powershell
+        continue-on-error: true
+        run: |
+          # meter_bridge.lua (already running via defer) picks up EXTSTATE requests
+          # and calls AddRemoveReaScript to register scripts at runtime — no restart needed
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua" -UseBasicParsing -TimeoutSec 5
+            Start-Sleep -Seconds 3
+            $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+            Write-Host "Dynamic registration result: $result"
+          } catch {
+            Write-Host "::warning::Dynamic registration failed (REAPER may not be running): $_"
+          }
+
       - name: Deploy WASM to REAPER www root
         shell: cmd
         continue-on-error: true
@@ -867,6 +882,26 @@ jobs:
           }
 
           Write-Host "Send mode check: OK (all sends are pre-fader post-FX)"
+
+      - name: Setup and verify ReaStream on engineer track
+        shell: powershell
+        continue-on-error: true
+        run: |
+          try {
+            # Trigger setup_reastream to insert/verify ReaStream VST on engineer inear track
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_SETUP_REASTREAM" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
+            $setup = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/setup_reastream" -UseBasicParsing -TimeoutSec 5).Content
+            Write-Host "ReaStream setup result: $setup"
+
+            # Verify ReaStream status
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_REASTREAM" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 2
+            $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status" -UseBasicParsing -TimeoutSec 5).Content
+            Write-Host "ReaStream status: $status"
+          } catch {
+            Write-Host "::warning::ReaStream setup/verify failed (scripts may not be registered yet): $_"
+          }
 
       - name: Verify deployment
         shell: powershell

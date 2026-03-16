@@ -73,6 +73,23 @@ function main()
   end
 
   reaper.SetExtState(SECTION, KEY, table.concat(parts, ";"), false)
+
+  -- Dynamic script registration via EXTSTATE (no REAPER restart needed)
+  -- CI or curl sets "reaperiem/register_scripts" with pipe-delimited filenames
+  -- e.g. "setup_reastream.lua|check_reastream.lua"
+  local reg_request = reaper.GetExtState("reaperiem", "register_scripts")
+  if reg_request ~= "" then
+    local scripts_dir = reaper.GetResourcePath() .. "/Scripts/reaperiem/"
+    local count = 0
+    for filename in reg_request:gmatch("[^|]+") do
+      local full_path = scripts_dir .. filename
+      local cmd_id = reaper.AddRemoveReaScript(true, 0, full_path, true)
+      if cmd_id ~= 0 then count = count + 1 end
+    end
+    reaper.SetExtState("reaperiem", "register_result", "OK:" .. count, false)
+    reaper.SetExtState("reaperiem", "register_scripts", "", false)
+  end
+
   reaper.defer(main)
 end
 
