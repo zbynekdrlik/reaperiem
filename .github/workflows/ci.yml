@@ -771,6 +771,24 @@ jobs:
           xcopy /Y scripts\reascripts\*.lua "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
           echo ReaScripts deployed
 
+      - name: Register new ReaScripts in reaper-kb.ini
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $kbIni = "C:\Users\newlevel\AppData\Roaming\REAPER\reaper-kb.ini"
+          if (-not (Test-Path $kbIni)) {
+            Write-Host "::warning::reaper-kb.ini not found, skipping registration"
+            exit 0
+          }
+          # Register setup_reastream.lua if not already registered
+          $content = Get-Content $kbIni -Raw
+          if ($content -notmatch "SETUP_REASTREAM") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_REASTREAM "Custom: Setup ReaStream for IEM audio streaming" Scripts\reaperiem\setup_reastream.lua'
+            Write-Host "Registered setup_reastream.lua — REAPER restart needed to load"
+          } else {
+            Write-Host "setup_reastream.lua already registered"
+          }
+
       - name: Deploy WASM to REAPER www root
         shell: cmd
         continue-on-error: true
