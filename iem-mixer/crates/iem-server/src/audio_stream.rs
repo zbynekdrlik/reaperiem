@@ -581,7 +581,11 @@ mod tests {
             "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
             addr.ip()
         );
-        assert_eq!(addr.port(), 4711, "Custom port (ReaStream default 58710 is used by REAPER)");
+        assert_eq!(
+            addr.port(),
+            4711,
+            "Custom port (ReaStream default 58710 is used by REAPER)"
+        );
     }
 
     #[test]
