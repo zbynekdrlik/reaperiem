@@ -563,7 +563,7 @@ jobs:
           }
 
           # Reserve ports 80 and 443 for non-admin use (idempotent)
-          # netsh returns exit code 1 if reservation exists — suppress under SilentlyContinue
+          # netsh returns exit code 1 if reservation exists - suppress under SilentlyContinue
           $ErrorActionPreference = "SilentlyContinue"
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
@@ -666,7 +666,7 @@ jobs:
           # CRITICAL: Uses a separate git worktree so the main repo working tree
           # is NEVER switched away from main. Previous approach used git checkout
           # to switch branches in-place, which DELETED projects/sunday_service.RPP
-          # from disk every deploy — causing total mix loss on REAPER restart.
+          # from disk every deploy - causing total mix loss on REAPER restart.
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
           $wtPath = "$env:TEMP\reaperiem-backup-wt"
 
@@ -784,14 +784,14 @@ jobs:
           $content = Get-Content $kbIni -Raw
           if ($content -notmatch "SETUP_REASTREAM") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_REASTREAM "Custom: Setup ReaStream for IEM audio streaming" Scripts\reaperiem\setup_reastream.lua'
-            Write-Host "Registered setup_reastream.lua — REAPER restart needed to load"
+            Write-Host "Registered setup_reastream.lua - REAPER restart needed to load"
           } else {
             Write-Host "setup_reastream.lua already registered"
           }
           # Register check_reastream.lua if not already registered
           if ($content -notmatch "CHECK_REASTREAM") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_CHECK_REASTREAM "Custom: Check ReaStream status on engineer track" Scripts\reaperiem\check_reastream.lua'
-            Write-Host "Registered check_reastream.lua — REAPER restart needed to load"
+            Write-Host "Registered check_reastream.lua - REAPER restart needed to load"
           } else {
             Write-Host "check_reastream.lua already registered"
           }
@@ -801,7 +801,7 @@ jobs:
         continue-on-error: true
         run: |
           # meter_bridge.lua (already running via defer) picks up EXTSTATE requests
-          # and calls AddRemoveReaScript to register scripts at runtime — no restart needed
+          # and calls AddRemoveReaScript to register scripts at runtime - no restart needed
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua" -UseBasicParsing -TimeoutSec 5
             Start-Sleep -Seconds 3
@@ -898,7 +898,7 @@ jobs:
             $checkActionId = ($checkId -split "`t")[-1]
 
             if (-not $setupActionId -or -not $checkActionId) {
-              Write-Host "::warning::Action IDs not found — scripts may not be registered yet"
+              Write-Host "::warning::Action IDs not found - scripts may not be registered yet"
               Write-Host "setup_reastream action: $setupActionId"
               Write-Host "check_reastream action: $checkActionId"
               exit 0
@@ -918,7 +918,7 @@ jobs:
             $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "ReaStream status: $status"
           } catch {
-            Write-Host "::warning::ReaStream setup/verify failed (scripts may not be registered yet): $_"
+            Write-Host "::warning::ReaStream setup/verify failed: $($_.Exception.Message)"
           }
 
       - name: Verify deployment
