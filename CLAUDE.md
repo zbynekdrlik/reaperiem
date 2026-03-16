@@ -289,7 +289,7 @@ Claude Code → MCP Server → HTTP API → REAPER (iem.lan:8080)
 ## Important Notes
 
 1. **No REAPER restarts** - All MCP operations work live via HTTP API + ReaScripts
-2. **ReaScript registration** - New scripts need one REAPER restart to load from reaper-kb.ini
+2. **ReaScript registration** - New scripts are registered dynamically via meter_bridge (no restart). CI also adds them to `reaper-kb.ini` as fallback for next startup.
 3. **Git on iem.lan** - Repository cloned there, commits track REAPER project changes
 4. **Sample rate** - Network runs at 96kHz (REAPER follows ASIO driver rate)
 5. **Input metering** - Tracks must be record-armed (I_RECARM=1) to show input levels
@@ -342,8 +342,24 @@ Integration tests exist: `cargo test -p iem-server --features integration`
    - Register in `reaper-kb.ini` with action ID `_RS_REAPERIEM_*`
    - Add MCP tool wrapper in `mcp/reaperiem_mcp/server.py`
    - Add action ID to `config/reaper_config.yaml`
-   - Deploy via `./scripts/deploy.sh`
-   - ONE restart to register new action, then it works live forever
+   - Deploy via CI (push to `dev`)
+   - Dynamic registration via meter_bridge (no restart needed — see below)
+
+### Dynamic Script Registration (v1.62.0+)
+
+**New scripts can be registered at runtime without REAPER restart.**
+
+`meter_bridge.lua` (running continuously via `defer()`) checks `EXTSTATE reaperiem/register_scripts` each tick. When set with pipe-delimited filenames, it calls `reaper.AddRemoveReaScript()` to register them instantly.
+
+```bash
+# Register scripts dynamically (CI does this automatically):
+curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua"
+sleep 3
+curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result"
+# Expected: OK:2
+```
+
+**Filenames only** (not full paths) — meter_bridge constructs the path via `reaper.GetResourcePath() .. "/Scripts/reaperiem/" .. filename`.
 
 ### Stereo Tracks Convention:
 
@@ -352,6 +368,171 @@ Input tracks from FOH: Single stereo track (DRUMS, BASS, INST, OTHER, BGVS)
   - NOT separate L/R tracks
   - Use consecutive Dante input channels as stereo pair
   - NCHAN=2, stereo input mode (channel + 1024)
+```
+
+---
+
+## ⚠️ OPERATIONAL PLAYBOOK — HOW TO WORK WITH REAPER
+
+**This section documents the patterns Claude MUST follow. Read it EVERY session.**
+
+### MCP Tools — ALWAYS USE FIRST
+
+You have an `reaperiem` MCP server with 24 tools for controlling REAPER. **Always use MCP tools before falling back to curl or SSH.**
+
+```
+DECISION TREE:
+  Need to read/write REAPER state? → Use MCP tool (list_tracks, set_send_level, etc.)
+  Need to trigger a ReaScript?     → Use curl: curl "http://iem.lan:8080/_/_RS_REAPERIEM_ACTION_NAME"
+  Need EXTSTATE read/write?         → Use curl: curl "http://iem.lan:8080/_/SET/EXTSTATE/section/key/value"
+                                              curl "http://iem.lan:8080/_/GET/EXTSTATE/section/key"
+  Need to run Windows commands?     → SSH: ssh newlevel@iem.lan "command"
+  Need git ops on iem.lan?          → Use MCP git tools (git_status, git_commit, git_push, git_log)
+  Need to add REAPER capability?    → Extend MCP server (see "Adding New MCP Tools" below)
+```
+
+### How to Talk to REAPER (3 Methods)
+
+**Method 1: MCP Tools (preferred for standard operations)**
+
+```
+mcp__reaperiem__list_tracks          # See all tracks
+mcp__reaperiem__set_send_level       # Control mix levels
+mcp__reaperiem__get_track_meter      # Read meters
+mcp__reaperiem__set_hardware_output  # Route audio outputs
+```
+
+**Method 2: HTTP API via curl (for EXTSTATE and actions)**
+
+```bash
+# ALL commands MUST use /_/ prefix!
+curl "http://iem.lan:8080/_/NTRACK;TRACK"                           # Query all tracks
+curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/key/value"       # Set EXTSTATE
+curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/key"             # Read EXTSTATE
+curl "http://iem.lan:8080/_/_RS_REAPERIEM_SETUP_REASTREAM"          # Trigger ReaScript action
+curl "http://iem.lan:8080/_/40026"                                  # Save project (action 40026)
+```
+
+**Method 3: SSH to iem.lan (for Windows system operations)**
+
+```bash
+ssh newlevel@iem.lan "command"                                       # Run command on Windows
+ssh newlevel@iem.lan "tasklist | findstr iem-mixer"                  # Check process
+ssh newlevel@iem.lan "type C:\path\to\file"                         # Read file on Windows
+```
+
+### EXTSTATE Communication Pattern
+
+EXTSTATE is the bridge between HTTP API and ReaScripts. This is the standard pattern:
+
+```
+1. Set parameters:  curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/param_key/param_value"
+2. Trigger script:  curl "http://iem.lan:8080/_/_RS_REAPERIEM_SCRIPT_NAME"
+3. Wait:            sleep 2-3 seconds (script needs time to execute)
+4. Read result:     curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/result_key"
+```
+
+Every ReaScript writes results to EXTSTATE. Never assume a script succeeded — always read the result.
+
+### ReaScript Lifecycle
+
+```
+scripts/reascripts/*.lua  →  CI deploys to iem.lan REAPER/Scripts/reaperiem/
+                          →  CI registers in reaper-kb.ini (startup fallback)
+                          →  CI triggers dynamic registration via meter_bridge EXTSTATE
+                          →  Scripts become callable via HTTP API action IDs
+```
+
+**Two script types:**
+
+- **One-shot** (setup*reastream.lua, check_reastream.lua): Triggered via `/*/_RS_REAPERIEM_\*`, run once, write result to EXTSTATE
+- **Deferred** (meter_bridge.lua): Run continuously via `reaper.defer()`, must NOT use `ShowConsoleMsg` (steals focus)
+
+### Adding New MCP Tools
+
+When REAPER needs a new capability not covered by existing tools:
+
+```
+1. Create ReaScript:       scripts/reascripts/new_script.lua
+   - Use EXTSTATE for params/results (not ShowConsoleMsg!)
+   - One-shot scripts: read EXTSTATE, do work, write result
+   - Name action: _RS_REAPERIEM_NEW_SCRIPT
+
+2. Add MCP tool wrapper:   mcp/reaperiem_mcp/tools/<module>.py
+   - Import in server.py
+   - Use reaper_http.send_command() for HTTP API calls
+   - Use ssh_client for system operations
+
+3. Add to config:          config/reaper_config.yaml (action IDs)
+
+4. Push to dev:            CI deploys script, registers it dynamically
+
+5. Test via MCP:           Use the new tool immediately (no restart)
+```
+
+**MCP server structure:**
+
+```
+mcp/reaperiem_mcp/
+├── server.py              # FastMCP server, tool registration
+├── lib/
+│   ├── reaper_http.py     # HTTP client (send_command, _build_url with /_/ prefix)
+│   ├── ssh_client.py      # SSH to iem.lan (paramiko, PowerShell commands)
+│   └── config.py          # YAML config loader
+└── tools/
+    ├── tracks.py          # Track control tools
+    ├── mix.py             # Send/mix control tools
+    ├── git.py             # Git operations on iem.lan
+    ├── band.py            # Band member config
+    ├── routing.py         # Hardware output routing
+    └── presets.py         # Mix preset save/load
+```
+
+### Registered ReaScripts (all in scripts/reascripts/)
+
+| Script                      | Action ID                       | Type     | Purpose                                         |
+| --------------------------- | ------------------------------- | -------- | ----------------------------------------------- |
+| meter_bridge.lua            | `_RS_REAPERIEM_METER_BRIDGE`    | Deferred | L/R stereo meters + dynamic script registration |
+| set_hardware_output.lua     | `_RS_REAPERIEM_SET_HW_OUT`      | One-shot | Set Dante output routing                        |
+| rename_track.lua            | `_RS_REAPERIEM_RENAME_TRACK`    | One-shot | Rename tracks live                              |
+| check_send_modes.lua        | `_RS_REAPERIEM_CHECK_SENDS`     | One-shot | Verify all sends are pre-fader                  |
+| fix_send_mode.lua           | `_RS_REAPERIEM_FIX_SENDS`       | One-shot | Fix sends to pre-fader post-FX                  |
+| setup_reastream.lua         | `_RS_REAPERIEM_SETUP_REASTREAM` | One-shot | Insert ReaStream VST on engineer track          |
+| check_reastream.lua         | `_RS_REAPERIEM_CHECK_REASTREAM` | One-shot | Verify ReaStream VST status                     |
+| setup_iem_project.lua       | -                               | One-shot | Initial project setup                           |
+| merge_stereo_inputs.lua     | -                               | One-shot | Merge mono inputs to stereo                     |
+| set_colors.lua              | -                               | One-shot | Set track colors                                |
+| create_sends_for_member.lua | -                               | One-shot | Create sends for new member                     |
+
+### Common Operational Tasks
+
+**Check if REAPER is responding:**
+
+```bash
+curl -sf "http://iem.lan:8080/_/NTRACK" && echo "REAPER OK" || echo "REAPER DOWN"
+```
+
+**Check if app is running:**
+
+```bash
+curl -sf "http://10.77.9.231/api/version" | python3 -m json.tool
+```
+
+**Verify audio streaming pipeline:**
+
+```bash
+curl "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_REASTREAM"
+sleep 2
+curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status"
+# Expected: PRESENT:track_idx=N:fx_idx=N:mode=send:enabled=yes
+```
+
+**Register new scripts dynamically (no restart):**
+
+```bash
+curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/script1.lua|script2.lua"
+sleep 3
+curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result"
 ```
 
 ---
