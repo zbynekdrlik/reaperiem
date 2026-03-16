@@ -783,14 +783,14 @@ jobs:
           # Register setup_reastream.lua if not already registered
           $content = Get-Content $kbIni -Raw
           if ($content -notmatch "SETUP_REASTREAM") {
-            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_REASTREAM "Custom: Setup ReaStream for IEM audio streaming" Scripts\reaperiem\setup_reastream.lua'
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_REASTREAM "Custom: Setup ReaStream for IEM audio streaming" reaperiem\setup_reastream.lua'
             Write-Host "Registered setup_reastream.lua - REAPER restart needed to load"
           } else {
             Write-Host "setup_reastream.lua already registered"
           }
           # Register check_reastream.lua if not already registered
           if ($content -notmatch "CHECK_REASTREAM") {
-            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_CHECK_REASTREAM "Custom: Check ReaStream status on engineer track" Scripts\reaperiem\check_reastream.lua'
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_CHECK_REASTREAM "Custom: Check ReaStream status on engineer track" reaperiem\check_reastream.lua'
             Write-Host "Registered check_reastream.lua - REAPER restart needed to load"
           } else {
             Write-Host "check_reastream.lua already registered"
