@@ -122,9 +122,8 @@ impl AudioPipeline {
         } else {
             opus::Channels::Mono
         };
-        let mut encoder =
-            opus::Encoder::new(48000, opus_channels, opus::Application::Audio)
-                .map_err(|e| format!("opus encoder init failed: {}", e))?;
+        let mut encoder = opus::Encoder::new(48000, opus_channels, opus::Application::Audio)
+            .map_err(|e| format!("opus encoder init failed: {}", e))?;
 
         // Set bitrate to 64kbps
         encoder
@@ -177,8 +176,7 @@ impl AudioPipeline {
             let mut interleaved_48k = Vec::with_capacity(out_frames * self.channels);
             for i in 0..out_frames {
                 for ch_buf in &resampled {
-                    interleaved_48k
-                        .push(if i < ch_buf.len() { ch_buf[i] } else { 0.0 });
+                    interleaved_48k.push(if i < ch_buf.len() { ch_buf[i] } else { 0.0 });
                 }
             }
 
@@ -242,23 +240,21 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
             // Lazily initialize pipeline on first valid packet
             let pipe = match pipeline.as_mut() {
                 Some(p) => p,
-                None => {
-                    match AudioPipeline::new(packet.sample_rate, packet.channels) {
-                        Ok(p) => {
-                            tracing::info!(
-                                sample_rate = packet.sample_rate,
-                                channels = packet.channels,
-                                "Audio pipeline initialized"
-                            );
-                            pipeline = Some(p);
-                            pipeline.as_mut().unwrap()
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to init audio pipeline: {}", e);
-                            continue;
-                        }
+                None => match AudioPipeline::new(packet.sample_rate, packet.channels) {
+                    Ok(p) => {
+                        tracing::info!(
+                            sample_rate = packet.sample_rate,
+                            channels = packet.channels,
+                            "Audio pipeline initialized"
+                        );
+                        pipeline = Some(p);
+                        pipeline.as_mut().unwrap()
                     }
-                }
+                    Err(e) => {
+                        tracing::error!("Failed to init audio pipeline: {}", e);
+                        continue;
+                    }
+                },
             };
 
             // Process and broadcast Opus frames
@@ -401,10 +397,7 @@ mod tests {
         // Each Opus frame should be non-empty bytes
         for frame in &frames {
             assert!(!frame.is_empty(), "Opus frame should not be empty");
-            assert!(
-                frame.len() < 4000,
-                "Opus frame should be reasonable size"
-            );
+            assert!(frame.len() < 4000, "Opus frame should be reasonable size");
         }
     }
 
@@ -433,14 +426,18 @@ mod tests {
         encoded.truncate(len);
 
         assert!(len > 0, "Encoded data should not be empty");
-        assert!(len < 500, "64kbps Opus frame should be well under 500 bytes");
+        assert!(
+            len < 500,
+            "64kbps Opus frame should be well under 500 bytes"
+        );
 
         // Decode
         let mut decoded = vec![0.0f32; 960 * 2];
-        let decoded_samples = decoder
-            .decode_float(&encoded, &mut decoded, false)
-            .unwrap();
-        assert_eq!(decoded_samples, 960, "Should decode 960 samples per channel");
+        let decoded_samples = decoder.decode_float(&encoded, &mut decoded, false).unwrap();
+        assert_eq!(
+            decoded_samples, 960,
+            "Should decode 960 samples per channel"
+        );
 
         // Check correlation between input and output (should be > 0.9 for tonal signal)
         let mut dot = 0.0f64;
