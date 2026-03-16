@@ -3,7 +3,7 @@
 //! Stores mix presets per member, following the SnapshotStore pattern.
 //! Each member has their own JSON file in the presets/ directory.
 
-use iem_core::{ChannelPreset, PresetEntry, MAX_PRESETS};
+use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

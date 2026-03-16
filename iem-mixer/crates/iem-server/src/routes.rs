@@ -315,12 +315,15 @@ fn serve_embedded_file(path: &str) -> Response {
 
         // HTML files should not be cached (ensures fresh UI after deploys)
         // Hashed assets (JS/WASM/CSS in /assets/) can be cached long-term
-        let cache_control =
-            if path.ends_with(".html") || path == "index.html" || path == "sw.js" || path == "manifest.json" {
-                "no-cache, must-revalidate"
-            } else {
-                "public, max-age=31536000"
-            };
+        let cache_control = if path.ends_with(".html")
+            || path == "index.html"
+            || path == "sw.js"
+            || path == "manifest.json"
+        {
+            "no-cache, must-revalidate"
+        } else {
+            "public, max-age=31536000"
+        };
 
         return Response::builder()
             .status(StatusCode::OK)
