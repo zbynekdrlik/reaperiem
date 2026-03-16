@@ -117,11 +117,7 @@ fn connect_websocket(
                         set_channels.update(|chs| {
                             let touched_snapshot: std::collections::HashMap<usize, bool> =
                                 touched.iter().map(|(k, v)| (*k, *v)).collect();
-                            iem_core::merge_or_replace_channels(
-                                chs,
-                                new_chs,
-                                &touched_snapshot,
-                            );
+                            iem_core::merge_or_replace_channels(chs, new_chs, &touched_snapshot);
                         });
                         // Update global volume from initial state
                         if let Some(lvl) = global_level_db {

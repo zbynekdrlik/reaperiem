@@ -11,12 +11,13 @@ pub mod ws;
 
 #[cfg(feature = "config")]
 pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
-pub use preset::{ChannelPreset, PresetEntry, MAX_PRESETS};
-pub use snapshot::{ChannelSnapshot, MixSnapshot, MAX_SNAPSHOTS};
+pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
+pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
-    merge_or_replace_channels, ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel,
-    Customization, MixerState, PollResponse,
+    ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, Customization, MixerState,
+    PollResponse, merge_or_replace_channels,
 };
+
 pub use ws::{ClientMsg, ServerMsg};
 
 /// Application version (from Cargo.toml)
