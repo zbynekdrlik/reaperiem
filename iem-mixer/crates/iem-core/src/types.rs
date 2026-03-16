@@ -117,15 +117,14 @@ pub fn merge_or_replace_channels(
 
     // Same structure — merge values for non-touched channels
     for new_ch in &incoming {
-        if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
-            if let Some(ch) = existing
+        if !touched.get(&new_ch.track_index).copied().unwrap_or(false)
+            && let Some(ch) = existing
                 .iter_mut()
                 .find(|c| c.track_index == new_ch.track_index)
-            {
-                ch.level_db = new_ch.level_db;
-                ch.muted = new_ch.muted;
-                ch.pan = new_ch.pan;
-            }
+        {
+            ch.level_db = new_ch.level_db;
+            ch.muted = new_ch.muted;
+            ch.pan = new_ch.pan;
         }
     }
 }
