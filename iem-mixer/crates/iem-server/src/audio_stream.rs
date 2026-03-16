@@ -16,10 +16,11 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 /// Opus frame size in samples per channel at 48kHz (20ms)
 const OPUS_FRAME_SAMPLES: usize = 960;
 
-/// Default UDP bind address for ReaStream
-/// ReaStream's default port is 58710 (not 4711).
-/// Bind to 0.0.0.0 to receive from any interface (localhost or broadcast).
-const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
+/// UDP bind address for receiving ReaStream audio.
+/// ReaStream's default port (58710) is already bound by REAPER itself,
+/// so we use a custom port. ReaStream must be configured to send to this port
+/// via the "Send audio/MIDI; IP:" field in the ReaStream GUI.
+const REASTREAM_BIND_ADDR: &str = "0.0.0.0:4711";
 
 /// Parsed ReaStream packet
 #[derive(Debug)]
@@ -580,7 +581,7 @@ mod tests {
             "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
             addr.ip()
         );
-        assert_eq!(addr.port(), 58710, "ReaStream default port is 58710");
+        assert_eq!(addr.port(), 4711, "Custom port (ReaStream default 58710 is used by REAPER)");
     }
 
     #[test]
