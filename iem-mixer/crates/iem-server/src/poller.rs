@@ -1221,20 +1221,16 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
                 },
             ],
         );
-        cache.input_track_indices = [
-            ("PETKA mic".to_string(), 1),
-            ("STEVO mic".to_string(), 2),
-        ]
-        .into_iter()
-        .collect();
+        cache.input_track_indices =
+            [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 2)]
+                .into_iter()
+                .collect();
 
         // New indices: STEVO shifted to track 3
-        let new_indices: HashMap<String, usize> = [
-            ("PETKA mic".to_string(), 1),
-            ("STEVO mic".to_string(), 3),
-        ]
-        .into_iter()
-        .collect();
+        let new_indices: HashMap<String, usize> =
+            [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 3)]
+                .into_iter()
+                .collect();
 
         // Detect change → member_states must be cleared
         if cache.input_track_indices != new_indices {
@@ -1253,9 +1249,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     #[test]
     fn test_output_index_shift_clears_member_states() {
         let mut cache = MixerCache::new();
-        cache
-            .output_track_indices
-            .insert("petka".to_string(), 23);
+        cache.output_track_indices.insert("petka".to_string(), 23);
         cache.member_states.insert(
             "engineer".to_string(),
             vec![iem_core::Channel {
@@ -1276,9 +1270,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         if old_idx.is_some_and(|old| old != new_idx) {
             cache.member_states.clear();
         }
-        cache
-            .output_track_indices
-            .insert("petka".to_string(), new_idx);
+        cache.output_track_indices.insert("petka".to_string(), new_idx);
 
         assert!(
             cache.member_states.is_empty(),
@@ -1290,15 +1282,11 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     #[test]
     fn test_no_clear_when_indices_unchanged() {
         let mut cache = MixerCache::new();
-        cache
-            .member_states
-            .insert("petka".to_string(), vec![]);
-        cache.input_track_indices = [
-            ("PETKA mic".to_string(), 1),
-            ("STEVO mic".to_string(), 2),
-        ]
-        .into_iter()
-        .collect();
+        cache.member_states.insert("petka".to_string(), vec![]);
+        cache.input_track_indices =
+            [("PETKA mic".to_string(), 1), ("STEVO mic".to_string(), 2)]
+                .into_iter()
+                .collect();
 
         // Same indices — no change
         let new_indices: HashMap<String, usize> = cache.input_track_indices.clone();
