@@ -498,6 +498,45 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
+      - name: Allow UDP 4711 through Windows Firewall (ReaStream audio)
+        shell: powershell
+        run: |
+          # ReaStream VST sends audio via UDP to port 4711.
+          # Windows Firewall blocks inbound UDP by default, even for localhost.
+          # This rule ensures iem-mixer-app can receive ReaStream packets.
+          $ruleName = "IEM Mixer Audio UDP 4711"
+          $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+          if ($existing) {
+            Write-Host "Firewall rule already exists: $ruleName"
+          } else {
+            New-NetFirewallRule `
+              -DisplayName $ruleName `
+              -Direction Inbound `
+              -Protocol UDP `
+              -LocalPort 4711 `
+              -Action Allow `
+              -Profile Any `
+              -Description "Allow ReaStream audio UDP packets for IEM Mixer"
+            Write-Host "Created firewall rule: $ruleName"
+          }
+          # Also ensure the app exe itself is allowed (covers any port)
+          $appData = [Environment]::GetFolderPath('LocalApplicationData')
+          $exePath = "$appData\IEM Mixer\iem-mixer-app.exe"
+          $appRule = "IEM Mixer App"
+          $existingApp = Get-NetFirewallRule -DisplayName $appRule -ErrorAction SilentlyContinue
+          if (-not $existingApp -and (Test-Path $exePath)) {
+            New-NetFirewallRule `
+              -DisplayName $appRule `
+              -Direction Inbound `
+              -Program $exePath `
+              -Action Allow `
+              -Profile Any `
+              -Description "Allow all inbound traffic for IEM Mixer app"
+            Write-Host "Created app firewall rule: $appRule"
+          } else {
+            Write-Host "App firewall rule exists or exe not yet installed"
+          }
+
       - name: Install and start IEM Mixer
         shell: powershell
         env:
@@ -795,6 +834,13 @@ jobs:
           } else {
             Write-Host "check_reastream.lua already registered"
           }
+          # Register diag_reastream.lua if not already registered
+          if ($content -notmatch "DIAG_REASTREAM") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_DIAG_REASTREAM "Custom: Diagnose ReaStream configuration" reaperiem\diag_reastream.lua'
+            Write-Host "Registered diag_reastream.lua - REAPER restart needed to load"
+          } else {
+            Write-Host "diag_reastream.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -803,7 +849,7 @@ jobs:
           # meter_bridge.lua (already running via defer) picks up EXTSTATE requests
           # and calls AddRemoveReaScript to register scripts at runtime - no restart needed
           try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua" -UseBasicParsing -TimeoutSec 5
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua|diag_reastream.lua" -UseBasicParsing -TimeoutSec 5
             Start-Sleep -Seconds 3
             $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration result: $result"
@@ -919,6 +965,69 @@ jobs:
             Write-Host "ReaStream status: $status"
           } catch {
             Write-Host "::warning::ReaStream setup/verify failed: $($_.Exception.Message)"
+          }
+
+      - name: Diagnose ReaStream audio configuration
+        shell: powershell
+        continue-on-error: true
+        run: |
+          try {
+            # Register and run the diagnostic script via meter_bridge
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/diag_reastream.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
+
+            # Get the dynamic action ID for diag_reastream
+            $diagId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_diag_reastream" -UseBasicParsing -TimeoutSec 5).Content
+            $diagActionId = ($diagId -split "`t")[-1]
+
+            if ($diagActionId) {
+              # Run diagnostic
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$diagActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+              Start-Sleep -Seconds 2
+              $diag = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_diag" -UseBasicParsing -TimeoutSec 5).Content
+              Write-Host "ReaStream diagnostic: $diag"
+            } else {
+              Write-Host "::warning::diag_reastream not registered (action ID not found)"
+            }
+          } catch {
+            Write-Host "::warning::ReaStream diagnostic failed: $($_.Exception.Message)"
+          }
+
+      - name: Test audio pipeline (UDP to WebSocket)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          # Install websockets for the audio pipeline E2E test
+          pip install websockets --quiet 2>&1 | Out-Null
+
+          # Check if app is listening on UDP 4711
+          $udpListeners = netstat -an | Select-String "UDP.*:4711"
+          if ($udpListeners) {
+            Write-Host "UDP 4711 listener found:"
+            $udpListeners | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "::warning::No UDP listener on port 4711 - audio feature may not be compiled in"
+          }
+
+          # Check Windows Firewall rules for UDP 4711
+          $fwRules = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -match "IEM|4711" }
+          if ($fwRules) {
+            Write-Host "Firewall rules allowing inbound:"
+            $fwRules | ForEach-Object { Write-Host "  $($_.DisplayName) (Enabled: $($_.Enabled))" }
+          } else {
+            Write-Host "::warning::No firewall rules found for IEM Mixer / UDP 4711"
+          }
+
+          # Run the audio pipeline E2E test
+          Write-Host "`nRunning audio pipeline test..."
+          python scripts/test_audio_pipeline.py --host localhost --port 80 --timeout 15
+          $testResult = $LASTEXITCODE
+          if ($testResult -eq 0) {
+            Write-Host "Audio pipeline test: PASS"
+          } else {
+            Write-Host "::warning::Audio pipeline test: FAIL (exit code $testResult)"
+            Write-Host "This may indicate ReaStream is not sending audio or UDP packets are blocked"
           }
 
       - name: Verify deployment
