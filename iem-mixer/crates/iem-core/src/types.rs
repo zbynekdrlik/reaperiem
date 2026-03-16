@@ -90,6 +90,46 @@ pub struct Customization {
     pub hidden: Vec<usize>,
 }
 
+/// Merge incoming channels into existing list.
+/// If the set of track_indices changed (structural shift), fully replace.
+/// Otherwise, merge values for non-touched channels.
+pub fn merge_or_replace_channels(
+    existing: &mut Vec<Channel>,
+    incoming: Vec<Channel>,
+    touched: &std::collections::HashMap<usize, bool>,
+) {
+    if existing.is_empty() {
+        *existing = incoming;
+        return;
+    }
+
+    // Detect structural change: different set of track_indices
+    let old_indices: std::collections::HashSet<usize> =
+        existing.iter().map(|c| c.track_index).collect();
+    let new_indices: std::collections::HashSet<usize> =
+        incoming.iter().map(|c| c.track_index).collect();
+
+    if old_indices != new_indices {
+        // Structural change (track inserted/removed/shifted) — full replace
+        *existing = incoming;
+        return;
+    }
+
+    // Same structure — merge values for non-touched channels
+    for new_ch in &incoming {
+        if !touched.get(&new_ch.track_index).copied().unwrap_or(false) {
+            if let Some(ch) = existing
+                .iter_mut()
+                .find(|c| c.track_index == new_ch.track_index)
+            {
+                ch.level_db = new_ch.level_db;
+                ch.muted = new_ch.muted;
+                ch.pan = new_ch.pan;
+            }
+        }
+    }
+}
+
 /// API error response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
@@ -127,6 +167,7 @@ impl ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_api_error_new() {
@@ -276,5 +317,83 @@ mod tests {
             my_input,
             "Other member's mic must NOT match"
         );
+    }
+
+    // ================================================================
+    // merge_or_replace_channels tests
+    // ================================================================
+
+    fn make_channel(track_index: usize, name: &str, level_db: f32) -> Channel {
+        Channel {
+            track_index,
+            name: name.to_string(),
+            level_db,
+            pan: 0.0,
+            muted: false,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        }
+    }
+
+    #[test]
+    fn test_merge_replaces_on_index_shift() {
+        let mut existing = vec![
+            make_channel(1, "PETKA mic", 0.0),
+            make_channel(2, "STEVO mic", 0.0),
+            make_channel(3, "MAREK mic", 0.0),
+        ];
+        let incoming = vec![
+            make_channel(1, "PETKA mic", 0.0),
+            make_channel(3, "STEVO mic", 0.0),
+            make_channel(4, "MAREK mic", 0.0),
+        ];
+        let touched = HashMap::new();
+        merge_or_replace_channels(&mut existing, incoming, &touched);
+        // Must be fully replaced — STEVO at 3, MAREK at 4
+        assert_eq!(existing.len(), 3);
+        assert_eq!(existing[1].name, "STEVO mic");
+        assert_eq!(existing[1].track_index, 3);
+        assert_eq!(existing[2].name, "MAREK mic");
+        assert_eq!(existing[2].track_index, 4);
+    }
+
+    #[test]
+    fn test_merge_preserves_touched_when_same_structure() {
+        let mut existing = vec![
+            make_channel(1, "PETKA mic", -10.0),
+            make_channel(2, "STEVO mic", -5.0),
+        ];
+        let incoming = vec![
+            make_channel(1, "PETKA mic", -20.0),
+            make_channel(2, "STEVO mic", -15.0),
+        ];
+        let mut touched = HashMap::new();
+        touched.insert(2_usize, true); // STEVO fader is being dragged
+        merge_or_replace_channels(&mut existing, incoming, &touched);
+        // PETKA updated, STEVO preserved (touched)
+        assert_eq!(existing[0].level_db, -20.0);
+        assert_eq!(existing[1].level_db, -5.0); // preserved
+    }
+
+    #[test]
+    fn test_merge_populates_empty() {
+        let mut existing: Vec<Channel> = vec![];
+        let incoming = vec![make_channel(1, "PETKA mic", 0.0)];
+        merge_or_replace_channels(&mut existing, incoming, &HashMap::new());
+        assert_eq!(existing.len(), 1);
+        assert_eq!(existing[0].name, "PETKA mic");
+    }
+
+    #[test]
+    fn test_full_replace_on_shift_ignores_touched() {
+        let mut existing = vec![make_channel(2, "STEVO mic", -5.0)];
+        let incoming = vec![make_channel(3, "STEVO mic", -15.0)];
+        let mut touched = HashMap::new();
+        touched.insert(2_usize, true);
+        merge_or_replace_channels(&mut existing, incoming, &touched);
+        // Structural change — full replace even though old index was touched
+        assert_eq!(existing[0].track_index, 3);
+        assert_eq!(existing[0].level_db, -15.0);
     }
 }
