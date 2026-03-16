@@ -39,14 +39,12 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
         if entry.is_empty() {
             continue;
         }
-        if let Some((idx_str, vals_str)) = entry.split_once(':') {
-            if let Ok(track_idx) = idx_str.parse::<usize>() {
-                if let Some((l_str, r_str)) = vals_str.split_once(',') {
-                    if let (Ok(l_db10), Ok(r_db10)) = (l_str.parse::<f32>(), r_str.parse::<f32>()) {
-                        meters.insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
-                    }
-                }
-            }
+        if let Some((idx_str, vals_str)) = entry.split_once(':')
+            && let Ok(track_idx) = idx_str.parse::<usize>()
+            && let Some((l_str, r_str)) = vals_str.split_once(',')
+            && let (Ok(l_db10), Ok(r_db10)) = (l_str.parse::<f32>(), r_str.parse::<f32>())
+        {
+            meters.insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
         }
     }
     meters
@@ -64,30 +62,30 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     let tracks_url = reaper_api::query_tracks(&reaper_url);
     let mut members = Vec::new();
 
-    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
-        if let Ok(text) = resp.text().await {
-            let mut send_index = 0;
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.first() == Some(&"TRACK") && parts.len() > 2 {
-                    if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        let track_name = parts[2];
-                        if let Some(member) = DiscoveredMember::from_reaper_track(
-                            track_name,
-                            track_idx,
-                            send_index,
-                            &config_ref,
-                        ) {
-                            tracing::info!(
-                                member = %member.name,
-                                track_index = member.track_index,
-                                send_index = member.send_index,
-                                dante = ?[member.dante_output_l, member.dante_output_r],
-                                "Discovered member from REAPER"
-                            );
-                            members.push(member);
-                            send_index += 1;
-                        }
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await
+        && let Ok(text) = resp.text().await
+    {
+        let mut send_index = 0;
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK") && parts.len() > 2 {
+                if let Ok(track_idx) = parts[1].parse::<usize>() {
+                    let track_name = parts[2];
+                    if let Some(member) = DiscoveredMember::from_reaper_track(
+                        track_name,
+                        track_idx,
+                        send_index,
+                        &config_ref,
+                    ) {
+                        tracing::info!(
+                            member = %member.name,
+                            track_index = member.track_index,
+                            send_index = member.send_index,
+                            dante = ?[member.dante_output_l, member.dante_output_r],
+                            "Discovered member from REAPER"
+                        );
+                        members.push(member);
+                        send_index += 1;
                     }
                 }
             }
