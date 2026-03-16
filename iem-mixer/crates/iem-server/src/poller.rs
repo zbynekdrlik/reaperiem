@@ -391,6 +391,16 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
         // Update output track indices and global volumes, broadcast changes
         for (member_id, (track_idx, vol_linear, flags)) in &output_tracks {
+            let old_idx = cache.output_track_indices.get(member_id).copied();
+            if old_idx.is_some_and(|old| old != *track_idx) {
+                tracing::warn!(
+                    member = %member_id,
+                    old = old_idx.unwrap(),
+                    new = track_idx,
+                    "Output track index shifted — forcing full state resync"
+                );
+                cache.member_states.clear();
+            }
             cache
                 .output_track_indices
                 .insert(member_id.clone(), *track_idx);
@@ -431,6 +441,12 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 if let Some(&idx) = all_track_names.get(&input.name) {
                     input_indices.insert(input.name.clone(), idx);
                 }
+            }
+            if cache.input_track_indices != input_indices {
+                tracing::warn!(
+                    "Input track indices changed — forcing full state resync for all members"
+                );
+                cache.member_states.clear();
             }
             cache.input_track_indices = input_indices;
         }
@@ -1166,6 +1182,135 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         let cache = MixerCache::new();
         assert!(cache.input_track_indices.is_empty());
         assert!(cache.last_track_count.is_none());
+    }
+
+    // ================================================================
+    // Cache invalidation on track index shift (follow-up to #85)
+    // ================================================================
+
+    /// When input track indices change, member_states must be cleared to force
+    /// a full State resync. Without this, the delta diff compares by track_index
+    /// and misses shifted channels, leaving frontends with stale data.
+    #[test]
+    fn test_index_shift_clears_member_states_for_full_resync() {
+        let mut cache = MixerCache::new();
+
+        // Simulate cached state: STEVO at track 2
+        cache.member_states.insert(
+            "engineer".to_string(),
+            vec![
+                iem_core::Channel {
+                    track_index: 1,
+                    name: "PETKA mic".into(),
+                    level_db: -10.0,
+                    pan: 0.0,
+                    muted: false,
+                    category: "mics".into(),
+                    stereo_pair: None,
+                    stereo_side: None,
+                },
+                iem_core::Channel {
+                    track_index: 2,
+                    name: "STEVO mic".into(),
+                    level_db: -10.0,
+                    pan: 0.0,
+                    muted: false,
+                    category: "mics".into(),
+                    stereo_pair: None,
+                    stereo_side: None,
+                },
+            ],
+        );
+        cache.input_track_indices = [
+            ("PETKA mic".to_string(), 1),
+            ("STEVO mic".to_string(), 2),
+        ]
+        .into_iter()
+        .collect();
+
+        // New indices: STEVO shifted to track 3
+        let new_indices: HashMap<String, usize> = [
+            ("PETKA mic".to_string(), 1),
+            ("STEVO mic".to_string(), 3),
+        ]
+        .into_iter()
+        .collect();
+
+        // Detect change → member_states must be cleared
+        if cache.input_track_indices != new_indices {
+            cache.member_states.clear();
+        }
+        cache.input_track_indices = new_indices;
+
+        assert!(
+            cache.member_states.is_empty(),
+            "member_states must be cleared on index shift to force full State resend"
+        );
+    }
+
+    /// When output track indices change (e.g., member inear track shifts),
+    /// member_states must be cleared so engineer mix channels get correct data.
+    #[test]
+    fn test_output_index_shift_clears_member_states() {
+        let mut cache = MixerCache::new();
+        cache
+            .output_track_indices
+            .insert("petka".to_string(), 23);
+        cache.member_states.insert(
+            "engineer".to_string(),
+            vec![iem_core::Channel {
+                track_index: 23,
+                name: "PETKA inear".into(),
+                level_db: -6.0,
+                pan: 0.0,
+                muted: false,
+                category: "members".into(),
+                stereo_pair: None,
+                stereo_side: None,
+            }],
+        );
+
+        // Output track shifts from 23 to 24
+        let new_idx: usize = 24;
+        let old_idx = cache.output_track_indices.get("petka").copied();
+        if old_idx.is_some_and(|old| old != new_idx) {
+            cache.member_states.clear();
+        }
+        cache
+            .output_track_indices
+            .insert("petka".to_string(), new_idx);
+
+        assert!(
+            cache.member_states.is_empty(),
+            "member_states must be cleared on output index shift"
+        );
+    }
+
+    /// When indices haven't changed, member_states should NOT be cleared
+    #[test]
+    fn test_no_clear_when_indices_unchanged() {
+        let mut cache = MixerCache::new();
+        cache
+            .member_states
+            .insert("petka".to_string(), vec![]);
+        cache.input_track_indices = [
+            ("PETKA mic".to_string(), 1),
+            ("STEVO mic".to_string(), 2),
+        ]
+        .into_iter()
+        .collect();
+
+        // Same indices — no change
+        let new_indices: HashMap<String, usize> = cache.input_track_indices.clone();
+        if cache.input_track_indices != new_indices {
+            cache.member_states.clear();
+        }
+        cache.input_track_indices = new_indices;
+
+        assert!(
+            !cache.member_states.is_empty(),
+            "member_states must NOT be cleared when indices are unchanged"
+        );
     }
 
     /// METER_BRIDGE_STARTED resets on disconnect so bridge re-triggers on reconnect.
