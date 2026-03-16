@@ -271,10 +271,12 @@ end
 
 local already_present, fx_idx = has_reastream(track)
 if already_present then
-  -- Even if already present, try to configure IP
+  -- Ensure mode is Send (1.0), not Receive (0.0)
+  reaper.TrackFX_SetParam(track, fx_idx, 0, 1.0)
+  -- Try to configure IP to localhost
   local ip_status = configure_reastream_ip(track, fx_idx)
   reaper.SetExtState("reaperiem", "setup_reastream",
-    "SKIP:" .. track_idx .. ":" .. fx_idx .. ":" .. ip_status, false)
+    "FIXED:" .. track_idx .. ":" .. fx_idx .. ":" .. ip_status, false)
   return
 end
 
