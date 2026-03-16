@@ -498,18 +498,18 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Ensure Windows Firewall allows UDP 4711 (ReaStream audio)
+      - name: Ensure Windows Firewall allows UDP 58710 (ReaStream audio)
         shell: powershell
         continue-on-error: true
         run: |
-          # ReaStream VST sends audio via UDP to port 4711.
+          # ReaStream VST sends audio via UDP to port 58710.
           # Windows Firewall blocks inbound UDP by default, even for localhost.
           # Creating firewall rules requires admin privileges.
           # This step is idempotent and continues on error (rules may already exist
           # from manual setup, or the runner may not have admin access).
           $ErrorActionPreference = "SilentlyContinue"
 
-          $ruleName = "IEM Mixer Audio UDP 4711"
+          $ruleName = "IEM Mixer Audio UDP 58710"
           $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
           if ($existing) {
             Write-Host "Firewall rule already exists: $ruleName"
@@ -518,7 +518,7 @@ jobs:
               -DisplayName $ruleName `
               -Direction Inbound `
               -Protocol UDP `
-              -LocalPort 4711 `
+              -LocalPort 58710 `
               -Action Allow `
               -Profile Any `
               -Description "Allow ReaStream audio UDP packets for IEM Mixer" 2>&1
@@ -526,13 +526,13 @@ jobs:
               Write-Host "Created firewall rule: $ruleName"
             } else {
               Write-Host "::warning::Cannot create firewall rule (needs admin). Run manually:"
-              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 4711' -Direction Inbound -Protocol UDP -LocalPort 4711 -Action Allow"
+              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 58710' -Direction Inbound -Protocol UDP -LocalPort 58710 -Action Allow"
             }
           }
 
-          # Check existing firewall rules for IEM/4711
+          # Check existing firewall rules for IEM/58710
           $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|4711|reastream" }
+            Where-Object { $_.DisplayName -match "IEM|58710|reastream" }
           if ($rules) {
             Write-Host "Existing inbound firewall rules:"
             $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
@@ -1002,24 +1002,24 @@ jobs:
         run: |
           $ErrorActionPreference = "SilentlyContinue"
 
-          # Check if app is listening on UDP 4711
-          $udpListeners = netstat -an | Select-String "UDP.*:4711"
+          # Check if app is listening on UDP 58710
+          $udpListeners = netstat -an | Select-String "UDP.*:58710"
           if ($udpListeners) {
-            Write-Host "UDP 4711 listener found:"
+            Write-Host "UDP 58710 listener found:"
             $udpListeners | ForEach-Object { Write-Host "  $_" }
           } else {
-            Write-Host "::warning::No UDP listener on port 4711"
+            Write-Host "::warning::No UDP listener on port 58710"
             exit 0
           }
 
           # Check Windows Firewall rules
           $fwRules = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|4711" }
+            Where-Object { $_.DisplayName -match "IEM|58710" }
           if ($fwRules) {
             Write-Host "Firewall rules:"
             $fwRules | ForEach-Object { Write-Host "  $($_.DisplayName) ($($_.Action))" }
           } else {
-            Write-Host "::warning::No firewall rules for IEM/4711"
+            Write-Host "::warning::No firewall rules for IEM/58710"
           }
 
           # Build a valid ReaStream packet (2ch, 96kHz, 64 samples/ch)
@@ -1059,12 +1059,12 @@ jobs:
           $udp.EnableBroadcast = $true
           $sent = 0
           for ($i = 0; $i -lt 100; $i++) {
-            $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
+            $udp.Send($data, $data.Length, "127.0.0.1", 58710) | Out-Null
             $sent++
             Start-Sleep -Milliseconds 5
           }
           $udp.Close()
-          Write-Host "Sent $sent ReaStream packets ($($data.Length) bytes each) to 127.0.0.1:4711"
+          Write-Host "Sent $sent ReaStream packets ($($data.Length) bytes each) to 127.0.0.1:58710"
 
           # Check app logs for pipeline initialization
           Start-Sleep -Seconds 2

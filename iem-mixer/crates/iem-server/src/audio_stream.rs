@@ -17,10 +17,9 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 const OPUS_FRAME_SAMPLES: usize = 960;
 
 /// Default UDP bind address for ReaStream
-/// Must be 0.0.0.0 (not 127.0.0.1) because ReaStream's default send target
-/// is 255.255.255.255 (broadcast). A loopback-only listener cannot receive
-/// broadcast packets, causing "No Source" in the engineer's audio stream.
-const REASTREAM_BIND_ADDR: &str = "0.0.0.0:4711";
+/// ReaStream's default port is 58710 (not 4711).
+/// Bind to 0.0.0.0 to receive from any interface (localhost or broadcast).
+const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
 
 /// Parsed ReaStream packet
 #[derive(Debug)]
@@ -572,18 +571,16 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_address_accepts_broadcast() {
-        // ReaStream's default send target is 255.255.255.255 (broadcast).
-        // The listener MUST bind to 0.0.0.0 to receive broadcast packets.
-        // Binding to 127.0.0.1 causes "No Source" because broadcast packets
-        // never reach the loopback interface.
+    fn test_bind_address_uses_reastream_default_port() {
+        // ReaStream's default port is 58710.
+        // Bind to 0.0.0.0 to receive from any interface.
         let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse().unwrap();
         assert!(
             addr.ip().is_unspecified(),
-            "REASTREAM_BIND_ADDR must be 0.0.0.0 (not {}), otherwise broadcast packets from ReaStream won't be received",
+            "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
             addr.ip()
         );
-        assert_eq!(addr.port(), 4711);
+        assert_eq!(addr.port(), 58710, "ReaStream default port is 58710");
     }
 
     #[test]
