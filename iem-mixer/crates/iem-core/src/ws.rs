@@ -24,6 +24,10 @@ pub enum ClientMsg {
         pinned: Vec<usize>,
         hidden: Vec<usize>,
     },
+    /// Start listening to audio stream (engineer only)
+    ListenStart,
+    /// Stop listening to audio stream
+    ListenStop,
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -59,6 +63,8 @@ pub enum ServerMsg {
     },
     /// Network mode indicator (local LAN vs remote internet)
     NetworkMode { mode: String },
+    /// Audio streaming status update
+    AudioStatus { status: String },
 }
 
 #[cfg(test)]
@@ -264,6 +270,36 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"CustomizationUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_listen_start_serialization() {
+        let msg = ClientMsg::ListenStart;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ListenStart\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_listen_stop_serialization() {
+        let msg = ClientMsg::ListenStop;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ListenStop\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_audio_status_serialization() {
+        let msg = ServerMsg::AudioStatus {
+            status: "no_source".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"AudioStatus\""));
+        assert!(json.contains("\"status\":\"no_source\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

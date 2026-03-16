@@ -2,7 +2,9 @@
 
 use leptos::prelude::*;
 
-/// Bottom toolbar with Presets, History, and optional Mute All buttons
+use super::audio_player::ListenButton;
+
+/// Bottom toolbar with Presets, History, and optional Mute All / Listen buttons
 /// Note: Reset button removed - 0 dB = unity gain = dangerously loud for IEMs
 /// Note: +Me button removed - was broken and unwanted by user
 #[component]
@@ -11,7 +13,7 @@ pub fn Toolbar(
     on_presets: Callback<()>,
     /// Called when History button is clicked
     on_history: Callback<()>,
-    /// Whether the current user is an engineer (shows Mute All button)
+    /// Whether the current user is an engineer (shows Mute All + Listen buttons)
     #[prop(default = false)]
     is_engineer: bool,
     /// Called when Mute All button is clicked (engineer only)
@@ -33,6 +35,7 @@ pub fn Toolbar(
                     >
                         "Mute All"
                     </button>
+                    <ListenButton />
                 }
             })}
             {(!is_engineer).then(|| {

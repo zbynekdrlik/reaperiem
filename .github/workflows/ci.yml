@@ -125,6 +125,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -147,7 +150,9 @@ jobs:
 
       - name: Clippy (strict - deny warnings)
         working-directory: iem-mixer
-        run: cargo clippy --all-targets -- -D warnings -D clippy::all
+        run: |
+          cargo clippy --all-targets -- -D warnings -D clippy::all
+          cargo clippy -p iem-server --features audio -- -D warnings -D clippy::all
 
   # ============================================================
   # TEST - Unit tests for core and server
@@ -159,6 +164,9 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -181,7 +189,9 @@ jobs:
 
       - name: Run tests
         working-directory: iem-mixer
-        run: cargo test -p iem-core -p iem-server
+        run: |
+          cargo test -p iem-core
+          cargo test -p iem-server --features audio
 
   # ============================================================
   # BUILD WASM - Frontend must build
@@ -257,6 +267,9 @@ jobs:
           name: wasm-dist
           path: iem-mixer/iem-ui/dist/
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -273,7 +286,7 @@ jobs:
 
       - name: Build server
         working-directory: iem-mixer
-        run: cargo build --package iem-server --features standalone --release
+        run: cargo build --package iem-server --features "standalone,audio" --release
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -295,7 +308,7 @@ jobs:
       - name: Start server
         working-directory: iem-mixer
         run: |
-          cargo run --package iem-server --features standalone --release &
+          cargo run --package iem-server --features "standalone,audio" --release &
           # Wait for server to be ready (may take a while if compiling)
           for i in {1..120}; do
             if curl -sf http://localhost:8080/ > /dev/null 2>&1; then

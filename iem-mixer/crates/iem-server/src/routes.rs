@@ -84,6 +84,8 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         )
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
+        // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
+        .route("/ws/audio", get(ws_audio_handler))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -240,6 +242,24 @@ async fn put_customization(
             ))
         }
     }
+}
+
+/// Audio WebSocket handler — delegates to proxy::ws_audio when audio feature is enabled
+#[cfg(feature = "audio")]
+async fn ws_audio_handler(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    state: axum::extract::State<AppState>,
+    query: axum::extract::Query<proxy::WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<iem_core::ApiError>)> {
+    proxy::ws_audio(ws, state, query).await
+}
+
+#[cfg(not(feature = "audio"))]
+async fn ws_audio_handler() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        "Audio streaming not available (compiled without audio feature)",
+    )
 }
 
 /// REAPER proxy handler

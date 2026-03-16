@@ -979,6 +979,32 @@ body {
   color: var(--bg-primary);
 }
 
+.toolbar-btn-listen.listening {
+  background: #1a5c2a;
+  border-color: #2d9f4a;
+  animation: listen-pulse 1.5s ease-in-out infinite;
+}
+
+.toolbar-btn-listen.no-source {
+  background: #5c3a1a;
+  border-color: #9f6a2d;
+}
+
+.toolbar-btn-listen.unsupported {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes listen-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 /* Pan slider touch-safe activation states */
 .pan-slider.activating::-webkit-slider-thumb {
   box-shadow: 0 0 8px var(--accent-glow);

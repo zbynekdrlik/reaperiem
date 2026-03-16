@@ -6,6 +6,8 @@
 //! - Proxies requests to REAPER HTTP API
 //! - Provides real-time WebSocket updates
 
+#[cfg(feature = "audio")]
+pub mod audio_stream;
 pub mod auth;
 pub mod customization_store;
 pub mod pin_store;
@@ -48,6 +50,9 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
+    /// Broadcast channel for audio Opus frames (engineer listening)
+    #[cfg(feature = "audio")]
+    pub audio_tx: broadcast::Sender<bytes::Bytes>,
 }
 
 /// Global IEM output volume state for a member
@@ -103,6 +108,8 @@ impl MixerCache {
 impl AppState {
     pub fn new(config: Config, config_dir: &std::path::Path) -> Self {
         let (event_tx, _) = broadcast::channel(256);
+        #[cfg(feature = "audio")]
+        let (audio_tx, _) = broadcast::channel(64);
         Self {
             config: Arc::new(RwLock::new(config)),
             http_client: reqwest::Client::builder()
@@ -117,6 +124,8 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
+            #[cfg(feature = "audio")]
+            audio_tx,
         }
     }
 }
@@ -186,6 +195,10 @@ pub async fn start_server(
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
+
+    // Spawn audio listener (captures ReaStream UDP packets from REAPER)
+    #[cfg(feature = "audio")]
+    audio_stream::spawn_audio_listener(state.audio_tx.clone());
 
     let cors = CorsLayer::permissive();
 

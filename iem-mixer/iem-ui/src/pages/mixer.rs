@@ -167,6 +167,9 @@ fn connect_websocket(
                     iem_core::ServerMsg::NetworkMode { mode } => {
                         set_network_mode.set(mode);
                     }
+                    iem_core::ServerMsg::AudioStatus { .. } => {
+                        // Audio status handled by ListenButton's own WebSocket
+                    }
                 }
             }
         }
