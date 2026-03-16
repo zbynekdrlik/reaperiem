@@ -470,6 +470,104 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_udp_listener_receives_reastream_packet() {
+        // Test the full server-side pipeline: UDP → parse → resample → encode → broadcast
+        //
+        // 1. Create a broadcast channel
+        // 2. Spawn the UDP listener on a test port
+        // 3. Send synthetic ReaStream packets
+        // 4. Verify Opus frames arrive on the broadcast receiver
+
+        let (audio_tx, mut audio_rx) = broadcast::channel::<Bytes>(64);
+
+        // Bind listener on an ephemeral port to avoid conflicts
+        let listener_socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let listener_addr = listener_socket.local_addr().unwrap();
+
+        // Spawn a custom listener task (same logic as spawn_audio_listener but with our socket)
+        tokio::spawn(async move {
+            let mut buf = vec![0u8; 65536];
+            let mut pipeline: Option<AudioPipeline> = None;
+
+            loop {
+                let len = match listener_socket.recv(&mut buf).await {
+                    Ok(len) => len,
+                    Err(_) => continue,
+                };
+
+                let packet = match parse_reastream_packet(&buf[..len]) {
+                    Ok(p) => p,
+                    Err(_) => continue,
+                };
+
+                let pipe = match pipeline.as_mut() {
+                    Some(p) => p,
+                    None => match AudioPipeline::new(packet.sample_rate, packet.channels) {
+                        Ok(p) => {
+                            pipeline = Some(p);
+                            pipeline.as_mut().unwrap()
+                        }
+                        Err(_) => continue,
+                    },
+                };
+
+                let frames = pipe.process(&packet.samples);
+                for frame in frames {
+                    let _ = audio_tx.send(frame);
+                }
+            }
+        });
+
+        // Give listener time to start
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        // Create a sender socket and send enough data to produce Opus frames
+        let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        sender.connect(listener_addr).await.unwrap();
+
+        // Send ~1 second of 96kHz stereo audio as ReaStream packets
+        // Each packet: 512 samples per channel (typical ReaStream block size)
+        let samples_per_packet = 512;
+        let total_packets = (96000 / samples_per_packet) + 1; // >1 second
+
+        for pkt_idx in 0..total_packets {
+            let mut samples = Vec::with_capacity(samples_per_packet * 2);
+            for i in 0..samples_per_packet {
+                let sample_offset = pkt_idx * samples_per_packet + i;
+                let t = sample_offset as f32 / 96000.0;
+                let val = (2.0 * std::f32::consts::PI * 440.0 * t).sin() * 0.3;
+                samples.push(val); // L
+                samples.push(val); // R
+            }
+            let packet = build_reastream_packet(2, 96000, samples_per_packet as u16, &samples);
+            sender.send(&packet).await.unwrap();
+
+            // Small delay to avoid overwhelming the receiver
+            if pkt_idx % 20 == 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+            }
+        }
+
+        // Wait for pipeline to process all packets
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+        // Collect all Opus frames from the broadcast channel
+        let mut frame_count = 0;
+        while let Ok(frame) = audio_rx.try_recv() {
+            assert!(!frame.is_empty(), "Opus frame should not be empty");
+            frame_count += 1;
+        }
+
+        // 1 second of 96kHz → ~48000 samples at 48kHz → ~50 Opus frames (20ms each)
+        // Allow some margin due to resampler chunk boundaries
+        assert!(
+            frame_count >= 10,
+            "Expected at least 10 Opus frames from ~1s of audio, got {}",
+            frame_count
+        );
+    }
+
     #[test]
     fn test_pipeline_processes_incrementally() {
         // Pipeline should buffer small packets and output frames when enough data accumulates

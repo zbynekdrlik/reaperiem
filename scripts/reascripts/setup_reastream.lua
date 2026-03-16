@@ -5,6 +5,12 @@
 --
 -- ReaStream sends float32 PCM via UDP to localhost:4711
 -- The IEM Mixer Tauri app captures these packets and streams to the engineer's browser
+--
+-- Result is written to EXTSTATE for remote verification:
+--   reaper.GetExtState("reaperiem", "setup_reastream")
+--   OK:<track_idx>:<fx_idx>  — success
+--   SKIP:<track_idx>:<fx_idx> — already present
+--   FAIL:<reason>            — error
 
 -- Find engineer inear track
 local function find_engineer_track()
@@ -35,13 +41,17 @@ end
 -- Main
 local track, track_idx = find_engineer_track()
 if not track then
+  reaper.SetExtState("reaperiem", "setup_reastream", "FAIL:engineer_inear_track_not_found", false)
   reaper.ShowConsoleMsg("setup_reastream: ENGINEER inear track not found!\n")
   return
 end
 
 local already_present, fx_idx = has_reastream(track)
 if already_present then
+  reaper.SetExtState("reaperiem", "setup_reastream", "SKIP:" .. track_idx .. ":" .. fx_idx, false)
   reaper.ShowConsoleMsg("setup_reastream: ReaStream already present on ENGINEER inear (FX #" .. fx_idx .. "), skipping.\n")
+  -- Open the FX UI so user can verify IP/port configuration
+  reaper.TrackFX_SetOpen(track, fx_idx, true)
   return
 end
 
@@ -49,24 +59,22 @@ end
 -- ReaStream is a VST2 plugin bundled with REAPER
 local new_fx = reaper.TrackFX_AddByName(track, "ReaStream (Cockos)", false, -1)
 if new_fx < 0 then
+  reaper.SetExtState("reaperiem", "setup_reastream", "FAIL:insert_failed", false)
   reaper.ShowConsoleMsg("setup_reastream: Failed to insert ReaStream VST! Is it installed?\n")
   return
 end
 
 -- Configure ReaStream:
--- Parameter 0: Mode (0 = Send, 1 = Receive)
--- Parameter 1: IP address (string, not directly settable via param)
--- Parameter 2: Identifier
--- We set to Send mode, the identifier and IP are configured via the VST GUI defaults
--- ReaStream defaults to localhost:4711 for send mode
-
--- Set to Send mode (parameter index 0, value 0.0 = send)
+-- Parameter 0: Mode (0.0 = Send, 1.0 = Receive)
+-- ReaStream defaults to localhost:4711 when in send mode
+-- IP/port are configured via the VST GUI (not scriptable parameters)
 reaper.TrackFX_SetParam(track, new_fx, 0, 0.0)
 
--- Set the identifier to "default" via named config
--- (ReaStream uses "default" as its channel identifier)
-reaper.TrackFX_SetNamedConfigParm(track, new_fx, "identifier", "default")
+-- Open FX UI so user can verify/configure IP and port (localhost:4711)
+reaper.TrackFX_SetOpen(track, new_fx, true)
 
 local _, track_name = reaper.GetTrackName(track)
+reaper.SetExtState("reaperiem", "setup_reastream", "OK:" .. track_idx .. ":" .. new_fx, false)
 reaper.ShowConsoleMsg("setup_reastream: Inserted ReaStream (send mode) on track '" .. track_name .. "' (index " .. track_idx .. ")\n")
+reaper.ShowConsoleMsg("setup_reastream: FX UI opened — verify IP=127.0.0.1, Port=4711\n")
 reaper.ShowConsoleMsg("setup_reastream: Streaming to localhost:4711 — open engineer mixer and click Listen\n")
