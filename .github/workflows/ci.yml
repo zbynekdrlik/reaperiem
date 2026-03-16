@@ -498,43 +498,46 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Allow UDP 4711 through Windows Firewall (ReaStream audio)
+      - name: Ensure Windows Firewall allows UDP 4711 (ReaStream audio)
         shell: powershell
+        continue-on-error: true
         run: |
           # ReaStream VST sends audio via UDP to port 4711.
           # Windows Firewall blocks inbound UDP by default, even for localhost.
-          # This rule ensures iem-mixer-app can receive ReaStream packets.
+          # Creating firewall rules requires admin privileges.
+          # This step is idempotent and continues on error (rules may already exist
+          # from manual setup, or the runner may not have admin access).
+          $ErrorActionPreference = "SilentlyContinue"
+
           $ruleName = "IEM Mixer Audio UDP 4711"
           $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
           if ($existing) {
             Write-Host "Firewall rule already exists: $ruleName"
           } else {
-            New-NetFirewallRule `
+            $result = New-NetFirewallRule `
               -DisplayName $ruleName `
               -Direction Inbound `
               -Protocol UDP `
               -LocalPort 4711 `
               -Action Allow `
               -Profile Any `
-              -Description "Allow ReaStream audio UDP packets for IEM Mixer"
-            Write-Host "Created firewall rule: $ruleName"
+              -Description "Allow ReaStream audio UDP packets for IEM Mixer" 2>&1
+            if ($?) {
+              Write-Host "Created firewall rule: $ruleName"
+            } else {
+              Write-Host "::warning::Cannot create firewall rule (needs admin). Run manually:"
+              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 4711' -Direction Inbound -Protocol UDP -LocalPort 4711 -Action Allow"
+            }
           }
-          # Also ensure the app exe itself is allowed (covers any port)
-          $appData = [Environment]::GetFolderPath('LocalApplicationData')
-          $exePath = "$appData\IEM Mixer\iem-mixer-app.exe"
-          $appRule = "IEM Mixer App"
-          $existingApp = Get-NetFirewallRule -DisplayName $appRule -ErrorAction SilentlyContinue
-          if (-not $existingApp -and (Test-Path $exePath)) {
-            New-NetFirewallRule `
-              -DisplayName $appRule `
-              -Direction Inbound `
-              -Program $exePath `
-              -Action Allow `
-              -Profile Any `
-              -Description "Allow all inbound traffic for IEM Mixer app"
-            Write-Host "Created app firewall rule: $appRule"
+
+          # Check existing firewall rules for IEM/4711
+          $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -match "IEM|4711|reastream" }
+          if ($rules) {
+            Write-Host "Existing inbound firewall rules:"
+            $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
           } else {
-            Write-Host "App firewall rule exists or exe not yet installed"
+            Write-Host "::warning::No IEM/audio firewall rules found. Audio streaming may not work."
           }
 
       - name: Install and start IEM Mixer
