@@ -120,15 +120,14 @@ pub async fn get_mixer_state(
 
     let send_results = futures::future::join_all(send_futures).await;
     for (track_index, result) in send_results {
-        if let Ok((level, mute, pan)) = result {
-            if let Some(ch) = result_channels
+        if let Ok((level, mute, pan)) = result
+            && let Some(ch) = result_channels
                 .iter_mut()
                 .find(|c| c.track_index == track_index)
-            {
-                ch.level_db = reaper_vol_to_db(level);
-                ch.muted = mute;
-                ch.pan = reaper_pan_to_ui(pan);
-            }
+        {
+            ch.level_db = reaper_vol_to_db(level);
+            ch.muted = mute;
+            ch.pan = reaper_pan_to_ui(pan);
         }
     }
 
@@ -158,15 +157,14 @@ pub async fn get_mixer_state(
 
         let mix_results = futures::future::join_all(mix_futures).await;
         for (track_index, result) in mix_results {
-            if let Ok((level, mute, pan)) = result {
-                if let Some(ch) = mix_channels
+            if let Ok((level, mute, pan)) = result
+                && let Some(ch) = mix_channels
                     .iter_mut()
                     .find(|c| c.track_index == track_index)
-                {
-                    ch.level_db = reaper_vol_to_db(level);
-                    ch.muted = mute;
-                    ch.pan = reaper_pan_to_ui(pan);
-                }
+            {
+                ch.level_db = reaper_vol_to_db(level);
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
             }
         }
 
@@ -247,16 +245,16 @@ pub async fn poll_mixer_state(
 
         // Try meter bridge EXTSTATE for true L/R per-channel peaks
         let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
-        if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
-            if let Ok(text) = resp.text().await {
-                // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
-                if let Some(value) = text.split('\t').nth(3) {
-                    if !value.is_empty() {
-                        let bridge_meters = crate::poller::parse_meter_bridge(value);
-                        if !bridge_meters.is_empty() {
-                            meters = bridge_meters;
-                        }
-                    }
+        if let Ok(resp) = state.http_client.get(&extstate_url).send().await
+            && let Ok(text) = resp.text().await
+        {
+            // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
+            if let Some(value) = text.split('\t').nth(3)
+                && !value.is_empty()
+            {
+                let bridge_meters = crate::poller::parse_meter_bridge(value);
+                if !bridge_meters.is_empty() {
+                    meters = bridge_meters;
                 }
             }
         }
@@ -650,7 +648,7 @@ fn validate_level_db(level_db: f32) -> Result<(), (StatusCode, Json<ApiError>)> 
 
 /// Validate pan is between -1.0 and 1.0
 fn validate_pan(pan: f32) -> Result<(), (StatusCode, Json<ApiError>)> {
-    if pan.is_nan() || pan.is_infinite() || pan < -1.0 || pan > 1.0 {
+    if !(-1.0..=1.0).contains(&pan) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::bad_request("pan must be between -1.0 and 1.0")),
@@ -1302,16 +1300,16 @@ async fn apply_command_to_cache(
             let cached_db = quantize_02(reaper_vol_to_db(vol));
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.level_db = cached_db;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: cached_db,
-                        muted: ch.muted,
-                        pan: ch.pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.level_db = cached_db;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: cached_db,
+                    muted: ch.muted,
+                    pan: ch.pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),
@@ -1329,16 +1327,16 @@ async fn apply_command_to_cache(
             let mute_val: u8 = if *muted { 1 } else { 0 };
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.muted = *muted;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: ch.level_db,
-                        muted: *muted,
-                        pan: ch.pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.muted = *muted;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: ch.level_db,
+                    muted: *muted,
+                    pan: ch.pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),
@@ -1357,16 +1355,16 @@ async fn apply_command_to_cache(
             let cached_pan = reaper_pan_to_ui(reaper_pan);
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.pan = cached_pan;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: ch.level_db,
-                        muted: ch.muted,
-                        pan: cached_pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.pan = cached_pan;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: ch.level_db,
+                    muted: ch.muted,
+                    pan: cached_pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),

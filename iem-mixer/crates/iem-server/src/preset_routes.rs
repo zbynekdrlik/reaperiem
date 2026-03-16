@@ -104,7 +104,7 @@ async fn save_preset(
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
                     StatusCode::CONFLICT,
-                    ApiError::new("LIMIT_REACHED", &e.to_string()),
+                    ApiError::new("LIMIT_REACHED", e.to_string()),
                 ),
                 crate::preset_store::PresetError::Io(_) => {
                     tracing::error!("Failed to save preset: {}", e);

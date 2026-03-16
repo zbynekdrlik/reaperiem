@@ -3,7 +3,7 @@
 //! Stores mix presets per member, following the SnapshotStore pattern.
 //! Each member has their own JSON file in the presets/ directory.
 
-use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
+use iem_core::{ChannelPreset, PresetEntry, MAX_PRESETS};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -45,8 +45,7 @@ impl PresetStore {
     ) -> Result<(), std::io::Error> {
         std::fs::create_dir_all(&self.presets_dir)?;
         let path = self.member_path(member_id);
-        let json = serde_json::to_string_pretty(presets)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(presets).map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 

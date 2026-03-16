@@ -63,6 +63,7 @@ pub struct GlobalVolState {
 }
 
 /// Cached mixer state for change detection
+#[derive(Default)]
 pub struct MixerCache {
     /// Last known channel states per member (member_id -> channels)
     pub member_states: HashMap<String, Vec<iem_core::Channel>>,
@@ -90,18 +91,7 @@ pub struct MixerCache {
 
 impl MixerCache {
     pub fn new() -> Self {
-        Self {
-            member_states: HashMap::new(),
-            meters: HashMap::new(),
-            connected: false,
-            active_members: HashMap::new(),
-            command_timestamps: HashMap::new(),
-            global_volumes: HashMap::new(),
-            output_track_indices: HashMap::new(),
-            input_track_indices: HashMap::new(),
-            last_track_count: None,
-            snapshot_last_date: HashMap::new(),
-        }
+        Self::default()
     }
 }
 
