@@ -500,18 +500,17 @@ jobs:
 
       - name: Stop REAPER to release port 58710
         shell: powershell
-        continue-on-error: true
         run: |
           # The app must bind port 58710 BEFORE REAPER. ReaStream's port is hardcoded
           # and REAPER's socket absorbs all packets if it binds first.
-          # Save project, stop REAPER, install+start app, then restart REAPER.
+          # Save project, quit REAPER via HTTP API, install+start app, then restart REAPER.
           $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
           if (-not $reaper) {
             Write-Host "REAPER not running, skip"
             exit 0
           }
 
-          # Save project first
+          # Save project via HTTP API
           try {
             Invoke-WebRequest -Uri "http://localhost:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep 2
@@ -520,16 +519,29 @@ jobs:
             Write-Host "::warning::Could not save project: $_"
           }
 
-          # Stop REAPER gracefully
-          $ErrorActionPreference = "SilentlyContinue"
-          & taskkill /f /im reaper.exe 2>&1 | Out-Null
-          Start-Sleep 3
+          # Quit REAPER via HTTP API action 40004 (File: Quit REAPER)
+          try {
+            Invoke-WebRequest -Uri "http://localhost:8080/_/40004" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          } catch {
+            # Expected — REAPER closes the HTTP server before responding
+          }
+          Start-Sleep 5
+
+          # Verify REAPER is gone
           $proc = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "::warning::REAPER still running after taskkill"
-          } else {
-            Write-Host "REAPER stopped (will restart after app starts)"
+            Write-Host "REAPER still running after quit command, trying taskkill..."
+            $ErrorActionPreference = "SilentlyContinue"
+            & taskkill /f /im reaper.exe 2>&1 | Out-Null
+            $ErrorActionPreference = "Stop"
+            Start-Sleep 3
+            $proc = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+            if ($proc) {
+              Write-Host "::error::Cannot stop REAPER (PID $($proc.Id)). Audio pipeline will not work."
+              exit 1
+            }
           }
+          Write-Host "REAPER stopped (will restart after app binds port 58710)"
 
       - name: Ensure Windows Firewall allows UDP 58710 (ReaStream audio)
         shell: powershell
