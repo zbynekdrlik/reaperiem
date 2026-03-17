@@ -274,7 +274,11 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
                 s
             }
             Err(e) => {
-                tracing::error!("Failed to bind audio UDP socket on {}: {}", VBAN_BIND_ADDR, e);
+                tracing::error!(
+                    "Failed to bind audio UDP socket on {}: {}",
+                    VBAN_BIND_ADDR,
+                    e
+                );
                 return;
             }
         };
@@ -463,19 +467,13 @@ mod tests {
     fn test_parse_wrong_magic() {
         let mut packet = build_vban_packet(2, 96000, 4, &[0.0; 8], "test");
         packet[0] = b'X'; // corrupt magic
-        assert_eq!(
-            parse_vban_packet(&packet).unwrap_err(),
-            "wrong magic bytes"
-        );
+        assert_eq!(parse_vban_packet(&packet).unwrap_err(), "wrong magic bytes");
     }
 
     #[test]
     fn test_parse_truncated_header() {
         let packet = &VBAN_MAGIC; // only magic, no header fields
-        assert_eq!(
-            parse_vban_packet(packet).unwrap_err(),
-            "packet too short"
-        );
+        assert_eq!(parse_vban_packet(packet).unwrap_err(), "packet too short");
     }
 
     #[test]
@@ -484,10 +482,7 @@ mod tests {
         let mut packet = build_vban_packet(2, 96000, 2, &[0.0; 4], "test");
         // Overwrite format_nbs to claim 4 samples per channel (index 3 = 4 samples)
         packet[5] = 3; // nbs = 3 means 4 samples per channel
-        assert_eq!(
-            parse_vban_packet(&packet).unwrap_err(),
-            "truncated audio data"
-        );
+        assert_eq!(parse_vban_packet(&packet).unwrap_err(), "truncated audio data");
     }
 
     #[test]
@@ -550,10 +545,7 @@ mod tests {
         let mut packet = build_vban_packet(1, 48000, 1, &[0.0], "test");
         // Set data type to INT24 (2) which we don't support
         packet[7] = 2;
-        assert_eq!(
-            parse_vban_packet(&packet).unwrap_err(),
-            "unsupported data type"
-        );
+        assert_eq!(parse_vban_packet(&packet).unwrap_err(), "unsupported data type");
     }
 
     #[test]
