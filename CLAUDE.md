@@ -535,18 +535,21 @@ REAPER → ENGINEER inear track → ReaStream VST → UDP → iem-mixer-app → 
 ReaStream settings (configured in GUI — NOT accessible via API):
   - Mode: Send
   - IP: 127.0.0.1
-  - Port: 4711 (NOT default 58710 — REAPER's own socket on 0.0.0.0:58710 absorbs all packets)
+  - Port: 58710 (HARDCODED — cannot be changed, confirmed by Cockos forums + protocol docs)
 
-App listens on: 0.0.0.0:4711 (exclusive port, not shared with REAPER)
+App listens on: 0.0.0.0:58710 (MUST start BEFORE REAPER to own the port)
 ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
 Mode, IP, port: NOT exposed — GUI-only configuration
 
-WHY port 4711 instead of 58710:
-  REAPER's ReaStream VST binds 0.0.0.0:58710 even in send mode (for its receive capability).
-  SO_REUSEADDR does NOT duplicate UDP packets on Windows — the first-bound socket (REAPER)
-  gets everything. Our app on 127.0.0.1:58710 gets ZERO packets.
-  Port 4711 is exclusively ours — 100% packet delivery confirmed by diagnostics.
-  This is a ONE-TIME manual GUI change that persists in the REAPER project file.
+CRITICAL STARTUP ORDER:
+  1. iem-mixer-app starts FIRST (binds 0.0.0.0:58710 without SO_REUSEADDR)
+  2. REAPER starts SECOND (ReaStream still sends to 127.0.0.1:58710)
+  3. Our app receives all packets because it owns the port exclusively
+
+  If REAPER starts first, its socket on 0.0.0.0:58710 absorbs ALL packets.
+  SO_REUSEADDR does NOT help — Windows delivers to the first-bound socket.
+  The CI deploy handles this: stops REAPER, installs+starts app, restarts REAPER.
+  At boot, the startup launcher runs before user opens REAPER.
 ```
 
 **Post-deploy verification (CI does this automatically):**

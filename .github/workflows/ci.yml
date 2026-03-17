@@ -498,17 +498,48 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Ensure Windows Firewall allows UDP 4711 (ReaStream audio)
+      - name: Stop REAPER to release port 58710
         shell: powershell
         continue-on-error: true
         run: |
-          # ReaStream VST sends audio via UDP to port 4711 (configured in GUI).
-          # We use port 4711 instead of ReaStream's default 58710 because REAPER's
-          # own socket on 0.0.0.0:58710 absorbs all packets (SO_REUSEADDR doesn't
-          # duplicate UDP on Windows).
+          # The app must bind port 58710 BEFORE REAPER. ReaStream's port is hardcoded
+          # and REAPER's socket absorbs all packets if it binds first.
+          # Save project, stop REAPER, install+start app, then restart REAPER.
+          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if (-not $reaper) {
+            Write-Host "REAPER not running, skip"
+            exit 0
+          }
+
+          # Save project first
+          try {
+            Invoke-WebRequest -Uri "http://localhost:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep 2
+            Write-Host "Project saved"
+          } catch {
+            Write-Host "::warning::Could not save project: $_"
+          }
+
+          # Stop REAPER gracefully
+          $ErrorActionPreference = "SilentlyContinue"
+          & taskkill /f /im reaper.exe 2>&1 | Out-Null
+          Start-Sleep 3
+          $proc = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "::warning::REAPER still running after taskkill"
+          } else {
+            Write-Host "REAPER stopped (will restart after app starts)"
+          }
+
+      - name: Ensure Windows Firewall allows UDP 58710 (ReaStream audio)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          # ReaStream VST sends audio via UDP to port 58710 (hardcoded default).
+          # The app must bind 0.0.0.0:58710 BEFORE REAPER starts to own the port.
           $ErrorActionPreference = "SilentlyContinue"
 
-          $ruleName = "IEM Mixer Audio UDP 4711"
+          $ruleName = "IEM Mixer Audio UDP 58710"
           $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
           if ($existing) {
             Write-Host "Firewall rule already exists: $ruleName"
@@ -517,24 +548,24 @@ jobs:
               -DisplayName $ruleName `
               -Direction Inbound `
               -Protocol UDP `
-              -LocalPort 4711 `
+              -LocalPort 58710 `
               -Action Allow `
               -Profile Any `
-              -Description "Allow ReaStream audio UDP packets for IEM Mixer on port 4711" 2>&1
+              -Description "Allow ReaStream audio UDP packets for IEM Mixer" 2>&1
             if ($?) {
               Write-Host "Created firewall rule: $ruleName"
             } else {
               Write-Host "::warning::Cannot create firewall rule (needs admin). Run manually:"
-              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 4711' -Direction Inbound -Protocol UDP -LocalPort 4711 -Action Allow"
+              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 58710' -Direction Inbound -Protocol UDP -LocalPort 58710 -Action Allow"
             }
           }
 
-          # Remove old 58710 firewall rule if present (no longer needed)
-          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 58710" -ErrorAction SilentlyContinue
+          # Remove old 4711 firewall rule if present
+          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 4711" -ErrorAction SilentlyContinue
 
-          # Check existing firewall rules for IEM/4711
+          # Check existing firewall rules
           $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|4711|reastream" }
+            Where-Object { $_.DisplayName -match "IEM|58710|reastream" }
           if ($rules) {
             Write-Host "Existing inbound firewall rules:"
             $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
@@ -667,40 +698,54 @@ jobs:
           }
           exit 0
 
-      - name: Verify REAPER health (post-deploy)
+      - name: Restart REAPER (after app binds port 58710)
         shell: powershell
         run: |
           $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
 
-          # Wait for app startup to complete (discovery sends requests to REAPER)
-          Start-Sleep -Seconds 15
+          # Wait for app to fully start and bind port 58710
+          Start-Sleep -Seconds 10
 
-          # Check REAPER process
-          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
-          if (-not $reaper) {
-            if ($wasRunning -eq "true") {
-              Write-Host "::error::REAPER CRASHED after IEM Mixer started!"
-              Write-Host "::error::REAPER was running before deploy but is now gone."
-              Write-Host "::error::The app's startup discovery may have overwhelmed REAPER."
-              exit 1
-            } else {
-              Write-Host "::warning::REAPER is not running (was not running before deploy either)"
-            }
+          # Verify app has port 58710
+          $appListener = netstat -an | Select-String "UDP.*:58710"
+          if ($appListener) {
+            Write-Host "App owns port 58710: $appListener"
           } else {
-            Write-Host "REAPER still running: PID $($reaper.Id)"
+            Write-Host "::warning::App did not bind port 58710"
           }
 
-          # Check REAPER HTTP API responds
-          try {
-            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
-            Write-Host "REAPER HTTP API: OK ($($resp.StatusCode))"
-          } catch {
-            if ($reaper) {
-              Write-Host "::warning::REAPER process alive but HTTP API not responding (may have modal dialog)"
-            } else {
-              Write-Host "::error::REAPER HTTP API not responding and process is dead"
-              if ($wasRunning -eq "true") { exit 1 }
+          # Restart REAPER if it was running before deploy
+          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if ($reaper) {
+            Write-Host "REAPER already running: PID $($reaper.Id)"
+          } elseif ($wasRunning -eq "true") {
+            Write-Host "Restarting REAPER (was stopped for port 58710 handoff)..."
+            # Find REAPER executable
+            $reaperPath = "C:\Program Files\REAPER (x64)\reaper.exe"
+            if (-not (Test-Path $reaperPath)) {
+              $reaperPath = "C:\Program Files\REAPER\reaper.exe"
             }
+            if (Test-Path $reaperPath) {
+              # Start REAPER in interactive session via WMI
+              $result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{
+                CommandLine = "`"$reaperPath`""
+              }
+              Write-Host "REAPER started: PID $($result.ProcessId), return $($result.ReturnValue)"
+              Start-Sleep 15  # Wait for REAPER to fully load
+
+              # Verify REAPER is responding
+              try {
+                $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 10
+                Write-Host "REAPER HTTP API: OK"
+              } catch {
+                Write-Host "::warning::REAPER started but HTTP API not responding yet"
+              }
+            } else {
+              Write-Host "::error::REAPER executable not found at expected paths"
+              exit 1
+            }
+          } else {
+            Write-Host "REAPER was not running before deploy, skip restart"
           }
 
       - name: Backup REAPER project
@@ -1011,13 +1056,13 @@ jobs:
 
           $ErrorActionPreference = "Stop"
 
-          # Verify UDP listener exists on port 4711 (exclusive — not shared with REAPER)
-          $udpListeners = netstat -an | Select-String "UDP.*:4711"
+          # Verify UDP listener exists on port 58710 (app must start before REAPER)
+          $udpListeners = netstat -an | Select-String "UDP.*:58710"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 4711 - app not listening for ReaStream"
+            Write-Host "::error::No UDP listener on port 58710 - app not listening for ReaStream"
             exit 1
           }
-          Write-Host "UDP 4711 listener found: $udpListeners"
+          Write-Host "UDP 58710 listener found: $udpListeners"
 
           # Step 1: Build ReaStream packets
           function Build-ReaStreamPacket {
@@ -1072,7 +1117,7 @@ jobs:
                 }
               }
               $data = [byte[]]$pkt.ToArray()
-              $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
+              $udp.Send($data, $data.Length, "127.0.0.1", 58710) | Out-Null
               $offset += $samplesPerCh; $sent++
               Start-Sleep -Milliseconds 5
             }
@@ -1169,7 +1214,7 @@ jobs:
             exit 0
           } elseif ($gotNoSource) {
             Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - UDP packets not reaching audio pipeline"
-            Write-Host "Check: Is ReaStream sending to 127.0.0.1:4711? Is the UDP sender working?"
+            Write-Host "Check: Is ReaStream sending to 127.0.0.1:58710? Is the UDP sender working?"
             exit 1
           } else {
             Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
@@ -1184,7 +1229,7 @@ jobs:
           # It does NOT send synthetic UDP — it relies on REAPER's ReaStream VST
           # being configured to send to port 4711.
           # This step uses continue-on-error because it requires one-time manual
-          # ReaStream GUI configuration (port 58710 -> 4711).
+          # ReaStream requires app to start before REAPER (port 58710 ownership).
 
           $ErrorActionPreference = "Stop"
 

@@ -1,6 +1,6 @@
 //! Audio streaming pipeline: ReaStream UDP → Resample → Opus → WebSocket
 //!
-//! Captures audio from REAPER via ReaStream VST (UDP packets on port 4711),
+//! Captures audio from REAPER via ReaStream VST (UDP packets on port 58710),
 //! resamples from 96kHz to 48kHz, encodes to Opus, and broadcasts as binary frames.
 
 use bytes::Bytes;
@@ -17,12 +17,12 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 const OPUS_FRAME_SAMPLES: usize = 960;
 
 /// UDP bind address for receiving ReaStream audio.
-/// We use port 4711 (NOT ReaStream's default 58710) because REAPER's own
-/// ReaStream socket binds 0.0.0.0:58710 and absorbs ALL packets on that port.
-/// SO_REUSEADDR does NOT duplicate UDP packets on Windows — the first-bound
-/// socket (REAPER) gets everything. Port 4711 is exclusively ours.
-/// ReaStream must be configured in its GUI to send to port 4711.
-const REASTREAM_BIND_ADDR: &str = "0.0.0.0:4711";
+/// We bind to 0.0.0.0:58710 (ReaStream's default port) WITHOUT SO_REUSEADDR.
+/// The app MUST start before REAPER so we get exclusive ownership of port 58710.
+/// If REAPER starts first and binds 0.0.0.0:58710, our bind will fail.
+/// ReaStream sends to 127.0.0.1:58710 — as long as we own the port, we get all packets.
+/// The startup launcher runs at boot before the user opens REAPER, ensuring correct order.
+const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
 
 /// Parsed ReaStream packet
 #[derive(Debug)]
@@ -574,15 +574,15 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_address_uses_exclusive_port() {
-        // We use port 4711 exclusively — NOT ReaStream's default 58710.
-        // REAPER's own socket on 0.0.0.0:58710 absorbs all UDP packets,
-        // making SO_REUSEADDR port sharing impossible on Windows.
+    fn test_bind_address_uses_reastream_port() {
+        // We bind to ReaStream's default port 58710 on 0.0.0.0.
+        // The app MUST start before REAPER to get exclusive ownership.
+        // No SO_REUSEADDR — plain bind ensures we're the sole owner.
         let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse().unwrap();
         assert_eq!(
             addr.port(),
-            4711,
-            "Must bind to port 4711 (exclusive, not shared with REAPER)"
+            58710,
+            "Must bind to ReaStream default port 58710"
         );
         assert!(
             addr.ip().is_unspecified(),
