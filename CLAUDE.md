@@ -527,6 +527,26 @@ curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status"
 # Expected: PRESENT:track_idx=N:fx_idx=N:mode=send:enabled=yes
 ```
 
+### ReaStream Audio Streaming Configuration
+
+```
+REAPER → ENGINEER inear track → ReaStream VST → UDP → iem-mixer-app → Opus → WebSocket → Browser
+
+ReaStream settings (MUST be configured in GUI — NOT accessible via API):
+  - Mode: Send
+  - IP: 127.0.0.1
+  - Port: 4711
+
+ReaStream default port: 58710 (but REAPER binds it — cannot use)
+App listens on: 0.0.0.0:4711 (custom port)
+ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
+Mode, IP, port: NOT exposed — GUI-only configuration
+```
+
+**Post-deploy verification (CI does this automatically):**
+
+The deploy job sends synthetic UDP packets and connects to the live WebSocket to verify binary Opus frames arrive. This test FAILS the deploy if audio pipeline is broken — no `continue-on-error`.
+
 **Register new scripts dynamically (no restart):**
 
 ```bash

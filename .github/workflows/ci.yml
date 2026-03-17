@@ -996,7 +996,7 @@ jobs:
             Write-Host "::warning::ReaStream diagnostic failed: $($_.Exception.Message)"
           }
 
-      - name: Test audio pipeline (UDP → WebSocket Opus frames)
+      - name: Test audio pipeline (UDP to WebSocket Opus frames)
         shell: powershell
         run: |
           # This test PROVES the full audio pipeline works end-to-end:
@@ -1012,7 +1012,7 @@ jobs:
           # Verify UDP listener exists
           $udpListeners = netstat -an | Select-String "UDP.*:4711"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 4711 — app not listening for ReaStream"
+            Write-Host "::error::No UDP listener on port 4711 - app not listening for ReaStream"
             exit 1
           }
           Write-Host "UDP 4711 listener found: $udpListeners"
@@ -1111,7 +1111,7 @@ jobs:
           $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
           Write-Host "Sent ListenStart command"
 
-          # Read messages — count binary (Opus) frames
+          # Read messages - count binary (Opus) frames
           $binaryFrames = 0
           $textMessages = @()
           $gotListening = $false
@@ -1141,7 +1141,7 @@ jobs:
                 break
               }
             } catch {
-              # Timeout reading — continue loop
+              # Timeout reading - continue loop
             }
           }
 
@@ -1166,11 +1166,11 @@ jobs:
             Write-Host "::warning::Partial success: got $binaryFrames frames but expected >=5"
             exit 0
           } elseif ($gotNoSource) {
-            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' — UDP packets not reaching audio pipeline"
+            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - UDP packets not reaching audio pipeline"
             Write-Host "Check: Is ReaStream sending to 127.0.0.1:4711? Is the UDP sender working?"
             exit 1
           } else {
-            Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status — WebSocket not responding"
+            Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
             exit 1
           }
 
