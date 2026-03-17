@@ -5,6 +5,7 @@
 
 use bytes::Bytes;
 use rubato::Resampler;
+use socket2::{Domain, Protocol, Socket, Type};
 use tokio::sync::broadcast;
 
 /// ReaStream magic bytes: "MRSR" (little-endian u32)
@@ -17,11 +18,13 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 const OPUS_FRAME_SAMPLES: usize = 960;
 
 /// UDP bind address for receiving ReaStream audio.
-/// We bind to 0.0.0.0:58710 (ReaStream's default port) WITHOUT SO_REUSEADDR.
-/// The app MUST start before REAPER so we get exclusive ownership of port 58710.
-/// If REAPER starts first and binds 0.0.0.0:58710, our bind will fail.
-/// ReaStream sends to 127.0.0.1:58710 — as long as we own the port, we get all packets.
-/// The startup launcher runs at boot before the user opens REAPER, ensuring correct order.
+/// We bind to 0.0.0.0:58710 (ReaStream's default port) WITH SO_REUSEADDR.
+/// The app MUST start BEFORE REAPER so we bind first. When ReaStream initializes
+/// later, it also binds 0.0.0.0:58710 with SO_REUSEADDR. On Windows, the
+/// first-bound socket gets priority for incoming packets. ReaStream sends to
+/// 127.0.0.1:58710, and our socket (bound first) receives them.
+/// CI deploy ensures correct order: stop REAPER → start app → restart REAPER.
+/// At boot, the startup launcher runs before the user opens REAPER.
 const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
 
 /// Parsed ReaStream packet
@@ -213,9 +216,23 @@ impl AudioPipeline {
 /// Spawn the UDP listener that captures ReaStream packets and broadcasts Opus frames
 pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
     tokio::spawn(async move {
-        let socket = match tokio::net::UdpSocket::bind(REASTREAM_BIND_ADDR).await {
+        // Use socket2 to set SO_REUSEADDR before binding. This allows ReaStream
+        // (which starts later) to also bind 0.0.0.0:58710. The first-bound socket
+        // (ours) gets priority for incoming packets on Windows.
+        let socket = match (|| -> Result<tokio::net::UdpSocket, Box<dyn std::error::Error>> {
+            let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse()?;
+            let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+            sock.set_reuse_address(true)?;
+            sock.bind(&addr.into())?;
+            sock.set_nonblocking(true)?;
+            let std_socket: std::net::UdpSocket = sock.into();
+            Ok(tokio::net::UdpSocket::from_std(std_socket)?)
+        })() {
             Ok(s) => {
-                tracing::info!("Audio listener bound to {}", REASTREAM_BIND_ADDR);
+                tracing::info!(
+                    "Audio listener bound to {} (SO_REUSEADDR, must start before REAPER)",
+                    REASTREAM_BIND_ADDR
+                );
                 s
             }
             Err(e) => {
