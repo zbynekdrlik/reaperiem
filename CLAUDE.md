@@ -762,6 +762,41 @@ is WRONG and must be rewritten.
 - "Element exists" tests prove rendering, NOT functionality
 - Use `page.waitForRequest()` to verify API calls fire without needing REAPER
 
+### ⚠️ USER-REPORTED ISSUES: E2E HARDENING FIRST, CODE SECOND
+
+**When the user reports a bug or issue, DO NOT start writing fix code. Start by writing an E2E test that catches the issue on the REAL deployed version.**
+
+This rule exists because Claude has repeatedly "fixed" the audio streaming "No Source" issue 20+ times with code changes that passed synthetic CI tests but never fixed the real problem on iem.lan. The fix always looked correct in isolation but never tested against the actual deployed system.
+
+**MANDATORY workflow for every user-reported issue:**
+
+```
+Phase 1: E2E HARDENING (do this FIRST — do NOT skip to Phase 2)
+  1. Write an E2E test that reproduces the EXACT issue the user reported
+  2. Run the test against the REAL deployed system (iem.lan / 10.77.9.231)
+  3. Confirm the test FAILS — proving it catches the real bug
+  4. If the test passes, your test is WRONG — the bug exists, your test doesn't detect it
+  5. DO NOT proceed to Phase 2 until you have a failing E2E test on the live system
+
+Phase 2: FIX (only after Phase 1 is complete)
+  1. Write the code fix
+  2. Deploy to iem.lan
+  3. Run the E2E test from Phase 1 against the deployed fix
+  4. Confirm the test PASSES on the REAL system
+  5. Only then report success to the user
+```
+
+**NEVER DO:**
+
+```
+❌ Write a fix without an E2E test that catches the issue on the live system
+❌ Write synthetic/localhost tests and claim the issue is fixed
+❌ Skip Phase 1 because "the fix is obvious"
+❌ Report success based on CI passing — CI uses synthetic data, not real REAPER
+```
+
+**The key difference from regular TDD:** Regular TDD tests run in CI with synthetic data. For user-reported issues, the E2E test MUST run against the real deployed system (iem.lan) to prove the fix works in production, not just in CI.
+
 ### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
 
 **NEVER claim a visual fix (icons, images, colors) is done without automated verification.**
