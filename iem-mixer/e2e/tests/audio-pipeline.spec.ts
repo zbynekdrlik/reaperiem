@@ -153,19 +153,16 @@ test.describe("Audio Pipeline (UDP → Opus → WebSocket)", () => {
         ws.send(JSON.stringify({ cmd: "ListenStart" }));
       });
 
-      ws.on("message", (data: Buffer | string, isBinary: boolean) => {
-        if (isBinary || Buffer.isBuffer(data)) {
+      ws.on("message", (data: Buffer, isBinary: boolean) => {
+        if (isBinary) {
           binaryFrames++;
-          messages.push({
-            type: "binary",
-            data: `${Buffer.isBuffer(data) ? data.length : 0} bytes`,
-          });
+          messages.push({ type: "binary", data: `${data.length} bytes` });
           if (binaryFrames >= 5) {
             clearTimeout(timeout);
             resolve();
           }
         } else {
-          const text = data.toString();
+          const text = data.toString("utf-8");
           messages.push({ type: "text", data: text });
           try {
             const msg = JSON.parse(text);
@@ -226,10 +223,10 @@ test.describe("Audio Pipeline (UDP → Opus → WebSocket)", () => {
         ws.send(JSON.stringify({ cmd: "ListenStart" }));
       });
 
-      ws.on("message", (data: Buffer | string, isBinary: boolean) => {
+      ws.on("message", (data: Buffer, isBinary: boolean) => {
         if (!isBinary) {
           try {
-            const msg = JSON.parse(data.toString());
+            const msg = JSON.parse(data.toString("utf-8"));
             if (msg?.data?.status === "listening") gotListening = true;
             if (msg?.data?.status === "no_source") {
               gotNoSource = true;
