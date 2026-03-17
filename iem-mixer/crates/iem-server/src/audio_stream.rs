@@ -1,103 +1,153 @@
-//! Audio streaming pipeline: ReaStream UDP → Resample → Opus → WebSocket
+//! Audio streaming pipeline: VBAN UDP → Resample → Opus → WebSocket
 //!
-//! Captures audio from REAPER via ReaStream VST (UDP packets on port 58710),
+//! Captures audio from REAPER via VBAN IEM VST3 (UDP packets on port 6980),
 //! resamples from 96kHz to 48kHz, encodes to Opus, and broadcasts as binary frames.
 
 use bytes::Bytes;
 use rubato::Resampler;
-use socket2::{Domain, Protocol, Socket, Type};
 use tokio::sync::broadcast;
 
-/// ReaStream magic bytes: "MRSR" (little-endian u32)
-const REASTREAM_MAGIC: &[u8; 4] = b"MRSR";
+/// VBAN magic bytes: "VBAN" as little-endian u32 = 0x4E414256
+const VBAN_MAGIC: [u8; 4] = [0x56, 0x42, 0x41, 0x4E]; // "VBAN" in LE
 
-/// ReaStream header size: 4 (magic) + 4 (packet_size) + 32 (identifier) + 1 (channels) + 4 (sample_rate) + 2 (block_size)
-const REASTREAM_HEADER_SIZE: usize = 47;
+/// VBAN header size: 28 bytes
+/// 4 (magic) + 1 (format_SR) + 1 (format_nbs) + 1 (format_nbc) + 1 (format_bit)
+/// + 16 (streamname) + 4 (nuFrame)
+const VBAN_HEADER_SIZE: usize = 28;
 
 /// Opus frame size in samples per channel at 48kHz (20ms)
 const OPUS_FRAME_SAMPLES: usize = 960;
 
-/// UDP bind address for receiving ReaStream audio.
-/// We bind to 0.0.0.0:58710 (ReaStream's default port) WITH SO_REUSEADDR.
-/// The app MUST start BEFORE REAPER so we bind first. When ReaStream initializes
-/// later, it also binds 0.0.0.0:58710 with SO_REUSEADDR. On Windows, the
-/// first-bound socket gets priority for incoming packets. ReaStream sends to
-/// 127.0.0.1:58710, and our socket (bound first) receives them.
-/// CI deploy ensures correct order: stop REAPER → start app → restart REAPER.
-/// At boot, the startup launcher runs before the user opens REAPER.
-const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
+/// UDP bind address for receiving VBAN audio from the local VBAN IEM VST3 plugin.
+/// Port 6980 is the standard VBAN port. Unlike ReaStream's hardcoded port 58710,
+/// VBAN's port is configurable and doesn't conflict with REAPER.
+/// No startup order dependency — plain bind, no SO_REUSEADDR needed.
+const VBAN_BIND_ADDR: &str = "127.0.0.1:6980";
 
-/// Parsed ReaStream packet
+/// VBAN sample rate lookup table (21 entries, index 0-20)
+const VBAN_SAMPLE_RATES: [u32; 21] = [
+    6000, 12000, 24000, 48000, 96000, 192000, 384000, // 0-6
+    8000, 16000, 32000, 64000, 128000, 256000, 512000, // 7-13
+    11025, 22050, 44100, 88200, 176400, 352800, 705600, // 14-20
+];
+
+/// VBAN data type IDs (lower 3 bits of format_bit)
+const VBAN_DATATYPE_INT16: u8 = 1;
+const VBAN_DATATYPE_FLOAT32: u8 = 4;
+
+/// Masks for parsing VBAN header fields
+const VBAN_SR_MASK: u8 = 0x1F;
+const VBAN_DATATYPE_MASK: u8 = 0x07;
+
+/// Parsed VBAN packet
 #[derive(Debug)]
-pub struct ReaStreamPacket {
+pub struct VbanPacket {
     pub channels: u8,
     pub sample_rate: u32,
-    pub block_size: u16,
+    pub samples_per_channel: u16,
     /// Interleaved float32 samples [L, R, L, R, ...]
     pub samples: Vec<f32>,
+    pub stream_name: String,
 }
 
-/// Parse a ReaStream UDP packet
+/// Parse a VBAN UDP packet
 ///
-/// ReaStream format (little-endian):
-/// - 4 bytes: magic "MRSR"
-/// - 4 bytes: packet_size (total size after magic)
-/// - 32 bytes: identifier (null-padded ASCII string)
-/// - 1 byte: channel count
-/// - 4 bytes: sample rate (u32)
-/// - 2 bytes: block_size (samples per channel in this packet)
-/// - remaining: interleaved float32 PCM samples
-pub fn parse_reastream_packet(data: &[u8]) -> Result<ReaStreamPacket, &'static str> {
-    if data.len() < REASTREAM_HEADER_SIZE {
+/// VBAN format (little-endian):
+/// - 4 bytes: magic 0x4E414256 ("VBAN" LE)
+/// - 1 byte: format_SR — sample rate index (bits 0-4) | protocol (bits 5-7)
+/// - 1 byte: format_nbs — samples per frame - 1 (0 = 1 sample, 255 = 256 samples)
+/// - 1 byte: format_nbc — channels - 1 (0 = 1 channel, 255 = 256 channels)
+/// - 1 byte: format_bit — data type (bits 0-2) | codec (bits 4-7)
+/// - 16 bytes: stream name (null-padded ASCII)
+/// - 4 bytes: frame counter (u32 LE)
+/// - remaining: interleaved audio data (INT16 or FLOAT32)
+pub fn parse_vban_packet(data: &[u8]) -> Result<VbanPacket, &'static str> {
+    if data.len() < VBAN_HEADER_SIZE {
         return Err("packet too short");
     }
 
     // Check magic
-    if &data[0..4] != REASTREAM_MAGIC {
+    if data[0..4] != VBAN_MAGIC {
         return Err("wrong magic bytes");
     }
 
     // Parse header fields
-    let channels = data[40];
-    if channels == 0 || channels > 8 {
+    let format_sr = data[4];
+    let format_nbs = data[5];
+    let format_nbc = data[6];
+    let format_bit = data[7];
+
+    // Sample rate from index
+    let sr_index = (format_sr & VBAN_SR_MASK) as usize;
+    if sr_index >= VBAN_SAMPLE_RATES.len() {
+        return Err("invalid sample rate index");
+    }
+    let sample_rate = VBAN_SAMPLE_RATES[sr_index];
+
+    // Samples per frame = format_nbs + 1
+    let samples_per_channel = (format_nbs as u16) + 1;
+
+    // Channels = format_nbc + 1
+    let channels = format_nbc + 1;
+    if channels == 0 {
         return Err("invalid channel count");
     }
 
-    let sample_rate = u32::from_le_bytes([data[41], data[42], data[43], data[44]]);
-    if sample_rate == 0 {
-        return Err("invalid sample rate");
-    }
+    // Data type
+    let data_type = format_bit & VBAN_DATATYPE_MASK;
 
-    let block_size = u16::from_le_bytes([data[45], data[46]]);
-    if block_size == 0 {
-        return Err("invalid block size");
-    }
+    // Stream name (16 bytes, null-terminated)
+    let name_bytes = &data[8..24];
+    let name_end = name_bytes.iter().position(|&b| b == 0).unwrap_or(16);
+    let stream_name = String::from_utf8_lossy(&name_bytes[..name_end]).to_string();
 
-    let expected_samples = block_size as usize * channels as usize;
-    let expected_bytes = expected_samples * 4; // f32 = 4 bytes
-    let audio_data = &data[REASTREAM_HEADER_SIZE..];
+    // Calculate expected audio data size
+    let total_samples = samples_per_channel as usize * channels as usize;
+    let audio_data = &data[VBAN_HEADER_SIZE..];
 
-    if audio_data.len() < expected_bytes {
-        return Err("truncated audio data");
-    }
+    let samples = match data_type {
+        VBAN_DATATYPE_INT16 => {
+            let expected_bytes = total_samples * 2;
+            if audio_data.len() < expected_bytes {
+                return Err("truncated audio data");
+            }
+            let mut samples = Vec::with_capacity(total_samples);
+            for i in 0..total_samples {
+                let offset = i * 2;
+                let raw = i16::from_le_bytes([audio_data[offset], audio_data[offset + 1]]);
+                samples.push(raw as f32 / 32767.0);
+            }
+            samples
+        }
+        VBAN_DATATYPE_FLOAT32 => {
+            let expected_bytes = total_samples * 4;
+            if audio_data.len() < expected_bytes {
+                return Err("truncated audio data");
+            }
+            let mut samples = Vec::with_capacity(total_samples);
+            for i in 0..total_samples {
+                let offset = i * 4;
+                let sample = f32::from_le_bytes([
+                    audio_data[offset],
+                    audio_data[offset + 1],
+                    audio_data[offset + 2],
+                    audio_data[offset + 3],
+                ]);
+                samples.push(sample);
+            }
+            samples
+        }
+        _ => {
+            return Err("unsupported data type");
+        }
+    };
 
-    let mut samples = Vec::with_capacity(expected_samples);
-    for i in 0..expected_samples {
-        let offset = i * 4;
-        let sample = f32::from_le_bytes([
-            audio_data[offset],
-            audio_data[offset + 1],
-            audio_data[offset + 2],
-            audio_data[offset + 3],
-        ]);
-        samples.push(sample);
-    }
-
-    Ok(ReaStreamPacket {
+    Ok(VbanPacket {
         channels,
         sample_rate,
-        block_size,
+        samples_per_channel,
         samples,
+        stream_name,
     })
 }
 
@@ -213,30 +263,18 @@ impl AudioPipeline {
     }
 }
 
-/// Spawn the UDP listener that captures ReaStream packets and broadcasts Opus frames
+/// Spawn the UDP listener that captures VBAN packets and broadcasts Opus frames
 pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
     tokio::spawn(async move {
-        // Use socket2 to set SO_REUSEADDR before binding. This allows ReaStream
-        // (which starts later) to also bind 0.0.0.0:58710. The first-bound socket
-        // (ours) gets priority for incoming packets on Windows.
-        let socket = match (|| -> Result<tokio::net::UdpSocket, Box<dyn std::error::Error>> {
-            let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse()?;
-            let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-            sock.set_reuse_address(true)?;
-            sock.bind(&addr.into())?;
-            sock.set_nonblocking(true)?;
-            let std_socket: std::net::UdpSocket = sock.into();
-            Ok(tokio::net::UdpSocket::from_std(std_socket)?)
-        })() {
+        // Plain bind — no SO_REUSEADDR needed. VBAN IEM VST sends to 127.0.0.1:6980
+        // and there's no port conflict with REAPER (unlike ReaStream's hardcoded 58710).
+        let socket = match tokio::net::UdpSocket::bind(VBAN_BIND_ADDR).await {
             Ok(s) => {
-                tracing::info!(
-                    "Audio listener bound to {} (SO_REUSEADDR, must start before REAPER)",
-                    REASTREAM_BIND_ADDR
-                );
+                tracing::info!("Audio listener bound to {}", VBAN_BIND_ADDR);
                 s
             }
             Err(e) => {
-                tracing::error!("Failed to bind audio UDP socket: {}", e);
+                tracing::error!("Failed to bind audio UDP socket on {}: {}", VBAN_BIND_ADDR, e);
                 return;
             }
         };
@@ -253,10 +291,10 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
                 }
             };
 
-            let packet = match parse_reastream_packet(&buf[..len]) {
+            let packet = match parse_vban_packet(&buf[..len]) {
                 Ok(p) => p,
                 Err(e) => {
-                    tracing::debug!("ReaStream parse error: {}", e);
+                    tracing::debug!("VBAN parse error: {}", e);
                     continue;
                 }
             };
@@ -269,7 +307,8 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
                         tracing::info!(
                             sample_rate = packet.sample_rate,
                             channels = packet.channels,
-                            "Audio pipeline initialized"
+                            stream_name = %packet.stream_name,
+                            "Audio pipeline initialized (VBAN)"
                         );
                         pipeline = Some(p);
                         pipeline.as_mut().unwrap()
@@ -295,102 +334,226 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
 mod tests {
     use super::*;
 
-    /// Build a minimal valid ReaStream packet for testing
-    fn build_reastream_packet(
+    /// Build a VBAN packet with INT16 audio data for testing
+    fn build_vban_packet(
         channels: u8,
         sample_rate: u32,
         samples_per_channel: u16,
         samples: &[f32],
+        stream_name: &str,
     ) -> Vec<u8> {
         let mut packet = Vec::new();
-        // Magic
-        packet.extend_from_slice(REASTREAM_MAGIC);
-        // Packet size (everything after magic)
-        let audio_bytes = samples.len() * 4;
-        let packet_size = 32 + 1 + 4 + 2 + audio_bytes;
-        packet.extend_from_slice(&(packet_size as u32).to_le_bytes());
-        // Identifier (32 bytes, null-padded)
-        let id = b"engineer";
-        packet.extend_from_slice(id);
-        packet.extend(std::iter::repeat(0u8).take(32 - id.len()));
-        // Channels
-        packet.push(channels);
-        // Sample rate
-        packet.extend_from_slice(&sample_rate.to_le_bytes());
-        // Block size (samples per channel)
-        packet.extend_from_slice(&samples_per_channel.to_le_bytes());
-        // Audio data (interleaved f32)
+
+        // Magic "VBAN" (LE)
+        packet.extend_from_slice(&VBAN_MAGIC);
+
+        // format_SR: sample rate index | protocol (audio = 0x00)
+        let sr_index = VBAN_SAMPLE_RATES
+            .iter()
+            .position(|&r| r == sample_rate)
+            .unwrap_or(3) as u8;
+        packet.push(sr_index); // protocol audio = 0x00 in upper bits
+
+        // format_nbs: samples per frame - 1
+        packet.push((samples_per_channel - 1) as u8);
+
+        // format_nbc: channels - 1
+        packet.push(channels - 1);
+
+        // format_bit: INT16 (1) | codec PCM (0x00)
+        packet.push(VBAN_DATATYPE_INT16);
+
+        // Stream name (16 bytes, null-padded)
+        let name_bytes = stream_name.as_bytes();
+        let name_len = name_bytes.len().min(16);
+        packet.extend_from_slice(&name_bytes[..name_len]);
+        packet.extend(std::iter::repeat(0u8).take(16 - name_len));
+
+        // Frame counter (u32 LE)
+        packet.extend_from_slice(&0u32.to_le_bytes());
+
+        // Audio data: interleaved INT16
+        for &s in samples {
+            let clamped = s.clamp(-1.0, 1.0);
+            let int16_val = (clamped * 32767.0) as i16;
+            packet.extend_from_slice(&int16_val.to_le_bytes());
+        }
+
+        packet
+    }
+
+    /// Build a VBAN packet with FLOAT32 audio data for testing
+    fn build_vban_packet_f32(
+        channels: u8,
+        sample_rate: u32,
+        samples_per_channel: u16,
+        samples: &[f32],
+        stream_name: &str,
+    ) -> Vec<u8> {
+        let mut packet = Vec::new();
+
+        // Magic "VBAN" (LE)
+        packet.extend_from_slice(&VBAN_MAGIC);
+
+        // format_SR
+        let sr_index = VBAN_SAMPLE_RATES
+            .iter()
+            .position(|&r| r == sample_rate)
+            .unwrap_or(3) as u8;
+        packet.push(sr_index);
+
+        // format_nbs
+        packet.push((samples_per_channel - 1) as u8);
+
+        // format_nbc
+        packet.push(channels - 1);
+
+        // format_bit: FLOAT32 (4) | codec PCM (0x00)
+        packet.push(VBAN_DATATYPE_FLOAT32);
+
+        // Stream name
+        let name_bytes = stream_name.as_bytes();
+        let name_len = name_bytes.len().min(16);
+        packet.extend_from_slice(&name_bytes[..name_len]);
+        packet.extend(std::iter::repeat(0u8).take(16 - name_len));
+
+        // Frame counter
+        packet.extend_from_slice(&0u32.to_le_bytes());
+
+        // Audio data: interleaved FLOAT32
         for &s in samples {
             packet.extend_from_slice(&s.to_le_bytes());
         }
+
         packet
     }
 
     #[test]
-    fn test_parse_valid_packet() {
+    fn test_parse_valid_int16_packet() {
         // 2 channels, 96kHz, 4 samples per channel = 8 interleaved samples
         let samples = vec![0.1, -0.1, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4];
-        let packet = build_reastream_packet(2, 96000, 4, &samples);
+        let packet = build_vban_packet(2, 96000, 4, &samples, "engineer");
 
-        let parsed = parse_reastream_packet(&packet).unwrap();
+        let parsed = parse_vban_packet(&packet).unwrap();
         assert_eq!(parsed.channels, 2);
         assert_eq!(parsed.sample_rate, 96000);
-        assert_eq!(parsed.block_size, 4);
+        assert_eq!(parsed.samples_per_channel, 4);
         assert_eq!(parsed.samples.len(), 8);
+        assert_eq!(parsed.stream_name, "engineer");
+        // INT16 conversion has quantization error, check within tolerance
+        assert!((parsed.samples[0] - 0.1).abs() < 0.001);
+        assert!((parsed.samples[1] - (-0.1)).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_parse_valid_float32_packet() {
+        let samples = vec![0.1, -0.1, 0.2, -0.2, 0.3, -0.3, 0.4, -0.4];
+        let packet = build_vban_packet_f32(2, 96000, 4, &samples, "engineer");
+
+        let parsed = parse_vban_packet(&packet).unwrap();
+        assert_eq!(parsed.channels, 2);
+        assert_eq!(parsed.sample_rate, 96000);
+        assert_eq!(parsed.samples.len(), 8);
+        // FLOAT32 is lossless
         assert!((parsed.samples[0] - 0.1).abs() < 1e-6);
         assert!((parsed.samples[1] - (-0.1)).abs() < 1e-6);
     }
 
     #[test]
     fn test_parse_wrong_magic() {
-        let mut packet = build_reastream_packet(2, 96000, 4, &[0.0; 8]);
+        let mut packet = build_vban_packet(2, 96000, 4, &[0.0; 8], "test");
         packet[0] = b'X'; // corrupt magic
         assert_eq!(
-            parse_reastream_packet(&packet).unwrap_err(),
+            parse_vban_packet(&packet).unwrap_err(),
             "wrong magic bytes"
         );
     }
 
     #[test]
     fn test_parse_truncated_header() {
-        let packet = b"MRSR"; // only magic, no header
+        let packet = &VBAN_MAGIC; // only magic, no header fields
         assert_eq!(
-            parse_reastream_packet(packet).unwrap_err(),
+            parse_vban_packet(packet).unwrap_err(),
             "packet too short"
         );
     }
 
     #[test]
     fn test_parse_truncated_audio() {
-        // Claim 4 samples per channel (8 floats = 32 bytes) but provide only 2 floats
-        let mut packet = build_reastream_packet(2, 96000, 4, &[0.0; 2]);
-        // Fix block_size to 4 even though we only have 2 samples
-        packet[45] = 4;
-        packet[46] = 0;
+        // Build a packet claiming 4 samples/ch but provide only 2 samples worth of data
+        let mut packet = build_vban_packet(2, 96000, 2, &[0.0; 4], "test");
+        // Overwrite format_nbs to claim 4 samples per channel (index 3 = 4 samples)
+        packet[5] = 3; // nbs = 3 means 4 samples per channel
         assert_eq!(
-            parse_reastream_packet(&packet).unwrap_err(),
+            parse_vban_packet(&packet).unwrap_err(),
             "truncated audio data"
-        );
-    }
-
-    #[test]
-    fn test_parse_zero_channels() {
-        let mut packet = build_reastream_packet(1, 96000, 1, &[0.0]);
-        packet[40] = 0; // zero channels
-        assert_eq!(
-            parse_reastream_packet(&packet).unwrap_err(),
-            "invalid channel count"
         );
     }
 
     #[test]
     fn test_parse_mono_packet() {
         let samples = vec![0.5, 0.6, 0.7, 0.8];
-        let packet = build_reastream_packet(1, 48000, 4, &samples);
-        let parsed = parse_reastream_packet(&packet).unwrap();
+        let packet = build_vban_packet(1, 48000, 4, &samples, "mono");
+        let parsed = parse_vban_packet(&packet).unwrap();
         assert_eq!(parsed.channels, 1);
         assert_eq!(parsed.sample_rate, 48000);
         assert_eq!(parsed.samples.len(), 4);
+    }
+
+    #[test]
+    fn test_int16_to_f32_conversion() {
+        // Verify INT16 → f32 conversion accuracy
+        let samples = vec![1.0, -1.0, 0.0, 0.5];
+        let packet = build_vban_packet(1, 48000, 4, &samples, "test");
+        let parsed = parse_vban_packet(&packet).unwrap();
+
+        // 1.0 → 32767 → 32767/32767.0 = 1.0 (exact)
+        assert!((parsed.samples[0] - 1.0).abs() < 0.001);
+        // -1.0 → -32767 → -32767/32767.0 ≈ -1.0
+        assert!((parsed.samples[1] - (-1.0)).abs() < 0.001);
+        // 0.0 → 0 → 0.0 (exact)
+        assert!((parsed.samples[2]).abs() < 0.001);
+        // 0.5 → 16383 → 16383/32767.0 ≈ 0.5
+        assert!((parsed.samples[3] - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_sample_rate_lookup() {
+        // Test all sample rates in the lookup table
+        for (idx, &rate) in VBAN_SAMPLE_RATES.iter().enumerate() {
+            let samples = vec![0.0; 2];
+            let packet = build_vban_packet(1, rate, 2, &samples, "test");
+            let parsed = parse_vban_packet(&packet).unwrap();
+            assert_eq!(
+                parsed.sample_rate, rate,
+                "Sample rate mismatch at index {}",
+                idx
+            );
+        }
+    }
+
+    #[test]
+    fn test_stream_name_parsing() {
+        let packet = build_vban_packet(1, 48000, 1, &[0.0], "engineer");
+        let parsed = parse_vban_packet(&packet).unwrap();
+        assert_eq!(parsed.stream_name, "engineer");
+
+        // Full 16-char name
+        let packet = build_vban_packet(1, 48000, 1, &[0.0], "1234567890123456");
+        let parsed = parse_vban_packet(&packet).unwrap();
+        // Name is truncated to 15 chars + null in build_vban_packet (16 bytes total)
+        assert_eq!(parsed.stream_name.len(), 16);
+    }
+
+    #[test]
+    fn test_unsupported_data_type() {
+        let mut packet = build_vban_packet(1, 48000, 1, &[0.0], "test");
+        // Set data type to INT24 (2) which we don't support
+        packet[7] = 2;
+        assert_eq!(
+            parse_vban_packet(&packet).unwrap_err(),
+            "unsupported data type"
+        );
     }
 
     #[test]
@@ -399,8 +562,6 @@ mod tests {
         let mut pipeline = AudioPipeline::new(96000, 2).unwrap();
 
         // Feed enough data: resampler chunk=1024, ratio=2:1, Opus frame=960
-        // Need multiple resampler chunks worth of data to produce output
-        // Feed 96000 samples (1 second) in large chunks to ensure pipeline produces frames
         let num_samples = 96000;
         let mut total_frames = 0;
 
@@ -441,7 +602,6 @@ mod tests {
         let mut decoder = opus::Decoder::new(48000, opus::Channels::Stereo).unwrap();
 
         // Encode and decode multiple frames to let the codec converge
-        // (first frames have codec startup artifacts, correlation improves after warmup)
         let num_frames = 20;
         let mut last_input = vec![0.0f32; 960 * 2];
         let mut last_decoded = vec![0.0f32; 960 * 2];
@@ -493,14 +653,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_udp_listener_receives_reastream_packet() {
+    async fn test_udp_listener_receives_vban_packet() {
         // Test the full server-side pipeline: UDP → parse → resample → encode → broadcast
-        //
-        // 1. Create a broadcast channel
-        // 2. Spawn the UDP listener on a test port
-        // 3. Send synthetic ReaStream packets
-        // 4. Verify Opus frames arrive on the broadcast receiver
-
         let (audio_tx, mut audio_rx) = broadcast::channel::<Bytes>(64);
 
         // Bind listener on an ephemeral port to avoid conflicts
@@ -518,7 +672,7 @@ mod tests {
                     Err(_) => continue,
                 };
 
-                let packet = match parse_reastream_packet(&buf[..len]) {
+                let packet = match parse_vban_packet(&buf[..len]) {
                     Ok(p) => p,
                     Err(_) => continue,
                 };
@@ -548,10 +702,10 @@ mod tests {
         let sender = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
         sender.connect(listener_addr).await.unwrap();
 
-        // Send ~1 second of 96kHz stereo audio as ReaStream packets
-        // Each packet: 512 samples per channel (typical ReaStream block size)
-        let samples_per_packet = 512;
-        let total_packets = (96000 / samples_per_packet) + 1; // >1 second
+        // Send ~1 second of 96kHz stereo audio as VBAN INT16 packets
+        // VBAN max samples per packet: 256 (format_nbs is u8, max 255 = 256 samples)
+        let samples_per_packet = 256;
+        let total_packets = (96000 / samples_per_packet) + 1;
 
         for pkt_idx in 0..total_packets {
             let mut samples = Vec::with_capacity(samples_per_packet * 2);
@@ -562,7 +716,8 @@ mod tests {
                 samples.push(val); // L
                 samples.push(val); // R
             }
-            let packet = build_reastream_packet(2, 96000, samples_per_packet as u16, &samples);
+            let packet =
+                build_vban_packet(2, 96000, samples_per_packet as u16, &samples, "engineer");
             sender.send(&packet).await.unwrap();
 
             // Small delay to avoid overwhelming the receiver
@@ -582,7 +737,6 @@ mod tests {
         }
 
         // 1 second of 96kHz → ~48000 samples at 48kHz → ~50 Opus frames (20ms each)
-        // Allow some margin due to resampler chunk boundaries
         assert!(
             frame_count >= 10,
             "Expected at least 10 Opus frames from ~1s of audio, got {}",
@@ -591,19 +745,12 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_address_uses_reastream_port() {
-        // We bind to ReaStream's default port 58710 on 0.0.0.0.
-        // The app MUST start before REAPER to get exclusive ownership.
-        // No SO_REUSEADDR — plain bind ensures we're the sole owner.
-        let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse().unwrap();
-        assert_eq!(
-            addr.port(),
-            58710,
-            "Must bind to ReaStream default port 58710"
-        );
+    fn test_bind_address_uses_vban_port() {
+        let addr: std::net::SocketAddr = VBAN_BIND_ADDR.parse().unwrap();
+        assert_eq!(addr.port(), 6980, "Must bind to VBAN port 6980");
         assert!(
-            addr.ip().is_unspecified(),
-            "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
+            addr.ip().is_loopback(),
+            "VBAN_BIND_ADDR must be 127.0.0.1 (localhost only), got {}",
             addr.ip()
         );
     }

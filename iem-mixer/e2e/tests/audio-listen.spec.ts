@@ -104,7 +104,7 @@ test.describe("Audio Listen Button (#90)", () => {
     const btnClass = await listenBtn.getAttribute("class");
     const hasStateChange =
       btnClass?.includes("listening") || btnClass?.includes("no-source");
-    // In CI without REAPER/ReaStream, we expect no-source or the WS may fail
+    // In CI without REAPER/VBAN, we expect no-source or the WS may fail
     // The key test is that the button click doesn't crash and changes state
     expect(btnClass).toBeTruthy();
   });

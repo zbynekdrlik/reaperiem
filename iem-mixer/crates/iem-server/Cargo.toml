@@ -1,6 +1,6 @@
 [package]
 name = "iem-server"
-version = "1.65.0"
+version = "1.66.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Axum API server for IEM mixer"
@@ -60,11 +60,10 @@ axum-server = { version = "0.8", features = ["tls-rustls"], optional = true }
 rustls = { version = "0.23", features = ["ring"], optional = true }
 dirs = { version = "6.0", optional = true }
 
-# Audio streaming (ReaStream -> Opus -> WebSocket)
+# Audio streaming (VBAN -> Opus -> WebSocket)
 opus = { version = "0.3", optional = true }
 rubato = { version = "0.14", optional = true }
 bytes = { version = "1", optional = true }
-socket2 = { version = "0.5", features = ["all"], optional = true }
 
 [[bin]]
 name = "iem-server"
@@ -75,5 +74,5 @@ required-features = ["standalone"]
 default = []
 standalone = ["tracing-subscriber"]
 tls = ["axum-server", "rustls", "dirs"]
-audio = ["dep:opus", "dep:rubato", "dep:bytes", "dep:socket2"]
+audio = ["dep:opus", "dep:rubato", "dep:bytes"]
 integration = []  # gates live REAPER integration tests in tests/reaper_live.rs

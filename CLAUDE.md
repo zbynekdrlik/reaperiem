@@ -353,7 +353,7 @@ Integration tests exist: `cargo test -p iem-server --features integration`
 
 ```bash
 # Register scripts dynamically (CI does this automatically):
-curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_reastream.lua|check_reastream.lua"
+curl "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua"
 sleep 3
 curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result"
 # Expected: OK:2
@@ -445,7 +445,7 @@ scripts/reascripts/*.lua  →  CI deploys to iem.lan REAPER/Scripts/reaperiem/
 
 **Two script types:**
 
-- **One-shot** (setup*reastream.lua, check_reastream.lua): Triggered via `/*/_RS_REAPERIEM_\*`, run once, write result to EXTSTATE
+- **One-shot** (setup*vban.lua, check_vban.lua): Triggered via `/*/_RS_REAPERIEM_\*`, run once, write result to EXTSTATE
 - **Deferred** (meter_bridge.lua): Run continuously via `reaper.defer()`, must NOT use `ShowConsoleMsg` (steals focus)
 
 ### Adding New MCP Tools
@@ -490,19 +490,19 @@ mcp/reaperiem_mcp/
 
 ### Registered ReaScripts (all in scripts/reascripts/)
 
-| Script                      | Action ID                       | Type     | Purpose                                         |
-| --------------------------- | ------------------------------- | -------- | ----------------------------------------------- |
-| meter_bridge.lua            | `_RS_REAPERIEM_METER_BRIDGE`    | Deferred | L/R stereo meters + dynamic script registration |
-| set_hardware_output.lua     | `_RS_REAPERIEM_SET_HW_OUT`      | One-shot | Set Dante output routing                        |
-| rename_track.lua            | `_RS_REAPERIEM_RENAME_TRACK`    | One-shot | Rename tracks live                              |
-| check_send_modes.lua        | `_RS_REAPERIEM_CHECK_SENDS`     | One-shot | Verify all sends are pre-fader                  |
-| fix_send_mode.lua           | `_RS_REAPERIEM_FIX_SENDS`       | One-shot | Fix sends to pre-fader post-FX                  |
-| setup_reastream.lua         | `_RS_REAPERIEM_SETUP_REASTREAM` | One-shot | Insert ReaStream VST on engineer track          |
-| check_reastream.lua         | `_RS_REAPERIEM_CHECK_REASTREAM` | One-shot | Verify ReaStream VST status                     |
-| setup_iem_project.lua       | -                               | One-shot | Initial project setup                           |
-| merge_stereo_inputs.lua     | -                               | One-shot | Merge mono inputs to stereo                     |
-| set_colors.lua              | -                               | One-shot | Set track colors                                |
-| create_sends_for_member.lua | -                               | One-shot | Create sends for new member                     |
+| Script                      | Action ID                    | Type     | Purpose                                         |
+| --------------------------- | ---------------------------- | -------- | ----------------------------------------------- |
+| meter_bridge.lua            | `_RS_REAPERIEM_METER_BRIDGE` | Deferred | L/R stereo meters + dynamic script registration |
+| set_hardware_output.lua     | `_RS_REAPERIEM_SET_HW_OUT`   | One-shot | Set Dante output routing                        |
+| rename_track.lua            | `_RS_REAPERIEM_RENAME_TRACK` | One-shot | Rename tracks live                              |
+| check_send_modes.lua        | `_RS_REAPERIEM_CHECK_SENDS`  | One-shot | Verify all sends are pre-fader                  |
+| fix_send_mode.lua           | `_RS_REAPERIEM_FIX_SENDS`    | One-shot | Fix sends to pre-fader post-FX                  |
+| setup_vban.lua              | `_RS_REAPERIEM_SETUP_VBAN`   | One-shot | Insert VBAN IEM VST3 on engineer track          |
+| check_vban.lua              | `_RS_REAPERIEM_CHECK_VBAN`   | One-shot | Verify VBAN IEM VST3 status                     |
+| setup_iem_project.lua       | -                            | One-shot | Initial project setup                           |
+| merge_stereo_inputs.lua     | -                            | One-shot | Merge mono inputs to stereo                     |
+| set_colors.lua              | -                            | One-shot | Set track colors                                |
+| create_sends_for_member.lua | -                            | One-shot | Create sends for new member                     |
 
 ### Common Operational Tasks
 
@@ -521,35 +521,26 @@ curl -sf "http://10.77.9.231/api/version" | python3 -m json.tool
 **Verify audio streaming pipeline:**
 
 ```bash
-curl "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_REASTREAM"
+curl "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_VBAN"
 sleep 2
-curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status"
-# Expected: PRESENT:track_idx=N:fx_idx=N:mode=send:enabled=yes
+curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/vban_status"
+# Expected: PRESENT:track_idx=N:fx_idx=N:enabled=yes
 ```
 
-### ReaStream Audio Streaming Configuration
+### VBAN Audio Streaming Configuration
 
 ```
-REAPER → ENGINEER inear track → ReaStream VST → UDP → iem-mixer-app → Opus → WebSocket → Browser
+REAPER → ENGINEER inear track → VBAN IEM VST3 → UDP 127.0.0.1:6980 → iem-mixer-app → Opus → WebSocket → Browser
 
-ReaStream settings (configured in GUI — NOT accessible via API):
-  - Mode: Send
-  - IP: 127.0.0.1
-  - Port: 58710 (HARDCODED — cannot be changed, confirmed by Cockos forums + protocol docs)
+VBAN IEM VST3 (custom, built in CI from iem-mixer/vban-vst/):
+  - Hardcoded: Send to 127.0.0.1:6980, stream name "engineer"
+  - Format: VBAN protocol, INT16 interleaved PCM
+  - No GUI configuration needed — auto-activates on insert
+  - Deployed to: C:\Program Files\Common Files\VST3\VBAN IEM.vst3
 
-App listens on: 0.0.0.0:58710 (MUST start BEFORE REAPER to own the port)
-ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
-Mode, IP, port: NOT exposed — GUI-only configuration
-
-CRITICAL STARTUP ORDER:
-  1. iem-mixer-app starts FIRST (binds 0.0.0.0:58710 without SO_REUSEADDR)
-  2. REAPER starts SECOND (ReaStream still sends to 127.0.0.1:58710)
-  3. Our app receives all packets because it owns the port exclusively
-
-  If REAPER starts first, its socket on 0.0.0.0:58710 absorbs ALL packets.
-  SO_REUSEADDR does NOT help — Windows delivers to the first-bound socket.
-  The CI deploy handles this: stops REAPER, installs+starts app, restarts REAPER.
-  At boot, the startup launcher runs before user opens REAPER.
+App listens on: 127.0.0.1:6980 (standard VBAN port)
+No startup order dependency — port 6980 is not shared with REAPER.
+No SO_REUSEADDR needed — plain bind.
 ```
 
 **Post-deploy verification (CI does this automatically):**

@@ -186,7 +186,7 @@ pub async fn start_server(
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
 
-    // Spawn audio listener (captures ReaStream UDP packets from REAPER)
+    // Spawn audio listener (captures VBAN UDP packets from REAPER)
     #[cfg(feature = "audio")]
     audio_stream::spawn_audio_listener(state.audio_tx.clone());
 

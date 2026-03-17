@@ -2,10 +2,10 @@
  * Audio Pipeline E2E Test
  *
  * Tests the full server-side audio pipeline:
- *   Synthetic ReaStream UDP → parse → resample → Opus encode → WebSocket binary frames
+ *   Synthetic VBAN UDP → parse → resample → Opus encode → WebSocket binary frames
  *
  * This test does NOT require REAPER or a browser audio player.
- * It sends synthetic UDP packets and verifies Opus frames arrive on the WebSocket.
+ * It sends synthetic VBAN UDP packets and verifies Opus frames arrive on the WebSocket.
  */
 
 import { test, expect } from "@playwright/test";
@@ -13,59 +13,75 @@ import * as dgram from "dgram";
 import WebSocket from "ws";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8080";
-const REASTREAM_PORT = 58710;
+const VBAN_PORT = 6980;
 
-/** Build a valid ReaStream UDP packet with a 440Hz sine tone */
-function buildReaStreamPacket(
+// VBAN protocol constants
+const VBAN_MAGIC = Buffer.from([0x56, 0x42, 0x41, 0x4e]); // "VBAN" in LE (0x4E414256)
+const VBAN_HEADER_SIZE = 28;
+
+// VBAN sample rate table (index 4 = 96000 Hz)
+const VBAN_SR_INDEX_96000 = 4;
+
+/** Build a valid VBAN UDP packet with a 440Hz sine tone (INT16 format) */
+function buildVBANPacket(
   sampleOffset: number,
   channels = 2,
   sampleRate = 96000,
-  samplesPerCh = 512,
+  samplesPerCh = 256,
 ): Buffer {
-  const audioBytes = samplesPerCh * channels * 4;
-  const packetSize = 32 + 1 + 4 + 2 + audioBytes;
-
-  const buf = Buffer.alloc(4 + 4 + 32 + 1 + 4 + 2 + audioBytes);
+  const audioBytes = samplesPerCh * channels * 2; // INT16 = 2 bytes per sample
+  const buf = Buffer.alloc(VBAN_HEADER_SIZE + audioBytes);
   let offset = 0;
 
-  // Magic "MRSR"
-  buf.write("MRSR", offset, "ascii");
+  // Magic "VBAN" (LE)
+  VBAN_MAGIC.copy(buf, offset);
   offset += 4;
 
-  // Packet size (LE u32)
-  buf.writeUInt32LE(packetSize, offset);
-  offset += 4;
-
-  // Identifier: "engineer" null-padded to 32 bytes
-  buf.write("engineer", offset, "ascii");
-  offset += 32; // rest is zero-filled by Buffer.alloc
-
-  // Channels (u8)
-  buf.writeUInt8(channels, offset);
+  // format_SR: sample rate index | protocol audio (0x00)
+  const srIndex =
+    sampleRate === 96000
+      ? VBAN_SR_INDEX_96000
+      : sampleRate === 48000
+        ? 3
+        : VBAN_SR_INDEX_96000;
+  buf.writeUInt8(srIndex, offset);
   offset += 1;
 
-  // Sample rate (LE u32)
-  buf.writeUInt32LE(sampleRate, offset);
+  // format_nbs: samples per frame - 1
+  buf.writeUInt8(samplesPerCh - 1, offset);
+  offset += 1;
+
+  // format_nbc: channels - 1
+  buf.writeUInt8(channels - 1, offset);
+  offset += 1;
+
+  // format_bit: INT16 (1) | codec PCM (0x00)
+  buf.writeUInt8(1, offset);
+  offset += 1;
+
+  // Stream name: "engineer" null-padded to 16 bytes
+  buf.write("engineer", offset, "ascii");
+  offset += 16; // rest is zero-filled by Buffer.alloc
+
+  // Frame counter (u32 LE)
+  buf.writeUInt32LE(Math.floor(sampleOffset / samplesPerCh), offset);
   offset += 4;
 
-  // Block size / samples per channel (LE u16)
-  buf.writeUInt16LE(samplesPerCh, offset);
-  offset += 2;
-
-  // Audio: interleaved f32 sine wave (440Hz)
+  // Audio: interleaved INT16 sine wave (440Hz)
   for (let i = 0; i < samplesPerCh; i++) {
     const t = (sampleOffset + i) / sampleRate;
     const val = 0.3 * Math.sin(2 * Math.PI * 440 * t);
+    const int16Val = Math.round(val * 32767);
     for (let ch = 0; ch < channels; ch++) {
-      buf.writeFloatLE(val, offset);
-      offset += 4;
+      buf.writeInt16LE(int16Val, offset);
+      offset += 2;
     }
   }
 
   return buf;
 }
 
-/** Send ReaStream UDP packets for a given duration */
+/** Send VBAN UDP packets for a given duration */
 function startUdpSender(durationMs: number): {
   stop: () => void;
   packetsSent: () => number;
@@ -73,12 +89,12 @@ function startUdpSender(durationMs: number): {
   const socket = dgram.createSocket("udp4");
   let sent = 0;
   let sampleOffset = 0;
-  const samplesPerPacket = 512;
-  const intervalMs = (samplesPerPacket / 96000) * 1000; // ~5.3ms
+  const samplesPerPacket = 256;
+  const intervalMs = (samplesPerPacket / 96000) * 1000; // ~2.67ms
 
   const interval = setInterval(() => {
-    const packet = buildReaStreamPacket(sampleOffset);
-    socket.send(packet, REASTREAM_PORT, "127.0.0.1");
+    const packet = buildVBANPacket(sampleOffset);
+    socket.send(packet, VBAN_PORT, "127.0.0.1");
     sampleOffset += samplesPerPacket;
     sent++;
   }, intervalMs);
@@ -116,8 +132,8 @@ async function getEngineerToken(): Promise<string> {
   return data.token;
 }
 
-test.describe("Audio Pipeline (UDP → Opus → WebSocket)", () => {
-  test("synthetic ReaStream UDP packets produce Opus frames on WebSocket", async () => {
+test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
+  test("synthetic VBAN UDP packets produce Opus frames on WebSocket", async () => {
     // Step 1: Start sending UDP packets BEFORE connecting WebSocket
     // The pipeline needs data to initialize (resampler + Opus encoder)
     const sender = startUdpSender(15000);
@@ -200,7 +216,7 @@ test.describe("Audio Pipeline (UDP → Opus → WebSocket)", () => {
     expect(gotListening).toBe(true);
     expect(gotNoSource).toBe(false);
     console.log(
-      `PASS: Received ${binaryFrames} Opus frames from ${sender.packetsSent()} UDP packets`,
+      `PASS: Received ${binaryFrames} Opus frames from ${sender.packetsSent()} VBAN UDP packets`,
     );
   });
 

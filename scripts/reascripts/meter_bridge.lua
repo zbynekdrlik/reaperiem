@@ -76,7 +76,7 @@ function main()
 
   -- Dynamic script registration via EXTSTATE (no REAPER restart needed)
   -- CI or curl sets "reaperiem/register_scripts" with pipe-delimited filenames
-  -- e.g. "setup_reastream.lua|check_reastream.lua"
+  -- e.g. "setup_vban.lua|check_vban.lua"
   local reg_request = reaper.GetExtState("reaperiem", "register_scripts")
   if reg_request ~= "" then
     local scripts_dir = reaper.GetResourcePath() .. "/Scripts/reaperiem/"
@@ -88,7 +88,7 @@ function main()
       if cmd_id ~= 0 then
         count = count + 1
         -- Store numeric action ID so CI can trigger the script
-        -- Key: "action_<basename>" e.g. "action_setup_reastream"
+        -- Key: "action_<basename>" e.g. "action_setup_vban"
         local base = filename:gsub("%.lua$", "")
         reaper.SetExtState("reaperiem", "action_" .. base, tostring(cmd_id), false)
         ids[#ids + 1] = base .. "=" .. cmd_id

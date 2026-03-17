@@ -3,9 +3,9 @@
 Audio Pipeline E2E Test
 
 Tests the full audio streaming pipeline:
-  ReaStream UDP -> iem-mixer-app -> Opus encode -> WebSocket -> this script
+  VBAN UDP -> iem-mixer-app -> Opus encode -> WebSocket -> this script
 
-Sends synthetic ReaStream UDP packets to localhost:58710 and verifies that
+Sends synthetic VBAN UDP packets to localhost:6980 and verifies that
 Opus-encoded audio frames arrive on the /ws/audio WebSocket endpoint.
 
 Usage:
@@ -24,41 +24,59 @@ import sys
 import threading
 import time
 
-# ReaStream packet constants
-REASTREAM_MAGIC = b"MRSR"
-# 32-byte null-padded identifier
-REASTREAM_ID = b"engineer" + b"\x00" * 24
+# VBAN packet constants
+VBAN_MAGIC = b"\x56\x42\x41\x4E"  # "VBAN" in little-endian (0x4E414256)
+VBAN_PORT = 6980
+VBAN_HEADER_SIZE = 28
+VBAN_SR_INDEX_96000 = 4  # Index into sample rate table for 96000 Hz
+VBAN_DATATYPE_INT16 = 1
 
 
-def build_reastream_packet(channels=2, sample_rate=96000, samples_per_ch=512,
-                           sample_offset=0):
-    """Build a single ReaStream UDP packet with a 440Hz sine tone."""
+def build_vban_packet(channels=2, sample_rate=96000, samples_per_ch=256,
+                      sample_offset=0, stream_name="engineer"):
+    """Build a single VBAN UDP packet with a 440Hz sine tone (INT16 format)."""
     pkt = bytearray()
-    pkt.extend(REASTREAM_MAGIC)
 
-    num_samples = samples_per_ch * channels
-    audio_bytes = num_samples * 4
-    packet_size = 32 + 1 + 4 + 2 + audio_bytes
-    pkt.extend(struct.pack("<I", packet_size))
-    pkt.extend(REASTREAM_ID)
-    pkt.append(channels)
-    pkt.extend(struct.pack("<I", sample_rate))
-    pkt.extend(struct.pack("<H", samples_per_ch))
+    # Magic "VBAN" (LE)
+    pkt.extend(VBAN_MAGIC)
 
+    # format_SR: sample rate index | protocol audio (0x00)
+    sr_index = VBAN_SR_INDEX_96000 if sample_rate == 96000 else 3
+    pkt.append(sr_index)
+
+    # format_nbs: samples per frame - 1
+    pkt.append(samples_per_ch - 1)
+
+    # format_nbc: channels - 1
+    pkt.append(channels - 1)
+
+    # format_bit: INT16 (1) | codec PCM (0x00)
+    pkt.append(VBAN_DATATYPE_INT16)
+
+    # Stream name (16 bytes, null-padded)
+    name_bytes = stream_name.encode("ascii")[:16]
+    pkt.extend(name_bytes)
+    pkt.extend(b"\x00" * (16 - len(name_bytes)))
+
+    # Frame counter (u32 LE)
+    pkt.extend(struct.pack("<I", sample_offset // samples_per_ch))
+
+    # Audio data: interleaved INT16
     for i in range(samples_per_ch):
         t = (sample_offset + i) / sample_rate
         val = 0.3 * math.sin(2 * math.pi * 440 * t)
+        int16_val = int(val * 32767)
         for _ in range(channels):
-            pkt.extend(struct.pack("<f", val))
+            pkt.extend(struct.pack("<h", int16_val))
 
     return bytes(pkt)
 
 
-def send_reastream_udp(host="127.0.0.1", port=58710, duration=5,
-                       sample_rate=96000, stop_event=None):
-    """Send synthetic ReaStream packets for a given duration."""
+def send_vban_udp(host="127.0.0.1", port=VBAN_PORT, duration=5,
+                  sample_rate=96000, stop_event=None):
+    """Send synthetic VBAN packets for a given duration."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    samples_per_pkt = 512
+    samples_per_pkt = 256
     interval = samples_per_pkt / sample_rate
     offset = 0
     sent = 0
@@ -67,7 +85,7 @@ def send_reastream_udp(host="127.0.0.1", port=58710, duration=5,
     while time.time() - start < duration:
         if stop_event and stop_event.is_set():
             break
-        pkt = build_reastream_packet(
+        pkt = build_vban_packet(
             channels=2,
             sample_rate=sample_rate,
             samples_per_ch=samples_per_pkt,
@@ -82,8 +100,8 @@ def send_reastream_udp(host="127.0.0.1", port=58710, duration=5,
     return sent
 
 
-def diagnose_udp(port=58710):
-    """Check if UDP port 58710 is in use and can receive packets."""
+def diagnose_udp(port=VBAN_PORT):
+    """Check if UDP port 6980 is in use and can receive packets."""
     print(f"=== UDP Port {port} Diagnostics ===")
 
     # Check if port is already bound
@@ -100,18 +118,12 @@ def diagnose_udp(port=58710):
 
     # Try sending a packet
     sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    pkt = build_reastream_packet(samples_per_ch=64)
+    pkt = build_vban_packet(samples_per_ch=64)
     try:
         sender.sendto(pkt, ("127.0.0.1", port))
         print(f"  Sent test packet to 127.0.0.1:{port}: OK")
     except Exception as e:
         print(f"  Sent test packet to 127.0.0.1:{port}: FAILED ({e})")
-
-    try:
-        sender.sendto(pkt, ("255.255.255.255", port))
-        print(f"  Sent test packet to 255.255.255.255:{port}: OK")
-    except Exception as e:
-        print(f"  Sent test packet to 255.255.255.255:{port}: FAILED ({e})")
 
     sender.close()
     return True
@@ -158,10 +170,10 @@ async def test_audio_ws(host="localhost", port=80, timeout=15, pin="1177"):
 
             # Start UDP sender in background
             udp_thread = threading.Thread(
-                target=send_reastream_udp,
+                target=send_vban_udp,
                 kwargs={
                     "host": "127.0.0.1",
-                    "port": 58710,
+                    "port": VBAN_PORT,
                     "duration": timeout,
                     "stop_event": stop_event,
                 },
@@ -229,12 +241,12 @@ def main():
         return 0
 
     if args.udp_only:
-        print(f"Sending ReaStream UDP to 127.0.0.1:58710 for {args.timeout}s...")
-        count = send_reastream_udp(duration=args.timeout)
+        print(f"Sending VBAN UDP to 127.0.0.1:{VBAN_PORT} for {args.timeout}s...")
+        count = send_vban_udp(duration=args.timeout)
         print(f"Sent {count} packets")
         return 0
 
-    print(f"Testing audio pipeline: UDP -> App ({args.host}:{args.port}) -> WebSocket")
+    print(f"Testing audio pipeline: VBAN UDP -> App ({args.host}:{args.port}) -> WebSocket")
     print(f"Timeout: {args.timeout}s")
     print()
 
