@@ -224,7 +224,10 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
             Ok(tokio::net::UdpSocket::from_std(std_socket)?)
         })() {
             Ok(s) => {
-                tracing::info!("Audio listener bound to {} (SO_REUSEADDR)", REASTREAM_BIND_ADDR);
+                tracing::info!(
+                    "Audio listener bound to {} (SO_REUSEADDR)",
+                    REASTREAM_BIND_ADDR
+                );
                 s
             }
             Err(e) => {
