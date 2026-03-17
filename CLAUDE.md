@@ -532,13 +532,12 @@ curl "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/reastream_status"
 ```
 REAPER → ENGINEER inear track → ReaStream VST → UDP → iem-mixer-app → Opus → WebSocket → Browser
 
-ReaStream settings (MUST be configured in GUI — NOT accessible via API):
+ReaStream settings (configured in GUI — NOT accessible via API):
   - Mode: Send
   - IP: 127.0.0.1
-  - Port: 4711
+  - Port: 58710 (default — no manual change needed)
 
-ReaStream default port: 58710 (but REAPER binds it — cannot use)
-App listens on: 0.0.0.0:4711 (custom port)
+App listens on: 0.0.0.0:58710 (shared with REAPER via SO_REUSEADDR)
 ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
 Mode, IP, port: NOT exposed — GUI-only configuration
 ```

@@ -8,8 +8,7 @@
 -- After this script inserts ReaStream, you MUST configure in the GUI:
 --   - Mode: Send
 --   - IP: 127.0.0.1
---   - Port: 4711
--- ReaStream's default port (58710) conflicts with REAPER's own binding.
+--   - Port: 58710 (default — no change needed, app shares port via SO_REUSEADDR)
 --
 -- Result is written to EXTSTATE for remote verification:
 --   reaper.GetExtState("reaperiem", "setup_reastream")
@@ -64,5 +63,5 @@ end
 
 -- NOTE: ReaStream mode/IP/port are NOT exposed as VST parameters.
 -- Only 4 params exist: resv, Bypass, Wet, Delta.
--- The user MUST configure Send mode, IP 127.0.0.1, port 4711 in the GUI.
+-- The user MUST configure Send mode, IP 127.0.0.1, port 58710 in the GUI.
 reaper.SetExtState("reaperiem", "setup_reastream", "OK:" .. track_idx .. ":" .. new_fx, false)

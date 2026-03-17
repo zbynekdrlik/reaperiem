@@ -498,18 +498,18 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Ensure Windows Firewall allows UDP 4711 (ReaStream audio)
+      - name: Ensure Windows Firewall allows UDP 58710 (ReaStream audio)
         shell: powershell
         continue-on-error: true
         run: |
-          # ReaStream VST sends audio via UDP to port 4711.
+          # ReaStream VST sends audio via UDP to port 58710 (default ReaStream port).
           # Windows Firewall blocks inbound UDP by default, even for localhost.
           # Creating firewall rules requires admin privileges.
           # This step is idempotent and continues on error (rules may already exist
           # from manual setup, or the runner may not have admin access).
           $ErrorActionPreference = "SilentlyContinue"
 
-          $ruleName = "IEM Mixer Audio UDP 4711"
+          $ruleName = "IEM Mixer Audio UDP 58710"
           $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
           if ($existing) {
             Write-Host "Firewall rule already exists: $ruleName"
@@ -518,7 +518,7 @@ jobs:
               -DisplayName $ruleName `
               -Direction Inbound `
               -Protocol UDP `
-              -LocalPort 4711 `
+              -LocalPort 58710 `
               -Action Allow `
               -Profile Any `
               -Description "Allow ReaStream audio UDP packets for IEM Mixer" 2>&1
@@ -526,13 +526,16 @@ jobs:
               Write-Host "Created firewall rule: $ruleName"
             } else {
               Write-Host "::warning::Cannot create firewall rule (needs admin). Run manually:"
-              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 4711' -Direction Inbound -Protocol UDP -LocalPort 4711 -Action Allow"
+              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 58710' -Direction Inbound -Protocol UDP -LocalPort 58710 -Action Allow"
             }
           }
 
-          # Check existing firewall rules for IEM/4711
+          # Also remove old 4711 firewall rule if present
+          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 4711" -ErrorAction SilentlyContinue
+
+          # Check existing firewall rules for IEM/58710
           $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|4711|reastream" }
+            Where-Object { $_.DisplayName -match "IEM|58710|reastream" }
           if ($rules) {
             Write-Host "Existing inbound firewall rules:"
             $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
@@ -1000,7 +1003,7 @@ jobs:
         shell: powershell
         run: |
           # This test PROVES the full audio pipeline works end-to-end:
-          #   1. Send synthetic ReaStream UDP to 127.0.0.1:4711
+          #   1. Send synthetic ReaStream UDP to 127.0.0.1:58710
           #   2. Login as engineer, get JWT
           #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
           #   4. Send ListenStart command
@@ -1009,13 +1012,13 @@ jobs:
 
           $ErrorActionPreference = "Stop"
 
-          # Verify UDP listener exists
-          $udpListeners = netstat -an | Select-String "UDP.*:4711"
+          # Verify UDP listener exists (port 58710 shared with REAPER via SO_REUSEADDR)
+          $udpListeners = netstat -an | Select-String "UDP.*:58710"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 4711 - app not listening for ReaStream"
+            Write-Host "::error::No UDP listener on port 58710 - app not listening for ReaStream"
             exit 1
           }
-          Write-Host "UDP 4711 listener found: $udpListeners"
+          Write-Host "UDP 58710 listener found: $udpListeners"
 
           # Step 1: Build ReaStream packets
           function Build-ReaStreamPacket {
@@ -1070,7 +1073,7 @@ jobs:
                 }
               }
               $data = [byte[]]$pkt.ToArray()
-              $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
+              $udp.Send($data, $data.Length, "127.0.0.1", 58710) | Out-Null
               $offset += $samplesPerCh; $sent++
               Start-Sleep -Milliseconds 5
             }
@@ -1167,7 +1170,7 @@ jobs:
             exit 0
           } elseif ($gotNoSource) {
             Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - UDP packets not reaching audio pipeline"
-            Write-Host "Check: Is ReaStream sending to 127.0.0.1:4711? Is the UDP sender working?"
+            Write-Host "Check: Is ReaStream sending to 127.0.0.1:58710? Is the UDP sender working?"
             exit 1
           } else {
             Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
