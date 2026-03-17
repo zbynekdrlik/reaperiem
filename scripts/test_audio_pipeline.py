@@ -5,7 +5,7 @@ Audio Pipeline E2E Test
 Tests the full audio streaming pipeline:
   ReaStream UDP -> iem-mixer-app -> Opus encode -> WebSocket -> this script
 
-Sends synthetic ReaStream UDP packets to localhost:58710 and verifies that
+Sends synthetic ReaStream UDP packets to localhost:4711 and verifies that
 Opus-encoded audio frames arrive on the /ws/audio WebSocket endpoint.
 
 Usage:
@@ -54,7 +54,7 @@ def build_reastream_packet(channels=2, sample_rate=96000, samples_per_ch=512,
     return bytes(pkt)
 
 
-def send_reastream_udp(host="127.0.0.1", port=58710, duration=5,
+def send_reastream_udp(host="127.0.0.1", port=4711, duration=5,
                        sample_rate=96000, stop_event=None):
     """Send synthetic ReaStream packets for a given duration."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -82,8 +82,8 @@ def send_reastream_udp(host="127.0.0.1", port=58710, duration=5,
     return sent
 
 
-def diagnose_udp(port=58710):
-    """Check if UDP port 58710 is in use and can receive packets."""
+def diagnose_udp(port=4711):
+    """Check if UDP port 4711 is in use and can receive packets."""
     print(f"=== UDP Port {port} Diagnostics ===")
 
     # Check if port is already bound
@@ -161,7 +161,7 @@ async def test_audio_ws(host="localhost", port=80, timeout=15, pin="1177"):
                 target=send_reastream_udp,
                 kwargs={
                     "host": "127.0.0.1",
-                    "port": 58710,
+                    "port": 4711,
                     "duration": timeout,
                     "stop_event": stop_event,
                 },
@@ -229,7 +229,7 @@ def main():
         return 0
 
     if args.udp_only:
-        print(f"Sending ReaStream UDP to 127.0.0.1:58710 for {args.timeout}s...")
+        print(f"Sending ReaStream UDP to 127.0.0.1:4711 for {args.timeout}s...")
         count = send_reastream_udp(duration=args.timeout)
         print(f"Sent {count} packets")
         return 0

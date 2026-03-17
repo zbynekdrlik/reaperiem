@@ -1,11 +1,10 @@
 //! Audio streaming pipeline: ReaStream UDP → Resample → Opus → WebSocket
 //!
-//! Captures audio from REAPER via ReaStream VST (UDP packets on port 58710),
+//! Captures audio from REAPER via ReaStream VST (UDP packets on port 4711),
 //! resamples from 96kHz to 48kHz, encodes to Opus, and broadcasts as binary frames.
 
 use bytes::Bytes;
 use rubato::Resampler;
-use socket2::{Domain, Protocol, Socket, Type};
 use tokio::sync::broadcast;
 
 /// ReaStream magic bytes: "MRSR" (little-endian u32)
@@ -18,11 +17,12 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 const OPUS_FRAME_SAMPLES: usize = 960;
 
 /// UDP bind address for receiving ReaStream audio.
-/// We bind to 127.0.0.1:58710 (ReaStream's default port) with SO_REUSEADDR.
-/// REAPER also binds 0.0.0.0:58710 for its own ReaStream receive socket,
-/// but Windows routes packets sent to 127.0.0.1 to the more specific binding.
-/// ReaStream sends to 127.0.0.1 by default, so our app receives those packets.
-const REASTREAM_BIND_ADDR: &str = "127.0.0.1:58710";
+/// We use port 4711 (NOT ReaStream's default 58710) because REAPER's own
+/// ReaStream socket binds 0.0.0.0:58710 and absorbs ALL packets on that port.
+/// SO_REUSEADDR does NOT duplicate UDP packets on Windows — the first-bound
+/// socket (REAPER) gets everything. Port 4711 is exclusively ours.
+/// ReaStream must be configured in its GUI to send to port 4711.
+const REASTREAM_BIND_ADDR: &str = "0.0.0.0:4711";
 
 /// Parsed ReaStream packet
 #[derive(Debug)]
@@ -213,22 +213,9 @@ impl AudioPipeline {
 /// Spawn the UDP listener that captures ReaStream packets and broadcasts Opus frames
 pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
     tokio::spawn(async move {
-        // Use socket2 to set SO_REUSEADDR before binding. This allows us to
-        // share port 58710 with REAPER's own ReaStream receive socket.
-        let socket = match (|| -> Result<tokio::net::UdpSocket, Box<dyn std::error::Error>> {
-            let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse()?;
-            let sock = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-            sock.set_reuse_address(true)?;
-            sock.bind(&addr.into())?;
-            sock.set_nonblocking(true)?;
-            let std_socket: std::net::UdpSocket = sock.into();
-            Ok(tokio::net::UdpSocket::from_std(std_socket)?)
-        })() {
+        let socket = match tokio::net::UdpSocket::bind(REASTREAM_BIND_ADDR).await {
             Ok(s) => {
-                tracing::info!(
-                    "Audio listener bound to {} (SO_REUSEADDR)",
-                    REASTREAM_BIND_ADDR
-                );
+                tracing::info!("Audio listener bound to {}", REASTREAM_BIND_ADDR);
                 s
             }
             Err(e) => {
@@ -587,20 +574,20 @@ mod tests {
     }
 
     #[test]
-    fn test_bind_address_uses_reastream_default_port() {
-        // ReaStream's default port is 58710.
-        // Bind to 127.0.0.1 (more specific than REAPER's 0.0.0.0) so Windows
-        // routes packets sent to 127.0.0.1 to our socket.
+    fn test_bind_address_uses_exclusive_port() {
+        // We use port 4711 exclusively — NOT ReaStream's default 58710.
+        // REAPER's own socket on 0.0.0.0:58710 absorbs all UDP packets,
+        // making SO_REUSEADDR port sharing impossible on Windows.
         let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse().unwrap();
-        assert!(
-            addr.ip().is_loopback(),
-            "REASTREAM_BIND_ADDR must be 127.0.0.1, got {}",
-            addr.ip()
-        );
         assert_eq!(
             addr.port(),
-            58710,
-            "Must bind to ReaStream default port 58710 (shared with REAPER via SO_REUSEADDR)"
+            4711,
+            "Must bind to port 4711 (exclusive, not shared with REAPER)"
+        );
+        assert!(
+            addr.ip().is_unspecified(),
+            "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
+            addr.ip()
         );
     }
 

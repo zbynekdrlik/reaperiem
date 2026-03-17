@@ -535,11 +535,18 @@ REAPER → ENGINEER inear track → ReaStream VST → UDP → iem-mixer-app → 
 ReaStream settings (configured in GUI — NOT accessible via API):
   - Mode: Send
   - IP: 127.0.0.1
-  - Port: 58710 (default — no manual change needed)
+  - Port: 4711 (NOT default 58710 — REAPER's own socket on 0.0.0.0:58710 absorbs all packets)
 
-App listens on: 127.0.0.1:58710 (specific binding wins over REAPER's 0.0.0.0:58710)
+App listens on: 0.0.0.0:4711 (exclusive port, not shared with REAPER)
 ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
 Mode, IP, port: NOT exposed — GUI-only configuration
+
+WHY port 4711 instead of 58710:
+  REAPER's ReaStream VST binds 0.0.0.0:58710 even in send mode (for its receive capability).
+  SO_REUSEADDR does NOT duplicate UDP packets on Windows — the first-bound socket (REAPER)
+  gets everything. Our app on 127.0.0.1:58710 gets ZERO packets.
+  Port 4711 is exclusively ours — 100% packet delivery confirmed by diagnostics.
+  This is a ONE-TIME manual GUI change that persists in the REAPER project file.
 ```
 
 **Post-deploy verification (CI does this automatically):**

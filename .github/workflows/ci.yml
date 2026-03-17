@@ -498,18 +498,17 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Ensure Windows Firewall allows UDP 58710 (ReaStream audio)
+      - name: Ensure Windows Firewall allows UDP 4711 (ReaStream audio)
         shell: powershell
         continue-on-error: true
         run: |
-          # ReaStream VST sends audio via UDP to port 58710 (default ReaStream port).
-          # Windows Firewall blocks inbound UDP by default, even for localhost.
-          # Creating firewall rules requires admin privileges.
-          # This step is idempotent and continues on error (rules may already exist
-          # from manual setup, or the runner may not have admin access).
+          # ReaStream VST sends audio via UDP to port 4711 (configured in GUI).
+          # We use port 4711 instead of ReaStream's default 58710 because REAPER's
+          # own socket on 0.0.0.0:58710 absorbs all packets (SO_REUSEADDR doesn't
+          # duplicate UDP on Windows).
           $ErrorActionPreference = "SilentlyContinue"
 
-          $ruleName = "IEM Mixer Audio UDP 58710"
+          $ruleName = "IEM Mixer Audio UDP 4711"
           $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
           if ($existing) {
             Write-Host "Firewall rule already exists: $ruleName"
@@ -518,24 +517,24 @@ jobs:
               -DisplayName $ruleName `
               -Direction Inbound `
               -Protocol UDP `
-              -LocalPort 58710 `
+              -LocalPort 4711 `
               -Action Allow `
               -Profile Any `
-              -Description "Allow ReaStream audio UDP packets for IEM Mixer" 2>&1
+              -Description "Allow ReaStream audio UDP packets for IEM Mixer on port 4711" 2>&1
             if ($?) {
               Write-Host "Created firewall rule: $ruleName"
             } else {
               Write-Host "::warning::Cannot create firewall rule (needs admin). Run manually:"
-              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 58710' -Direction Inbound -Protocol UDP -LocalPort 58710 -Action Allow"
+              Write-Host "::warning::  New-NetFirewallRule -DisplayName 'IEM Mixer Audio UDP 4711' -Direction Inbound -Protocol UDP -LocalPort 4711 -Action Allow"
             }
           }
 
-          # Also remove old 4711 firewall rule if present
-          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 4711" -ErrorAction SilentlyContinue
+          # Remove old 58710 firewall rule if present (no longer needed)
+          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 58710" -ErrorAction SilentlyContinue
 
-          # Check existing firewall rules for IEM/58710
+          # Check existing firewall rules for IEM/4711
           $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|58710|reastream" }
+            Where-Object { $_.DisplayName -match "IEM|4711|reastream" }
           if ($rules) {
             Write-Host "Existing inbound firewall rules:"
             $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
@@ -1003,7 +1002,7 @@ jobs:
         shell: powershell
         run: |
           # This test PROVES the full audio pipeline works end-to-end:
-          #   1. Send synthetic ReaStream UDP to 127.0.0.1:58710
+          #   1. Send synthetic ReaStream UDP to 127.0.0.1:4711
           #   2. Login as engineer, get JWT
           #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
           #   4. Send ListenStart command
@@ -1012,13 +1011,13 @@ jobs:
 
           $ErrorActionPreference = "Stop"
 
-          # Verify UDP listener exists (port 58710 shared with REAPER via SO_REUSEADDR)
-          $udpListeners = netstat -an | Select-String "UDP.*:58710"
+          # Verify UDP listener exists on port 4711 (exclusive — not shared with REAPER)
+          $udpListeners = netstat -an | Select-String "UDP.*:4711"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 58710 - app not listening for ReaStream"
+            Write-Host "::error::No UDP listener on port 4711 - app not listening for ReaStream"
             exit 1
           }
-          Write-Host "UDP 58710 listener found: $udpListeners"
+          Write-Host "UDP 4711 listener found: $udpListeners"
 
           # Step 1: Build ReaStream packets
           function Build-ReaStreamPacket {
@@ -1073,7 +1072,7 @@ jobs:
                 }
               }
               $data = [byte[]]$pkt.ToArray()
-              $udp.Send($data, $data.Length, "127.0.0.1", 58710) | Out-Null
+              $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
               $offset += $samplesPerCh; $sent++
               Start-Sleep -Milliseconds 5
             }
@@ -1170,11 +1169,73 @@ jobs:
             exit 0
           } elseif ($gotNoSource) {
             Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - UDP packets not reaching audio pipeline"
-            Write-Host "Check: Is ReaStream sending to 127.0.0.1:58710? Is the UDP sender working?"
+            Write-Host "Check: Is ReaStream sending to 127.0.0.1:4711? Is the UDP sender working?"
             exit 1
           } else {
             Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
             exit 1
+          }
+
+      - name: Test REAL audio from REAPER (no synthetic UDP)
+        shell: powershell
+        continue-on-error: true
+        run: |
+          # This test verifies REAL ReaStream audio from REAPER reaches the app.
+          # It does NOT send synthetic UDP — it relies on REAPER's ReaStream VST
+          # being configured to send to port 4711.
+          # This step uses continue-on-error because it requires one-time manual
+          # ReaStream GUI configuration (port 58710 -> 4711).
+
+          $ErrorActionPreference = "Stop"
+
+          # Authenticate as engineer
+          $authBody = '{"member":"engineer","pin":"1177"}'
+          $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
+          $token = ($authResp.Content | ConvertFrom-Json).token
+          if (-not $token) {
+            Write-Host "::warning::REAL AUDIO: Cannot authenticate"
+            exit 0
+          }
+
+          # Connect WebSocket — no synthetic UDP, only real REAPER audio
+          $ws = New-Object System.Net.WebSockets.ClientWebSocket
+          $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
+          $ct = New-Object System.Threading.CancellationTokenSource(15000)
+
+          try {
+            $ws.ConnectAsync($uri, $ct.Token).Wait()
+          } catch {
+            Write-Host "::warning::REAL AUDIO: WebSocket connection failed"
+            exit 0
+          }
+
+          # Send ListenStart
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
+          $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
+
+          # Wait up to 10 seconds for REAL binary Opus frames
+          $readBuf = New-Object byte[] 65536
+          $readSegment = New-Object System.ArraySegment[byte]($readBuf, 0, $readBuf.Length)
+          $binaryFrames = 0
+          $deadline = [DateTime]::UtcNow.AddSeconds(10)
+
+          while ([DateTime]::UtcNow -lt $deadline -and $binaryFrames -lt 3) {
+            try {
+              $readCt = New-Object System.Threading.CancellationTokenSource(3000)
+              $result = $ws.ReceiveAsync($readSegment, $readCt.Token).GetAwaiter().GetResult()
+              if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Binary) {
+                $binaryFrames++
+              }
+            } catch {}
+          }
+
+          try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [System.Threading.CancellationToken]::None).Wait() } catch {}
+
+          if ($binaryFrames -ge 3) {
+            Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER)"
+          } else {
+            Write-Host "::warning::REAL AUDIO E2E: No real audio frames received ($binaryFrames). ReaStream port may need GUI config to 4711."
           }
 
       - name: Verify deployment

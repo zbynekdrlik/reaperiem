@@ -13,7 +13,7 @@ import * as dgram from "dgram";
 import WebSocket from "ws";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8080";
-const REASTREAM_PORT = 58710;
+const REASTREAM_PORT = 4711;
 
 /** Build a valid ReaStream UDP packet with a 440Hz sine tone */
 function buildReaStreamPacket(
