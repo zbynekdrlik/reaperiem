@@ -537,7 +537,7 @@ ReaStream settings (configured in GUI — NOT accessible via API):
   - IP: 127.0.0.1
   - Port: 58710 (default — no manual change needed)
 
-App listens on: 0.0.0.0:58710 (shared with REAPER via SO_REUSEADDR)
+App listens on: 127.0.0.1:58710 (specific binding wins over REAPER's 0.0.0.0:58710)
 ReaStream VST params exposed to API: only 4 (resv, Bypass, Wet, Delta)
 Mode, IP, port: NOT exposed — GUI-only configuration
 ```

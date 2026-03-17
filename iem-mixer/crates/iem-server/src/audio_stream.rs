@@ -18,10 +18,11 @@ const REASTREAM_HEADER_SIZE: usize = 47;
 const OPUS_FRAME_SAMPLES: usize = 960;
 
 /// UDP bind address for receiving ReaStream audio.
-/// We bind to ReaStream's default port (58710) with SO_REUSEADDR so that
-/// both REAPER and our app can share the port. This way ReaStream works
-/// out-of-the-box without manual GUI configuration.
-const REASTREAM_BIND_ADDR: &str = "0.0.0.0:58710";
+/// We bind to 127.0.0.1:58710 (ReaStream's default port) with SO_REUSEADDR.
+/// REAPER also binds 0.0.0.0:58710 for its own ReaStream receive socket,
+/// but Windows routes packets sent to 127.0.0.1 to the more specific binding.
+/// ReaStream sends to 127.0.0.1 by default, so our app receives those packets.
+const REASTREAM_BIND_ADDR: &str = "127.0.0.1:58710";
 
 /// Parsed ReaStream packet
 #[derive(Debug)]
@@ -588,11 +589,12 @@ mod tests {
     #[test]
     fn test_bind_address_uses_reastream_default_port() {
         // ReaStream's default port is 58710.
-        // Bind to 0.0.0.0 to receive from any interface.
+        // Bind to 127.0.0.1 (more specific than REAPER's 0.0.0.0) so Windows
+        // routes packets sent to 127.0.0.1 to our socket.
         let addr: std::net::SocketAddr = REASTREAM_BIND_ADDR.parse().unwrap();
         assert!(
-            addr.ip().is_unspecified(),
-            "REASTREAM_BIND_ADDR must be 0.0.0.0, got {}",
+            addr.ip().is_loopback(),
+            "REASTREAM_BIND_ADDR must be 127.0.0.1, got {}",
             addr.ip()
         );
         assert_eq!(
