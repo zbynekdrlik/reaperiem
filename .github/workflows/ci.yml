@@ -996,97 +996,182 @@ jobs:
             Write-Host "::warning::ReaStream diagnostic failed: $($_.Exception.Message)"
           }
 
-      - name: Test audio pipeline (UDP delivery)
+      - name: Test audio pipeline (UDP → WebSocket Opus frames)
         shell: powershell
-        continue-on-error: true
         run: |
-          $ErrorActionPreference = "SilentlyContinue"
+          # This test PROVES the full audio pipeline works end-to-end:
+          #   1. Send synthetic ReaStream UDP to 127.0.0.1:4711
+          #   2. Login as engineer, get JWT
+          #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
+          #   4. Send ListenStart command
+          #   5. Verify binary Opus frames arrive
+          #   FAIL if no binary frames within 15 seconds
 
-          # Check if app is listening on UDP 4711
+          $ErrorActionPreference = "Stop"
+
+          # Verify UDP listener exists
           $udpListeners = netstat -an | Select-String "UDP.*:4711"
-          if ($udpListeners) {
-            Write-Host "UDP 4711 listener found:"
-            $udpListeners | ForEach-Object { Write-Host "  $_" }
-          } else {
-            Write-Host "::warning::No UDP listener on port 4711"
-            exit 0
+          if (-not $udpListeners) {
+            Write-Host "::error::No UDP listener on port 4711 — app not listening for ReaStream"
+            exit 1
           }
+          Write-Host "UDP 4711 listener found: $udpListeners"
 
-          # Check Windows Firewall rules
-          $fwRules = Get-NetFirewallRule -Direction Inbound -Action Allow -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|4711" }
-          if ($fwRules) {
-            Write-Host "Firewall rules:"
-            $fwRules | ForEach-Object { Write-Host "  $($_.DisplayName) ($($_.Action))" }
-          } else {
-            Write-Host "::warning::No firewall rules for IEM/4711"
-          }
-
-          # Build a valid ReaStream packet (2ch, 96kHz, 64 samples/ch)
-          $channels = 2
-          $sampleRate = 96000
-          $samplesPerCh = 64
-          $pkt = New-Object System.Collections.ArrayList
-          # Magic "MRSR"
-          foreach ($b in @(0x4D,0x52,0x53,0x52)) { [void]$pkt.Add([byte]$b) }
-          # Packet size
-          $audioBytes = $samplesPerCh * $channels * 4
-          $pktSize = 32 + 1 + 4 + 2 + $audioBytes
-          foreach ($b in [BitConverter]::GetBytes([uint32]$pktSize)) { [void]$pkt.Add($b) }
-          # Identifier "engineer" (32 bytes null-padded)
-          $id = [System.Text.Encoding]::ASCII.GetBytes("engineer")
-          foreach ($b in $id) { [void]$pkt.Add($b) }
-          for ($i = 0; $i -lt (32 - $id.Length); $i++) { [void]$pkt.Add([byte]0) }
-          # Channels
-          [void]$pkt.Add([byte]$channels)
-          # Sample rate
-          foreach ($b in [BitConverter]::GetBytes([uint32]$sampleRate)) { [void]$pkt.Add($b) }
-          # Block size
-          foreach ($b in [BitConverter]::GetBytes([uint16]$samplesPerCh)) { [void]$pkt.Add($b) }
-          # Audio: 440Hz sine
-          for ($i = 0; $i -lt $samplesPerCh; $i++) {
-            $t = $i / $sampleRate
-            $val = [float](0.3 * [Math]::Sin(2 * [Math]::PI * 440 * $t))
-            $sampleBytes = [BitConverter]::GetBytes($val)
-            for ($ch = 0; $ch -lt $channels; $ch++) {
-              foreach ($b in $sampleBytes) { [void]$pkt.Add($b) }
-            }
-          }
-          $data = [byte[]]$pkt.ToArray()
-
-          # Send packets via localhost and broadcast
-          $udp = New-Object System.Net.Sockets.UdpClient
-          $udp.EnableBroadcast = $true
-          $sent = 0
-          for ($i = 0; $i -lt 100; $i++) {
-            $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
-            $sent++
-            Start-Sleep -Milliseconds 5
-          }
-          $udp.Close()
-          Write-Host "Sent $sent ReaStream packets ($($data.Length) bytes each) to 127.0.0.1:4711"
-
-          # Check app logs for pipeline initialization
-          Start-Sleep -Seconds 2
-          $logDir = "$env:APPDATA\iem-mixer\logs"
-          $logFile = Get-ChildItem $logDir -File -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if ($logFile) {
-            $recent = Get-Content $logFile.FullName -Tail 10
-            $pipelineInit = $recent | Select-String "Audio pipeline initialized"
-            if ($pipelineInit) {
-              Write-Host "Audio pipeline initialized: $pipelineInit"
-              Write-Host "Audio UDP delivery: PASS"
-            } else {
-              # Pipeline may have been initialized earlier
-              $anyInit = Get-Content $logFile.FullName | Select-String "Audio pipeline initialized"
-              if ($anyInit) {
-                Write-Host "Audio pipeline was initialized earlier: $($anyInit[-1])"
-                Write-Host "Audio UDP delivery: PASS (pipeline already running)"
-              } else {
-                Write-Host "::warning::Audio pipeline NOT initialized - UDP packets may not be reaching listener"
+          # Step 1: Build ReaStream packets
+          function Build-ReaStreamPacket {
+            param([int]$SampleOffset = 0)
+            $channels = 2; $sampleRate = 96000; $samplesPerCh = 128
+            $audioBytes = $samplesPerCh * $channels * 4
+            $pktSize = 32 + 1 + 4 + 2 + $audioBytes
+            $pkt = New-Object System.Collections.ArrayList
+            foreach ($b in @(0x4D,0x52,0x53,0x52)) { [void]$pkt.Add([byte]$b) }
+            foreach ($b in [BitConverter]::GetBytes([uint32]$pktSize)) { [void]$pkt.Add($b) }
+            $id = [System.Text.Encoding]::ASCII.GetBytes("engineer")
+            foreach ($b in $id) { [void]$pkt.Add($b) }
+            for ($i = 0; $i -lt (32 - $id.Length); $i++) { [void]$pkt.Add([byte]0) }
+            [void]$pkt.Add([byte]$channels)
+            foreach ($b in [BitConverter]::GetBytes([uint32]$sampleRate)) { [void]$pkt.Add($b) }
+            foreach ($b in [BitConverter]::GetBytes([uint16]$samplesPerCh)) { [void]$pkt.Add($b) }
+            for ($i = 0; $i -lt $samplesPerCh; $i++) {
+              $t = ($SampleOffset + $i) / $sampleRate
+              $val = [float](0.3 * [Math]::Sin(2 * [Math]::PI * 440 * $t))
+              $sampleBytes = [BitConverter]::GetBytes($val)
+              for ($ch = 0; $ch -lt $channels; $ch++) {
+                foreach ($b in $sampleBytes) { [void]$pkt.Add($b) }
               }
             }
+            return [byte[]]$pkt.ToArray()
+          }
+
+          # Step 2: Start background UDP sender (keeps sending for 15 seconds)
+          $udpJob = Start-Job -ScriptBlock {
+            $channels = 2; $sampleRate = 96000; $samplesPerCh = 128
+            $udp = New-Object System.Net.Sockets.UdpClient
+            $sent = 0; $offset = 0
+            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($stopwatch.ElapsedMilliseconds -lt 15000) {
+              $audioBytes = $samplesPerCh * $channels * 4
+              $pktSize = 32 + 1 + 4 + 2 + $audioBytes
+              $pkt = New-Object System.Collections.ArrayList
+              foreach ($b in @(0x4D,0x52,0x53,0x52)) { [void]$pkt.Add([byte]$b) }
+              foreach ($b in [BitConverter]::GetBytes([uint32]$pktSize)) { [void]$pkt.Add($b) }
+              $id = [System.Text.Encoding]::ASCII.GetBytes("engineer")
+              foreach ($b in $id) { [void]$pkt.Add($b) }
+              for ($i = 0; $i -lt (32 - $id.Length); $i++) { [void]$pkt.Add([byte]0) }
+              [void]$pkt.Add([byte]$channels)
+              foreach ($b in [BitConverter]::GetBytes([uint32]$sampleRate)) { [void]$pkt.Add($b) }
+              foreach ($b in [BitConverter]::GetBytes([uint16]$samplesPerCh)) { [void]$pkt.Add($b) }
+              for ($i = 0; $i -lt $samplesPerCh; $i++) {
+                $t = ($offset + $i) / $sampleRate
+                $val = [float](0.3 * [Math]::Sin(2 * [Math]::PI * 440 * $t))
+                $sampleBytes = [BitConverter]::GetBytes($val)
+                for ($ch = 0; $ch -lt $channels; $ch++) {
+                  foreach ($b in $sampleBytes) { [void]$pkt.Add($b) }
+                }
+              }
+              $data = [byte[]]$pkt.ToArray()
+              $udp.Send($data, $data.Length, "127.0.0.1", 4711) | Out-Null
+              $offset += $samplesPerCh; $sent++
+              Start-Sleep -Milliseconds 5
+            }
+            $udp.Close()
+            Write-Output "Sent $sent UDP packets"
+          }
+          Write-Host "Started background UDP sender"
+          Start-Sleep -Seconds 2  # Let pipeline initialize
+
+          # Step 3: Get engineer JWT token
+          $authBody = '{"member":"engineer","pin":"1177"}'
+          $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
+          $token = ($authResp.Content | ConvertFrom-Json).token
+          if (-not $token) {
+            Write-Host "::error::Failed to get engineer token"
+            exit 1
+          }
+          Write-Host "Got engineer JWT token"
+
+          # Step 4: Connect WebSocket and verify Opus frames arrive
+          # Using .NET ClientWebSocket for binary frame detection
+          $ws = New-Object System.Net.WebSockets.ClientWebSocket
+          $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
+          $ct = New-Object System.Threading.CancellationTokenSource(15000)
+
+          try {
+            $ws.ConnectAsync($uri, $ct.Token).Wait()
+            Write-Host "WebSocket connected to /ws/audio"
+          } catch {
+            Write-Host "::error::WebSocket connection failed: $_"
+            Stop-Job $udpJob -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+          # Send ListenStart
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
+          $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
+          Write-Host "Sent ListenStart command"
+
+          # Read messages — count binary (Opus) frames
+          $binaryFrames = 0
+          $textMessages = @()
+          $gotListening = $false
+          $gotNoSource = $false
+          $readBuf = New-Object byte[] 65536
+          $readSegment = New-Object System.ArraySegment[byte]($readBuf, 0, $readBuf.Length)
+          $deadline = [DateTime]::UtcNow.AddSeconds(12)
+
+          while ([DateTime]::UtcNow -lt $deadline -and $binaryFrames -lt 5) {
+            try {
+              $readCt = New-Object System.Threading.CancellationTokenSource(3000)
+              $result = $ws.ReceiveAsync($readSegment, $readCt.Token).GetAwaiter().GetResult()
+
+              if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Binary) {
+                $binaryFrames++
+                Write-Host "  Binary frame #$binaryFrames ($($result.Count) bytes)"
+              }
+              elseif ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Text) {
+                $text = [System.Text.Encoding]::UTF8.GetString($readBuf, 0, $result.Count)
+                $textMessages += $text
+                Write-Host "  Text: $text"
+                if ($text -match '"listening"') { $gotListening = $true }
+                if ($text -match '"no_source"') { $gotNoSource = $true }
+              }
+              elseif ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+                Write-Host "WebSocket closed by server"
+                break
+              }
+            } catch {
+              # Timeout reading — continue loop
+            }
+          }
+
+          # Cleanup
+          try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [System.Threading.CancellationToken]::None).Wait() } catch {}
+          $udpResult = Receive-Job $udpJob -Wait -ErrorAction SilentlyContinue
+          Stop-Job $udpJob -ErrorAction SilentlyContinue
+          Write-Host "UDP sender: $udpResult"
+
+          # Verdict
+          Write-Host ""
+          Write-Host "=== AUDIO PIPELINE TEST RESULTS ==="
+          Write-Host "Binary Opus frames received: $binaryFrames"
+          Write-Host "Got 'listening' status: $gotListening"
+          Write-Host "Got 'no_source' status: $gotNoSource"
+          Write-Host "Text messages: $($textMessages.Count)"
+
+          if ($binaryFrames -ge 5 -and $gotListening) {
+            Write-Host "AUDIO PIPELINE: PASS (${binaryFrames} Opus frames delivered via WebSocket)"
+            exit 0
+          } elseif ($binaryFrames -gt 0) {
+            Write-Host "::warning::Partial success: got $binaryFrames frames but expected >=5"
+            exit 0
+          } elseif ($gotNoSource) {
+            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' — UDP packets not reaching audio pipeline"
+            Write-Host "Check: Is ReaStream sending to 127.0.0.1:4711? Is the UDP sender working?"
+            exit 1
+          } else {
+            Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status — WebSocket not responding"
+            exit 1
           }
 
       - name: Verify deployment
