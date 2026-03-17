@@ -719,10 +719,10 @@ jobs:
 
       - name: Deploy VBAN VST3 to REAPER plugin path
         shell: powershell
-        continue-on-error: true
         run: |
-          # Copy VBAN IEM VST3 bundle to common VST3 directory
-          $vst3Dest = "C:\Program Files\Common Files\VST3"
+          # Deploy to REAPER user plugin path (no admin needed)
+          # C:\Program Files\Common Files\VST3\ requires admin — runner doesn't have it
+          $vst3Dest = "$env:APPDATA\REAPER\UserPlugins"
           if (-not (Test-Path $vst3Dest)) {
             New-Item -ItemType Directory -Path $vst3Dest -Force | Out-Null
           }
@@ -730,8 +730,8 @@ jobs:
           # Find the VST3 bundle in the artifact
           $vst3Source = Get-ChildItem -Path "vban-vst3" -Filter "*.vst3" -Recurse -Directory | Select-Object -First 1
           if (-not $vst3Source) {
-            Write-Host "::warning::VBAN VST3 bundle not found in artifact"
-            exit 0
+            Write-Host "::error::VBAN VST3 bundle not found in artifact"
+            exit 1
           }
 
           # Copy the entire VST3 bundle directory
@@ -742,9 +742,35 @@ jobs:
           Copy-Item $vst3Source.FullName $destPath -Recurse -Force
           Write-Host "VBAN VST3 deployed: $destPath"
 
-      - name: Verify app listens on VBAN port
+          # Verify the bundle was copied correctly
+          if (-not (Test-Path $destPath)) {
+            Write-Host "::error::VST3 bundle not found at destination after copy"
+            exit 1
+          }
+          $dll = Get-ChildItem -Path $destPath -Filter "*.dll" -Recurse
+          if (-not $dll) {
+            $dll = Get-ChildItem -Path $destPath -Filter "*.vst3" -Recurse -File
+          }
+          Write-Host "VST3 bundle contents:"
+          Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+      - name: Trigger REAPER VST3 rescan
         shell: powershell
         continue-on-error: true
+        run: |
+          # Tell REAPER to clear VST cache and rescan (action 40886)
+          # This picks up the newly deployed VST3 without restart
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40886" -UseBasicParsing -TimeoutSec 10 | Out-Null
+            Write-Host "Triggered REAPER VST3 rescan (action 40886)"
+            # Give REAPER time to rescan plugins
+            Start-Sleep -Seconds 8
+          } catch {
+            Write-Host "::warning::Could not trigger REAPER VST3 rescan (REAPER may not be running): $_"
+          }
+
+      - name: Verify app listens on VBAN port
+        shell: powershell
         run: |
           # Wait for app to fully start
           Start-Sleep -Seconds 5
@@ -754,7 +780,8 @@ jobs:
           if ($appListener) {
             Write-Host "App owns VBAN port 6980: $appListener"
           } else {
-            Write-Host "::warning::App did not bind VBAN port 6980 (audio streaming may not work until next restart)"
+            Write-Host "::error::App did not bind VBAN port 6980 - audio streaming broken"
+            exit 1
           }
 
       - name: Backup REAPER project
@@ -984,37 +1011,68 @@ jobs:
 
       - name: Setup and verify VBAN IEM on engineer track
         shell: powershell
-        continue-on-error: true
         run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Check if REAPER is available
+          $reaperAvailable = $false
           try {
-            # After dynamic registration, meter_bridge writes numeric action IDs to EXTSTATE
-            $setupId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_vban" -UseBasicParsing -TimeoutSec 5).Content
-            $checkId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_check_vban" -UseBasicParsing -TimeoutSec 5).Content
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {}
 
-            $setupActionId = ($setupId -split "`t")[-1]
-            $checkActionId = ($checkId -split "`t")[-1]
-
-            if (-not $setupActionId -or -not $checkActionId) {
-              Write-Host "::warning::Action IDs not found - scripts may not be registered yet"
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running but is now unreachable — deploy may have crashed it"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not running — skipping VBAN setup"
               exit 0
             }
-
-            Write-Host "Action IDs: setup=$setupActionId, check=$checkActionId"
-
-            # Trigger setup_vban (removes ReaStream if present, inserts VBAN IEM)
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$setupActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
-            Start-Sleep -Seconds 3
-            $setup = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/setup_vban" -UseBasicParsing -TimeoutSec 5).Content
-            Write-Host "VBAN setup result: $setup"
-
-            # Trigger check_vban
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$checkActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
-            Start-Sleep -Seconds 2
-            $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/vban_status" -UseBasicParsing -TimeoutSec 5).Content
-            Write-Host "VBAN status: $status"
-          } catch {
-            Write-Host "::warning::VBAN setup/verify failed: $($_.Exception.Message)"
           }
+
+          # After dynamic registration, meter_bridge writes numeric action IDs to EXTSTATE
+          $setupId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_vban" -UseBasicParsing -TimeoutSec 5).Content
+          $checkId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_check_vban" -UseBasicParsing -TimeoutSec 5).Content
+
+          $setupActionId = ($setupId -split "`t")[-1]
+          $checkActionId = ($checkId -split "`t")[-1]
+
+          if (-not $setupActionId -or -not $checkActionId) {
+            Write-Host "::error::VBAN action IDs not found — scripts not registered"
+            Write-Host "setup_vban ID: '$setupActionId', check_vban ID: '$checkActionId'"
+            exit 1
+          }
+
+          Write-Host "Action IDs: setup=$setupActionId, check=$checkActionId"
+
+          # Trigger setup_vban (removes ReaStream if present, inserts VBAN IEM)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$setupActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Start-Sleep -Seconds 3
+          $setup = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/setup_vban" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "VBAN setup result: $setup"
+
+          # HARD GATE: setup must NOT report FAIL
+          if ($setup -match "FAIL") {
+            Write-Host "::error::VBAN setup FAILED: $setup"
+            Write-Host "::error::VST3 plugin likely not found. Check that VBAN IEM.vst3 is in REAPER UserPlugins and rescan completed."
+            exit 1
+          }
+
+          # Trigger check_vban to verify plugin is present
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$checkActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Start-Sleep -Seconds 2
+          $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/vban_status" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "VBAN status: $status"
+
+          # HARD GATE: check must report PRESENT
+          if ($status -notmatch "PRESENT") {
+            Write-Host "::error::VBAN IEM VST3 not present on engineer track: $status"
+            Write-Host "::error::Expected 'PRESENT' but got '$status'"
+            exit 1
+          }
+
+          Write-Host "VBAN IEM verified: plugin present and active on engineer track"
 
       - name: Test audio pipeline (VBAN UDP to WebSocket Opus frames)
         shell: powershell
@@ -1179,12 +1237,17 @@ jobs:
 
       - name: Test REAL audio from REAPER (no synthetic UDP)
         shell: powershell
-        continue-on-error: true
         run: |
           # This test verifies REAL VBAN audio from REAPER reaches the app.
           # It does NOT send synthetic UDP — it relies on REAPER's VBAN IEM VST3
           # being active on the engineer track, sending to 127.0.0.1:6980.
-          # This step uses continue-on-error because VBAN IEM must be inserted first.
+          # FAILS the deploy if REAPER was running and VBAN setup succeeded but no audio arrives.
+
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+          if ($wasRunning -ne "true") {
+            Write-Host "::warning::REAPER was not running before deploy — skipping real audio test"
+            exit 0
+          }
 
           $ErrorActionPreference = "Stop"
 
@@ -1193,8 +1256,8 @@ jobs:
           $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
           $token = ($authResp.Content | ConvertFrom-Json).token
           if (-not $token) {
-            Write-Host "::warning::REAL AUDIO: Cannot authenticate"
-            exit 0
+            Write-Host "::error::REAL AUDIO: Cannot authenticate as engineer"
+            exit 1
           }
 
           # Connect WebSocket — no synthetic UDP, only real REAPER audio
@@ -1205,8 +1268,8 @@ jobs:
           try {
             $ws.ConnectAsync($uri, $ct.Token).Wait()
           } catch {
-            Write-Host "::warning::REAL AUDIO: WebSocket connection failed"
-            exit 0
+            Write-Host "::error::REAL AUDIO: WebSocket connection failed: $($_.Exception.Message)"
+            exit 1
           }
 
           # Send ListenStart
@@ -1235,7 +1298,9 @@ jobs:
           if ($binaryFrames -ge 3) {
             Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER via VBAN)"
           } else {
-            Write-Host "::warning::REAL AUDIO E2E: No real audio frames received ($binaryFrames). VBAN IEM VST may not be inserted yet."
+            Write-Host "::error::REAL AUDIO E2E FAIL: Expected 3+ Opus frames, got $binaryFrames"
+            Write-Host "::error::REAPER was running and VBAN setup should have succeeded — audio pipeline is broken"
+            exit 1
           }
 
       - name: Verify deployment
