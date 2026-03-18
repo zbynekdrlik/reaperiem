@@ -36,10 +36,6 @@ public:
     bool hasEditor() const override { return true; }
     juce::AudioProcessorEditor* createEditor() override;
 
-    // Configuration
-    void setActive(bool active);
-    bool isActive() const { return active; }
-
     // Status
     bool isConnected() const;
     uint64_t getPacketCount() const;
@@ -53,8 +49,6 @@ private:
     static constexpr const char* DEST_IP = "127.0.0.1";
     static constexpr uint16_t PORT = 6980;
     static constexpr const char* STREAM_NAME = "engineer";
-
-    bool active = false;
 
     std::unique_ptr<VBANSender> sender;
 

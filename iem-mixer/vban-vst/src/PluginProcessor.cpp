@@ -39,9 +39,8 @@ void VBANIEMProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     int latencySamples = samplesPerBlock * 2;
     setLatencySamples(latencySamples);
 
-    if (active) {
-        sender->start();
-    }
+    // Always start sending immediately
+    sender->start();
 }
 
 void VBANIEMProcessor::releaseResources() {
@@ -64,8 +63,8 @@ void VBANIEMProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     }
     inputLevel = maxLevel;
 
-    // Send audio via VBAN
-    if (active && sender->isRunning()) {
+    // Always send audio via VBAN
+    if (sender->isRunning()) {
         sender->pushSamples(buffer.getArrayOfReadPointers(), numSamples);
     }
 
@@ -73,38 +72,16 @@ void VBANIEMProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     outputLevel = inputLevel.load();
 }
 
-void VBANIEMProcessor::getStateInformation(juce::MemoryBlock& destData) {
-    juce::XmlElement xml("VBANIEMState");
-    xml.setAttribute("active", active);
-    copyXmlToBinary(xml, destData);
+void VBANIEMProcessor::getStateInformation(juce::MemoryBlock&) {
+    // No state to save — plugin is always active
 }
 
-void VBANIEMProcessor::setStateInformation(const void* data, int sizeInBytes) {
-    auto xml = getXmlFromBinary(data, sizeInBytes);
-    if (xml != nullptr && xml->hasTagName("VBANIEMState")) {
-        bool wasActive = xml->getBoolAttribute("active", false);
-        if (wasActive) {
-            active = true;
-            sender->start();
-        }
-    }
+void VBANIEMProcessor::setStateInformation(const void*, int) {
+    // No state to restore — plugin is always active
 }
 
 juce::AudioProcessorEditor* VBANIEMProcessor::createEditor() {
     return new VBANIEMEditor(*this);
-}
-
-void VBANIEMProcessor::setActive(bool newActive) {
-    if (active != newActive) {
-        active = newActive;
-        if (active) {
-            sender->configure(DEST_IP, PORT, STREAM_NAME,
-                              static_cast<int>(currentSampleRate), numChannels);
-            sender->start();
-        } else {
-            sender->stop();
-        }
-    }
 }
 
 bool VBANIEMProcessor::isConnected() const {

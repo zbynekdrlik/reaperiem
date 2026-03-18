@@ -22,20 +22,13 @@ VBANIEMEditor::VBANIEMEditor(VBANIEMProcessor& p)
     streamLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(streamLabel);
 
-    // Active toggle
-    activeButton.setToggleState(processor.isActive(), juce::dontSendNotification);
-    activeButton.onClick = [this] {
-        processor.setActive(activeButton.getToggleState());
-    };
-    addAndMakeVisible(activeButton);
-
     // Meter component
     addAndMakeVisible(meterComponent);
 
     // Start UI update timer
     startTimerHz(30);
 
-    setSize(250, 350);
+    setSize(250, 320);
 }
 
 VBANIEMEditor::~VBANIEMEditor() {
@@ -53,23 +46,17 @@ void VBANIEMEditor::resized() {
     destLabel.setBounds(bounds.removeFromTop(20));
     streamLabel.setBounds(bounds.removeFromTop(20));
 
-    auto toggleArea = bounds.removeFromTop(30);
-    activeButton.setBounds(toggleArea.reduced(60, 0));
-
     // Meters take the rest
     meterComponent.setBounds(bounds);
 }
 
 void VBANIEMEditor::timerCallback() {
-    // Sync active button state
-    activeButton.setToggleState(processor.isActive(), juce::dontSendNotification);
-
     // Update meters
     meterComponent.setLevels(processor.getInputLevel(), processor.getOutputLevel());
     meterComponent.setStatus(
         processor.isConnected(),
         processor.getPacketCount(),
         true,  // always send mode
-        processor.isActive()
+        true   // always active
     );
 }
