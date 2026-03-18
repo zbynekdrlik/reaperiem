@@ -311,7 +311,7 @@ async fn serve_asset(Path(path): Path<String>) -> impl IntoResponse {
 /// be cached, as CDN caches stale content causing SRI hash mismatches.
 fn has_content_hash(path: &str) -> bool {
     let filename = path.rsplit('/').next().unwrap_or(path);
-    filename.as_bytes().len() >= 12
+    filename.len() >= 12
         && filename
             .as_bytes()
             .windows(12)
