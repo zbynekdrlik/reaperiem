@@ -1110,18 +1110,26 @@ jobs:
         run: |
           # Insert 440Hz tone generator on ENGINEER inear track
           # This gives a deterministic audio source for pipeline verification
+
+          # Set the action to "start" before triggering the script
           Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/start" -UseBasicParsing | Out-Null
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/tone_generator.lua" -UseBasicParsing | Out-Null
-          Start-Sleep -Seconds 3
-          # Check registration
-          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
-          Write-Host "Script registration: $result"
-          # Trigger tone generator
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_TONE_GEN" -UseBasicParsing | Out-Null
+
+          # Get the dynamically-registered action ID (stored by meter_bridge)
+          $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+          $toneActionId = ($toneIdResp -split "`t")[-1]
+          Write-Host "Tone generator action ID: $toneActionId"
+
+          if (-not $toneActionId) {
+            Write-Host "::error::Tone generator not registered - action ID not found in EXTSTATE"
+            exit 1
+          }
+
+          # Trigger tone generator using numeric action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
           Start-Sleep -Seconds 2
           $toneResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
           Write-Host "Tone generator: $toneResult"
-          if ($toneResult -notmatch "^OK") {
+          if ($toneResult -notmatch "OK") {
             Write-Host "::error::Tone generator failed: $toneResult"
             exit 1
           }
@@ -1400,7 +1408,12 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/stop" -UseBasicParsing | Out-Null
           try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_TONE_GEN" -UseBasicParsing | Out-Null
+            # Use dynamically-registered action ID
+            $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+            $toneActionId = ($toneIdResp -split "`t")[-1]
+            if ($toneActionId) {
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
+            }
           } catch {
             Write-Host "::warning::Could not trigger tone gen stop: $_"
           }
