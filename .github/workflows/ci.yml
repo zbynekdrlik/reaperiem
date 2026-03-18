@@ -734,29 +734,42 @@ jobs:
             exit 1
           }
 
-          # Copy the entire VST3 bundle directory
-          # If the DLL is locked by REAPER (already loaded), that's OK — plugin is in use
-          $destPath = Join-Path $vst3Dest $vst3Source.Name
-          try {
-            if (Test-Path $destPath) {
-              Remove-Item $destPath -Recurse -Force -ErrorAction Stop
-            }
-            Copy-Item $vst3Source.FullName $destPath -Recurse -Force
-            Write-Host "VBAN VST3 deployed: $destPath"
-          } catch {
-            # File locked = REAPER has the plugin loaded = already deployed
-            if ($_.Exception -is [System.UnauthorizedAccessException] -or $_.Exception.InnerException -is [System.UnauthorizedAccessException]) {
-              Write-Host "VBAN VST3 already deployed and locked by REAPER (in use) — skipping copy"
-            } else {
-              Write-Host "::error::Failed to deploy VBAN VST3: $_"
-              exit 1
-            }
+          # REAPER locks loaded VST3 DLLs — must save + stop REAPER before overwriting
+          $reaperRunning = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if ($reaperRunning) {
+            Write-Host "Saving REAPER project before VST3 deploy..."
+            try { Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+            Start-Sleep -Seconds 2
+            Write-Host "Stopping REAPER to unlock VST3 files..."
+            taskkill /f /im reaper.exe 2>&1 | Out-Null
+            Start-Sleep -Seconds 3
           }
 
-          # Verify the bundle exists (either freshly copied or already present)
+          # Copy the entire VST3 bundle directory
+          $destPath = Join-Path $vst3Dest $vst3Source.Name
+          if (Test-Path $destPath) {
+            Remove-Item $destPath -Recurse -Force
+          }
+          Copy-Item $vst3Source.FullName $destPath -Recurse -Force
+          Write-Host "VBAN VST3 deployed: $destPath"
+
+          # Verify the bundle was copied
           if (-not (Test-Path $destPath)) {
             Write-Host "::error::VST3 bundle not found at $destPath"
             exit 1
+          }
+
+          # Restart REAPER with project
+          if ($reaperRunning) {
+            Write-Host "Restarting REAPER..."
+            schtasks /run /tn "StartREAPER" 2>&1 | Out-Null
+            Start-Sleep -Seconds 15
+            $back = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+            if ($back) {
+              Write-Host "REAPER restarted (PID $($back.Id))"
+            } else {
+              Write-Host "::warning::REAPER did not restart"
+            }
           }
           Write-Host "VST3 bundle contents:"
           Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
