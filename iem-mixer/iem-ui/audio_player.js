@@ -13,6 +13,15 @@ let lastError = null;
  */
 export function initAudioPlayer() {
   if (audioContext && audioContext.state !== "closed") {
+    // Context exists but might be suspended — resume it NOW (we're in a user gesture)
+    if (audioContext.state === "suspended") {
+      audioContext.resume().then(() => {
+        console.log(
+          "[audio] Context resumed (re-init), state:",
+          audioContext.state,
+        );
+      });
+    }
     return;
   }
   audioContext = new AudioContext({ sampleRate: 48000 });
@@ -20,9 +29,29 @@ export function initAudioPlayer() {
   frameIndex = 0;
   lastAudioLevel = -150;
   lastError = null;
+
+  // CRITICAL: Resume immediately during user gesture (click/tap).
+  // On mobile browsers (iOS Safari, Chrome Android), AudioContext starts
+  // as "suspended" even when created in a click handler. resume() MUST be
+  // called from a user gesture — it will be REJECTED if called later from
+  // a WebSocket callback or timer. This is the ONLY chance to unlock audio.
+  if (audioContext.state === "suspended") {
+    audioContext
+      .resume()
+      .then(() => {
+        console.log("[audio] Context resumed, state:", audioContext.state);
+      })
+      .catch((e) => {
+        console.error("[audio] Context resume FAILED:", e);
+        lastError = "AudioContext resume failed: " + e.message;
+      });
+  }
+
   console.log(
     "[audio] Player initialized, sampleRate:",
     audioContext.sampleRate,
+    "state:",
+    audioContext.state,
   );
 }
 
@@ -41,9 +70,17 @@ export function feedOpusFrame(opusData) {
     );
   }
 
-  // Resume if suspended (autoplay policy)
+  // Fallback resume attempt — may fail on mobile (not a user gesture).
+  // The primary resume happens in initAudioPlayer() during the click handler.
   if (audioContext.state === "suspended") {
-    audioContext.resume();
+    audioContext.resume().catch(() => {
+      // Expected to fail on mobile — initAudioPlayer should have unlocked it
+      if (frameIndex % 50 === 0) {
+        console.warn(
+          "[audio] Context still suspended — resume rejected (not a user gesture)",
+        );
+      }
+    });
   }
 
   // Use WebCodecs AudioDecoder if available (Chrome, Edge, Safari 16.4+)
