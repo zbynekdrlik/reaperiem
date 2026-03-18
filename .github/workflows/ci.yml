@@ -734,15 +734,30 @@ jobs:
             exit 1
           }
 
-          # REAPER locks loaded VST3 DLLs — must save + stop REAPER before overwriting
+          # REAPER locks loaded VST3 DLLs — must save + quit REAPER before overwriting
           $reaperRunning = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
           if ($reaperRunning) {
             Write-Host "Saving REAPER project before VST3 deploy..."
             try { Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
             Start-Sleep -Seconds 2
-            Write-Host "Stopping REAPER to unlock VST3 files..."
-            taskkill /f /im reaper.exe 2>&1 | Out-Null
-            Start-Sleep -Seconds 3
+            Write-Host "Quitting REAPER via HTTP API (action 40004)..."
+            try { Invoke-WebRequest -Uri "http://iem.lan:8080/_/40004" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+            # Wait for REAPER to exit
+            $waited = 0
+            while ($waited -lt 15) {
+              Start-Sleep -Seconds 2
+              $waited += 2
+              $still = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+              if (-not $still) { break }
+            }
+            if (Get-Process -Name "reaper" -ErrorAction SilentlyContinue) {
+              Write-Host "::warning::REAPER did not quit gracefully, force killing..."
+              $ErrorActionPreference = "Continue"
+              taskkill /f /im reaper.exe 2>&1 | Out-Null
+              $ErrorActionPreference = "Stop"
+              Start-Sleep -Seconds 3
+            }
+            Write-Host "REAPER stopped"
           }
 
           # Copy the entire VST3 bundle directory
