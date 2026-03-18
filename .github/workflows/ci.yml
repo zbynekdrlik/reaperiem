@@ -734,7 +734,7 @@ jobs:
             exit 1
           }
 
-          # REAPER locks loaded VST3 DLLs — must save + quit REAPER before overwriting
+          # REAPER locks loaded VST3 DLLs - must save + quit REAPER before overwriting
           $reaperRunning = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
           if ($reaperRunning) {
             Write-Host "Saving REAPER project before VST3 deploy..."
@@ -1043,10 +1043,10 @@ jobs:
 
           if (-not $reaperAvailable) {
             if ($wasRunning -eq "true") {
-              Write-Host "::error::REAPER was running but is now unreachable — deploy may have crashed it"
+              Write-Host "::error::REAPER was running but is now unreachable - deploy may have crashed it"
               exit 1
             } else {
-              Write-Host "::warning::REAPER not running — skipping VBAN setup"
+              Write-Host "::warning::REAPER not running - skipping VBAN setup"
               exit 0
             }
           }
@@ -1059,7 +1059,7 @@ jobs:
           $checkActionId = ($checkId -split "`t")[-1]
 
           if (-not $setupActionId -or -not $checkActionId) {
-            Write-Host "::error::VBAN action IDs not found — scripts not registered"
+            Write-Host "::error::VBAN action IDs not found - scripts not registered"
             Write-Host "setup_vban ID: '$setupActionId', check_vban ID: '$checkActionId'"
             exit 1
           }
@@ -1259,13 +1259,13 @@ jobs:
         shell: powershell
         run: |
           # This test verifies REAL VBAN audio from REAPER reaches the app.
-          # It does NOT send synthetic UDP — it relies on REAPER's VBAN IEM VST3
+          # It does NOT send synthetic UDP - it relies on REAPER's VBAN IEM VST3
           # being active on the engineer track, sending to 127.0.0.1:6980.
           # FAILS the deploy if REAPER was running and VBAN setup succeeded but no audio arrives.
 
           $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
           if ($wasRunning -ne "true") {
-            Write-Host "::warning::REAPER was not running before deploy — skipping real audio test"
+            Write-Host "::warning::REAPER was not running before deploy - skipping real audio test"
             exit 0
           }
 
@@ -1280,7 +1280,7 @@ jobs:
             exit 1
           }
 
-          # Connect WebSocket — no synthetic UDP, only real REAPER audio
+          # Connect WebSocket - no synthetic UDP, only real REAPER audio
           $ws = New-Object System.Net.WebSockets.ClientWebSocket
           $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
           $ct = New-Object System.Threading.CancellationTokenSource(15000)
@@ -1319,7 +1319,7 @@ jobs:
             Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER via VBAN)"
           } else {
             Write-Host "::error::REAL AUDIO E2E FAIL: Expected 3+ Opus frames, got $binaryFrames"
-            Write-Host "::error::REAPER was running and VBAN setup should have succeeded — audio pipeline is broken"
+            Write-Host "::error::REAPER was running and VBAN setup should have succeeded - audio pipeline is broken"
             exit 1
           }
 
