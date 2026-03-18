@@ -283,13 +283,12 @@ async fn audio_diagnostics_handler(
                 Json(iem_core::ApiError::unauthorized()),
             )
         })?;
-    let claims =
-        crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(iem_core::ApiError::unauthorized()),
-            )
-        })?;
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(iem_core::ApiError::unauthorized()),
+        )
+    })?;
     if !claims.engineer {
         return Err((
             StatusCode::FORBIDDEN,
@@ -301,11 +300,7 @@ async fn audio_diagnostics_handler(
     }
     drop(config);
 
-    let diag = state
-        .audio_diagnostics
-        .lock()
-        .unwrap()
-        .clone();
+    let diag = state.audio_diagnostics.lock().unwrap().clone();
     Ok(Json(diag))
 }
 
