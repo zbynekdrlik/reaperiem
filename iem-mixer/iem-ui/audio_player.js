@@ -5,6 +5,7 @@ let audioContext = null;
 let nextStartTime = 0;
 let frameIndex = 0;
 let lastAudioLevel = -150;
+let lastError = null;
 
 /**
  * Initialize the audio player. Must be called from a user gesture (click).
@@ -18,6 +19,7 @@ export function initAudioPlayer() {
   nextStartTime = 0;
   frameIndex = 0;
   lastAudioLevel = -150;
+  lastError = null;
   console.log(
     "[audio] Player initialized, sampleRate:",
     audioContext.sampleRate,
@@ -63,6 +65,7 @@ function ensureDecoder() {
     },
     error: (e) => {
       console.error("[audio] Decoder ERROR:", e.message);
+      lastError = e.message;
     },
   });
 
@@ -76,6 +79,14 @@ function ensureDecoder() {
 function decodeWithWebCodecs(opusData) {
   try {
     ensureDecoder();
+
+    // If decoder crashed (error callback closed it), recreate
+    if (decoder && decoder.state === "closed") {
+      console.error("[audio] Decoder crashed — recreating");
+      decoder = null;
+      ensureDecoder();
+    }
+
     // Each Opus frame is 20ms = 20000 microseconds.
     // Monotonic timestamps help WebCodecs track frame ordering.
     const timestamp = frameIndex * 20000;
@@ -88,6 +99,7 @@ function decodeWithWebCodecs(opusData) {
     decoder.decode(chunk);
   } catch (e) {
     console.warn("[audio] Decode error:", e.message);
+    lastError = e.message;
   }
 }
 
@@ -150,6 +162,7 @@ export function stopAudioPlayer() {
   }
   nextStartTime = 0;
   lastAudioLevel = -150;
+  lastError = null;
   console.log("[audio] Player stopped");
 }
 
@@ -168,4 +181,18 @@ export function isAudioSupported() {
  */
 export function getAudioLevel() {
   return lastAudioLevel;
+}
+
+/**
+ * Get the last decoder error message, or null if no error.
+ * @returns {string|null}
+ */
+export function getAudioError() {
+  return lastError;
+}
+
+// Expose for E2E testing (Playwright can access via page.evaluate)
+if (typeof window !== "undefined") {
+  window.__iem_audio_level = getAudioLevel;
+  window.__iem_audio_error = getAudioError;
 }

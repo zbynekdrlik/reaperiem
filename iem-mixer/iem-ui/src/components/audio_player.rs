@@ -174,20 +174,35 @@ fn start_listening(
         set_ws_close.set(None);
     }) as Box<dyn FnMut(_)>);
 
-    socket.set_onopen(Some(on_open.as_ref().unchecked_ref()));
-    socket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-    socket.set_onclose(Some(on_close.as_ref().unchecked_ref()));
-    on_open.forget();
-    on_message.forget();
-    on_close.forget();
+    // On error: log and reset state
+    let set_state_error = set_state;
+    let on_error = Closure::wrap(Box::new(move |_: web_sys::Event| {
+        web_sys::console::error_1(&"[audio] WebSocket error".into());
+        stop_audio_player();
+        set_state_error.set(ListenState::Idle);
+    }) as Box<dyn FnMut(_)>);
 
-    // Store WS ref globally for on_open callback
+    // Store WS ref globally BEFORE registering on_open callback.
+    // on_open reads window.__iem_audio_ws to send ListenStart.
+    // If set_onopen fires synchronously before this assignment, ListenStart is never sent.
     if let Some(w) = web_sys::window() {
         let _ = js_sys::Reflect::set(&w, &"__iem_audio_ws".into(), &socket);
     }
 
+    socket.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+    socket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+    socket.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+    socket.set_onerror(Some(on_error.as_ref().unchecked_ref()));
+    on_open.forget();
+    on_message.forget();
+    on_close.forget();
+    on_error.forget();
+
     set_ws.set(Some(socket.clone()));
-    set_state.set(ListenState::Listening);
+    // Do NOT set ListenState::Listening here — wait for the first binary frame
+    // to arrive in on_message (line 149). Setting it prematurely makes the UI
+    // show "Listening..." even when the WS fails to connect or ListenStart
+    // is never sent. The on_message handler already sets Listening on first frame.
 }
 
 fn stop_listening(
