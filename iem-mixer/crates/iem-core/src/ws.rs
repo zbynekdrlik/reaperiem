@@ -42,6 +42,8 @@ pub enum ServerMsg {
         global_level_db: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         global_muted: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output_track_index: Option<usize>,
     },
     /// Meter levels (sent every ~150ms) — stereo [left, right] peaks
     Meters { meters: HashMap<usize, [f32; 2]> },
@@ -124,12 +126,14 @@ mod tests {
             connected: true,
             global_level_db: None,
             global_muted: None,
+            output_track_index: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"State\""));
         // Optional fields should NOT appear when None
         assert!(!json.contains("global_level_db"));
         assert!(!json.contains("global_muted"));
+        assert!(!json.contains("output_track_index"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
@@ -141,27 +145,31 @@ mod tests {
             connected: true,
             global_level_db: Some(-3.5),
             global_muted: Some(false),
+            output_track_index: Some(23),
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"global_level_db\":-3.5"));
         assert!(json.contains("\"global_muted\":false"));
+        assert!(json.contains("\"output_track_index\":23"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
 
     #[test]
     fn test_server_msg_state_backwards_compat() {
-        // Old State messages without global fields should still deserialize
+        // Old State messages without global/output fields should still deserialize
         let json = r#"{"event":"State","data":{"channels":[],"connected":true}}"#;
         let decoded: ServerMsg = serde_json::from_str(json).unwrap();
         match decoded {
             ServerMsg::State {
                 global_level_db,
                 global_muted,
+                output_track_index,
                 ..
             } => {
                 assert_eq!(global_level_db, None);
                 assert_eq!(global_muted, None);
+                assert_eq!(output_track_index, None);
             }
             _ => panic!("Expected State variant"),
         }

@@ -1575,8 +1575,9 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/petronela");
     if (!(await waitForMixer(page))) return;
 
-    // Skip the first 2 static .meter-fill elements (IEM VOL master L/R)
-    // which always have width:0%. Target a dynamic Meter component's fill.
+    // Skip the first 2 .meter-fill elements (IEM VOL master L/R) and target
+    // a channel Meter component's fill. IEM VOL meters use output_track_index
+    // which may not be present in injected data below.
     const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
@@ -1613,7 +1614,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     if (!assume(injected, "__iem_ws must be exposed for meter injection test"))
       return;
 
-    // Poll until a dynamic meter fill shows signal (skip first 2 = IEM VOL master).
+    // Poll until a channel meter fill shows signal (skip first 2 = IEM VOL master).
     // waitForFunction resolves on truthy return; return null to keep polling,
     // .catch gives a clear assertion failure instead of timeout.
     const fillWidth = await page
@@ -1621,7 +1622,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
         () => {
           const fills = document.querySelectorAll(".meter-fill");
           if (fills.length < 3) return null;
-          const el = fills[2]; // First dynamic Meter component fill
+          const el = fills[2]; // First channel Meter component fill
           const style = el.getAttribute("style") || "";
           const match = style.match(/width:\s*([\d.]+)%/);
           const w = match ? parseFloat(match[1]) : 0;

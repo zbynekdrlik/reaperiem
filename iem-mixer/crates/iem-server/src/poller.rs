@@ -607,6 +607,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .get(member_id)
                 .map(|gv| (Some(gv.level_db), Some(gv.muted)))
                 .unwrap_or((None, None));
+            let output_track_index = cache.output_track_indices.get(member_id).copied();
             let _ = state.event_tx.send((
                 member_id.clone(),
                 ServerMsg::State {
@@ -614,6 +615,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     connected: true,
                     global_level_db,
                     global_muted,
+                    output_track_index,
                 },
             ));
         }

@@ -1179,12 +1179,13 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         result_channels.extend(mix_channels);
     }
 
-    // Read cached global volume for this member
+    // Read cached global volume and output track index for this member
     let cache = state.mixer_cache.read().await;
     let (global_level_db, global_muted) = match cache.global_volumes.get(member_id) {
         Some(gv) => (Some(gv.level_db), Some(gv.muted)),
         None => (None, None),
     };
+    let output_track_index = cache.output_track_indices.get(member_id).copied();
     drop(cache);
 
     Ok(iem_core::ServerMsg::State {
@@ -1192,6 +1193,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         connected,
         global_level_db,
         global_muted,
+        output_track_index,
     })
 }
 
