@@ -5,7 +5,77 @@
 
 use bytes::Bytes;
 use rubato::Resampler;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::sync::broadcast;
+
+/// Audio pipeline health diagnostics
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AudioDiagnostics {
+    pub receiving_vban: bool,
+    pub packets_per_second: f32,
+    pub opus_frames_per_second: f32,
+    pub last_frame_size_bytes: usize,
+    pub peak_db: f32,
+    pub sample_rate: u32,
+    pub channels: u8,
+}
+
+impl Default for AudioDiagnostics {
+    fn default() -> Self {
+        Self {
+            receiving_vban: false,
+            packets_per_second: 0.0,
+            opus_frames_per_second: 0.0,
+            last_frame_size_bytes: 0,
+            peak_db: -150.0,
+            sample_rate: 0,
+            channels: 0,
+        }
+    }
+}
+
+/// Tracks packet/frame rates using a 1-second sliding window
+struct RateTracker {
+    window_start: Instant,
+    packet_count: u32,
+    opus_frame_count: u32,
+    last_packets_per_second: f32,
+    last_opus_frames_per_second: f32,
+}
+
+impl RateTracker {
+    fn new() -> Self {
+        Self {
+            window_start: Instant::now(),
+            packet_count: 0,
+            opus_frame_count: 0,
+            last_packets_per_second: 0.0,
+            last_opus_frames_per_second: 0.0,
+        }
+    }
+
+    /// Record one VBAN packet received and N opus frames produced.
+    /// Returns (packets_per_second, opus_frames_per_second) — updated every 1s window.
+    fn record(&mut self, opus_frames: u32) -> (f32, f32) {
+        self.packet_count += 1;
+        self.opus_frame_count += opus_frames;
+
+        let elapsed = self.window_start.elapsed().as_secs_f32();
+        if elapsed >= 1.0 {
+            self.last_packets_per_second = self.packet_count as f32 / elapsed;
+            self.last_opus_frames_per_second = self.opus_frame_count as f32 / elapsed;
+            self.packet_count = 0;
+            self.opus_frame_count = 0;
+            self.window_start = Instant::now();
+        }
+
+        (
+            self.last_packets_per_second,
+            self.last_opus_frames_per_second,
+        )
+    }
+}
 
 /// VBAN magic bytes: "VBAN" as little-endian u32 = 0x4E414256
 const VBAN_MAGIC: [u8; 4] = [0x56, 0x42, 0x41, 0x4E]; // "VBAN" in LE
@@ -264,7 +334,10 @@ impl AudioPipeline {
 }
 
 /// Spawn the UDP listener that captures VBAN packets and broadcasts Opus frames
-pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
+pub fn spawn_audio_listener(
+    audio_tx: broadcast::Sender<Bytes>,
+    diagnostics: Arc<Mutex<AudioDiagnostics>>,
+) {
     tokio::spawn(async move {
         // Plain bind — no SO_REUSEADDR needed. VBAN IEM VST sends to 127.0.0.1:6980
         // and there's no port conflict with REAPER (unlike ReaStream's hardcoded 58710).
@@ -285,6 +358,7 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
 
         let mut buf = vec![0u8; 65536];
         let mut pipeline: Option<AudioPipeline> = None;
+        let mut rate_tracker = RateTracker::new();
 
         loop {
             let len = match socket.recv(&mut buf).await {
@@ -301,6 +375,17 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
                     tracing::debug!("VBAN parse error: {}", e);
                     continue;
                 }
+            };
+
+            // Calculate peak from parsed samples
+            let peak = packet
+                .samples
+                .iter()
+                .fold(0.0f32, |max, &s| max.max(s.abs()));
+            let peak_db = if peak > 0.0001 {
+                20.0 * peak.log10()
+            } else {
+                -150.0
             };
 
             // Lazily initialize pipeline on first valid packet
@@ -326,9 +411,23 @@ pub fn spawn_audio_listener(audio_tx: broadcast::Sender<Bytes>) {
 
             // Process and broadcast Opus frames
             let frames = pipe.process(&packet.samples);
+            let opus_frame_count = frames.len() as u32;
+            let last_frame_size = frames.last().map(|f| f.len()).unwrap_or(0);
             for frame in frames {
                 // Ignore send errors (no subscribers)
                 let _ = audio_tx.send(frame);
+            }
+
+            // Update diagnostics
+            let (pps, fps) = rate_tracker.record(opus_frame_count);
+            if let Ok(mut diag) = diagnostics.lock() {
+                diag.receiving_vban = true;
+                diag.packets_per_second = pps;
+                diag.opus_frames_per_second = fps;
+                diag.last_frame_size_bytes = last_frame_size;
+                diag.peak_db = peak_db;
+                diag.sample_rate = packet.sample_rate;
+                diag.channels = packet.channels;
             }
         }
     });

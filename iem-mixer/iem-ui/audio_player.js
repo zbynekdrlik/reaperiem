@@ -4,6 +4,7 @@
 let audioContext = null;
 let nextStartTime = 0;
 let frameIndex = 0;
+let lastAudioLevel = -150;
 
 /**
  * Initialize the audio player. Must be called from a user gesture (click).
@@ -16,6 +17,7 @@ export function initAudioPlayer() {
   audioContext = new AudioContext({ sampleRate: 48000 });
   nextStartTime = 0;
   frameIndex = 0;
+  lastAudioLevel = -150;
   console.log(
     "[audio] Player initialized, sampleRate:",
     audioContext.sampleRate,
@@ -29,6 +31,13 @@ export function initAudioPlayer() {
  */
 export function feedOpusFrame(opusData) {
   if (!audioContext || audioContext.state === "closed") return;
+
+  // Diagnostic: log frame info (throttled to every 50th frame to avoid spam)
+  if (frameIndex % 50 === 0) {
+    console.log(
+      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}`,
+    );
+  }
 
   // Resume if suspended (autoplay policy)
   if (audioContext.state === "suspended") {
@@ -53,7 +62,7 @@ function ensureDecoder() {
       scheduleAudioData(audioData);
     },
     error: (e) => {
-      console.warn("[audio] Decoder error:", e.message);
+      console.error("[audio] Decoder ERROR:", e.message);
     },
   });
 
@@ -93,13 +102,21 @@ function scheduleAudioData(audioData) {
     audioData.sampleRate,
   );
 
-  // Copy decoded samples into AudioBuffer
+  // Copy decoded samples into AudioBuffer and track peak level
+  let peak = 0;
   for (let ch = 0; ch < numChannels; ch++) {
     const channelData = new Float32Array(numFrames);
     audioData.copyTo(channelData, { planeIndex: ch });
+    for (let i = 0; i < numFrames; i++) {
+      const abs = Math.abs(channelData[i]);
+      if (abs > peak) peak = abs;
+    }
     buffer.copyToChannel(channelData, ch);
   }
   audioData.close();
+
+  // Update signal level for diagnostics
+  lastAudioLevel = peak > 0.0001 ? 20 * Math.log10(peak) : -150;
 
   // Schedule playback with seamless timing
   const source = audioContext.createBufferSource();
@@ -132,6 +149,7 @@ export function stopAudioPlayer() {
     audioContext = null;
   }
   nextStartTime = 0;
+  lastAudioLevel = -150;
   console.log("[audio] Player stopped");
 }
 
@@ -141,4 +159,13 @@ export function stopAudioPlayer() {
  */
 export function isAudioSupported() {
   return typeof AudioDecoder !== "undefined";
+}
+
+/**
+ * Get the last measured audio signal level in dB.
+ * Returns -150 when silent or not playing.
+ * @returns {number} Signal level in dB (0 = full scale, -150 = silence)
+ */
+export function getAudioLevel() {
+  return lastAudioLevel;
 }

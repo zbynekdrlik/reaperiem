@@ -29,6 +29,9 @@ use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+#[cfg(feature = "audio")]
+use std::sync::Mutex;
+
 /// Shared application state
 #[derive(Clone)]
 pub struct AppState {
@@ -53,6 +56,9 @@ pub struct AppState {
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]
     pub audio_tx: broadcast::Sender<bytes::Bytes>,
+    /// Audio pipeline health diagnostics
+    #[cfg(feature = "audio")]
+    pub audio_diagnostics: Arc<Mutex<audio_stream::AudioDiagnostics>>,
 }
 
 /// Global IEM output volume state for a member
@@ -116,6 +122,8 @@ impl AppState {
             discovered_members: Arc::new(RwLock::new(Vec::new())),
             #[cfg(feature = "audio")]
             audio_tx,
+            #[cfg(feature = "audio")]
+            audio_diagnostics: Arc::new(Mutex::new(audio_stream::AudioDiagnostics::default())),
         }
     }
 }
@@ -188,7 +196,7 @@ pub async fn start_server(
 
     // Spawn audio listener (captures VBAN UDP packets from REAPER)
     #[cfg(feature = "audio")]
-    audio_stream::spawn_audio_listener(state.audio_tx.clone());
+    audio_stream::spawn_audio_listener(state.audio_tx.clone(), state.audio_diagnostics.clone());
 
     let cors = CorsLayer::permissive();
 

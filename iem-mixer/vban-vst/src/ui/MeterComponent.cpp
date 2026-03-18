@@ -1,4 +1,5 @@
 #include "MeterComponent.h"
+#include <cmath>
 
 MeterComponent::MeterComponent() {
     startTimerHz(30); // 30 FPS refresh
@@ -97,8 +98,11 @@ void MeterComponent::drawMeter(juce::Graphics& g, juce::Rectangle<int> bounds, f
     g.setColour(juce::Colour(0xff333333));
     g.fillRoundedRectangle(bounds.toFloat(), 4.0f);
 
-    // Meter fill
-    float meterHeight = bounds.getHeight() * std::clamp(level, 0.0f, 1.0f);
+    // Meter fill — convert linear level to dB-scaled meter position to match REAPER's display
+    float levelDb = (level > 0.0001f) ? 20.0f * std::log10f(level) : -80.0f;
+    // Map dB range [-60, 0] to [0.0, 1.0] for meter fill
+    float meterPct = std::clamp((levelDb + 60.0f) / 60.0f, 0.0f, 1.0f);
+    float meterHeight = bounds.getHeight() * meterPct;
     auto fillBounds = bounds.removeFromBottom(static_cast<int>(meterHeight));
 
     // Gradient from green to yellow to red
@@ -116,12 +120,12 @@ void MeterComponent::drawMeter(juce::Graphics& g, juce::Rectangle<int> bounds, f
     g.setGradientFill(gradient);
     g.fillRoundedRectangle(fillBounds.toFloat(), 4.0f);
 
-    // dB scale marks
+    // dB scale marks — placed using the same dB-to-percent mapping as the meter fill
     g.setColour(juce::Colours::grey.withAlpha(0.5f));
     int totalHeight = bounds.getHeight() + fillBounds.getHeight();
     for (float db : {-6.0f, -12.0f, -24.0f}) {
-        float linearLevel = std::pow(10.0f, db / 20.0f);
-        int y = bounds.getBottom() - static_cast<int>(totalHeight * linearLevel);
+        float markPct = (db + 60.0f) / 60.0f;
+        int y = bounds.getBottom() - static_cast<int>(totalHeight * markPct);
         g.drawHorizontalLine(y, bounds.getX() + 2.0f, bounds.getRight() - 2.0f);
     }
 }

@@ -11,6 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{AppState, Assets, auth, preset_routes, proxy, snapshot_routes};
+use axum::extract::State;
 use rust_embed::RustEmbed;
 
 /// Version information for deployment verification
@@ -86,6 +87,8 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
         .route("/ws/audio", get(ws_audio_handler))
+        // Audio diagnostics (engineer-only)
+        .route("/api/audio/diagnostics", get(audio_diagnostics_handler))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -259,6 +262,58 @@ async fn ws_audio_handler() -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,
         "Audio streaming not available (compiled without audio feature)",
+    )
+}
+
+/// Audio diagnostics endpoint — returns pipeline health metrics (engineer-only)
+#[cfg(feature = "audio")]
+async fn audio_diagnostics_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<crate::audio_stream::AudioDiagnostics>, (StatusCode, Json<iem_core::ApiError>)> {
+    // Require engineer auth
+    let config = state.config.read().await;
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(iem_core::ApiError::unauthorized()),
+            )
+        })?;
+    let claims =
+        crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(iem_core::ApiError::unauthorized()),
+            )
+        })?;
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(iem_core::ApiError::new(
+                "FORBIDDEN",
+                "Audio diagnostics is engineer-only",
+            )),
+        ));
+    }
+    drop(config);
+
+    let diag = state
+        .audio_diagnostics
+        .lock()
+        .unwrap()
+        .clone();
+    Ok(Json(diag))
+}
+
+#[cfg(not(feature = "audio"))]
+async fn audio_diagnostics_handler() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        "Audio diagnostics not available (compiled without audio feature)",
     )
 }
 
