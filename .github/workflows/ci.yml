@@ -720,9 +720,9 @@ jobs:
       - name: Deploy VBAN VST3 to REAPER plugin path
         shell: powershell
         run: |
-          # Deploy to REAPER user plugin path (no admin needed)
-          # C:\Program Files\Common Files\VST3\ requires admin — runner doesn't have it
-          $vst3Dest = "$env:APPDATA\REAPER\UserPlugins"
+          # Deploy to standard Windows VST3 path (REAPER scans this automatically)
+          # Directory created with admin + icacls granting newlevel full control
+          $vst3Dest = "C:\Program Files\Common Files\VST3"
           if (-not (Test-Path $vst3Dest)) {
             New-Item -ItemType Directory -Path $vst3Dest -Force | Out-Null
           }

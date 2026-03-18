@@ -536,7 +536,7 @@ VBAN IEM VST3 (custom, built in CI from iem-mixer/vban-vst/):
   - Hardcoded: Send to 127.0.0.1:6980, stream name "engineer"
   - Format: VBAN protocol, INT16 interleaved PCM
   - No GUI configuration needed — auto-activates on insert
-  - Deployed to: %APPDATA%\REAPER\UserPlugins\VBAN IEM.vst3
+  - Deployed to: C:\Program Files\Common Files\VST3\VBAN IEM.vst3 (dir has user write perms via icacls)
 
 App listens on: 127.0.0.1:6980 (standard VBAN port)
 No startup order dependency — port 6980 is not shared with REAPER.
