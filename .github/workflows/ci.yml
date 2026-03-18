@@ -118,7 +118,8 @@ jobs:
       - name: Ban continue-on-error in CI
         run: |
           echo "Checking for continue-on-error in CI workflows..."
-          FOUND=$(grep -rn "continue-on-error" .github/workflows/ 2>/dev/null || true)
+          # Exclude this check step itself (grep matches its own source)
+          FOUND=$(grep -rn "continue-on-error:" .github/workflows/ 2>/dev/null | grep -v "Ban continue-on-error" | grep -v "Checking for continue-on-error" || true)
           if [ -n "$FOUND" ]; then
             echo "::error::FORBIDDEN: continue-on-error found in CI workflows!"
             echo "::error::All CI steps must pass or fail explicitly. No silent failures."
