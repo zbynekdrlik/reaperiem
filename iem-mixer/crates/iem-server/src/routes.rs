@@ -473,8 +473,6 @@ mod tests {
             "snippets/iem-ui-fe2cd2496a8b535b/audio_player.js"
         ));
         // Full path with hashed filename → long cache
-        assert!(has_content_hash(
-            "assets/iem-ui-c72f48fccb666eb9.js"
-        ));
+        assert!(has_content_hash("assets/iem-ui-c72f48fccb666eb9.js"));
     }
 }
