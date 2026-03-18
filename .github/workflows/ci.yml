@@ -1052,10 +1052,15 @@ jobs:
           }
 
           # REAPER may have been restarted during VST3 deploy, clearing EXTSTATE.
-          # Re-register scripts via meter_bridge to get fresh action IDs.
+          # meter_bridge (deferred script) may not be running yet after restart.
+          # Trigger it first, then re-register VBAN scripts.
           try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
+            $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+            Write-Host "Dynamic registration: $regResult"
           } catch {
             Write-Host "::warning::Could not trigger dynamic registration: $_"
           }
