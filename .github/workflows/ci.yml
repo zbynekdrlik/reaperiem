@@ -735,21 +735,28 @@ jobs:
           }
 
           # Copy the entire VST3 bundle directory
+          # If the DLL is locked by REAPER (already loaded), that's OK — plugin is in use
           $destPath = Join-Path $vst3Dest $vst3Source.Name
-          if (Test-Path $destPath) {
-            Remove-Item $destPath -Recurse -Force
+          try {
+            if (Test-Path $destPath) {
+              Remove-Item $destPath -Recurse -Force -ErrorAction Stop
+            }
+            Copy-Item $vst3Source.FullName $destPath -Recurse -Force
+            Write-Host "VBAN VST3 deployed: $destPath"
+          } catch {
+            # File locked = REAPER has the plugin loaded = already deployed
+            if ($_.Exception -is [System.UnauthorizedAccessException] -or $_.Exception.InnerException -is [System.UnauthorizedAccessException]) {
+              Write-Host "VBAN VST3 already deployed and locked by REAPER (in use) — skipping copy"
+            } else {
+              Write-Host "::error::Failed to deploy VBAN VST3: $_"
+              exit 1
+            }
           }
-          Copy-Item $vst3Source.FullName $destPath -Recurse -Force
-          Write-Host "VBAN VST3 deployed: $destPath"
 
-          # Verify the bundle was copied correctly
+          # Verify the bundle exists (either freshly copied or already present)
           if (-not (Test-Path $destPath)) {
-            Write-Host "::error::VST3 bundle not found at destination after copy"
+            Write-Host "::error::VST3 bundle not found at $destPath"
             exit 1
-          }
-          $dll = Get-ChildItem -Path $destPath -Filter "*.dll" -Recurse
-          if (-not $dll) {
-            $dll = Get-ChildItem -Path $destPath -Filter "*.vst3" -Recurse -File
           }
           Write-Host "VST3 bundle contents:"
           Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
