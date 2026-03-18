@@ -654,6 +654,7 @@ sed -i 's/"version": "1.1.0"/"version": "1.2.0"/' iem-mixer/src-tauri/tauri.conf
 ❌ Use `shell: bash` on Windows self-hosted runner
 ❌ Change REAPER parsing without adding tests that verify real response format
 ❌ Push multiple "fix CI" commits in a row - think before pushing!
+❌ Use `continue-on-error: true` in CI — FORBIDDEN without explicit written user approval. Every step must pass or fail the build. Enforced by test-integrity check.
 ```
 
 **THE RULE:** One push should work. If CI fails, the fix should be ONE commit that addresses ALL issues found, not a stream of partial fixes.
@@ -970,6 +971,7 @@ gh release view <tag>
 - ❌ NEVER have conditional test execution (no `if: always()` bypass)
 - ❌ NEVER pass with 0 tests (must verify test count > 0)
 - ❌ NEVER deploy without E2E verification
+- ❌ **NEVER use `continue-on-error: true`** — every step must pass or FAIL the build. No silent failures. This is enforced by the `Ban continue-on-error in CI` integrity check. **DO NOT add `continue-on-error` without explicit written approval from the user in the conversation.**
 - ✅ ALWAYS run ALL tests on EVERY push
 - ✅ ALWAYS verify deployed app responds correctly
 - ✅ ALWAYS fail if any test is skipped or ignored

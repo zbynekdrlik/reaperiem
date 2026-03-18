@@ -115,6 +115,18 @@ jobs:
           cd iem-mixer/src-tauri/icons
           python3 verify_icons.py
 
+      - name: Ban continue-on-error in CI
+        run: |
+          echo "Checking for continue-on-error in CI workflows..."
+          FOUND=$(grep -rn "continue-on-error" .github/workflows/ 2>/dev/null || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::FORBIDDEN: continue-on-error found in CI workflows!"
+            echo "::error::All CI steps must pass or fail explicitly. No silent failures."
+            echo "$FOUND"
+            exit 1
+          fi
+          echo "No continue-on-error found - all steps are hard gates"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -550,47 +562,13 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Ensure Windows Firewall allows UDP 6980 (VBAN audio)
+      - name: Verify UDP 6980 is localhost-only (no firewall needed)
         shell: powershell
-        continue-on-error: true
         run: |
-          # VBAN IEM VST sends audio via UDP to 127.0.0.1:6980.
-          # Since it's localhost-only, firewall usually isn't needed, but add rule to be safe.
-          $ErrorActionPreference = "SilentlyContinue"
-
-          $ruleName = "IEM Mixer Audio UDP 6980"
-          $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-          if ($existing) {
-            Write-Host "Firewall rule already exists: $ruleName"
-          } else {
-            $result = New-NetFirewallRule `
-              -DisplayName $ruleName `
-              -Direction Inbound `
-              -Protocol UDP `
-              -LocalPort 6980 `
-              -Action Allow `
-              -Profile Any `
-              -Description "Allow VBAN audio UDP packets for IEM Mixer" 2>&1
-            if ($?) {
-              Write-Host "Created firewall rule: $ruleName"
-            } else {
-              Write-Host "::warning::Cannot create firewall rule (needs admin)"
-            }
-          }
-
-          # Remove old ReaStream firewall rules
-          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 58710" -ErrorAction SilentlyContinue
-          Remove-NetFirewallRule -DisplayName "IEM Mixer Audio UDP 4711" -ErrorAction SilentlyContinue
-
-          # Check existing firewall rules
-          $rules = Get-NetFirewallRule -Direction Inbound -Enabled True -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "IEM|6980|VBAN" }
-          if ($rules) {
-            Write-Host "Existing inbound firewall rules:"
-            $rules | ForEach-Object { Write-Host "  $($_.DisplayName) (Action: $($_.Action))" }
-          } else {
-            Write-Host "::warning::No IEM/VBAN firewall rules found."
-          }
+          # VBAN IEM sends UDP to 127.0.0.1:6980 (localhost-only).
+          # Windows firewall does not block localhost traffic, so no rule is needed.
+          # Just log the status for visibility.
+          Write-Host "VBAN audio uses localhost UDP (127.0.0.1:6980) - firewall not required"
 
       - name: Install and start IEM Mixer
         shell: powershell
@@ -910,15 +888,14 @@ jobs:
 
       - name: Deploy ReaScripts to REAPER
         shell: cmd
-        continue-on-error: true
         run: |
           if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
           xcopy /Y scripts\reascripts\*.lua "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          if errorlevel 1 (echo ERROR: Failed to deploy ReaScripts && exit /b 1)
           echo ReaScripts deployed
 
       - name: Register new ReaScripts in reaper-kb.ini
         shell: powershell
-        continue-on-error: true
         run: |
           $kbIni = "C:\Users\newlevel\AppData\Roaming\REAPER\reaper-kb.ini"
           if (-not (Test-Path $kbIni)) {
@@ -944,34 +921,46 @@ jobs:
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
-        continue-on-error: true
         run: |
-          # meter_bridge.lua (already running via defer) picks up EXTSTATE requests
-          # and calls AddRemoveReaScript to register scripts at runtime - no restart needed
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Check if REAPER is available
+          $reaperAvailable = $false
           try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua" -UseBasicParsing -TimeoutSec 5
-            Start-Sleep -Seconds 3
-            $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
-            Write-Host "Dynamic registration result: $result"
-          } catch {
-            Write-Host "::warning::Dynamic registration failed (REAPER may not be running): $_"
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {}
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running but is now unreachable"
+              exit 1
+            }
+            Write-Host "REAPER not running - dynamic registration will happen on next REAPER start"
+            exit 0
           }
+
+          # meter_bridge.lua (running via defer) picks up EXTSTATE requests
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Start-Sleep -Seconds 3
+          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "Dynamic registration result: $result"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
-        continue-on-error: true
         run: |
           xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
+          if errorlevel 1 (echo ERROR: Failed to deploy WASM to REAPER www root && exit /b 1)
           echo WASM deployed to REAPER www root
 
       - name: Verify WASM deployment
         shell: cmd
-        continue-on-error: true
         run: |
           if exist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\index.html" (
             echo WASM deployment verified!
           ) else (
-            echo WARNING: WASM not deployed to REAPER www root - requires admin access
+            echo ERROR: WASM not deployed to REAPER www root
+            exit /b 1
           )
 
       - name: Verify send modes (pre-fader)
