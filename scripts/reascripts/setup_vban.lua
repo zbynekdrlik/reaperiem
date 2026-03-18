@@ -76,6 +76,9 @@ if new_fx < 0 then
   return
 end
 
+-- Explicitly enable the FX (not bypassed)
+reaper.TrackFX_SetEnabled(track, new_fx, true)
+
 -- VBAN IEM auto-activates with hardcoded settings (127.0.0.1:6980, stream "engineer")
 -- No manual GUI configuration needed (unlike ReaStream which required GUI setup)
 if had_reastream then
