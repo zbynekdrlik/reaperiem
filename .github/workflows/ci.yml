@@ -754,46 +754,6 @@ jobs:
           Write-Host "VST3 bundle contents:"
           Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
 
-      - name: Trigger REAPER VST3 rescan
-        shell: powershell
-        continue-on-error: true
-        run: |
-          # Tell REAPER to clear VST cache and rescan (action 40886)
-          # This picks up the newly deployed VST3 without restart
-          # WARNING: REAPER becomes unresponsive during rescan — must wait for it to recover
-          try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40886" -UseBasicParsing -TimeoutSec 10 | Out-Null
-            Write-Host "Triggered REAPER VST3 rescan (action 40886)"
-          } catch {
-            Write-Host "::warning::Could not trigger REAPER VST3 rescan (REAPER may not be running): $_"
-            exit 0
-          }
-
-          # Wait for REAPER to finish rescan and become responsive again
-          # Plugin rescan can take 30+ seconds on large plugin collections
-          Write-Host "Waiting for REAPER to finish plugin rescan..."
-          $maxWait = 60
-          $waited = 0
-          $ready = $false
-          while ($waited -lt $maxWait) {
-            Start-Sleep -Seconds 5
-            $waited += 5
-            try {
-              $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
-              if ($resp.StatusCode -eq 200) {
-                $ready = $true
-                Write-Host "REAPER responsive after ${waited}s"
-                break
-              }
-            } catch {
-              Write-Host "  Still scanning... (${waited}s elapsed)"
-            }
-          }
-
-          if (-not $ready) {
-            Write-Host "::warning::REAPER did not become responsive within ${maxWait}s after rescan"
-          }
-
       - name: Verify app listens on VBAN port
         shell: powershell
         run: |
