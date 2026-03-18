@@ -950,8 +950,8 @@ jobs:
       - name: Deploy WASM to REAPER www root
         shell: cmd
         run: |
-          xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
-          if errorlevel 1 (echo ERROR: Failed to deploy WASM to REAPER www root && exit /b 1)
+          robocopy wasm-dist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer" /E /IS /IT /R:5 /W:2
+          if %ERRORLEVEL% GEQ 8 (echo ERROR: Failed to deploy WASM to REAPER www root && exit /b 1)
           echo WASM deployed to REAPER www root
 
       - name: Verify WASM deployment
