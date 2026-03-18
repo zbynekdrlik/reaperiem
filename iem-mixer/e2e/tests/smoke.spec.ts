@@ -17,11 +17,35 @@ test.describe("Smoke Tests - Must All Pass", () => {
     expect(response?.status()).toBe(200);
   });
 
-  test("landing page contains member content", async ({ page }) => {
+  test("WASM mounts and renders visible content (not blank page)", async ({
+    page,
+  }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+
     await page.goto("/");
-    // Page should have some content (not blank)
-    const content = await page.content();
-    expect(content.length).toBeGreaterThan(100);
+
+    // Wait for WASM to mount — Leptos renders into <body>.
+    // If WASM fails (SRI mismatch, init error), body stays empty → timeout.
+    await page.waitForSelector("body > :not(noscript):not(script)", {
+      timeout: 15000,
+    });
+
+    // Verify actual rendered content exists (not just empty divs)
+    const bodyChildCount = await page.evaluate(
+      () =>
+        document.querySelectorAll("body > :not(noscript):not(script):not(link)")
+          .length,
+    );
+    expect(bodyChildCount).toBeGreaterThan(0);
+
+    // No SRI or module loading errors
+    const sriErrors = consoleErrors.filter(
+      (e) => e.includes("integrity") || e.includes("blocked"),
+    );
+    expect(sriErrors).toEqual([]);
   });
 
   test("login page is accessible", async ({ page }) => {
@@ -40,6 +64,16 @@ test.describe("Smoke Tests - Must All Pass", () => {
     await page.goto("/");
     // Check that WASM loads (page should have JS execution)
     await page.waitForLoadState("networkidle");
+  });
+
+  test("non-hashed assets have no-cache headers", async ({ request }) => {
+    // audio_player.js (in snippets/) has no content hash in filename
+    // and must NOT be long-cached — stale CDN cache causes SRI failures
+    const swResp = await request.get("/sw.js");
+    expect(swResp.headers()["cache-control"]).toContain("no-cache");
+
+    const manifestResp = await request.get("/manifest.json");
+    expect(manifestResp.headers()["cache-control"]).toContain("no-cache");
   });
 });
 

@@ -1380,6 +1380,15 @@ jobs:
                 }
               }
 
+              # Verify non-hashed assets have no-cache (prevents CDN stale cache + SRI mismatch)
+              $swResp = Invoke-WebRequest -Uri "http://localhost:80/sw.js" -UseBasicParsing
+              $swCache = $swResp.Headers["Cache-Control"]
+              if ($swCache -notmatch "no-cache") {
+                Write-Host "::error::sw.js has wrong cache-control: $swCache (expected no-cache)"
+                exit 1
+              }
+              Write-Host "Cache-control headers: OK (non-hashed assets have no-cache)"
+
               Write-Host "Deployment fully verified!"
               exit 0
             } catch {

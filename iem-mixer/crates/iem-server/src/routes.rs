@@ -305,6 +305,19 @@ async fn serve_asset(Path(path): Path<String>) -> impl IntoResponse {
     serve_embedded_file(&format!("assets/{}", path))
 }
 
+/// Check if a filename contains a content hash (12+ contiguous hex chars).
+/// Content-hashed files are safe for immutable long-term caching.
+/// Files without content hashes (e.g. snippets/*/audio_player.js) must not
+/// be cached, as CDN caches stale content causing SRI hash mismatches.
+fn has_content_hash(path: &str) -> bool {
+    let filename = path.rsplit('/').next().unwrap_or(path);
+    filename.as_bytes().len() >= 12
+        && filename
+            .as_bytes()
+            .windows(12)
+            .any(|w| w.iter().all(|b| b.is_ascii_hexdigit()))
+}
+
 /// Serve an embedded file
 fn serve_embedded_file(path: &str) -> Response {
     // Try exact path first
@@ -313,16 +326,10 @@ fn serve_embedded_file(path: &str) -> Response {
             .first_or_octet_stream()
             .to_string();
 
-        // HTML files should not be cached (ensures fresh UI after deploys)
-        // Hashed assets (JS/WASM/CSS in /assets/) can be cached long-term
-        let cache_control = if path.ends_with(".html")
-            || path == "index.html"
-            || path == "sw.js"
-            || path == "manifest.json"
-        {
-            "no-cache, must-revalidate"
+        let cache_control = if has_content_hash(path) {
+            "public, max-age=31536000, immutable"
         } else {
-            "public, max-age=31536000"
+            "no-cache, must-revalidate"
         };
 
         return Response::builder()
@@ -437,5 +444,37 @@ mod tests {
         let local_ip = Some("203.0.113.50".to_string());
         // Should use first IP from x-forwarded-for
         assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_content_hash_detection_hashed_files() {
+        // Trunk-generated files with content hashes → long cache
+        assert!(has_content_hash("iem-ui-c72f48fccb666eb9.js"));
+        assert!(has_content_hash("iem-ui-c72f48fccb666eb9_bg.wasm"));
+        assert!(has_content_hash("style-ccead50460cc69d.css"));
+    }
+
+    #[test]
+    fn test_content_hash_detection_unhashed_files() {
+        // Files without content hashes → no-cache
+        assert!(!has_content_hash("audio_player.js"));
+        assert!(!has_content_hash("sw.js"));
+        assert!(!has_content_hash("manifest.json"));
+        assert!(!has_content_hash("index.html"));
+        assert!(!has_content_hash("icon.svg"));
+        assert!(!has_content_hash("icon-192.png"));
+        assert!(!has_content_hash("icon-512.png"));
+    }
+
+    #[test]
+    fn test_content_hash_detection_with_directory() {
+        // Snippet paths: directory has hash but filename doesn't → no-cache
+        assert!(!has_content_hash(
+            "snippets/iem-ui-fe2cd2496a8b535b/audio_player.js"
+        ));
+        // Full path with hashed filename → long cache
+        assert!(has_content_hash(
+            "assets/iem-ui-c72f48fccb666eb9.js"
+        ));
     }
 }
