@@ -77,7 +77,22 @@ test.describe("Audio Listen Button (#90)", () => {
     await expect(listenBtn).toHaveCount(0);
   });
 
-  test("clicking Listen button opens audio WebSocket", async ({ page }) => {
+  test("clicking Listen button opens audio WebSocket without errors", async ({
+    page,
+  }) => {
+    // Capture browser console errors related to audio
+    const audioErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        if (
+          text.match(/AudioDecoder|opus|decode|NotSupportedError|AudioContext/i)
+        ) {
+          audioErrors.push(text);
+        }
+      }
+    });
+
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
@@ -93,20 +108,21 @@ test.describe("Audio Listen Button (#90)", () => {
       return;
 
     // Click the Listen button — this should open a WebSocket to /ws/audio
-    // We can't easily verify WS in Playwright, but we can verify the button
-    // state changes to "listening" or "no-source" class
     await listenBtn.click();
 
-    // Wait a moment for the WebSocket to connect and status to update
-    await page.waitForTimeout(2000);
+    // Wait for the WebSocket to connect and status to update
+    await page.waitForTimeout(3000);
 
     // Button should have changed state (either listening or no-source)
     const btnClass = await listenBtn.getAttribute("class");
+    expect(btnClass).toBeTruthy();
     const hasStateChange =
       btnClass?.includes("listening") || btnClass?.includes("no-source");
     // In CI without REAPER/VBAN, we expect no-source or the WS may fail
     // The key test is that the button click doesn't crash and changes state
-    expect(btnClass).toBeTruthy();
+
+    // No audio-related errors should appear in the browser console
+    expect(audioErrors).toEqual([]);
   });
 
   test("audio WebSocket route exists and rejects plain HTTP", async ({

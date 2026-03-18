@@ -110,6 +110,12 @@ fn start_listening(
     let ws_protocol = if protocol == "https:" { "wss:" } else { "ws:" };
     let url = format!("{}//{}/ws/audio?token={}", ws_protocol, host, auth.token);
 
+    // Init audio player NOW — in the click handler's call stack.
+    // Mobile browsers require AudioContext to be created from a user gesture.
+    // If we wait for the async on_open callback, the context will be suspended
+    // and resume() won't work (it's also not a user gesture).
+    init_audio_player();
+
     let socket = match web_sys::WebSocket::new(&url) {
         Ok(s) => s,
         Err(e) => {
@@ -119,9 +125,8 @@ fn start_listening(
     };
     socket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
-    // On open: init audio player and send ListenStart
+    // On open: send ListenStart (audio player already initialized above)
     let on_open = Closure::wrap(Box::new(move |_: web_sys::Event| {
-        init_audio_player();
         // Send ListenStart command
         let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStart).unwrap_or_default();
         if let Some(w) = web_sys::window() {

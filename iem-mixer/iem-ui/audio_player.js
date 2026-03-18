@@ -3,6 +3,7 @@
 
 let audioContext = null;
 let nextStartTime = 0;
+let frameIndex = 0;
 
 /**
  * Initialize the audio player. Must be called from a user gesture (click).
@@ -14,6 +15,7 @@ export function initAudioPlayer() {
   }
   audioContext = new AudioContext({ sampleRate: 48000 });
   nextStartTime = 0;
+  frameIndex = 0;
   console.log(
     "[audio] Player initialized, sampleRate:",
     audioContext.sampleRate,
@@ -65,9 +67,13 @@ function ensureDecoder() {
 function decodeWithWebCodecs(opusData) {
   try {
     ensureDecoder();
+    // Each Opus frame is 20ms = 20000 microseconds.
+    // Monotonic timestamps help WebCodecs track frame ordering.
+    const timestamp = frameIndex * 20000;
+    frameIndex++;
     const chunk = new EncodedAudioChunk({
       type: "key",
-      timestamp: 0,
+      timestamp,
       data: opusData,
     });
     decoder.decode(chunk);

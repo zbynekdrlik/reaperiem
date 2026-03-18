@@ -152,6 +152,8 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     let binaryFrames = 0;
     let gotListening = false;
     let gotNoSource = false;
+    const frameSizes: number[] = [];
+    const tocBytes: number[] = [];
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -172,8 +174,12 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
       ws.on("message", (data: Buffer, isBinary: boolean) => {
         if (isBinary) {
           binaryFrames++;
+          frameSizes.push(data.length);
+          if (data.length > 0) {
+            tocBytes.push(data[0]);
+          }
           messages.push({ type: "binary", data: `${data.length} bytes` });
-          if (binaryFrames >= 5) {
+          if (binaryFrames >= 10) {
             clearTimeout(timeout);
             resolve();
           }
@@ -215,8 +221,25 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     expect(binaryFrames).toBeGreaterThanOrEqual(5);
     expect(gotListening).toBe(true);
     expect(gotNoSource).toBe(false);
+
+    // Validate Opus frame structure
+    for (const size of frameSizes) {
+      // Opus frames for 20ms stereo @ 64kbps are typically 80-200 bytes
+      // Minimum valid Opus packet is 1 byte (silence), max ~1275 bytes
+      expect(size).toBeGreaterThan(0);
+      expect(size).toBeLessThan(1300);
+    }
+
+    // Validate Opus TOC byte structure
+    // TOC byte encodes: config (5 bits) | stereo flag (1 bit) | code (2 bits)
+    // For stereo, bit 2 (0x04) should be set
+    for (const toc of tocBytes) {
+      const stereoFlag = (toc >> 2) & 1;
+      expect(stereoFlag).toBe(1); // must be stereo
+    }
+
     console.log(
-      `PASS: Received ${binaryFrames} Opus frames from ${sender.packetsSent()} VBAN UDP packets`,
+      `PASS: Received ${binaryFrames} valid Opus frames (sizes: ${frameSizes.slice(0, 5).join(",")}...) from ${sender.packetsSent()} VBAN UDP packets`,
     );
   });
 
