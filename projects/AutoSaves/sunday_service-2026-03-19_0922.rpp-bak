@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1773911542 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1773908531 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1326,9 +1326,9 @@
     MAINSEND 0 0
     HWOUT 32 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
-      WNDRECT 24 52 716 290
-      SHOW 1
-      LASTSEL 0
+      WNDRECT 24 52 477 433
+      SHOW 2
+      LASTSEL 1
       DOCKED 0
       BYPASS 0 0 0
       <JS synthesis/tonegenerator ""
