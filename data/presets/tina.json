@@ -1,0 +1,119 @@
+{
+  "Tina 19.3.": {
+    "name": "Tina 19.3.",
+    "channels": {
+      "10": {
+        "vol": -37.4,
+        "mute": true,
+        "pan": 1.0
+      },
+      "19": {
+        "vol": -22.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": -24.0,
+        "mute": true,
+        "pan": 1.0
+      },
+      "20": {
+        "vol": -25.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": -22.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": -30.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": -33.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": -29.8,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": -36.6,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": -27.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": -37.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": -29.6,
+        "mute": true,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": -19.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": -29.6,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": -14.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": -32.6,
+        "mute": true,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": -53.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": -30.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": -26.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": -33.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": -40.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -29.4,
+        "mute": true,
+        "pan": 0.5
+      }
+    },
+    "created_at": 1773938340,
+    "updated_at": 1773938340
+  }
+}
