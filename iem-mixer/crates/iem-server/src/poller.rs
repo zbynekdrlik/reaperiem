@@ -1355,13 +1355,9 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// Unchanged meters should NOT be broadcast (saves bandwidth during silence)
     #[test]
     fn test_meter_delta_unchanged_is_empty() {
-        let meters: HashMap<usize, [f32; 2]> = [
-            (1, [0.5, 0.5]),
-            (2, [0.0, 0.0]),
-            (3, [0.3, 0.25]),
-        ]
-        .into_iter()
-        .collect();
+        let meters: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.0, 0.0]), (3, [0.3, 0.25])]
+            .into_iter()
+            .collect();
 
         let delta = compute_meter_delta(&meters, &meters);
         assert!(
@@ -1374,19 +1370,15 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// Changed meters should be included in the delta
     #[test]
     fn test_meter_delta_changed_is_broadcast() {
-        let prev: HashMap<usize, [f32; 2]> = [
-            (1, [0.5, 0.5]),
-            (2, [0.0, 0.0]),
-            (3, [0.3, 0.25]),
-        ]
-        .into_iter()
-        .collect();
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.0, 0.0]), (3, [0.3, 0.25])]
+            .into_iter()
+            .collect();
 
         // Track 1 changed significantly, track 2 unchanged, track 3 changed
         let current: HashMap<usize, [f32; 2]> = [
-            (1, [0.7, 0.6]),   // changed
-            (2, [0.0, 0.0]),   // unchanged
-            (3, [0.1, 0.25]),  // L changed
+            (1, [0.7, 0.6]),  // changed
+            (2, [0.0, 0.0]),  // unchanged
+            (3, [0.1, 0.25]), // L changed
         ]
         .into_iter()
         .collect();
@@ -1401,10 +1393,8 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// Small changes below threshold should NOT trigger broadcast
     #[test]
     fn test_meter_delta_below_threshold() {
-        let prev: HashMap<usize, [f32; 2]> =
-            [(1, [0.5, 0.5])].into_iter().collect();
-        let current: HashMap<usize, [f32; 2]> =
-            [(1, [0.505, 0.498])].into_iter().collect();
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> = [(1, [0.505, 0.498])].into_iter().collect();
 
         let delta = compute_meter_delta(&prev, &current);
         assert!(
@@ -1417,11 +1407,10 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// New tracks (not in previous cache) should always be broadcast
     #[test]
     fn test_meter_delta_new_track_is_broadcast() {
-        let prev: HashMap<usize, [f32; 2]> =
-            [(1, [0.5, 0.5])].into_iter().collect();
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
         let current: HashMap<usize, [f32; 2]> = [
-            (1, [0.5, 0.5]),   // unchanged
-            (2, [0.3, 0.3]),   // new track
+            (1, [0.5, 0.5]), // unchanged
+            (2, [0.3, 0.3]), // new track
         ]
         .into_iter()
         .collect();
@@ -1435,12 +1424,8 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     #[test]
     fn test_meter_delta_first_broadcast_includes_all() {
         let prev: HashMap<usize, [f32; 2]> = HashMap::new();
-        let current: HashMap<usize, [f32; 2]> = [
-            (1, [0.0, 0.0]),
-            (2, [0.0, 0.0]),
-        ]
-        .into_iter()
-        .collect();
+        let current: HashMap<usize, [f32; 2]> =
+            [(1, [0.0, 0.0]), (2, [0.0, 0.0])].into_iter().collect();
 
         let delta = compute_meter_delta(&prev, &current);
         assert_eq!(

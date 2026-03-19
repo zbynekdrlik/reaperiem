@@ -6,7 +6,8 @@
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 /// PPM-style decay rate: 20 dB/s (smooth analog VU feel)
 const DECAY_DB_PER_SEC: f32 = 20.0;
