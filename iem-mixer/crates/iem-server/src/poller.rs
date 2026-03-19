@@ -381,7 +381,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         let changed: HashMap<usize, [f32; 2]> = meters
             .iter()
             .filter(|(idx, [l, r])| {
-                prev.get(idx).map_or(true, |[pl, pr]| {
+                prev.get(idx).is_none_or(|[pl, pr]| {
                     (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01
                 })
             })
@@ -1344,7 +1344,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         current
             .iter()
             .filter(|(idx, [l, r])| {
-                prev.get(idx).map_or(true, |[pl, pr]| {
+                prev.get(idx).is_none_or(|[pl, pr]| {
                     (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01
                 })
             })
