@@ -140,11 +140,26 @@ fn start_listening(
 
     // On message: handle text (status) and binary (Opus frames)
     let set_state_msg = set_state;
+    let frame_counter = std::cell::Cell::new(0u32);
     let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
         // Binary message = Opus frame
         if let Ok(buf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
             let array = js_sys::Uint8Array::new(&buf);
+            let raw_len = array.length();
             let data = array.to_vec();
+            let count = frame_counter.get();
+            if count < 3 || count % 200 == 0 {
+                web_sys::console::log_1(
+                    &format!(
+                        "[audio-ws] #{} arraybuf={}B vec={}B",
+                        count,
+                        raw_len,
+                        data.len()
+                    )
+                    .into(),
+                );
+            }
+            frame_counter.set(count + 1);
             feed_opus_frame(&data);
             set_state_msg.set(ListenState::Listening);
             return;
