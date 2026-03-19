@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1773906002 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1773871006 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1327,9 +1327,16 @@
     HWOUT 32 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
       WNDRECT 24 52 477 433
-      SHOW 1
+      SHOW 2
       LASTSEL 1
       DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        -12 -6 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS 0 0 0 0
+      FXID {8AD0F13B-5E04-4D06-930A-FCFD14951CA7}
+      WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
         mfzRf+5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAATAAAAAEAAAD//wAA
