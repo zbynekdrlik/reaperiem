@@ -6,6 +6,8 @@
 //! - Proxies requests to REAPER HTTP API
 //! - Provides real-time WebSocket updates
 
+#[cfg(feature = "audio")]
+pub mod audio_stream;
 pub mod auth;
 pub mod customization_store;
 pub mod pin_store;
@@ -26,6 +28,9 @@ use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
+
+#[cfg(feature = "audio")]
+use std::sync::Mutex;
 
 /// Shared application state
 #[derive(Clone)]
@@ -48,6 +53,12 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
+    /// Broadcast channel for audio Opus frames (engineer listening)
+    #[cfg(feature = "audio")]
+    pub audio_tx: broadcast::Sender<bytes::Bytes>,
+    /// Audio pipeline health diagnostics
+    #[cfg(feature = "audio")]
+    pub audio_diagnostics: Arc<Mutex<audio_stream::AudioDiagnostics>>,
 }
 
 /// Global IEM output volume state for a member
@@ -58,6 +69,7 @@ pub struct GlobalVolState {
 }
 
 /// Cached mixer state for change detection
+#[derive(Default)]
 pub struct MixerCache {
     /// Last known channel states per member (member_id -> channels)
     pub member_states: HashMap<String, Vec<iem_core::Channel>>,
@@ -85,24 +97,15 @@ pub struct MixerCache {
 
 impl MixerCache {
     pub fn new() -> Self {
-        Self {
-            member_states: HashMap::new(),
-            meters: HashMap::new(),
-            connected: false,
-            active_members: HashMap::new(),
-            command_timestamps: HashMap::new(),
-            global_volumes: HashMap::new(),
-            output_track_indices: HashMap::new(),
-            input_track_indices: HashMap::new(),
-            last_track_count: None,
-            snapshot_last_date: HashMap::new(),
-        }
+        Self::default()
     }
 }
 
 impl AppState {
     pub fn new(config: Config, config_dir: &std::path::Path) -> Self {
         let (event_tx, _) = broadcast::channel(256);
+        #[cfg(feature = "audio")]
+        let (audio_tx, _) = broadcast::channel(64);
         Self {
             config: Arc::new(RwLock::new(config)),
             http_client: reqwest::Client::builder()
@@ -117,6 +120,10 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
+            #[cfg(feature = "audio")]
+            audio_tx,
+            #[cfg(feature = "audio")]
+            audio_diagnostics: Arc::new(Mutex::new(audio_stream::AudioDiagnostics::default())),
         }
     }
 }
@@ -186,6 +193,10 @@ pub async fn start_server(
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
+
+    // Spawn audio listener (captures VBAN UDP packets from REAPER)
+    #[cfg(feature = "audio")]
+    audio_stream::spawn_audio_listener(state.audio_tx.clone(), state.audio_diagnostics.clone());
 
     let cors = CorsLayer::permissive();
 

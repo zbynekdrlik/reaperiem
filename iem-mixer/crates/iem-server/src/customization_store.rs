@@ -44,8 +44,7 @@ impl CustomizationStore {
     ) -> Result<(), std::io::Error> {
         std::fs::create_dir_all(&self.customizations_dir)?;
         let path = self.member_path(member_id);
-        let json = serde_json::to_string_pretty(customization)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(customization).map_err(std::io::Error::other)?;
         std::fs::write(path, json)
     }
 }

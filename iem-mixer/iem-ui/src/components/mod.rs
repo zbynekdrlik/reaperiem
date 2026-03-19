@@ -1,5 +1,6 @@
 //! Reusable UI components
 
+pub mod audio_player;
 pub mod category_tabs;
 pub mod fader;
 pub mod meter;

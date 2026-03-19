@@ -65,6 +65,7 @@ fn connect_websocket(
     set_pinned_channels: WriteSignal<Vec<usize>>,
     set_hidden_channels: WriteSignal<Vec<usize>>,
     set_network_mode: WriteSignal<String>,
+    set_output_track_idx: WriteSignal<Option<usize>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -113,6 +114,7 @@ fn connect_websocket(
                         connected: conn,
                         global_level_db,
                         global_muted,
+                        output_track_index,
                     } => {
                         set_channels.update(|chs| {
                             let touched_snapshot: std::collections::HashMap<usize, bool> =
@@ -125,6 +127,9 @@ fn connect_websocket(
                         }
                         if let Some(muted) = global_muted {
                             set_global_muted.set(muted);
+                        }
+                        if let Some(idx) = output_track_index {
+                            set_output_track_idx.set(Some(idx));
                         }
                         set_connected.set(conn);
                         set_loading.set(false);
@@ -166,6 +171,9 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::NetworkMode { mode } => {
                         set_network_mode.set(mode);
+                    }
+                    iem_core::ServerMsg::AudioStatus { .. } => {
+                        // Audio status handled by ListenButton's own WebSocket
                     }
                 }
             }
@@ -261,6 +269,9 @@ pub fn MixerPage() -> impl IntoView {
     // Network mode indicator (local LAN vs remote internet)
     let (network_mode, set_network_mode) = signal(String::new());
 
+    // Output track index for global volume metering (set from ServerMsg::State)
+    let (output_track_idx, set_output_track_idx) = signal(Option::<usize>::None);
+
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
@@ -288,6 +299,7 @@ pub fn MixerPage() -> impl IntoView {
             set_pinned_channels,
             set_hidden_channels,
             set_network_mode,
+            set_output_track_idx,
         );
     });
 
@@ -322,6 +334,7 @@ pub fn MixerPage() -> impl IntoView {
                     set_pinned_channels,
                     set_hidden_channels,
                     set_network_mode,
+                    set_output_track_idx,
                 );
             }
         }
@@ -656,6 +669,8 @@ pub fn MixerPage() -> impl IntoView {
                                 set_global_touched=set_global_touched
                                 connected=connected
                                 ws=ws
+                                meters=meters.into()
+                                output_track_idx=output_track_idx
                             />
                         </Show>
                         <ChannelList
@@ -730,6 +745,8 @@ fn GlobalVolumeFader(
     set_global_touched: WriteSignal<bool>,
     connected: ReadSignal<bool>,
     ws: ReadSignal<Option<web_sys::WebSocket>>,
+    meters: ReadSignal<HashMap<usize, [f32; 2]>>,
+    output_track_idx: ReadSignal<Option<usize>>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -857,6 +874,20 @@ fn GlobalVolumeFader(
 
     let level_signal = Signal::derive(move || level.get());
 
+    // Derive meter levels from the output track's meter data
+    let meter_l = Signal::derive(move || {
+        output_track_idx
+            .get()
+            .and_then(|idx| meters.with(|m| m.get(&idx).map(|v| v[0])))
+            .unwrap_or(0.0)
+    });
+    let meter_r = Signal::derive(move || {
+        output_track_idx
+            .get()
+            .and_then(|idx| meters.with(|m| m.get(&idx).map(|v| v[1])))
+            .unwrap_or(0.0)
+    });
+
     view! {
         <div
             class=move || {
@@ -875,10 +906,7 @@ fn GlobalVolumeFader(
 
             <div style="grid-area: menu"></div>
 
-            <div class="meter-stereo">
-                <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
-                <div class="meter-bar"><div class="meter-fill" style="width:0%"></div></div>
-            </div>
+            <Meter level_l=meter_l level_r=meter_r />
 
             <div class="fader-area">
                 <Fader

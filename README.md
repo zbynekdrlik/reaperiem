@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.59.0 (2026-03-16)
+
+- **Fix**: Mute/fader controls no longer target wrong member after track insertion/removal — frontend now detects track index shifts and fully replaces channel state instead of merging by stale index
+- **Fix**: `<For>` key changed to compound (name + track_index) so Leptos destroys stale closures when tracks shift, preventing captured values from targeting the wrong REAPER track
+
 ### v1.58.0 (2026-03-15)
 
 - **Fix**: Engineer mixer now shows all member mix faders — hardware output destination (-1) was breaking send discovery, preventing mix channels from appearing

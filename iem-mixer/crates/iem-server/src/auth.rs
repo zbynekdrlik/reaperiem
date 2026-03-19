@@ -90,7 +90,7 @@ pub async fn login(
     // 2. Check PinStore for custom PIN (member changed their PIN)
     // Uses constant-time comparison to prevent timing attacks
     if let Some(custom_pin) = pin_store.get_pin(&req.member) {
-        if !constant_time_eq(&req.pin, &custom_pin) {
+        if !constant_time_eq(&req.pin, custom_pin) {
             return Err((
                 StatusCode::UNAUTHORIZED,
                 Json(ApiError::new("INVALID_PIN", "Invalid PIN")),
@@ -233,7 +233,7 @@ pub async fn change_pin(
 
         let pin_store = state.pin_store.read().await;
         let old_pin_valid = if let Some(custom_pin) = pin_store.get_pin(&claims.sub) {
-            constant_time_eq(old_pin, &custom_pin)
+            constant_time_eq(old_pin, custom_pin)
         } else if let Some(config_pin) = config.pins.get(&claims.sub) {
             constant_time_eq(old_pin, config_pin)
         } else {

@@ -73,6 +73,31 @@ function main()
   end
 
   reaper.SetExtState(SECTION, KEY, table.concat(parts, ";"), false)
+
+  -- Dynamic script registration via EXTSTATE (no REAPER restart needed)
+  -- CI or curl sets "reaperiem/register_scripts" with pipe-delimited filenames
+  -- e.g. "setup_vban.lua|check_vban.lua"
+  local reg_request = reaper.GetExtState("reaperiem", "register_scripts")
+  if reg_request ~= "" then
+    local scripts_dir = reaper.GetResourcePath() .. "/Scripts/reaperiem/"
+    local count = 0
+    local ids = {}
+    for filename in reg_request:gmatch("[^|]+") do
+      local full_path = scripts_dir .. filename
+      local cmd_id = reaper.AddRemoveReaScript(true, 0, full_path, true)
+      if cmd_id ~= 0 then
+        count = count + 1
+        -- Store numeric action ID so CI can trigger the script
+        -- Key: "action_<basename>" e.g. "action_setup_vban"
+        local base = filename:gsub("%.lua$", "")
+        reaper.SetExtState("reaperiem", "action_" .. base, tostring(cmd_id), false)
+        ids[#ids + 1] = base .. "=" .. cmd_id
+      end
+    end
+    reaper.SetExtState("reaperiem", "register_result", "OK:" .. count .. ":" .. table.concat(ids, "|"), false)
+    reaper.SetExtState("reaperiem", "register_scripts", "", false)
+  end
+
   reaper.defer(main)
 end
 

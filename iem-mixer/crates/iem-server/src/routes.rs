@@ -11,6 +11,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::{AppState, Assets, auth, preset_routes, proxy, snapshot_routes};
+use axum::extract::State;
 use rust_embed::RustEmbed;
 
 /// Version information for deployment verification
@@ -84,6 +85,10 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         )
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
+        // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
+        .route("/ws/audio", get(ws_audio_handler))
+        // Audio diagnostics (engineer-only)
+        .route("/api/audio/diagnostics", get(audio_diagnostics_handler))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -242,6 +247,71 @@ async fn put_customization(
     }
 }
 
+/// Audio WebSocket handler — delegates to proxy::ws_audio when audio feature is enabled
+#[cfg(feature = "audio")]
+async fn ws_audio_handler(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    state: axum::extract::State<AppState>,
+    query: axum::extract::Query<proxy::WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<iem_core::ApiError>)> {
+    proxy::ws_audio(ws, state, query).await
+}
+
+#[cfg(not(feature = "audio"))]
+async fn ws_audio_handler() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        "Audio streaming not available (compiled without audio feature)",
+    )
+}
+
+/// Audio diagnostics endpoint — returns pipeline health metrics (engineer-only)
+#[cfg(feature = "audio")]
+async fn audio_diagnostics_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<crate::audio_stream::AudioDiagnostics>, (StatusCode, Json<iem_core::ApiError>)> {
+    // Require engineer auth
+    let config = state.config.read().await;
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(iem_core::ApiError::unauthorized()),
+            )
+        })?;
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(iem_core::ApiError::unauthorized()),
+        )
+    })?;
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(iem_core::ApiError::new(
+                "FORBIDDEN",
+                "Audio diagnostics is engineer-only",
+            )),
+        ));
+    }
+    drop(config);
+
+    let diag = state.audio_diagnostics.lock().unwrap().clone();
+    Ok(Json(diag))
+}
+
+#[cfg(not(feature = "audio"))]
+async fn audio_diagnostics_handler() -> impl IntoResponse {
+    (
+        StatusCode::NOT_FOUND,
+        "Audio diagnostics not available (compiled without audio feature)",
+    )
+}
+
 /// REAPER proxy handler
 async fn reaper_proxy(
     state: axum::extract::State<AppState>,
@@ -285,6 +355,19 @@ async fn serve_asset(Path(path): Path<String>) -> impl IntoResponse {
     serve_embedded_file(&format!("assets/{}", path))
 }
 
+/// Check if a filename contains a content hash (12+ contiguous hex chars).
+/// Content-hashed files are safe for immutable long-term caching.
+/// Files without content hashes (e.g. snippets/*/audio_player.js) must not
+/// be cached, as CDN caches stale content causing SRI hash mismatches.
+fn has_content_hash(path: &str) -> bool {
+    let filename = path.rsplit('/').next().unwrap_or(path);
+    filename.len() >= 12
+        && filename
+            .as_bytes()
+            .windows(12)
+            .any(|w| w.iter().all(|b| b.is_ascii_hexdigit()))
+}
+
 /// Serve an embedded file
 fn serve_embedded_file(path: &str) -> Response {
     // Try exact path first
@@ -293,14 +376,10 @@ fn serve_embedded_file(path: &str) -> Response {
             .first_or_octet_stream()
             .to_string();
 
-        // HTML files should not be cached (ensures fresh UI after deploys)
-        // Hashed assets (JS/WASM/CSS in /assets/) can be cached long-term
-        let cache_control = if path.ends_with(".html") || path == "index.html" {
-            "no-cache, must-revalidate"
-        } else if path == "sw.js" || path == "manifest.json" {
-            "no-cache, must-revalidate"
+        let cache_control = if has_content_hash(path) {
+            "public, max-age=31536000, immutable"
         } else {
-            "public, max-age=31536000"
+            "no-cache, must-revalidate"
         };
 
         return Response::builder()
@@ -415,5 +494,35 @@ mod tests {
         let local_ip = Some("203.0.113.50".to_string());
         // Should use first IP from x-forwarded-for
         assert_eq!(detect_network_mode(&headers, &local_ip), "local");
+    }
+
+    #[test]
+    fn test_content_hash_detection_hashed_files() {
+        // Trunk-generated files with content hashes → long cache
+        assert!(has_content_hash("iem-ui-c72f48fccb666eb9.js"));
+        assert!(has_content_hash("iem-ui-c72f48fccb666eb9_bg.wasm"));
+        assert!(has_content_hash("style-ccead50460cc69d.css"));
+    }
+
+    #[test]
+    fn test_content_hash_detection_unhashed_files() {
+        // Files without content hashes → no-cache
+        assert!(!has_content_hash("audio_player.js"));
+        assert!(!has_content_hash("sw.js"));
+        assert!(!has_content_hash("manifest.json"));
+        assert!(!has_content_hash("index.html"));
+        assert!(!has_content_hash("icon.svg"));
+        assert!(!has_content_hash("icon-192.png"));
+        assert!(!has_content_hash("icon-512.png"));
+    }
+
+    #[test]
+    fn test_content_hash_detection_with_directory() {
+        // Snippet paths: directory has hash but filename doesn't → no-cache
+        assert!(!has_content_hash(
+            "snippets/iem-ui-fe2cd2496a8b535b/audio_player.js"
+        ));
+        // Full path with hashed filename → long cache
+        assert!(has_content_hash("assets/iem-ui-c72f48fccb666eb9.js"));
     }
 }

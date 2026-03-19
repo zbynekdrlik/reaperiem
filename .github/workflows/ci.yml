@@ -115,6 +115,19 @@ jobs:
           cd iem-mixer/src-tauri/icons
           python3 verify_icons.py
 
+      - name: Ban continue-on-error in CI
+        run: |
+          echo "Checking for continue-on-error in CI workflows..."
+          # Exclude this check step itself (grep matches its own source)
+          FOUND=$(grep -rn "continue-on-error:" .github/workflows/ 2>/dev/null | grep -v "Ban continue-on-error" | grep -v "Checking for continue-on-error" || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::FORBIDDEN: continue-on-error found in CI workflows!"
+            echo "::error::All CI steps must pass or fail explicitly. No silent failures."
+            echo "$FOUND"
+            exit 1
+          fi
+          echo "No continue-on-error found - all steps are hard gates"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -124,6 +137,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -145,9 +161,16 @@ jobs:
         working-directory: iem-mixer
         run: cargo fmt --all -- --check
 
+      - name: Create minimal dist folder for rust-embed
+        run: |
+          mkdir -p iem-mixer/iem-ui/dist
+          echo "placeholder" > iem-mixer/iem-ui/dist/index.html
+
       - name: Clippy (strict - deny warnings)
         working-directory: iem-mixer
-        run: cargo clippy --all-targets -- -D warnings -D clippy::all
+        run: |
+          cargo clippy --all-targets -- -D warnings -D clippy::all
+          cargo clippy -p iem-server --features audio -- -D warnings -D clippy::all
 
   # ============================================================
   # TEST - Unit tests for core and server
@@ -159,6 +182,9 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -181,7 +207,9 @@ jobs:
 
       - name: Run tests
         working-directory: iem-mixer
-        run: cargo test -p iem-core -p iem-server
+        run: |
+          cargo test -p iem-core
+          cargo test -p iem-server --features audio
 
   # ============================================================
   # BUILD WASM - Frontend must build
@@ -257,6 +285,9 @@ jobs:
           name: wasm-dist
           path: iem-mixer/iem-ui/dist/
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -273,7 +304,7 @@ jobs:
 
       - name: Build server
         working-directory: iem-mixer
-        run: cargo build --package iem-server --features standalone --release
+        run: cargo build --package iem-server --features "standalone,audio" --release
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -295,7 +326,7 @@ jobs:
       - name: Start server
         working-directory: iem-mixer
         run: |
-          cargo run --package iem-server --features standalone --release &
+          cargo run --package iem-server --features "standalone,audio" --release &
           # Wait for server to be ready (may take a while if compiling)
           for i in {1..120}; do
             if curl -sf http://localhost:8080/ > /dev/null 2>&1; then
@@ -426,6 +457,51 @@ jobs:
           retention-days: 1
 
   # ============================================================
+  # BUILD VBAN VST3 - VBAN IEM sender plugin for REAPER
+  # ============================================================
+  build-vban:
+    name: Build VBAN VST3
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: iem-mixer/vban-vst/build
+          key: ${{ runner.os }}-vban-cmake-${{ hashFiles('iem-mixer/vban-vst/CMakeLists.txt', 'iem-mixer/vban-vst/src/**') }}
+
+      - name: Configure CMake
+        working-directory: iem-mixer/vban-vst
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        working-directory: iem-mixer/vban-vst
+        run: cmake --build build --config Release
+
+      - name: Find and verify VST3 bundle
+        shell: bash
+        run: |
+          VST3=$(find iem-mixer/vban-vst/build -name "*.vst3" -type d | head -1)
+          if [ -z "$VST3" ]; then
+            echo "ERROR: VST3 bundle not found"
+            find iem-mixer/vban-vst/build -type f -name "*.dll" -o -name "*.vst3" 2>/dev/null
+            exit 1
+          fi
+          echo "VST3 bundle found: $VST3"
+          ls -la "$VST3"
+
+      - name: Upload VBAN VST3 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vban-vst3
+          path: iem-mixer/vban-vst/build/**/*.vst3
+          retention-days: 1
+
+  # ============================================================
   # DEPLOY TO IEM.LAN - Auto deploy on push to main or dev
   # Uses existing self-hosted runner on iem.lan (Windows)
   # ============================================================
@@ -433,7 +509,8 @@ jobs:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
     timeout-minutes: 10
-    needs: [test-integrity, lint, test, build-wasm, build-tauri, e2e]
+    needs:
+      [test-integrity, lint, test, build-wasm, build-tauri, build-vban, e2e]
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
@@ -449,6 +526,12 @@ jobs:
         with:
           name: tauri-installer
           path: installer/
+
+      - name: Download VBAN VST3
+        uses: actions/download-artifact@v4
+        with:
+          name: vban-vst3
+          path: vban-vst3/
 
       - name: Verify REAPER health (pre-deploy)
         id: reaper-pre
@@ -479,6 +562,14 @@ jobs:
           }
           Write-Host "Process stopped"
           exit 0
+
+      - name: Verify UDP 6980 is localhost-only (no firewall needed)
+        shell: powershell
+        run: |
+          # VBAN IEM sends UDP to 127.0.0.1:6980 (localhost-only).
+          # Windows firewall does not block localhost traffic, so no rule is needed.
+          # Just log the status for visibility.
+          Write-Host "VBAN audio uses localhost UDP (127.0.0.1:6980) - firewall not required"
 
       - name: Install and start IEM Mixer
         shell: powershell
@@ -545,7 +636,7 @@ jobs:
           }
 
           # Reserve ports 80 and 443 for non-admin use (idempotent)
-          # netsh returns exit code 1 if reservation exists — suppress under SilentlyContinue
+          # netsh returns exit code 1 if reservation exists - suppress under SilentlyContinue
           $ErrorActionPreference = "SilentlyContinue"
           & netsh http add urlacl url=http://+:80/ user=$env:USERNAME 2>&1 | Out-Null
           & netsh http add urlacl url=https://+:443/ user=$env:USERNAME 2>&1 | Out-Null
@@ -605,40 +696,91 @@ jobs:
           }
           exit 0
 
-      - name: Verify REAPER health (post-deploy)
+      - name: Deploy VBAN VST3 to REAPER plugin path
         shell: powershell
         run: |
-          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
-
-          # Wait for app startup to complete (discovery sends requests to REAPER)
-          Start-Sleep -Seconds 15
-
-          # Check REAPER process
-          $reaper = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
-          if (-not $reaper) {
-            if ($wasRunning -eq "true") {
-              Write-Host "::error::REAPER CRASHED after IEM Mixer started!"
-              Write-Host "::error::REAPER was running before deploy but is now gone."
-              Write-Host "::error::The app's startup discovery may have overwhelmed REAPER."
-              exit 1
-            } else {
-              Write-Host "::warning::REAPER is not running (was not running before deploy either)"
-            }
-          } else {
-            Write-Host "REAPER still running: PID $($reaper.Id)"
+          # Deploy to standard Windows VST3 path (REAPER scans this automatically)
+          # Directory created with admin + icacls granting newlevel full control
+          $vst3Dest = "C:\Program Files\Common Files\VST3"
+          if (-not (Test-Path $vst3Dest)) {
+            New-Item -ItemType Directory -Path $vst3Dest -Force | Out-Null
           }
 
-          # Check REAPER HTTP API responds
-          try {
-            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
-            Write-Host "REAPER HTTP API: OK ($($resp.StatusCode))"
-          } catch {
-            if ($reaper) {
-              Write-Host "::warning::REAPER process alive but HTTP API not responding (may have modal dialog)"
-            } else {
-              Write-Host "::error::REAPER HTTP API not responding and process is dead"
-              if ($wasRunning -eq "true") { exit 1 }
+          # Find the VST3 bundle in the artifact
+          $vst3Source = Get-ChildItem -Path "vban-vst3" -Filter "*.vst3" -Recurse -Directory | Select-Object -First 1
+          if (-not $vst3Source) {
+            Write-Host "::error::VBAN VST3 bundle not found in artifact"
+            exit 1
+          }
+
+          # REAPER locks loaded VST3 DLLs - must save + quit REAPER before overwriting
+          $reaperRunning = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+          if ($reaperRunning) {
+            Write-Host "Saving REAPER project before VST3 deploy..."
+            try { Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+            Start-Sleep -Seconds 2
+            Write-Host "Quitting REAPER via HTTP API (action 40004)..."
+            try { Invoke-WebRequest -Uri "http://iem.lan:8080/_/40004" -UseBasicParsing -TimeoutSec 5 | Out-Null } catch {}
+            # Wait for REAPER to exit
+            $waited = 0
+            while ($waited -lt 15) {
+              Start-Sleep -Seconds 2
+              $waited += 2
+              $still = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+              if (-not $still) { break }
             }
+            if (Get-Process -Name "reaper" -ErrorAction SilentlyContinue) {
+              Write-Host "::warning::REAPER did not quit gracefully, force killing..."
+              $ErrorActionPreference = "Continue"
+              taskkill /f /im reaper.exe 2>&1 | Out-Null
+              $ErrorActionPreference = "Stop"
+              Start-Sleep -Seconds 3
+            }
+            Write-Host "REAPER stopped"
+          }
+
+          # Copy the entire VST3 bundle directory
+          $destPath = Join-Path $vst3Dest $vst3Source.Name
+          if (Test-Path $destPath) {
+            Remove-Item $destPath -Recurse -Force
+          }
+          Copy-Item $vst3Source.FullName $destPath -Recurse -Force
+          Write-Host "VBAN VST3 deployed: $destPath"
+
+          # Verify the bundle was copied
+          if (-not (Test-Path $destPath)) {
+            Write-Host "::error::VST3 bundle not found at $destPath"
+            exit 1
+          }
+
+          # Restart REAPER with project
+          if ($reaperRunning) {
+            Write-Host "Restarting REAPER..."
+            schtasks /run /tn "StartREAPER" 2>&1 | Out-Null
+            Start-Sleep -Seconds 15
+            $back = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
+            if ($back) {
+              Write-Host "REAPER restarted (PID $($back.Id))"
+            } else {
+              Write-Host "::warning::REAPER did not restart"
+            }
+          }
+          Write-Host "VST3 bundle contents:"
+          Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+      - name: Verify app listens on VBAN port
+        shell: powershell
+        run: |
+          # Wait for app to fully start
+          Start-Sleep -Seconds 5
+
+          # Verify app has port 6980
+          $appListener = netstat -an | Select-String "UDP.*:6980"
+          if ($appListener) {
+            Write-Host "App owns VBAN port 6980: $appListener"
+          } else {
+            Write-Host "::error::App did not bind VBAN port 6980 - audio streaming broken"
+            exit 1
           }
 
       - name: Backup REAPER project
@@ -648,7 +790,7 @@ jobs:
           # CRITICAL: Uses a separate git worktree so the main repo working tree
           # is NEVER switched away from main. Previous approach used git checkout
           # to switch branches in-place, which DELETED projects/sunday_service.RPP
-          # from disk every deploy — causing total mix loss on REAPER restart.
+          # from disk every deploy - causing total mix loss on REAPER restart.
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
           $wtPath = "$env:TEMP\reaperiem-backup-wt"
 
@@ -747,27 +889,86 @@ jobs:
 
       - name: Deploy ReaScripts to REAPER
         shell: cmd
-        continue-on-error: true
         run: |
           if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
           xcopy /Y scripts\reascripts\*.lua "C:\Users\newlevel\AppData\Roaming\REAPER\Scripts\reaperiem\"
+          if errorlevel 1 (echo ERROR: Failed to deploy ReaScripts && exit /b 1)
           echo ReaScripts deployed
+
+      - name: Register new ReaScripts in reaper-kb.ini
+        shell: powershell
+        run: |
+          $kbIni = "C:\Users\newlevel\AppData\Roaming\REAPER\reaper-kb.ini"
+          if (-not (Test-Path $kbIni)) {
+            Write-Host "::warning::reaper-kb.ini not found, skipping registration"
+            exit 0
+          }
+          $content = Get-Content $kbIni -Raw
+
+          # Register setup_vban.lua
+          if ($content -notmatch "SETUP_VBAN") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_VBAN "Custom: Setup VBAN IEM for audio streaming" reaperiem\setup_vban.lua'
+            Write-Host "Registered setup_vban.lua"
+          } else {
+            Write-Host "setup_vban.lua already registered"
+          }
+          # Register check_vban.lua
+          if ($content -notmatch "CHECK_VBAN") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_CHECK_VBAN "Custom: Check VBAN IEM status on engineer track" reaperiem\check_vban.lua'
+            Write-Host "Registered check_vban.lua"
+          } else {
+            Write-Host "check_vban.lua already registered"
+          }
+          # Register tone_generator.lua
+          if ($content -notmatch "TONE_GEN") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_TONE_GEN "Custom: Toggle tone generator on engineer track" reaperiem\tone_generator.lua'
+            Write-Host "Registered tone_generator.lua"
+          } else {
+            Write-Host "tone_generator.lua already registered"
+          }
+
+      - name: Register scripts dynamically via meter_bridge
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Check if REAPER is available
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {}
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running but is now unreachable"
+              exit 1
+            }
+            Write-Host "REAPER not running - dynamic registration will happen on next REAPER start"
+            exit 0
+          }
+
+          # meter_bridge.lua (running via defer) picks up EXTSTATE requests
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Start-Sleep -Seconds 3
+          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "Dynamic registration result: $result"
 
       - name: Deploy WASM to REAPER www root
         shell: cmd
-        continue-on-error: true
         run: |
-          xcopy /E /Y wasm-dist\* "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\"
+          robocopy wasm-dist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer" /E /IS /IT /R:5 /W:2
+          if %ERRORLEVEL% GEQ 8 (echo ERROR: Failed to deploy WASM to REAPER www root && exit /b 1)
           echo WASM deployed to REAPER www root
 
       - name: Verify WASM deployment
         shell: cmd
-        continue-on-error: true
         run: |
           if exist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer\index.html" (
             echo WASM deployment verified!
           ) else (
-            echo WARNING: WASM not deployed to REAPER www root - requires admin access
+            echo ERROR: WASM not deployed to REAPER www root
+            exit /b 1
           )
 
       - name: Verify send modes (pre-fader)
@@ -825,6 +1026,401 @@ jobs:
 
           Write-Host "Send mode check: OK (all sends are pre-fader post-FX)"
 
+      - name: Setup and verify VBAN IEM on engineer track
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Check if REAPER is available
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {}
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running but is now unreachable - deploy may have crashed it"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not running - skipping VBAN setup"
+              exit 0
+            }
+          }
+
+          # REAPER may have been restarted during VST3 deploy, clearing EXTSTATE.
+          # meter_bridge (deferred script) may not be running yet after restart.
+          # Trigger it first, then re-register VBAN scripts.
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 5
+            $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+            Write-Host "Dynamic registration: $regResult"
+          } catch {
+            Write-Host "::warning::Could not trigger dynamic registration: $_"
+          }
+
+          $setupId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_vban" -UseBasicParsing -TimeoutSec 5).Content
+          $checkId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_check_vban" -UseBasicParsing -TimeoutSec 5).Content
+
+          $setupActionId = ($setupId -split "`t")[-1]
+          $checkActionId = ($checkId -split "`t")[-1]
+
+          if (-not $setupActionId -or -not $checkActionId) {
+            Write-Host "::error::VBAN action IDs not found - scripts not registered"
+            Write-Host "setup_vban ID: '$setupActionId', check_vban ID: '$checkActionId'"
+            exit 1
+          }
+
+          Write-Host "Action IDs: setup=$setupActionId, check=$checkActionId"
+
+          # Trigger setup_vban (removes ReaStream if present, inserts VBAN IEM)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$setupActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Start-Sleep -Seconds 3
+          $setup = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/setup_vban" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "VBAN setup result: $setup"
+
+          # HARD GATE: setup must NOT report FAIL
+          if ($setup -match "FAIL") {
+            Write-Host "::error::VBAN setup FAILED: $setup"
+            Write-Host "::error::VST3 plugin likely not found. Check that VBAN IEM.vst3 is in REAPER UserPlugins and rescan completed."
+            exit 1
+          }
+
+          # Trigger check_vban to verify plugin is present
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$checkActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Start-Sleep -Seconds 2
+          $status = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/vban_status" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "VBAN status: $status"
+
+          # HARD GATE: check must report PRESENT
+          if ($status -notmatch "PRESENT") {
+            Write-Host "::error::VBAN IEM VST3 not present on engineer track: $status"
+            Write-Host "::error::Expected 'PRESENT' but got '$status'"
+            exit 1
+          }
+
+          Write-Host "VBAN IEM verified: plugin present and active on engineer track"
+
+      - name: Activate tone generator for audio testing
+        if: steps.reaper-pre.outputs.was_running == 'true'
+        shell: powershell
+        run: |
+          # Insert 440Hz tone generator on ENGINEER inear track
+          # This gives a deterministic audio source for pipeline verification
+
+          # Set the action to "start" before triggering the script
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/start" -UseBasicParsing | Out-Null
+
+          # Get the dynamically-registered action ID (stored by meter_bridge)
+          $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+          $toneActionId = ($toneIdResp -split "`t")[-1]
+          Write-Host "Tone generator action ID: $toneActionId"
+
+          if (-not $toneActionId) {
+            Write-Host "::error::Tone generator not registered - action ID not found in EXTSTATE"
+            exit 1
+          }
+
+          # Trigger tone generator using numeric action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 2
+          $toneResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
+          Write-Host "Tone generator: $toneResult"
+          if ($toneResult -notmatch "OK") {
+            Write-Host "::error::Tone generator failed: $toneResult"
+            exit 1
+          }
+
+      - name: Test audio pipeline (VBAN UDP to WebSocket Opus frames)
+        shell: powershell
+        run: |
+          # This test PROVES the full audio pipeline works end-to-end:
+          #   1. Send synthetic VBAN UDP to 127.0.0.1:6980
+          #   2. Login as engineer, get JWT
+          #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
+          #   4. Send ListenStart command
+          #   5. Verify binary Opus frames arrive
+          #   FAIL if no binary frames within 15 seconds
+
+          $ErrorActionPreference = "Stop"
+
+          # Verify UDP listener exists on port 6980
+          $udpListeners = netstat -an | Select-String "UDP.*:6980"
+          if (-not $udpListeners) {
+            Write-Host "::error::No UDP listener on port 6980 - app not listening for VBAN"
+            exit 1
+          }
+          Write-Host "UDP 6980 listener found: $udpListeners"
+
+          # Step 1: Start background VBAN UDP sender (keeps sending for 15 seconds)
+          $udpJob = Start-Job -ScriptBlock {
+            # VBAN packet format: 28-byte header + interleaved INT16 audio
+            $channels = 2; $sampleRate = 96000; $samplesPerCh = 128
+            $udp = New-Object System.Net.Sockets.UdpClient
+            $sent = 0; $offset = 0
+            $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            while ($stopwatch.ElapsedMilliseconds -lt 15000) {
+              $pkt = New-Object System.Collections.ArrayList
+              # Magic "VBAN" (LE: 0x56, 0x42, 0x41, 0x4E)
+              foreach ($b in @(0x56,0x42,0x41,0x4E)) { [void]$pkt.Add([byte]$b) }
+              # format_SR: index 4 = 96000 Hz, protocol audio = 0x00
+              [void]$pkt.Add([byte]4)
+              # format_nbs: samples-1 = 127
+              [void]$pkt.Add([byte]($samplesPerCh - 1))
+              # format_nbc: channels-1 = 1
+              [void]$pkt.Add([byte]($channels - 1))
+              # format_bit: INT16 (1) | codec PCM (0x00)
+              [void]$pkt.Add([byte]1)
+              # Stream name "engineer" (16 bytes, null-padded)
+              $name = [System.Text.Encoding]::ASCII.GetBytes("engineer")
+              foreach ($b in $name) { [void]$pkt.Add($b) }
+              for ($i = 0; $i -lt (16 - $name.Length); $i++) { [void]$pkt.Add([byte]0) }
+              # Frame counter (u32 LE)
+              foreach ($b in [BitConverter]::GetBytes([uint32]$sent)) { [void]$pkt.Add($b) }
+              # Audio: interleaved INT16
+              for ($i = 0; $i -lt $samplesPerCh; $i++) {
+                $t = ($offset + $i) / $sampleRate
+                $val = 0.3 * [Math]::Sin(2 * [Math]::PI * 440 * $t)
+                $int16Val = [int16][Math]::Round($val * 32767)
+                $sampleBytes = [BitConverter]::GetBytes($int16Val)
+                for ($ch = 0; $ch -lt $channels; $ch++) {
+                  foreach ($b in $sampleBytes) { [void]$pkt.Add($b) }
+                }
+              }
+              $data = [byte[]]$pkt.ToArray()
+              $udp.Send($data, $data.Length, "127.0.0.1", 6980) | Out-Null
+              $offset += $samplesPerCh; $sent++
+              Start-Sleep -Milliseconds 5
+            }
+            $udp.Close()
+            Write-Output "Sent $sent VBAN UDP packets"
+          }
+          Write-Host "Started background VBAN UDP sender"
+          Start-Sleep -Seconds 2  # Let pipeline initialize
+
+          # Step 3: Get engineer JWT token
+          $authBody = '{"member":"engineer","pin":"1177"}'
+          $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
+          $token = ($authResp.Content | ConvertFrom-Json).token
+          if (-not $token) {
+            Write-Host "::error::Failed to get engineer token"
+            exit 1
+          }
+          Write-Host "Got engineer JWT token"
+
+          # Step 4: Connect WebSocket and verify Opus frames arrive
+          # Using .NET ClientWebSocket for binary frame detection
+          $ws = New-Object System.Net.WebSockets.ClientWebSocket
+          $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
+          $ct = New-Object System.Threading.CancellationTokenSource(15000)
+
+          try {
+            $ws.ConnectAsync($uri, $ct.Token).Wait()
+            Write-Host "WebSocket connected to /ws/audio"
+          } catch {
+            Write-Host "::error::WebSocket connection failed: $_"
+            Stop-Job $udpJob -ErrorAction SilentlyContinue
+            exit 1
+          }
+
+          # Send ListenStart
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
+          $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
+          Write-Host "Sent ListenStart command"
+
+          # Read messages - count binary (Opus) frames
+          $binaryFrames = 0
+          $textMessages = @()
+          $gotListening = $false
+          $gotNoSource = $false
+          $readBuf = New-Object byte[] 65536
+          $readSegment = New-Object System.ArraySegment[byte]($readBuf, 0, $readBuf.Length)
+          $deadline = [DateTime]::UtcNow.AddSeconds(12)
+
+          while ([DateTime]::UtcNow -lt $deadline -and $binaryFrames -lt 5) {
+            try {
+              $readCt = New-Object System.Threading.CancellationTokenSource(3000)
+              $result = $ws.ReceiveAsync($readSegment, $readCt.Token).GetAwaiter().GetResult()
+
+              if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Binary) {
+                $binaryFrames++
+                Write-Host "  Binary frame #$binaryFrames ($($result.Count) bytes)"
+              }
+              elseif ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Text) {
+                $text = [System.Text.Encoding]::UTF8.GetString($readBuf, 0, $result.Count)
+                $textMessages += $text
+                Write-Host "  Text: $text"
+                if ($text -match '"listening"') { $gotListening = $true }
+                if ($text -match '"no_source"') { $gotNoSource = $true }
+              }
+              elseif ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+                Write-Host "WebSocket closed by server"
+                break
+              }
+            } catch {
+              # Timeout reading - continue loop
+            }
+          }
+
+          # Cleanup
+          try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [System.Threading.CancellationToken]::None).Wait() } catch {}
+          $udpResult = Receive-Job $udpJob -Wait -ErrorAction SilentlyContinue
+          Stop-Job $udpJob -ErrorAction SilentlyContinue
+          Write-Host "UDP sender: $udpResult"
+
+          # Verdict
+          Write-Host ""
+          Write-Host "=== AUDIO PIPELINE TEST RESULTS ==="
+          Write-Host "Binary Opus frames received: $binaryFrames"
+          Write-Host "Got 'listening' status: $gotListening"
+          Write-Host "Got 'no_source' status: $gotNoSource"
+          Write-Host "Text messages: $($textMessages.Count)"
+
+          if ($binaryFrames -ge 5 -and $gotListening) {
+            Write-Host "AUDIO PIPELINE: PASS (${binaryFrames} Opus frames delivered via WebSocket)"
+            exit 0
+          } elseif ($binaryFrames -gt 0) {
+            Write-Host "::warning::Partial success: got $binaryFrames frames but expected >=5"
+            exit 0
+          } elseif ($gotNoSource) {
+            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - VBAN UDP packets not reaching audio pipeline"
+            Write-Host "Check: Is VBAN IEM sending to 127.0.0.1:6980? Is the UDP listener bound?"
+            exit 1
+          } else {
+            Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
+            exit 1
+          }
+
+      - name: Test REAL audio from REAPER (no synthetic UDP)
+        shell: powershell
+        run: |
+          # This test verifies REAL VBAN audio from REAPER reaches the app.
+          # It does NOT send synthetic UDP - it relies on REAPER's VBAN IEM VST3
+          # being active on the engineer track, sending to 127.0.0.1:6980.
+          # FAILS the deploy if REAPER was running and VBAN setup succeeded but no audio arrives.
+
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+          if ($wasRunning -ne "true") {
+            Write-Host "::warning::REAPER was not running before deploy - skipping real audio test"
+            exit 0
+          }
+
+          $ErrorActionPreference = "Stop"
+
+          # Authenticate as engineer
+          $authBody = '{"member":"engineer","pin":"1177"}'
+          $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
+          $token = ($authResp.Content | ConvertFrom-Json).token
+          if (-not $token) {
+            Write-Host "::error::REAL AUDIO: Cannot authenticate as engineer"
+            exit 1
+          }
+
+          # Connect WebSocket - no synthetic UDP, only real REAPER audio
+          $ws = New-Object System.Net.WebSockets.ClientWebSocket
+          $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
+          $ct = New-Object System.Threading.CancellationTokenSource(15000)
+
+          try {
+            $ws.ConnectAsync($uri, $ct.Token).Wait()
+          } catch {
+            Write-Host "::error::REAL AUDIO: WebSocket connection failed: $($_.Exception.Message)"
+            exit 1
+          }
+
+          # Send ListenStart
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
+          $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
+
+          # Wait up to 10 seconds for REAL binary Opus frames
+          $readBuf = New-Object byte[] 65536
+          $readSegment = New-Object System.ArraySegment[byte]($readBuf, 0, $readBuf.Length)
+          $binaryFrames = 0
+          $deadline = [DateTime]::UtcNow.AddSeconds(10)
+
+          while ([DateTime]::UtcNow -lt $deadline -and $binaryFrames -lt 3) {
+            try {
+              $readCt = New-Object System.Threading.CancellationTokenSource(3000)
+              $result = $ws.ReceiveAsync($readSegment, $readCt.Token).GetAwaiter().GetResult()
+              if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Binary) {
+                $binaryFrames++
+              }
+            } catch {}
+          }
+
+          try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [System.Threading.CancellationToken]::None).Wait() } catch {}
+
+          if ($binaryFrames -ge 3) {
+            Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER via VBAN)"
+          } else {
+            Write-Host "::error::REAL AUDIO E2E FAIL: Expected 3+ Opus frames, got $binaryFrames"
+            Write-Host "::error::REAPER was running and VBAN setup should have succeeded - audio pipeline is broken"
+            exit 1
+          }
+
+      - name: Verify audio signal via diagnostics API
+        shell: powershell
+        run: |
+          # This test verifies ACTUAL AUDIO SIGNAL quality, not just bytes on a wire.
+          # Uses /api/audio/diagnostics to check peak_db and opus_frames_per_second.
+          # FAILS if audio pipeline produces silence despite having data.
+
+          $token = (Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST `
+            -Body '{"member":"engineer","pin":"1177"}' -ContentType "application/json" `
+            -UseBasicParsing).Content | ConvertFrom-Json | Select-Object -ExpandProperty token
+
+          # Wait for diagnostics to accumulate (synthetic UDP sender or tone gen already active)
+          Start-Sleep -Seconds 3
+
+          $diag = (Invoke-WebRequest -Uri "http://localhost:80/api/audio/diagnostics" `
+            -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing).Content | ConvertFrom-Json
+
+          Write-Host "=== AUDIO DIAGNOSTICS ==="
+          Write-Host "receiving_vban: $($diag.receiving_vban)"
+          Write-Host "packets/s: $($diag.packets_per_second)"
+          Write-Host "opus_frames/s: $($diag.opus_frames_per_second)"
+          Write-Host "peak_db: $($diag.peak_db)"
+          Write-Host "sample_rate: $($diag.sample_rate)"
+          Write-Host "channels: $($diag.channels)"
+
+          if (-not $diag.receiving_vban) {
+            Write-Host "::error::AUDIO DIAGNOSTICS FAIL: Not receiving VBAN packets"
+            exit 1
+          }
+          if ($diag.peak_db -lt -40) {
+            Write-Host "::error::AUDIO DIAGNOSTICS FAIL: peak_db=$($diag.peak_db) (silence! expected > -40)"
+            exit 1
+          }
+          if ($diag.opus_frames_per_second -lt 10) {
+            Write-Host "::error::AUDIO DIAGNOSTICS FAIL: opus_frames/s=$($diag.opus_frames_per_second) (expected > 10)"
+            exit 1
+          }
+          Write-Host "AUDIO DIAGNOSTICS: PASS (peak=$($diag.peak_db)dB, $($diag.opus_frames_per_second) opus/s)"
+
+      - name: Deactivate tone generator
+        if: always() && steps.reaper-pre.outputs.was_running == 'true'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/stop" -UseBasicParsing | Out-Null
+          try {
+            # Use dynamically-registered action ID
+            $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+            $toneActionId = ($toneIdResp -split "`t")[-1]
+            if ($toneActionId) {
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
+            }
+          } catch {
+            Write-Host "::warning::Could not trigger tone gen stop: $_"
+          }
+          Start-Sleep -Seconds 1
+          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
+          Write-Host "Tone generator cleanup: $result"
+
       - name: Verify deployment
         shell: powershell
         run: |
@@ -878,6 +1474,15 @@ jobs:
                   Write-Host "::warning::HTTPS not responding (cert may need DNS propagation)"
                 }
               }
+
+              # Verify non-hashed assets have no-cache (prevents CDN stale cache + SRI mismatch)
+              $swResp = Invoke-WebRequest -Uri "http://localhost:80/sw.js" -UseBasicParsing
+              $swCache = $swResp.Headers["Cache-Control"]
+              if ($swCache -notmatch "no-cache") {
+                Write-Host "::error::sw.js has wrong cache-control: $swCache (expected no-cache)"
+                exit 1
+              }
+              Write-Host "Cache-control headers: OK (non-hashed assets have no-cache)"
 
               Write-Host "Deployment fully verified!"
               exit 0

@@ -24,6 +24,10 @@ pub enum ClientMsg {
         pinned: Vec<usize>,
         hidden: Vec<usize>,
     },
+    /// Start listening to audio stream (engineer only)
+    ListenStart,
+    /// Stop listening to audio stream
+    ListenStop,
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -38,6 +42,8 @@ pub enum ServerMsg {
         global_level_db: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         global_muted: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output_track_index: Option<usize>,
     },
     /// Meter levels (sent every ~150ms) — stereo [left, right] peaks
     Meters { meters: HashMap<usize, [f32; 2]> },
@@ -59,6 +65,8 @@ pub enum ServerMsg {
     },
     /// Network mode indicator (local LAN vs remote internet)
     NetworkMode { mode: String },
+    /// Audio streaming status update
+    AudioStatus { status: String },
 }
 
 #[cfg(test)]
@@ -118,12 +126,14 @@ mod tests {
             connected: true,
             global_level_db: None,
             global_muted: None,
+            output_track_index: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"State\""));
         // Optional fields should NOT appear when None
         assert!(!json.contains("global_level_db"));
         assert!(!json.contains("global_muted"));
+        assert!(!json.contains("output_track_index"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
@@ -135,27 +145,31 @@ mod tests {
             connected: true,
             global_level_db: Some(-3.5),
             global_muted: Some(false),
+            output_track_index: Some(23),
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"global_level_db\":-3.5"));
         assert!(json.contains("\"global_muted\":false"));
+        assert!(json.contains("\"output_track_index\":23"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
 
     #[test]
     fn test_server_msg_state_backwards_compat() {
-        // Old State messages without global fields should still deserialize
+        // Old State messages without global/output fields should still deserialize
         let json = r#"{"event":"State","data":{"channels":[],"connected":true}}"#;
         let decoded: ServerMsg = serde_json::from_str(json).unwrap();
         match decoded {
             ServerMsg::State {
                 global_level_db,
                 global_muted,
+                output_track_index,
                 ..
             } => {
                 assert_eq!(global_level_db, None);
                 assert_eq!(global_muted, None);
+                assert_eq!(output_track_index, None);
             }
             _ => panic!("Expected State variant"),
         }
@@ -264,6 +278,36 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"CustomizationUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_listen_start_serialization() {
+        let msg = ClientMsg::ListenStart;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ListenStart\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_listen_stop_serialization() {
+        let msg = ClientMsg::ListenStop;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ListenStop\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_audio_status_serialization() {
+        let msg = ServerMsg::AudioStatus {
+            status: "no_source".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"AudioStatus\""));
+        assert!(json.contains("\"status\":\"no_source\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

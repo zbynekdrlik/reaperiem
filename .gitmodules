@@ -1,0 +1,3 @@
+[submodule "iem-mixer/vban-vst/JUCE"]
+	path = iem-mixer/vban-vst/JUCE
+	url = https://github.com/juce-framework/JUCE.git

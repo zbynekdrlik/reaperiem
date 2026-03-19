@@ -39,14 +39,12 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
         if entry.is_empty() {
             continue;
         }
-        if let Some((idx_str, vals_str)) = entry.split_once(':') {
-            if let Ok(track_idx) = idx_str.parse::<usize>() {
-                if let Some((l_str, r_str)) = vals_str.split_once(',') {
-                    if let (Ok(l_db10), Ok(r_db10)) = (l_str.parse::<f32>(), r_str.parse::<f32>()) {
-                        meters.insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
-                    }
-                }
-            }
+        if let Some((idx_str, vals_str)) = entry.split_once(':')
+            && let Ok(track_idx) = idx_str.parse::<usize>()
+            && let Some((l_str, r_str)) = vals_str.split_once(',')
+            && let (Ok(l_db10), Ok(r_db10)) = (l_str.parse::<f32>(), r_str.parse::<f32>())
+        {
+            meters.insert(track_idx, [db10_to_linear(l_db10), db10_to_linear(r_db10)]);
         }
     }
     meters
@@ -64,31 +62,32 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     let tracks_url = reaper_api::query_tracks(&reaper_url);
     let mut members = Vec::new();
 
-    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
-        if let Ok(text) = resp.text().await {
-            let mut send_index = 0;
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.first() == Some(&"TRACK") && parts.len() > 2 {
-                    if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        let track_name = parts[2];
-                        if let Some(member) = DiscoveredMember::from_reaper_track(
-                            track_name,
-                            track_idx,
-                            send_index,
-                            &config_ref,
-                        ) {
-                            tracing::info!(
-                                member = %member.name,
-                                track_index = member.track_index,
-                                send_index = member.send_index,
-                                dante = ?[member.dante_output_l, member.dante_output_r],
-                                "Discovered member from REAPER"
-                            );
-                            members.push(member);
-                            send_index += 1;
-                        }
-                    }
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await
+        && let Ok(text) = resp.text().await
+    {
+        let mut send_index = 0;
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK")
+                && parts.len() > 2
+                && let Ok(track_idx) = parts[1].parse::<usize>()
+            {
+                let track_name = parts[2];
+                if let Some(member) = DiscoveredMember::from_reaper_track(
+                    track_name,
+                    track_idx,
+                    send_index,
+                    &config_ref,
+                ) {
+                    tracing::info!(
+                        member = %member.name,
+                        track_index = member.track_index,
+                        send_index = member.send_index,
+                        dante = ?[member.dante_output_l, member.dante_output_r],
+                        "Discovered member from REAPER"
+                    );
+                    members.push(member);
+                    send_index += 1;
                 }
             }
         }
@@ -215,90 +214,90 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let mut all_track_names: HashMap<String, usize> = HashMap::new();
 
     let tracks_url = reaper_api::query_tracks(&reaper_url);
-    if let Ok(resp) = state.http_client.get(&tracks_url).send().await {
-        if let Ok(text) = resp.text().await {
-            connected = true;
+    if let Ok(resp) = state.http_client.get(&tracks_url).send().await
+        && let Ok(text) = resp.text().await
+    {
+        connected = true;
 
-            // Detect track count changes
-            for line in text.lines() {
-                if let Some(count_str) = line.strip_prefix("NTRACK\t") {
-                    if let Ok(count) = count_str.parse::<usize>() {
-                        let mut cache = state.mixer_cache.write().await;
-                        if let Some(prev) = cache.last_track_count {
-                            if count != prev {
-                                tracing::warn!(
-                                    old_count = prev,
-                                    new_count = count,
-                                    "REAPER track count changed — track indices may have shifted"
-                                );
-                            }
-                        }
-                        cache.last_track_count = Some(count);
+        // Detect track count changes
+        for line in text.lines() {
+            if let Some(count_str) = line.strip_prefix("NTRACK\t") {
+                if let Ok(count) = count_str.parse::<usize>() {
+                    let mut cache = state.mixer_cache.write().await;
+                    if let Some(prev) = cache.last_track_count
+                        && count != prev
+                    {
+                        tracing::warn!(
+                            old_count = prev,
+                            new_count = count,
+                            "REAPER track count changed — track indices may have shifted"
+                        );
                     }
-                    break;
+                    cache.last_track_count = Some(count);
+                }
+                break;
+            }
+        }
+
+        for line in text.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.first() == Some(&"TRACK")
+                && parts.len() > 7
+                && let Ok(track_idx) = parts[1].parse::<usize>()
+            {
+                // Meter fields only present when track has 14+ fields
+                // (record-armed tracks include last_meter_peak [6] and last_meter_pos [7])
+                // Without these fields (12 fields): field [6] is width, NOT a meter value
+                if parts.len() >= 14
+                    && let (Ok(peak_db10), Ok(pos_db10)) =
+                        (parts[6].parse::<f32>(), parts[7].parse::<f32>())
+                {
+                    // REAPER HTTP API docs: "last_meter_peak and last_meter_pos
+                    // are integers that are dB*10, so -100 would be -10dB."
+                    // Floor: -1500 = -150 dB = digital silence (no signal).
+                    let db10_to_linear = |v: f32| -> f32 {
+                        if v <= -1500.0 {
+                            0.0
+                        } else {
+                            10.0_f32.powf(v / 10.0 / 20.0)
+                        }
+                    };
+                    meters.insert(
+                        track_idx,
+                        [db10_to_linear(peak_db10), db10_to_linear(pos_db10)],
+                    );
+                }
+                // No VU → don't insert → frontend defaults to 0.0
+
+                // Build name→index map for ALL tracks (input index resolution)
+                let track_name = parts[2];
+                all_track_names.insert(track_name.to_string(), track_idx);
+
+                // Check if this is a member output track (e.g. "PETKA inear")
+                if let Some(member_id) = member_track_names.get(track_name) {
+                    let vol: f32 = parts[4].parse().unwrap_or(1.0);
+                    let flags: i32 = parts[3].parse().unwrap_or(0);
+                    output_tracks.insert(member_id.clone(), (track_idx, vol, flags));
                 }
             }
-
-            for line in text.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.first() == Some(&"TRACK") && parts.len() > 7 {
-                    if let Ok(track_idx) = parts[1].parse::<usize>() {
-                        // Meter fields only present when track has 14+ fields
-                        // (record-armed tracks include last_meter_peak [6] and last_meter_pos [7])
-                        // Without these fields (12 fields): field [6] is width, NOT a meter value
-                        if parts.len() >= 14 {
-                            if let (Ok(peak_db10), Ok(pos_db10)) =
-                                (parts[6].parse::<f32>(), parts[7].parse::<f32>())
-                            {
-                                // REAPER HTTP API docs: "last_meter_peak and last_meter_pos
-                                // are integers that are dB*10, so -100 would be -10dB."
-                                // Floor: -1500 = -150 dB = digital silence (no signal).
-                                let db10_to_linear = |v: f32| -> f32 {
-                                    if v <= -1500.0 {
-                                        0.0
-                                    } else {
-                                        10.0_f32.powf(v / 10.0 / 20.0)
-                                    }
-                                };
-                                meters.insert(
-                                    track_idx,
-                                    [db10_to_linear(peak_db10), db10_to_linear(pos_db10)],
-                                );
-                            }
-                        }
-                        // No VU → don't insert → frontend defaults to 0.0
-
-                        // Build name→index map for ALL tracks (input index resolution)
-                        let track_name = parts[2];
-                        all_track_names.insert(track_name.to_string(), track_idx);
-
-                        // Check if this is a member output track (e.g. "PETKA inear")
-                        if let Some(member_id) = member_track_names.get(track_name) {
-                            let vol: f32 = parts[4].parse().unwrap_or(1.0);
-                            let flags: i32 = parts[3].parse().unwrap_or(0);
-                            output_tracks.insert(member_id.clone(), (track_idx, vol, flags));
-                        }
-                    }
-                }
-            }
-            // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
-            use std::sync::atomic::AtomicU64;
-            static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
-            let count = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
-            if count % 66 == 0 {
-                let non_zero: Vec<_> = meters
-                    .iter()
-                    .filter(|(_, v)| v[0] > 0.001 || v[1] > 0.001)
-                    .take(5)
-                    .collect();
-                tracing::debug!(
-                    meter_count = meters.len(),
-                    non_zero_count = non_zero.len(),
-                    sample = ?non_zero,
-                    output_tracks = output_tracks.len(),
-                    "Meter poll summary"
-                );
-            }
+        }
+        // Debug: log meter summary periodically (every ~10s = 66 poll cycles)
+        use std::sync::atomic::AtomicU64;
+        static POLL_COUNT: AtomicU64 = AtomicU64::new(0);
+        let count = POLL_COUNT.fetch_add(1, Ordering::Relaxed);
+        if count.is_multiple_of(66) {
+            let non_zero: Vec<_> = meters
+                .iter()
+                .filter(|(_, v)| v[0] > 0.001 || v[1] > 0.001)
+                .take(5)
+                .collect();
+            tracing::debug!(
+                meter_count = meters.len(),
+                non_zero_count = non_zero.len(),
+                sample = ?non_zero,
+                output_tracks = output_tracks.len(),
+                "Meter poll summary"
+            );
         }
     }
 
@@ -340,17 +339,17 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         }
 
         let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
-        if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
-            if let Ok(text) = resp.text().await {
-                // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
-                if let Some(value) = text.split('\t').nth(3) {
-                    if !value.is_empty() {
-                        let bridge_meters = parse_meter_bridge(value);
-                        if !bridge_meters.is_empty() {
-                            // Override TRACK field meters with true L/R data
-                            meters = bridge_meters;
-                        }
-                    }
+        if let Ok(resp) = state.http_client.get(&extstate_url).send().await
+            && let Ok(text) = resp.text().await
+        {
+            // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
+            if let Some(value) = text.split('\t').nth(3)
+                && !value.is_empty()
+            {
+                let bridge_meters = parse_meter_bridge(value);
+                if !bridge_meters.is_empty() {
+                    // Override TRACK field meters with true L/R data
+                    meters = bridge_meters;
                 }
             }
         }
@@ -456,16 +455,16 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     if !output_tracks.is_empty() {
         let mut discovered = state.discovered_members.write().await;
         for (member_id, (new_idx, _, _)) in &output_tracks {
-            if let Some(member) = discovered.iter_mut().find(|m| m.id() == *member_id) {
-                if member.track_index != *new_idx {
-                    tracing::warn!(
-                        member = %member_id,
-                        old = member.track_index,
-                        new = new_idx,
-                        "Output track index shifted — syncing DiscoveredMember"
-                    );
-                    member.track_index = *new_idx;
-                }
+            if let Some(member) = discovered.iter_mut().find(|m| m.id() == *member_id)
+                && member.track_index != *new_idx
+            {
+                tracing::warn!(
+                    member = %member_id,
+                    old = member.track_index,
+                    new = new_idx,
+                    "Output track index shifted — syncing DiscoveredMember"
+                );
+                member.track_index = *new_idx;
             }
         }
     }
@@ -513,15 +512,14 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
         let mut result_channels = channels;
         for (track_index, result) in send_results {
-            if let Ok((level, mute, pan)) = result {
-                if let Some(ch) = result_channels
+            if let Ok((level, mute, pan)) = result
+                && let Some(ch) = result_channels
                     .iter_mut()
                     .find(|c| c.track_index == track_index)
-                {
-                    ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
-                    ch.muted = mute;
-                    ch.pan = reaper_pan_to_ui(pan);
-                }
+            {
+                ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
             }
         }
 
@@ -550,15 +548,14 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
             let mix_results = futures::future::join_all(mix_futures).await;
             for (track_index, result) in mix_results {
-                if let Ok((level, mute, pan)) = result {
-                    if let Some(ch) = mix_channels
+                if let Ok((level, mute, pan)) = result
+                    && let Some(ch) = mix_channels
                         .iter_mut()
                         .find(|c| c.track_index == track_index)
-                    {
-                        ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
-                        ch.muted = mute;
-                        ch.pan = reaper_pan_to_ui(pan);
-                    }
+                {
+                    ch.level_db = crate::proxy::quantize_02(reaper_vol_to_db(level));
+                    ch.muted = mute;
+                    ch.pan = reaper_pan_to_ui(pan);
                 }
             }
 
@@ -610,6 +607,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .get(member_id)
                 .map(|gv| (Some(gv.level_db), Some(gv.muted)))
                 .unwrap_or((None, None));
+            let output_track_index = cache.output_track_indices.get(member_id).copied();
             let _ = state.event_tx.send((
                 member_id.clone(),
                 ServerMsg::State {
@@ -617,6 +615,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     connected: true,
                     global_level_db,
                     global_muted,
+                    output_track_index,
                 },
             ));
         }

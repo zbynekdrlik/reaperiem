@@ -120,15 +120,14 @@ pub async fn get_mixer_state(
 
     let send_results = futures::future::join_all(send_futures).await;
     for (track_index, result) in send_results {
-        if let Ok((level, mute, pan)) = result {
-            if let Some(ch) = result_channels
+        if let Ok((level, mute, pan)) = result
+            && let Some(ch) = result_channels
                 .iter_mut()
                 .find(|c| c.track_index == track_index)
-            {
-                ch.level_db = reaper_vol_to_db(level);
-                ch.muted = mute;
-                ch.pan = reaper_pan_to_ui(pan);
-            }
+        {
+            ch.level_db = reaper_vol_to_db(level);
+            ch.muted = mute;
+            ch.pan = reaper_pan_to_ui(pan);
         }
     }
 
@@ -158,15 +157,14 @@ pub async fn get_mixer_state(
 
         let mix_results = futures::future::join_all(mix_futures).await;
         for (track_index, result) in mix_results {
-            if let Ok((level, mute, pan)) = result {
-                if let Some(ch) = mix_channels
+            if let Ok((level, mute, pan)) = result
+                && let Some(ch) = mix_channels
                     .iter_mut()
                     .find(|c| c.track_index == track_index)
-                {
-                    ch.level_db = reaper_vol_to_db(level);
-                    ch.muted = mute;
-                    ch.pan = reaper_pan_to_ui(pan);
-                }
+            {
+                ch.level_db = reaper_vol_to_db(level);
+                ch.muted = mute;
+                ch.pan = reaper_pan_to_ui(pan);
             }
         }
 
@@ -247,16 +245,16 @@ pub async fn poll_mixer_state(
 
         // Try meter bridge EXTSTATE for true L/R per-channel peaks
         let extstate_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_METERS", "peaks");
-        if let Ok(resp) = state.http_client.get(&extstate_url).send().await {
-            if let Ok(text) = resp.text().await {
-                // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
-                if let Some(value) = text.split('\t').nth(3) {
-                    if !value.is_empty() {
-                        let bridge_meters = crate::poller::parse_meter_bridge(value);
-                        if !bridge_meters.is_empty() {
-                            meters = bridge_meters;
-                        }
-                    }
+        if let Ok(resp) = state.http_client.get(&extstate_url).send().await
+            && let Ok(text) = resp.text().await
+        {
+            // REAPER EXTSTATE response: "EXTSTATE\tSECTION\tKEY\tvalue"
+            if let Some(value) = text.split('\t').nth(3)
+                && !value.is_empty()
+            {
+                let bridge_meters = crate::poller::parse_meter_bridge(value);
+                if !bridge_meters.is_empty() {
+                    meters = bridge_meters;
                 }
             }
         }
@@ -650,7 +648,7 @@ fn validate_level_db(level_db: f32) -> Result<(), (StatusCode, Json<ApiError>)> 
 
 /// Validate pan is between -1.0 and 1.0
 fn validate_pan(pan: f32) -> Result<(), (StatusCode, Json<ApiError>)> {
-    if pan.is_nan() || pan.is_infinite() || pan < -1.0 || pan > 1.0 {
+    if !(-1.0..=1.0).contains(&pan) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::bad_request("pan must be between -1.0 and 1.0")),
@@ -1181,12 +1179,13 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         result_channels.extend(mix_channels);
     }
 
-    // Read cached global volume for this member
+    // Read cached global volume and output track index for this member
     let cache = state.mixer_cache.read().await;
     let (global_level_db, global_muted) = match cache.global_volumes.get(member_id) {
         Some(gv) => (Some(gv.level_db), Some(gv.muted)),
         None => (None, None),
     };
+    let output_track_index = cache.output_track_indices.get(member_id).copied();
     drop(cache);
 
     Ok(iem_core::ServerMsg::State {
@@ -1194,6 +1193,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         connected,
         global_level_db,
         global_muted,
+        output_track_index,
     })
 }
 
@@ -1286,6 +1286,10 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+            // Audio commands are handled by ws_audio, not the mixer WS
+            return Err("Audio commands should use /ws/audio endpoint".to_string());
+        }
     }
 
     let (url, track_index, broadcast) = match cmd {
@@ -1298,16 +1302,16 @@ async fn apply_command_to_cache(
             let cached_db = quantize_02(reaper_vol_to_db(vol));
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.level_db = cached_db;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: cached_db,
-                        muted: ch.muted,
-                        pan: ch.pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.level_db = cached_db;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: cached_db,
+                    muted: ch.muted,
+                    pan: ch.pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),
@@ -1325,16 +1329,16 @@ async fn apply_command_to_cache(
             let mute_val: u8 = if *muted { 1 } else { 0 };
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.muted = *muted;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: ch.level_db,
-                        muted: *muted,
-                        pan: ch.pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.muted = *muted;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: ch.level_db,
+                    muted: *muted,
+                    pan: ch.pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),
@@ -1353,16 +1357,16 @@ async fn apply_command_to_cache(
             let cached_pan = reaper_pan_to_ui(reaper_pan);
             let mut cache = state.mixer_cache.write().await;
             let mut event = None;
-            if let Some(channels) = cache.member_states.get_mut(member_id) {
-                if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index) {
-                    ch.pan = cached_pan;
-                    event = Some(iem_core::ServerMsg::ChannelUpdate {
-                        track_index: *track_index,
-                        level_db: ch.level_db,
-                        muted: ch.muted,
-                        pan: cached_pan,
-                    });
-                }
+            if let Some(channels) = cache.member_states.get_mut(member_id)
+                && let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_index)
+            {
+                ch.pan = cached_pan;
+                event = Some(iem_core::ServerMsg::ChannelUpdate {
+                    track_index: *track_index,
+                    level_db: ch.level_db,
+                    muted: ch.muted,
+                    pan: cached_pan,
+                });
             }
             cache.command_timestamps.insert(
                 (member_id.to_string(), *track_index),
@@ -1420,6 +1424,9 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::UpdateCustomization { .. } => {
             unreachable!("UpdateCustomization handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+            unreachable!("Audio commands handled by ws_audio, not mixer WS")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
@@ -1562,6 +1569,161 @@ pub(crate) mod reaper_api {
     pub fn get_send_state(base_url: &str, track: usize, send: usize) -> String {
         format!("{}/_/GET/TRACK/{}/SEND/{}", base_url, track, send)
     }
+}
+
+// =============================================================================
+// Audio WebSocket handler (engineer-only audio streaming)
+// =============================================================================
+
+/// WebSocket audio endpoint - streams Opus frames to the engineer's browser
+/// Requires token query param for authentication: /ws/audio?token=<JWT>
+/// Engineer-only: non-engineer tokens are rejected with 403
+#[cfg(feature = "audio")]
+pub async fn ws_audio(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    State(state): State<AppState>,
+    Query(query): Query<WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+
+    // Token is required
+    let token = query.token.as_deref().ok_or_else(|| {
+        tracing::warn!("Audio WS connection without token");
+        (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized()))
+    })?;
+
+    // Validate token
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+        tracing::warn!("Audio WS connection with invalid token");
+        (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized()))
+    })?;
+
+    // Check token expiration
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if claims.exp < now {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new("TOKEN_EXPIRED", "Token has expired")),
+        ));
+    }
+
+    // Engineer-only access
+    if !claims.engineer {
+        tracing::warn!(sub = %claims.sub, "Audio WS denied: not engineer");
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new(
+                "FORBIDDEN",
+                "Audio streaming is engineer-only",
+            )),
+        ));
+    }
+
+    drop(config);
+
+    Ok(ws.on_upgrade(move |socket| handle_audio_ws(socket, state)))
+}
+
+/// Handle the audio WebSocket connection
+#[cfg(feature = "audio")]
+async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppState) {
+    use axum::extract::ws::Message;
+    use iem_core::{ClientMsg, ServerMsg};
+    use tokio::time::{Duration, Instant};
+
+    tracing::info!("Audio WebSocket connected");
+
+    let mut audio_rx: Option<tokio::sync::broadcast::Receiver<bytes::Bytes>> = None;
+    let mut last_audio_time = Instant::now();
+
+    loop {
+        tokio::select! {
+            // Client commands (text)
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
+                            match cmd {
+                                ClientMsg::ListenStart => {
+                                    tracing::info!("Audio listen started");
+                                    audio_rx = Some(state.audio_tx.subscribe());
+                                    last_audio_time = Instant::now();
+                                    let status = ServerMsg::AudioStatus {
+                                        status: "listening".to_string(),
+                                    };
+                                    let json = serde_json::to_string(&status).unwrap_or_default();
+                                    if socket.send(Message::Text(json.into())).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                ClientMsg::ListenStop => {
+                                    tracing::info!("Audio listen stopped");
+                                    audio_rx = None;
+                                    let status = ServerMsg::AudioStatus {
+                                        status: "stopped".to_string(),
+                                    };
+                                    let json = serde_json::to_string(&status).unwrap_or_default();
+                                    if socket.send(Message::Text(json.into())).await.is_err() {
+                                        break;
+                                    }
+                                }
+                                _ => {} // Ignore non-audio commands
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+
+            // Audio frames (binary) — only when listening
+            frame = async {
+                match audio_rx.as_mut() {
+                    Some(rx) => rx.recv().await,
+                    None => {
+                        // Not listening — sleep to avoid busy loop
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        Err(tokio::sync::broadcast::error::RecvError::Closed)
+                    }
+                }
+            } => {
+                match frame {
+                    Ok(data) => {
+                        last_audio_time = Instant::now();
+                        if socket.send(Message::Binary(data.to_vec().into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::debug!("Audio WS lagged {} frames", n);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        break;
+                    }
+                }
+            }
+
+            // No-source timeout: if listening but no audio for 5 seconds
+            _ = tokio::time::sleep(Duration::from_secs(5)), if audio_rx.is_some() => {
+                if last_audio_time.elapsed() > Duration::from_secs(5) {
+                    let status = ServerMsg::AudioStatus {
+                        status: "no_source".to_string(),
+                    };
+                    let json = serde_json::to_string(&status).unwrap_or_default();
+                    if socket.send(Message::Text(json.into())).await.is_err() {
+                        break;
+                    }
+                    // Reset timer so we don't spam
+                    last_audio_time = Instant::now();
+                }
+            }
+        }
+    }
+
+    tracing::info!("Audio WebSocket disconnected");
 }
 
 #[cfg(test)]
