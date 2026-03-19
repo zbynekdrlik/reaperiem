@@ -1,5 +1,5 @@
 // IEM Mixer Service Worker
-const CACHE_NAME = "iem-mixer-v1";
+const CACHE_NAME = "iem-mixer-v2";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
