@@ -1483,7 +1483,11 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     // ================================================================
 
     /// Helper to create a test DiscoveredMember
-    fn make_member(name: &str, track_index: usize, mix_send_index: Option<usize>) -> DiscoveredMember {
+    fn make_member(
+        name: &str,
+        track_index: usize,
+        mix_send_index: Option<usize>,
+    ) -> DiscoveredMember {
         DiscoveredMember {
             name: name.to_string(),
             track_index,
