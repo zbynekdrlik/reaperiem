@@ -151,10 +151,16 @@ test.describe("Browser Audio Playback", () => {
       return;
     }
 
-    // Collect console errors during playback
+    // Collect console errors AND uncaught exceptions during playback
     const consoleErrors: string[] = [];
+    const pageErrors: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
+    // CRITICAL: Catch uncaught exceptions (RangeError, TypeError, etc.)
+    // These are NOT console.error — they are thrown errors that crash silently
+    page.on("pageerror", (error) => {
+      pageErrors.push(`${error.name}: ${error.message}`);
     });
 
     // Click Listen button
@@ -192,9 +198,10 @@ test.describe("Browser Audio Playback", () => {
       console.log(
         "[ASSUME SKIP] No audio source available (REAPER may not be running)",
       );
-      // Still check: no decoder errors should have occurred
+      // Still check: no decoder errors or uncaught exceptions
       const audioErrors = consoleErrors.filter((e) => e.includes("[audio]"));
       expect(audioErrors).toHaveLength(0);
+      expect(pageErrors).toHaveLength(0);
 
       // Click again to stop
       await listenBtn.click();
@@ -223,6 +230,14 @@ test.describe("Browser Audio Playback", () => {
       // Filter audio-related console errors
       const audioErrors = consoleErrors.filter((e) => e.includes("[audio]"));
       expect(audioErrors).toHaveLength(0);
+
+      // CRITICAL: Catch uncaught exceptions like RangeError in AudioData.copyTo
+      // These crash silently — the user hears nothing but the UI shows "Listening"
+      if (pageErrors.length > 0) {
+        throw new Error(
+          `Uncaught page errors during audio playback:\n${pageErrors.join("\n")}`,
+        );
+      }
 
       // Click again to stop
       await listenBtn.click();

@@ -151,12 +151,18 @@ function scheduleAudioData(audioData) {
     audioData.sampleRate,
   );
 
-  // Copy decoded samples into AudioBuffer and track peak level
+  // Copy decoded samples into AudioBuffer and track peak level.
+  // CRITICAL: Request f32-planar format explicitly. The decoder may output
+  // interleaved (f32) where planeIndex:0 contains ALL channels interleaved,
+  // making a Float32Array(numFrames) too small. Specifying format:"f32-planar"
+  // tells the browser to give us per-channel planar data.
   let peak = 0;
   for (let ch = 0; ch < numChannels; ch++) {
-    const channelData = new Float32Array(numFrames);
-    audioData.copyTo(channelData, { planeIndex: ch });
-    for (let i = 0; i < numFrames; i++) {
+    const opts = { planeIndex: ch, format: "f32-planar" };
+    const byteSize = audioData.allocationSize(opts);
+    const channelData = new Float32Array(byteSize / 4);
+    audioData.copyTo(channelData, opts);
+    for (let i = 0; i < channelData.length; i++) {
       const abs = Math.abs(channelData[i]);
       if (abs > peak) peak = abs;
     }
