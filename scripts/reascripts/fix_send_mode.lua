@@ -1,17 +1,13 @@
 -- Fix Send Mode Script
--- Sets ALL sends on ALL tracks to pre-fader post-FX mode (I_SENDMODE = 3)
+-- Sets send modes according to IEM routing rules:
 --
--- Problem: REAPER defaults sends to post-fader mode. When a member adjusts their
--- main channel fader, it changes the signal level sent to ALL other members' IEM mixes.
--- Sends should be pre-fader so each member's mix is independent.
---
--- This script can be run once to fix an existing project, or triggered via HTTP API.
--- After running, all sends will be pre-fader and each member's mix will be fully independent.
+--   Input tracks:        pre-fader post-FX (mode 3) — each member's mix is independent
+--   Member inear tracks: post-fader (mode 0) — engineer hears member's actual volume
 --
 -- Mode values:
---   0 = post-fader (post-pan) — DEFAULT, WRONG for IEM
+--   0 = post-fader (post-pan)
 --   1 = pre-fader (pre-FX)
---   3 = pre-fader (post-FX) — CORRECT for IEM mixing
+--   3 = pre-fader (post-FX)
 
 local AUTO_MODE = reaper.GetExtState("reaperiem", "auto_fix_sends") == "1"
 if AUTO_MODE then
@@ -24,12 +20,17 @@ local function log(msg)
     end
 end
 
+local function is_member_inear(name)
+    -- Match "NAME inear" but NOT "ENGINEER inear"
+    return name:match(" inear$") and not name:match("^ENGINEER ")
+end
+
 local function fix_all_sends()
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
 
     log("========================================")
-    log("Fix Send Mode - Pre-Fader Post-FX")
+    log("Fix Send Modes — IEM Routing Rules")
     log("========================================")
 
     local num_tracks = reaper.CountTracks(0)
@@ -40,20 +41,24 @@ local function fix_all_sends()
         local track = reaper.GetTrack(0, t)
         local _, track_name = reaper.GetTrackName(track)
         local num_sends = reaper.GetTrackNumSends(track, 0)  -- 0 = sends (not receives)
+        local expect_post_fader = is_member_inear(track_name)
+        local target_mode = expect_post_fader and 0 or 3
 
         for s = 0, num_sends - 1 do
             total_sends = total_sends + 1
             local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
 
-            if current_mode ~= 3 then
-                reaper.SetTrackSendInfo_Value(track, 0, s, "I_SENDMODE", 3)
+            if current_mode ~= target_mode then
+                reaper.SetTrackSendInfo_Value(track, 0, s, "I_SENDMODE", target_mode)
                 fixed_sends = fixed_sends + 1
-                log(string.format("  Fixed: %s send %d (was mode %d -> now 3)", track_name, s, current_mode))
+                local mode_name = expect_post_fader and "post-fader" or "pre-fader post-FX"
+                log(string.format("  Fixed: %s send %d (was mode %d -> now %d [%s])",
+                    track_name, s, current_mode, target_mode, mode_name))
             end
         end
     end
 
-    -- Also fix master track sends
+    -- Also fix master track sends (always pre-fader)
     local master = reaper.GetMasterTrack(0)
     local master_sends = reaper.GetTrackNumSends(master, 0)
     for s = 0, master_sends - 1 do
@@ -67,7 +72,7 @@ local function fix_all_sends()
     end
 
     reaper.PreventUIRefresh(-1)
-    reaper.Undo_EndBlock("Fix all sends to pre-fader post-FX", -1)
+    reaper.Undo_EndBlock("Fix send modes for IEM routing", -1)
 
     log("")
     log(string.format("Total sends: %d", total_sends))
@@ -81,7 +86,8 @@ local function fix_all_sends()
 
     if not AUTO_MODE then
         reaper.ShowMessageBox(
-            string.format("Fixed %d of %d sends to pre-fader post-FX mode.", fixed_sends, total_sends),
+            string.format("Fixed %d of %d sends.\n\nInput sends: pre-fader post-FX (mode 3)\nMember inear sends: post-fader (mode 0)",
+                fixed_sends, total_sends),
             "Send Mode Fix Complete",
             0
         )

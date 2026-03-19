@@ -971,7 +971,7 @@ jobs:
             exit /b 1
           )
 
-      - name: Verify send modes (pre-fader)
+      - name: Verify send modes (IEM routing rules)
         shell: powershell
         run: |
           $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
@@ -1009,8 +1009,9 @@ jobs:
           Write-Host "Send mode check result: $response"
 
           if ($response -match "FAIL") {
-            Write-Host "::error::SEND MODE CHECK FAILED: Some sends are not pre-fader (mode 3)."
-            Write-Host "::error::Run fix_send_mode.lua in REAPER to fix: curl http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/auto_fix_sends/1 && curl http://iem.lan:8080/_/_RS_REAPERIEM_FIX_SENDS"
+            Write-Host "::error::SEND MODE CHECK FAILED: Some sends have wrong mode."
+            Write-Host "::error::Expected: input sends = pre-fader (3), member inear sends = post-fader (0)"
+            Write-Host "::error::Run fix_send_mode.lua to fix: curl http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/auto_fix_sends/1 && curl http://iem.lan:8080/_/_RS_REAPERIEM_FIX_SENDS"
             exit 1
           }
 
@@ -1024,7 +1025,7 @@ jobs:
             exit 1
           }
 
-          Write-Host "Send mode check: OK (all sends are pre-fader post-FX)"
+          Write-Host "Send mode check: OK (input=pre-fader, member inear=post-fader)"
 
       - name: Setup and verify VBAN IEM on engineer track
         shell: powershell

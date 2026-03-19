@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.71.0 (2026-03-19)
+
+- **Fix**: Blank page after deploy — removed service worker caching that served stale WASM/JS assets; all band members' phones auto-fix on next app open (no manual cache clear needed)
+- **Fix**: AudioData.copyTo RangeError — use allocationSize + f32-planar format for correct buffer sizing
+- **Fix**: Mobile audio playback — AudioContext.resume() now called during user gesture to unblock audio on mobile browsers
+
 ### v1.59.0 (2026-03-16)
 
 - **Fix**: Mute/fader controls no longer target wrong member after track insertion/removal — frontend now detects track index shifts and fully replaces channel state instead of merging by stale index

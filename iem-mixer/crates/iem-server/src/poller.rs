@@ -7,7 +7,7 @@
 
 use iem_core::{DiscoveredMember, MixSnapshot, ServerMsg};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::proxy::{
@@ -167,6 +167,24 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     members
 }
 
+/// Cooldown between re-discovery attempts (10 seconds)
+static LAST_REDISCOVERY_ATTEMPT: AtomicU64 = AtomicU64::new(0);
+
+/// Check if discovered members need re-discovery (fallback or incomplete state).
+///
+/// Returns `true` when any non-engineer member has `mix_send_index == None`
+/// or any member has `track_index == 0` (fallback placeholder from config).
+pub fn needs_rediscovery(members: &[DiscoveredMember]) -> bool {
+    members.iter().any(|m| {
+        // Engineer doesn't have mix_send_index (it's the target, not source)
+        if m.id() == "engineer" {
+            return false;
+        }
+        // Fallback members have track_index = 0
+        m.track_index == 0 || m.mix_send_index.is_none()
+    })
+}
+
 /// Spawn the background poller task
 pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -180,6 +198,33 @@ pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
 
 /// Single poll cycle: query REAPER, diff against cache, broadcast changes
 async fn poll_reaper_and_broadcast(state: &AppState) {
+    // Retry discovery if previous attempt was incomplete (e.g., REAPER was down at startup)
+    {
+        let discovered = state.discovered_members.read().await;
+        if needs_rediscovery(&discovered) {
+            drop(discovered); // release read lock before write
+
+            // Only attempt re-discovery every 10 seconds to avoid hammering REAPER
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let last = LAST_REDISCOVERY_ATTEMPT.load(Ordering::Relaxed);
+            if now_ms.saturating_sub(last) > 10_000 {
+                LAST_REDISCOVERY_ATTEMPT.store(now_ms, Ordering::Relaxed);
+                let new_members = discover_members(state).await;
+                if !new_members.is_empty() && !needs_rediscovery(&new_members) {
+                    let mut discovered = state.discovered_members.write().await;
+                    tracing::info!("Re-discovery successful — replacing fallback members");
+                    *discovered = new_members;
+                    // Clear cached channel states to force full State resync
+                    let mut cache = state.mixer_cache.write().await;
+                    cache.member_states.clear();
+                }
+            }
+        }
+    }
+
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
@@ -373,13 +418,27 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         return;
     }
 
-    // Always broadcast meters
-    let _ = state.event_tx.send((
-        String::new(), // broadcast to all
-        ServerMsg::Meters {
-            meters: meters.clone(),
-        },
-    ));
+    // Only broadcast meters that actually changed (threshold: 0.01 linear ≈ -40 dB).
+    // During silence this sends nothing; during active playing only ~10-15 channels.
+    {
+        let cache = state.mixer_cache.read().await;
+        let prev = &cache.meters;
+        let changed: HashMap<usize, [f32; 2]> = meters
+            .iter()
+            .filter(|(idx, [l, r])| {
+                prev.get(idx)
+                    .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+            })
+            .map(|(k, v)| (*k, *v))
+            .collect();
+
+        if !changed.is_empty() {
+            let _ = state.event_tx.send((
+                String::new(), // broadcast to all
+                ServerMsg::Meters { meters: changed },
+            ));
+        }
+    }
 
     // Update cached meters and output track state
     {
@@ -1313,6 +1372,191 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         assert!(
             !METER_BRIDGE_STARTED.load(Ordering::Relaxed),
             "Flag must reset on disconnect so bridge re-triggers on reconnect"
+        );
+    }
+
+    // ================================================================
+    // Meter change detection tests (v1.72.0 performance optimization)
+    // ================================================================
+
+    /// Helper: compute delta meters using the same logic as poll_and_broadcast.
+    /// Returns only meters that changed beyond the 0.01 threshold.
+    fn compute_meter_delta(
+        prev: &HashMap<usize, [f32; 2]>,
+        current: &HashMap<usize, [f32; 2]>,
+    ) -> HashMap<usize, [f32; 2]> {
+        current
+            .iter()
+            .filter(|(idx, [l, r])| {
+                prev.get(idx)
+                    .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+            })
+            .map(|(k, v)| (*k, *v))
+            .collect()
+    }
+
+    /// Unchanged meters should NOT be broadcast (saves bandwidth during silence)
+    #[test]
+    fn test_meter_delta_unchanged_is_empty() {
+        let meters: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.0, 0.0]), (3, [0.3, 0.25])]
+            .into_iter()
+            .collect();
+
+        let delta = compute_meter_delta(&meters, &meters);
+        assert!(
+            delta.is_empty(),
+            "Identical meters should produce empty delta, got {} entries",
+            delta.len()
+        );
+    }
+
+    /// Changed meters should be included in the delta
+    #[test]
+    fn test_meter_delta_changed_is_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.0, 0.0]), (3, [0.3, 0.25])]
+            .into_iter()
+            .collect();
+
+        // Track 1 changed significantly, track 2 unchanged, track 3 changed
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.7, 0.6]),  // changed
+            (2, [0.0, 0.0]),  // unchanged
+            (3, [0.1, 0.25]), // L changed
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(delta.len(), 2, "Should have 2 changed tracks");
+        assert!(delta.contains_key(&1), "Track 1 changed");
+        assert!(delta.contains_key(&3), "Track 3 L changed");
+        assert!(!delta.contains_key(&2), "Track 2 unchanged");
+    }
+
+    /// Small changes below threshold should NOT trigger broadcast
+    #[test]
+    fn test_meter_delta_below_threshold() {
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> = [(1, [0.505, 0.498])].into_iter().collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert!(
+            delta.is_empty(),
+            "Changes < 0.01 should be suppressed, got {} entries",
+            delta.len()
+        );
+    }
+
+    /// New tracks (not in previous cache) should always be broadcast
+    #[test]
+    fn test_meter_delta_new_track_is_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]), // unchanged
+            (2, [0.3, 0.3]), // new track
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(delta.len(), 1);
+        assert!(delta.contains_key(&2), "New track should be broadcast");
+    }
+
+    /// All-silent meters with empty previous cache should be broadcast once
+    #[test]
+    fn test_meter_delta_first_broadcast_includes_all() {
+        let prev: HashMap<usize, [f32; 2]> = HashMap::new();
+        let current: HashMap<usize, [f32; 2]> =
+            [(1, [0.0, 0.0]), (2, [0.0, 0.0])].into_iter().collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(
+            delta.len(),
+            2,
+            "First broadcast should include all tracks (no previous cache)"
+        );
+    }
+
+    // ================================================================
+    // Re-discovery tests (REAPER unavailable at startup hardening)
+    // ================================================================
+
+    /// Helper to create a test DiscoveredMember
+    fn make_member(
+        name: &str,
+        track_index: usize,
+        mix_send_index: Option<usize>,
+    ) -> DiscoveredMember {
+        DiscoveredMember {
+            name: name.to_string(),
+            track_index,
+            dante_output_l: 1,
+            dante_output_r: 2,
+            send_index: 0,
+            mix_send_index,
+        }
+    }
+
+    /// Member with mix_send_index == None triggers rediscovery
+    #[test]
+    fn test_discovery_incomplete_when_mix_send_index_is_none() {
+        let members = vec![
+            make_member("PETKA", 23, None),
+            make_member("STEVO", 24, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            needs_rediscovery(&members),
+            "PETKA has mix_send_index=None → needs rediscovery"
+        );
+    }
+
+    /// Member with track_index == 0 (fallback placeholder) triggers rediscovery
+    #[test]
+    fn test_discovery_incomplete_when_track_index_zero() {
+        let members = vec![
+            make_member("PETKA", 0, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            needs_rediscovery(&members),
+            "PETKA has track_index=0 → needs rediscovery"
+        );
+    }
+
+    /// All members properly discovered → no rediscovery needed
+    #[test]
+    fn test_discovery_complete_when_all_fields_set() {
+        let members = vec![
+            make_member("PETKA", 23, Some(1)),
+            make_member("STEVO", 24, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            !needs_rediscovery(&members),
+            "All non-engineer members have valid track_index and mix_send_index"
+        );
+    }
+
+    /// Engineer with mix_send_index == None does NOT trigger rediscovery
+    /// (engineer is the target track, not a source — it never has mix_send_index)
+    #[test]
+    fn test_engineer_excluded_from_rediscovery_check() {
+        let members = vec![make_member("ENGINEER", 32, None)];
+        assert!(
+            !needs_rediscovery(&members),
+            "Engineer alone with mix_send_index=None should NOT trigger rediscovery"
+        );
+    }
+
+    /// Empty members list does not trigger rediscovery (nothing to check)
+    #[test]
+    fn test_rediscovery_empty_members() {
+        let members: Vec<DiscoveredMember> = vec![];
+        assert!(
+            !needs_rediscovery(&members),
+            "Empty member list should not trigger rediscovery"
         );
     }
 }
