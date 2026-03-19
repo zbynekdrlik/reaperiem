@@ -373,13 +373,28 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         return;
     }
 
-    // Always broadcast meters
-    let _ = state.event_tx.send((
-        String::new(), // broadcast to all
-        ServerMsg::Meters {
-            meters: meters.clone(),
-        },
-    ));
+    // Only broadcast meters that actually changed (threshold: 0.01 linear ≈ -40 dB).
+    // During silence this sends nothing; during active playing only ~10-15 channels.
+    {
+        let cache = state.mixer_cache.read().await;
+        let prev = &cache.meters;
+        let changed: HashMap<usize, [f32; 2]> = meters
+            .iter()
+            .filter(|(idx, [l, r])| {
+                prev.get(idx).map_or(true, |[pl, pr]| {
+                    (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01
+                })
+            })
+            .map(|(k, v)| (*k, *v))
+            .collect();
+
+        if !changed.is_empty() {
+            let _ = state.event_tx.send((
+                String::new(), // broadcast to all
+                ServerMsg::Meters { meters: changed },
+            ));
+        }
+    }
 
     // Update cached meters and output track state
     {
@@ -1313,6 +1328,125 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         assert!(
             !METER_BRIDGE_STARTED.load(Ordering::Relaxed),
             "Flag must reset on disconnect so bridge re-triggers on reconnect"
+        );
+    }
+
+    // ================================================================
+    // Meter change detection tests (v1.72.0 performance optimization)
+    // ================================================================
+
+    /// Helper: compute delta meters using the same logic as poll_and_broadcast.
+    /// Returns only meters that changed beyond the 0.01 threshold.
+    fn compute_meter_delta(
+        prev: &HashMap<usize, [f32; 2]>,
+        current: &HashMap<usize, [f32; 2]>,
+    ) -> HashMap<usize, [f32; 2]> {
+        current
+            .iter()
+            .filter(|(idx, [l, r])| {
+                prev.get(idx).map_or(true, |[pl, pr]| {
+                    (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01
+                })
+            })
+            .map(|(k, v)| (*k, *v))
+            .collect()
+    }
+
+    /// Unchanged meters should NOT be broadcast (saves bandwidth during silence)
+    #[test]
+    fn test_meter_delta_unchanged_is_empty() {
+        let meters: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]),
+            (2, [0.0, 0.0]),
+            (3, [0.3, 0.25]),
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&meters, &meters);
+        assert!(
+            delta.is_empty(),
+            "Identical meters should produce empty delta, got {} entries",
+            delta.len()
+        );
+    }
+
+    /// Changed meters should be included in the delta
+    #[test]
+    fn test_meter_delta_changed_is_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]),
+            (2, [0.0, 0.0]),
+            (3, [0.3, 0.25]),
+        ]
+        .into_iter()
+        .collect();
+
+        // Track 1 changed significantly, track 2 unchanged, track 3 changed
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.7, 0.6]),   // changed
+            (2, [0.0, 0.0]),   // unchanged
+            (3, [0.1, 0.25]),  // L changed
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(delta.len(), 2, "Should have 2 changed tracks");
+        assert!(delta.contains_key(&1), "Track 1 changed");
+        assert!(delta.contains_key(&3), "Track 3 L changed");
+        assert!(!delta.contains_key(&2), "Track 2 unchanged");
+    }
+
+    /// Small changes below threshold should NOT trigger broadcast
+    #[test]
+    fn test_meter_delta_below_threshold() {
+        let prev: HashMap<usize, [f32; 2]> =
+            [(1, [0.5, 0.5])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> =
+            [(1, [0.505, 0.498])].into_iter().collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert!(
+            delta.is_empty(),
+            "Changes < 0.01 should be suppressed, got {} entries",
+            delta.len()
+        );
+    }
+
+    /// New tracks (not in previous cache) should always be broadcast
+    #[test]
+    fn test_meter_delta_new_track_is_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> =
+            [(1, [0.5, 0.5])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]),   // unchanged
+            (2, [0.3, 0.3]),   // new track
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(delta.len(), 1);
+        assert!(delta.contains_key(&2), "New track should be broadcast");
+    }
+
+    /// All-silent meters with empty previous cache should be broadcast once
+    #[test]
+    fn test_meter_delta_first_broadcast_includes_all() {
+        let prev: HashMap<usize, [f32; 2]> = HashMap::new();
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.0, 0.0]),
+            (2, [0.0, 0.0]),
+        ]
+        .into_iter()
+        .collect();
+
+        let delta = compute_meter_delta(&prev, &current);
+        assert_eq!(
+            delta.len(),
+            2,
+            "First broadcast should include all tracks (no previous cache)"
         );
     }
 }

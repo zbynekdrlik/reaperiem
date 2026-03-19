@@ -103,6 +103,11 @@ fn connect_websocket(
         &ws,
     );
 
+    // Meter update throttle: skip updates arriving faster than 50ms apart.
+    // Server sends every 150ms but network jitter can bunch messages.
+    // This caps reactive signal storms at ~20/sec instead of unbounded.
+    let last_meter_time = std::cell::Cell::new(0.0_f64);
+
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
         if let Some(text) = e.data().as_string() {
@@ -135,8 +140,18 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
-                        set_meters.set(m);
-                        set_data_pulse.update(|v| *v = !*v);
+                        // Throttle: skip if less than 50ms since last meter update
+                        let now = js_sys::Date::now();
+                        if now - last_meter_time.get() >= 50.0 {
+                            last_meter_time.set(now);
+                            // Merge delta meters into existing map (server sends only changed values)
+                            set_meters.update(|existing| {
+                                for (k, v) in m {
+                                    existing.insert(k, v);
+                                }
+                            });
+                            set_data_pulse.update(|v| *v = !*v);
+                        }
                     }
                     iem_core::ServerMsg::ChannelUpdate {
                         track_index,

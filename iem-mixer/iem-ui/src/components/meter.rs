@@ -1,7 +1,12 @@
 //! Stereo VU Meter component — two thin gradient bars with ballistics and peak hold
+//!
+//! All meter animations run in a single shared `requestAnimationFrame` loop
+//! instead of per-component `setInterval` timers. This reduces ~1500 timer
+//! callbacks/sec (50 meters × 30fps) down to 1 RAF callback at display refresh rate.
 
 use leptos::prelude::*;
-use wasm_bindgen::{JsCast, prelude::*};
+use std::cell::{Cell, RefCell};
+use wasm_bindgen::{prelude::*, JsCast};
 
 /// PPM-style decay rate: 20 dB/s (smooth analog VU feel)
 const DECAY_DB_PER_SEC: f32 = 20.0;
@@ -9,8 +14,8 @@ const DECAY_DB_PER_SEC: f32 = 20.0;
 const PEAK_HOLD_MS: f64 = 1500.0;
 /// Peak indicator decay rate: 20 dB/s
 const PEAK_DECAY_DB_PER_SEC: f32 = 20.0;
-/// Animation tick interval (~30fps)
-const TICK_MS: u32 = 33;
+/// Target tick interval for ballistic math (~30fps)
+const TICK_MS: f64 = 33.0;
 /// Display floor — below this we show 0%
 const DISPLAY_FLOOR: f32 = 0.0001;
 
@@ -24,17 +29,24 @@ fn linear_to_pct(level: f32) -> f32 {
     ((db + 60.0) / 66.0 * 100.0).clamp(0.0, 100.0)
 }
 
-/// Decay factor per tick: level *= decay_factor each 33ms frame.
-/// decay_factor = 10^(-DECAY_DB_PER_SEC * TICK_S / 20)
-fn decay_factor() -> f32 {
-    let tick_s = TICK_MS as f32 / 1000.0;
-    10.0_f32.powf(-DECAY_DB_PER_SEC * tick_s / 20.0)
+/// Decay factor for a given time step (in seconds).
+fn decay_factor_for(dt_s: f32) -> f32 {
+    10.0_f32.powf(-DECAY_DB_PER_SEC * dt_s / 20.0)
 }
 
-/// Peak decay factor per tick (slower than main decay).
+/// Peak decay factor for a given time step (in seconds).
+fn peak_decay_factor_for(dt_s: f32) -> f32 {
+    10.0_f32.powf(-PEAK_DECAY_DB_PER_SEC * dt_s / 20.0)
+}
+
+/// Decay factor per 33ms tick (for unit tests).
+fn decay_factor() -> f32 {
+    decay_factor_for(TICK_MS as f32 / 1000.0)
+}
+
+/// Peak decay factor per 33ms tick (for unit tests).
 fn peak_decay_factor() -> f32 {
-    let tick_s = TICK_MS as f32 / 1000.0;
-    10.0_f32.powf(-PEAK_DECAY_DB_PER_SEC * tick_s / 20.0)
+    peak_decay_factor_for(TICK_MS as f32 / 1000.0)
 }
 
 /// Apply ballistic smoothing for one tick.
@@ -81,6 +93,191 @@ fn peak_hold_tick(
     }
 }
 
+// ── Shared animation loop (single RAF for all meters) ───────────────────
+
+/// State for one registered meter channel (L or R).
+struct MeterChannel {
+    display: f32,
+    peak: f32,
+    hold_remaining: f64,
+}
+
+/// One registered meter (L+R pair).
+struct MeterEntry {
+    /// Read input levels from these signals (get_untracked)
+    level_l: Signal<f32>,
+    level_r: Signal<f32>,
+    /// Write smoothed display values back to these signals
+    set_display_l: WriteSignal<f32>,
+    set_display_r: WriteSignal<f32>,
+    set_peak_l: WriteSignal<f32>,
+    set_peak_r: WriteSignal<f32>,
+    /// Internal ballistic state (not reactive — mutated in RAF callback)
+    left: MeterChannel,
+    right: MeterChannel,
+    /// Unique ID for unregistration
+    id: usize,
+}
+
+thread_local! {
+    static REGISTRY: RefCell<Vec<MeterEntry>> = RefCell::new(Vec::new());
+    static NEXT_ID: Cell<usize> = Cell::new(0);
+    static RAF_HANDLE: Cell<i32> = Cell::new(0);
+    static RAF_RUNNING: Cell<bool> = Cell::new(false);
+    static LAST_TICK_TIME: Cell<f64> = Cell::new(0.0);
+}
+
+/// Register a meter and ensure the shared RAF loop is running.
+/// Returns an ID for later unregistration.
+fn register_meter(
+    level_l: Signal<f32>,
+    level_r: Signal<f32>,
+    set_display_l: WriteSignal<f32>,
+    set_display_r: WriteSignal<f32>,
+    set_peak_l: WriteSignal<f32>,
+    set_peak_r: WriteSignal<f32>,
+) -> usize {
+    let id = NEXT_ID.with(|n| {
+        let id = n.get();
+        n.set(id + 1);
+        id
+    });
+
+    REGISTRY.with(|reg| {
+        reg.borrow_mut().push(MeterEntry {
+            level_l,
+            level_r,
+            set_display_l,
+            set_display_r,
+            set_peak_l,
+            set_peak_r,
+            left: MeterChannel {
+                display: 0.0,
+                peak: 0.0,
+                hold_remaining: 0.0,
+            },
+            right: MeterChannel {
+                display: 0.0,
+                peak: 0.0,
+                hold_remaining: 0.0,
+            },
+            id,
+        });
+    });
+
+    ensure_raf_running();
+    id
+}
+
+/// Unregister a meter. Stops the RAF loop if no meters remain.
+fn unregister_meter(id: usize) {
+    REGISTRY.with(|reg| {
+        reg.borrow_mut().retain(|e| e.id != id);
+    });
+
+    let count = REGISTRY.with(|reg| reg.borrow().len());
+    if count == 0 {
+        stop_raf();
+    }
+}
+
+fn ensure_raf_running() {
+    RAF_RUNNING.with(|running| {
+        if !running.get() {
+            running.set(true);
+            LAST_TICK_TIME.with(|t| t.set(js_sys::Date::now()));
+            schedule_raf();
+        }
+    });
+}
+
+fn stop_raf() {
+    RAF_RUNNING.with(|running| {
+        if running.get() {
+            running.set(false);
+            let handle = RAF_HANDLE.with(|h| h.get());
+            if handle != 0 {
+                if let Some(w) = web_sys::window() {
+                    let _ = w.cancel_animation_frame(handle);
+                }
+                RAF_HANDLE.with(|h| h.set(0));
+            }
+        }
+    });
+}
+
+fn schedule_raf() {
+    let closure = Closure::once_into_js(move || {
+        tick_all_meters();
+    });
+    if let Some(w) = web_sys::window() {
+        let handle = w
+            .request_animation_frame(closure.as_ref().unchecked_ref())
+            .unwrap_or(0);
+        RAF_HANDLE.with(|h| h.set(handle));
+    }
+}
+
+/// Single RAF callback that processes ALL registered meters.
+fn tick_all_meters() {
+    let still_running = RAF_RUNNING.with(|r| r.get());
+    if !still_running {
+        return;
+    }
+
+    let now = js_sys::Date::now();
+    let dt_ms = LAST_TICK_TIME.with(|t| {
+        let prev = t.get();
+        t.set(now);
+        (now - prev).clamp(1.0, 100.0) // clamp to avoid huge jumps
+    });
+    let dt_s = dt_ms as f32 / 1000.0;
+
+    let decay = decay_factor_for(dt_s);
+    let p_decay = peak_decay_factor_for(dt_s);
+
+    REGISTRY.with(|reg| {
+        for entry in reg.borrow_mut().iter_mut() {
+            let target_l = entry.level_l.try_get_untracked().unwrap_or(0.0);
+            let target_r = entry.level_r.try_get_untracked().unwrap_or(0.0);
+
+            // Ballistic smoothing for bar levels
+            entry.left.display = ballistic_tick(entry.left.display, target_l, decay);
+            entry.right.display = ballistic_tick(entry.right.display, target_r, decay);
+
+            // Peak hold logic
+            let (new_peak_l, new_hold_l) = peak_hold_tick(
+                entry.left.peak,
+                entry.left.hold_remaining,
+                target_l,
+                p_decay,
+                dt_ms,
+            );
+            entry.left.peak = new_peak_l;
+            entry.left.hold_remaining = new_hold_l;
+
+            let (new_peak_r, new_hold_r) = peak_hold_tick(
+                entry.right.peak,
+                entry.right.hold_remaining,
+                target_r,
+                p_decay,
+                dt_ms,
+            );
+            entry.right.peak = new_peak_r;
+            entry.right.hold_remaining = new_hold_r;
+
+            // Write display values to signals (batched — all in one frame)
+            entry.set_display_l.try_set(entry.left.display);
+            entry.set_display_r.try_set(entry.right.display);
+            entry.set_peak_l.try_set(entry.left.peak);
+            entry.set_peak_r.try_set(entry.right.peak);
+        }
+    });
+
+    // Schedule next frame
+    schedule_raf();
+}
+
 /// Stereo VU meter with ballistics and peak hold
 #[component]
 pub fn Meter(
@@ -92,58 +289,22 @@ pub fn Meter(
     // Smoothed display values for L and R bars
     let (display_l, set_display_l) = signal(0.0_f32);
     let (display_r, set_display_r) = signal(0.0_f32);
-    // Peak hold values and timers
+    // Peak hold values
     let (peak_l, set_peak_l) = signal(0.0_f32);
     let (peak_r, set_peak_r) = signal(0.0_f32);
-    let (hold_l, set_hold_l) = signal(0.0_f64);
-    let (hold_r, set_hold_r) = signal(0.0_f64);
 
-    let decay = decay_factor();
-    let p_decay = peak_decay_factor();
-    let tick_ms_f64 = TICK_MS as f64;
-
-    // 30fps animation loop using raw JS setInterval + Closure::forget().
-    // gloo_timers::Interval stored in a local Rc gets dropped when the component
-    // function returns, killing the timer immediately. Raw JS setInterval with
-    // forget() keeps the closure alive; on_cleanup clears the interval.
-    let tick_closure = Closure::wrap(Box::new(move || {
-        let target_l = level_l.get_untracked();
-        let target_r = level_r.get_untracked();
-
-        // Ballistic smoothing for bar levels
-        set_display_l.update(|d| *d = ballistic_tick(*d, target_l, decay));
-        set_display_r.update(|d| *d = ballistic_tick(*d, target_r, decay));
-
-        // Peak hold logic
-        let cur_peak_l = peak_l.get_untracked();
-        let cur_hold_l = hold_l.get_untracked();
-        let (new_peak_l, new_hold_l) =
-            peak_hold_tick(cur_peak_l, cur_hold_l, target_l, p_decay, tick_ms_f64);
-        set_peak_l.set(new_peak_l);
-        set_hold_l.set(new_hold_l);
-
-        let cur_peak_r = peak_r.get_untracked();
-        let cur_hold_r = hold_r.get_untracked();
-        let (new_peak_r, new_hold_r) =
-            peak_hold_tick(cur_peak_r, cur_hold_r, target_r, p_decay, tick_ms_f64);
-        set_peak_r.set(new_peak_r);
-        set_hold_r.set(new_hold_r);
-    }) as Box<dyn FnMut()>);
-
-    let interval_id = web_sys::window()
-        .unwrap()
-        .set_interval_with_callback_and_timeout_and_arguments_0(
-            tick_closure.as_ref().unchecked_ref(),
-            TICK_MS as i32,
-        )
-        .unwrap();
-    // Leaks ~300 bytes of closure state; interval is cleared by on_cleanup below
-    tick_closure.forget();
+    // Register with the shared animation loop
+    let meter_id = register_meter(
+        level_l,
+        level_r,
+        set_display_l,
+        set_display_r,
+        set_peak_l,
+        set_peak_r,
+    );
 
     on_cleanup(move || {
-        if let Some(w) = web_sys::window() {
-            w.clear_interval_with_handle(interval_id);
-        }
+        unregister_meter(meter_id);
     });
 
     // Derived percentage signals for rendering
@@ -237,7 +398,7 @@ mod tests {
     #[test]
     fn test_peak_hold() {
         // Initial peak capture
-        let (peak, hold) = peak_hold_tick(0.0, 0.0, 0.5, peak_decay_factor(), TICK_MS as f64);
+        let (peak, hold) = peak_hold_tick(0.0, 0.0, 0.5, peak_decay_factor(), TICK_MS);
         assert!((peak - 0.5).abs() < 0.001, "Peak should capture 0.5");
         assert!(
             (hold - PEAK_HOLD_MS).abs() < 0.1,
@@ -246,13 +407,8 @@ mod tests {
         );
 
         // During hold period — peak should stay, timer counts down
-        let (peak2, hold2) = peak_hold_tick(
-            0.5,
-            PEAK_HOLD_MS - 100.0,
-            0.0,
-            peak_decay_factor(),
-            TICK_MS as f64,
-        );
+        let (peak2, hold2) =
+            peak_hold_tick(0.5, PEAK_HOLD_MS - 100.0, 0.0, peak_decay_factor(), TICK_MS);
         assert!(
             (peak2 - 0.5).abs() < 0.001,
             "Peak should hold during hold period"
@@ -260,7 +416,7 @@ mod tests {
         assert!(hold2 < PEAK_HOLD_MS - 100.0, "Timer should count down");
 
         // After hold expires — peak should decay
-        let (peak3, _) = peak_hold_tick(0.5, 0.0, 0.0, peak_decay_factor(), TICK_MS as f64);
+        let (peak3, _) = peak_hold_tick(0.5, 0.0, 0.0, peak_decay_factor(), TICK_MS);
         assert!(peak3 < 0.5, "Peak should decay after hold expires");
         assert!(peak3 > 0.0, "Peak should not drop to 0 in one tick");
     }
@@ -300,5 +456,21 @@ mod tests {
             display = ballistic_tick(display, 0.0, decay);
         }
         assert_eq!(display, 0.0, "Should converge to 0 after ~6 seconds");
+    }
+
+    #[test]
+    fn test_decay_factor_scales_with_dt() {
+        // Larger dt should produce more decay (smaller factor)
+        let short = decay_factor_for(0.016); // ~60fps
+        let long = decay_factor_for(0.033); // ~30fps
+        assert!(
+            short > long,
+            "Shorter dt should decay less: {} vs {}",
+            short,
+            long
+        );
+        // Both should be between 0 and 1
+        assert!(short > 0.0 && short < 1.0);
+        assert!(long > 0.0 && long < 1.0);
     }
 }
