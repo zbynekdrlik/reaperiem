@@ -7,7 +7,7 @@
 
 use iem_core::{DiscoveredMember, MixSnapshot, ServerMsg};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::proxy::{
@@ -167,6 +167,24 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     members
 }
 
+/// Cooldown between re-discovery attempts (10 seconds)
+static LAST_REDISCOVERY_ATTEMPT: AtomicU64 = AtomicU64::new(0);
+
+/// Check if discovered members need re-discovery (fallback or incomplete state).
+///
+/// Returns `true` when any non-engineer member has `mix_send_index == None`
+/// or any member has `track_index == 0` (fallback placeholder from config).
+pub fn needs_rediscovery(members: &[DiscoveredMember]) -> bool {
+    members.iter().any(|m| {
+        // Engineer doesn't have mix_send_index (it's the target, not source)
+        if m.id() == "engineer" {
+            return false;
+        }
+        // Fallback members have track_index = 0
+        m.track_index == 0 || m.mix_send_index.is_none()
+    })
+}
+
 /// Spawn the background poller task
 pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
@@ -180,6 +198,33 @@ pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
 
 /// Single poll cycle: query REAPER, diff against cache, broadcast changes
 async fn poll_reaper_and_broadcast(state: &AppState) {
+    // Retry discovery if previous attempt was incomplete (e.g., REAPER was down at startup)
+    {
+        let discovered = state.discovered_members.read().await;
+        if needs_rediscovery(&discovered) {
+            drop(discovered); // release read lock before write
+
+            // Only attempt re-discovery every 10 seconds to avoid hammering REAPER
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+            let last = LAST_REDISCOVERY_ATTEMPT.load(Ordering::Relaxed);
+            if now_ms.saturating_sub(last) > 10_000 {
+                LAST_REDISCOVERY_ATTEMPT.store(now_ms, Ordering::Relaxed);
+                let new_members = discover_members(state).await;
+                if !new_members.is_empty() && !needs_rediscovery(&new_members) {
+                    let mut discovered = state.discovered_members.write().await;
+                    tracing::info!("Re-discovery successful — replacing fallback members");
+                    *discovered = new_members;
+                    // Clear cached channel states to force full State resync
+                    let mut cache = state.mixer_cache.write().await;
+                    cache.member_states.clear();
+                }
+            }
+        }
+    }
+
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
@@ -1430,6 +1475,84 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             delta.len(),
             2,
             "First broadcast should include all tracks (no previous cache)"
+        );
+    }
+
+    // ================================================================
+    // Re-discovery tests (REAPER unavailable at startup hardening)
+    // ================================================================
+
+    /// Helper to create a test DiscoveredMember
+    fn make_member(name: &str, track_index: usize, mix_send_index: Option<usize>) -> DiscoveredMember {
+        DiscoveredMember {
+            name: name.to_string(),
+            track_index,
+            dante_output_l: 1,
+            dante_output_r: 2,
+            send_index: 0,
+            mix_send_index,
+        }
+    }
+
+    /// Member with mix_send_index == None triggers rediscovery
+    #[test]
+    fn test_discovery_incomplete_when_mix_send_index_is_none() {
+        let members = vec![
+            make_member("PETKA", 23, None),
+            make_member("STEVO", 24, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            needs_rediscovery(&members),
+            "PETKA has mix_send_index=None → needs rediscovery"
+        );
+    }
+
+    /// Member with track_index == 0 (fallback placeholder) triggers rediscovery
+    #[test]
+    fn test_discovery_incomplete_when_track_index_zero() {
+        let members = vec![
+            make_member("PETKA", 0, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            needs_rediscovery(&members),
+            "PETKA has track_index=0 → needs rediscovery"
+        );
+    }
+
+    /// All members properly discovered → no rediscovery needed
+    #[test]
+    fn test_discovery_complete_when_all_fields_set() {
+        let members = vec![
+            make_member("PETKA", 23, Some(1)),
+            make_member("STEVO", 24, Some(1)),
+            make_member("ENGINEER", 32, None),
+        ];
+        assert!(
+            !needs_rediscovery(&members),
+            "All non-engineer members have valid track_index and mix_send_index"
+        );
+    }
+
+    /// Engineer with mix_send_index == None does NOT trigger rediscovery
+    /// (engineer is the target track, not a source — it never has mix_send_index)
+    #[test]
+    fn test_engineer_excluded_from_rediscovery_check() {
+        let members = vec![make_member("ENGINEER", 32, None)];
+        assert!(
+            !needs_rediscovery(&members),
+            "Engineer alone with mix_send_index=None should NOT trigger rediscovery"
+        );
+    }
+
+    /// Empty members list does not trigger rediscovery (nothing to check)
+    #[test]
+    fn test_rediscovery_empty_members() {
+        let members: Vec<DiscoveredMember> = vec![];
+        assert!(
+            !needs_rediscovery(&members),
+            "Empty member list should not trigger rediscovery"
         );
     }
 }
