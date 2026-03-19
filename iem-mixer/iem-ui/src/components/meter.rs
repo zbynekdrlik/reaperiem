@@ -15,8 +15,6 @@ const DECAY_DB_PER_SEC: f32 = 20.0;
 const PEAK_HOLD_MS: f64 = 1500.0;
 /// Peak indicator decay rate: 20 dB/s
 const PEAK_DECAY_DB_PER_SEC: f32 = 20.0;
-/// Target tick interval for ballistic math (~30fps)
-const TICK_MS: f64 = 33.0;
 /// Display floor — below this we show 0%
 const DISPLAY_FLOOR: f32 = 0.0001;
 
@@ -38,16 +36,6 @@ fn decay_factor_for(dt_s: f32) -> f32 {
 /// Peak decay factor for a given time step (in seconds).
 fn peak_decay_factor_for(dt_s: f32) -> f32 {
     10.0_f32.powf(-PEAK_DECAY_DB_PER_SEC * dt_s / 20.0)
-}
-
-/// Decay factor per 33ms tick (for unit tests).
-fn decay_factor() -> f32 {
-    decay_factor_for(TICK_MS as f32 / 1000.0)
-}
-
-/// Peak decay factor per 33ms tick (for unit tests).
-fn peak_decay_factor() -> f32 {
-    peak_decay_factor_for(TICK_MS as f32 / 1000.0)
 }
 
 /// Apply ballistic smoothing for one tick.
@@ -357,6 +345,19 @@ pub fn Meter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Target tick interval for ballistic math (~30fps)
+    const TICK_MS: f64 = 33.0;
+
+    /// Decay factor per 33ms tick.
+    fn decay_factor() -> f32 {
+        decay_factor_for(TICK_MS as f32 / 1000.0)
+    }
+
+    /// Peak decay factor per 33ms tick.
+    fn peak_decay_factor() -> f32 {
+        peak_decay_factor_for(TICK_MS as f32 / 1000.0)
+    }
 
     #[test]
     fn test_instant_attack() {
