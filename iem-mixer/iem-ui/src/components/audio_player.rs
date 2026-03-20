@@ -5,8 +5,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::*, JsCast};
 
 // JS interop functions from audio_player.js
 #[wasm_bindgen(module = "/audio_player.js")]
