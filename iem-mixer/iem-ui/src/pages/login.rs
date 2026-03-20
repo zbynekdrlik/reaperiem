@@ -72,8 +72,8 @@ pub fn LoginPage() -> impl IntoView {
 
     // Keyboard support: listen for digit keys on document
     {
-        use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
+        use wasm_bindgen::prelude::*;
 
         let hd_key = handle_digit.clone();
 
@@ -102,8 +102,8 @@ pub fn LoginPage() -> impl IntoView {
             });
 
         let document = web_sys::window().unwrap().document().unwrap();
-        let _ = document
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        let _ =
+            document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
 
         // Store closure to prevent drop + cleanup on unmount
         let closure = std::cell::RefCell::new(Some(closure));
