@@ -1010,6 +1010,18 @@ async fn handle_ws(
         let _ = socket.send(Message::Text(json.into())).await;
     }
 
+    // Send initial solo state (if any active solos for this member)
+    {
+        let cache = state.mixer_cache.read().await;
+        if let Some(soloed) = cache.solo_states.get(&member_id) {
+            let msg = ServerMsg::SoloUpdate {
+                soloed: soloed.clone(),
+            };
+            let json = serde_json::to_string(&msg).unwrap_or_default();
+            let _ = socket.send(Message::Text(json.into())).await;
+        }
+    }
+
     // Send network mode (local/remote) — updates on every WS reconnect,
     // so switching between WiFi and mobile data triggers a fresh detection
     {
@@ -1044,6 +1056,27 @@ async fn handle_ws(
                                 ));
                                 continue;
                             }
+
+                            // Handle solo state updates (no REAPER command — solo is UI-only sync)
+                            if let ClientMsg::SetSolo { ref soloed } = cmd {
+                                {
+                                    let mut cache = state.mixer_cache.write().await;
+                                    if soloed.is_empty() {
+                                        cache.solo_states.remove(&member_id);
+                                    } else {
+                                        cache.solo_states
+                                            .insert(member_id.clone(), soloed.clone());
+                                    }
+                                }
+                                let _ = state.event_tx.send((
+                                    member_id.clone(),
+                                    ServerMsg::SoloUpdate {
+                                        soloed: soloed.clone(),
+                                    },
+                                ));
+                                continue;
+                            }
+
                             match apply_command_to_cache(&state, &member_id, &cmd).await {
                                 Ok((url, broadcast)) => {
                                     // Broadcast to other clients of same member for cross-device sync
@@ -1108,6 +1141,7 @@ async fn handle_ws(
         if *count == 0 {
             cache.active_members.remove(&member_id);
             cache.member_states.remove(&member_id);
+            cache.solo_states.remove(&member_id);
         }
     }
 }
@@ -1315,6 +1349,10 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::SetSolo { .. } => {
+            // Handled in WS handler before apply_command_to_cache is called
+            return Err("SetSolo should not reach apply_command_to_cache".to_string());
+        }
         iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
@@ -1453,6 +1491,9 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::UpdateCustomization { .. } => {
             unreachable!("UpdateCustomization handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::SetSolo { .. } => {
+            unreachable!("SetSolo handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")

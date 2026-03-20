@@ -24,6 +24,8 @@ pub enum ClientMsg {
         pinned: Vec<usize>,
         hidden: Vec<usize>,
     },
+    /// Set solo state for this member (full replacement, syncs across devices)
+    SetSolo { soloed: Vec<usize> },
     /// Start listening to audio stream (engineer only)
     ListenStart,
     /// Stop listening to audio stream
@@ -65,6 +67,8 @@ pub enum ServerMsg {
     },
     /// Network mode indicator (local LAN vs remote internet)
     NetworkMode { mode: String },
+    /// Solo state update (sent on connect and after changes)
+    SoloUpdate { soloed: Vec<usize> },
     /// Audio streaming status update
     AudioStatus { status: String },
 }
@@ -320,6 +324,33 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"NetworkMode\""));
         assert!(json.contains("\"mode\":\"local\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_solo_serialization() {
+        let msg = ClientMsg::SetSolo { soloed: vec![1, 5] };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetSolo\""));
+        assert!(json.contains("\"soloed\":[1,5]"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_solo_update_serialization() {
+        let msg = ServerMsg::SoloUpdate { soloed: vec![1, 5] };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"SoloUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_solo_update_empty() {
+        let msg = ServerMsg::SoloUpdate { soloed: vec![] };
+        let json = serde_json::to_string(&msg).unwrap();
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
