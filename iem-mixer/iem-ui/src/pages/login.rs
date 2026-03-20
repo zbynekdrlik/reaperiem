@@ -70,6 +70,52 @@ pub fn LoginPage() -> impl IntoView {
         }
     });
 
+    // Keyboard support: listen for digit keys on document
+    {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+
+        let hd_key = handle_digit.clone();
+
+        let closure =
+            Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+                let key = e.key();
+                match key.as_str() {
+                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
+                        e.prevent_default();
+                        hd_key(key.chars().next().unwrap());
+                    }
+                    "Backspace" => {
+                        e.prevent_default();
+                        set_error.set(None);
+                        set_pin.update(|p| {
+                            p.pop();
+                        });
+                    }
+                    "Escape" | "Delete" => {
+                        e.prevent_default();
+                        set_error.set(None);
+                        set_pin.set(String::new());
+                    }
+                    _ => {} // ignore all other keys
+                }
+            });
+
+        let document = web_sys::window().unwrap().document().unwrap();
+        let _ = document
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+
+        // Store closure to prevent drop + cleanup on unmount
+        let closure = std::cell::RefCell::new(Some(closure));
+        on_cleanup(move || {
+            if let Some(cb) = closure.borrow_mut().take() {
+                let doc = web_sys::window().unwrap().document().unwrap();
+                let _ =
+                    doc.remove_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
+            }
+        });
+    }
+
     // Create clones for each button
     let hd1 = handle_digit.clone();
     let hd2 = handle_digit.clone();
