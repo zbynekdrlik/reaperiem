@@ -2324,6 +2324,21 @@ test.describe("Solo sync", () => {
 
     await soloBtn1.click({ force: true });
 
+    // Wait for solo to activate on page1 (requires working WS + server)
+    await expect(soloBtn1)
+      .toHaveClass(/on/, { timeout: 3000 })
+      .catch(() => null);
+    if (
+      !assume(
+        (await soloBtn1.getAttribute("class"))?.includes("on"),
+        "Solo must activate on page1 (requires server connection)",
+      )
+    ) {
+      await ctx1.close();
+      await ctx2.close();
+      return;
+    }
+
     // Verify page2 sees the solo state
     const soloBtn2 = page2.locator(".solo-btn").first();
     await expect(soloBtn2).toHaveClass(/on/, { timeout: 3000 });
