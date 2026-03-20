@@ -6,6 +6,22 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.73.0 (2026-03-20)
+
+- **Security**: REAPER proxy endpoint now requires engineer authentication
+- **Security**: JWT secret auto-generated at startup when not configured (with warning)
+- **Security**: Member ID validated against path traversal in all file stores
+- **Fix**: MCP meter readings corrected — was dividing dB\*10 by 100 instead of 10 (10x error)
+- **Fix**: REST endpoints now use REAPER-discovered members instead of static config
+- **Fix**: Batch Reset uses name-based track lookup instead of sequential indices
+- **Fix**: WebSocket closure memory leak on reconnect (closures stored instead of forgotten)
+- **Perf**: Memoized channel display list to avoid recomputation on every meter update
+- **Perf**: E2E tests use pre-built binary (30s startup vs 120s)
+- **Robustness**: Atomic file writes (tmp+rename) in all JSON stores prevent corruption on crash
+- **Robustness**: Poisoned mutex handled gracefully in audio diagnostics
+- **CI**: Nightly backup uses git worktree (no working tree modification while REAPER runs)
+- **CI**: Cargo cache cross-job fallback with restore-keys
+
 ### v1.72.0 (2026-03-20)
 
 - **Hardening**: App now retries member discovery when REAPER is temporarily unavailable at startup — engineer mix controls auto-recover within 10 seconds instead of staying broken for the entire session
