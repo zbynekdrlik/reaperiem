@@ -101,6 +101,8 @@ pub struct MixerCache {
     /// Date of last auto-snapshot per member (member_id -> "YYYY-MM-DD")
     /// Used to ensure only one auto-snapshot per day per member
     pub snapshot_last_date: HashMap<String, String>,
+    /// Solo state per member — transient, in-memory only (member_id -> soloed track indices)
+    pub solo_states: HashMap<String, Vec<usize>>,
 }
 
 impl MixerCache {

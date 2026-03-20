@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.74.0 (2026-03-20)
+
+- **Fix**: Phones no longer stuck on infinite spinner after app restart — JWT signing key now persists to config.yaml so cached tokens remain valid across restarts
+- **Fix**: Stale tokens auto-detected — after 3 consecutive WebSocket failures, the app verifies the token with the server and redirects to login if rejected (instead of spinning forever)
+
 ### v1.73.0 (2026-03-20)
 
 - **Security**: REAPER proxy endpoint now requires engineer authentication

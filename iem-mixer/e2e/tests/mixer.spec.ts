@@ -2285,3 +2285,65 @@ test.describe("Main tab channel ordering", () => {
     }
   });
 });
+
+test.describe("Solo sync", () => {
+  test("solo state syncs across two tabs of same member", async ({
+    browser,
+  }) => {
+    const ctx1 = await browser.newContext();
+    const ctx2 = await browser.newContext();
+    const page1 = await ctx1.newPage();
+    const page2 = await ctx2.newPage();
+
+    // Navigate first so localStorage is accessible (not about:blank)
+    await page1.goto("/");
+    await page2.goto("/");
+    await loginAs(page1, "petronela");
+    await page1.goto("/petronela");
+    await loginAs(page2, "petronela");
+    await page2.goto("/petronela");
+
+    if (!(await waitForMixer(page1))) {
+      await ctx1.close();
+      await ctx2.close();
+      return;
+    }
+    if (!(await waitForMixer(page2))) {
+      await ctx1.close();
+      await ctx2.close();
+      return;
+    }
+
+    const soloBtn1 = page1.locator(".solo-btn").first();
+    if ((await soloBtn1.count()) === 0) {
+      console.log("[ASSUME SKIP] No solo buttons found");
+      await ctx1.close();
+      await ctx2.close();
+      return;
+    }
+
+    await soloBtn1.click({ force: true });
+
+    // Wait for solo to activate on page1 (requires working WS + server)
+    await expect(soloBtn1)
+      .toHaveClass(/on/, { timeout: 3000 })
+      .catch(() => null);
+    if (
+      !assume(
+        (await soloBtn1.getAttribute("class"))?.includes("on"),
+        "Solo must activate on page1 (requires server connection)",
+      )
+    ) {
+      await ctx1.close();
+      await ctx2.close();
+      return;
+    }
+
+    // Verify page2 sees the solo state
+    const soloBtn2 = page2.locator(".solo-btn").first();
+    await expect(soloBtn2).toHaveClass(/on/, { timeout: 3000 });
+
+    await ctx1.close();
+    await ctx2.close();
+  });
+});

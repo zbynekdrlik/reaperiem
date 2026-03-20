@@ -83,6 +83,10 @@ fn connect_websocket(
     set_hidden_channels: WriteSignal<Vec<usize>>,
     set_network_mode: WriteSignal<String>,
     set_output_track_idx: WriteSignal<Option<usize>>,
+    set_soloed: WriteSignal<std::collections::HashSet<usize>>,
+    set_pre_solo_mutes: WriteSignal<HashMap<usize, bool>>,
+    channels: ReadSignal<Vec<Channel>>,
+    soloed: ReadSignal<std::collections::HashSet<usize>>,
     ws_closures: WsClosureStore,
     ws_fail_count: WsFailCounter,
 ) {
@@ -211,6 +215,27 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::NetworkMode { mode } => {
                         set_network_mode.set(mode);
+                    }
+                    iem_core::ServerMsg::SoloUpdate { soloed: new_solo } => {
+                        let new_soloed: std::collections::HashSet<usize> =
+                            new_solo.into_iter().collect();
+                        let current = soloed.get_untracked();
+                        // Skip echo from our own command
+                        if new_soloed != current {
+                            if new_soloed.is_empty() && !current.is_empty() {
+                                // Remote un-soloed all: clear pre-solo mutes
+                                set_pre_solo_mutes.set(HashMap::new());
+                            } else if !new_soloed.is_empty() && current.is_empty() {
+                                // Remote entered solo: save current mute states for restore
+                                let chs = channels.get_untracked();
+                                let mut saved = HashMap::new();
+                                for ch in &chs {
+                                    saved.insert(ch.track_index, ch.muted);
+                                }
+                                set_pre_solo_mutes.set(saved);
+                            }
+                            set_soloed.set(new_soloed);
+                        }
                     }
                     iem_core::ServerMsg::AudioStatus { .. } => {
                         // Audio status handled by ListenButton's own WebSocket
@@ -351,6 +376,10 @@ pub fn MixerPage() -> impl IntoView {
             set_hidden_channels,
             set_network_mode,
             set_output_track_idx,
+            set_soloed,
+            set_pre_solo_mutes,
+            channels,
+            soloed,
             ws_closures_effect.clone(),
             ws_fail_count_effect.clone(),
         );
@@ -407,6 +436,10 @@ pub fn MixerPage() -> impl IntoView {
                 set_hidden_channels,
                 set_network_mode,
                 set_output_track_idx,
+                set_soloed,
+                set_pre_solo_mutes,
+                channels,
+                soloed,
                 ws_closures.clone(),
                 ws_fail_count.clone(),
             );
@@ -1492,7 +1525,9 @@ fn ChannelList(
                                     });
                                 }
                             }
+                            let soloed_vec: Vec<usize> = new_soloed.iter().copied().collect();
                             set_soloed.set(new_soloed);
+                            ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: soloed_vec });
                         } else {
                             let was_empty = current_soloed.is_empty();
 
@@ -1544,7 +1579,9 @@ fn ChannelList(
                             if let Some(partner) = partner_idx {
                                 new_soloed.insert(partner);
                             }
+                            let soloed_vec: Vec<usize> = new_soloed.iter().copied().collect();
                             set_soloed.set(new_soloed);
+                            ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: soloed_vec });
                         }
                     };
 
