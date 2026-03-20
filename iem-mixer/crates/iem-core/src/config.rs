@@ -161,10 +161,10 @@ impl Config {
             );
 
             // Persist so tokens survive app restarts
-            if let Some(path) = config_path {
-                if let Err(e) = self.persist_jwt_to_config(path) {
-                    eprintln!("WARNING: Failed to save generated JWT config: {}", e);
-                }
+            if let Some(path) = config_path
+                && let Err(e) = self.persist_jwt_to_config(path)
+            {
+                eprintln!("WARNING: Failed to save generated JWT config: {}", e);
             }
 
             eprintln!(
