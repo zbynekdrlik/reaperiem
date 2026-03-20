@@ -641,7 +641,8 @@ jobs:
           if ($tlsCert -and $tlsKey) {
             # Reset key.pem permissions before writing (previous deploy may have restricted it)
             if (Test-Path "$configDir\key.pem") {
-              & icacls "$configDir\key.pem" /grant "${env:USERNAME}:(F)" 2>&1 | Out-Null
+              & takeown /f "$configDir\key.pem" 2>&1 | Out-Null
+              & icacls "$configDir\key.pem" /reset 2>&1 | Out-Null
             }
             [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
             [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
