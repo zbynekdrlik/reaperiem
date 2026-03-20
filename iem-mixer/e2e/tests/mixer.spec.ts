@@ -2295,6 +2295,9 @@ test.describe("Solo sync", () => {
     const page1 = await ctx1.newPage();
     const page2 = await ctx2.newPage();
 
+    // Navigate first so localStorage is accessible (not about:blank)
+    await page1.goto("/");
+    await page2.goto("/");
     await loginAs(page1, "petronela");
     await page1.goto("/petronela");
     await loginAs(page2, "petronela");
