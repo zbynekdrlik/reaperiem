@@ -51,10 +51,12 @@ fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg
 /// Storage for WebSocket closures to prevent memory leaks on reconnect.
 /// Dropping a Closure that was passed to JS via `as_ref().unchecked_ref()` properly
 /// releases the WASM-side allocation. Without this, `Closure::forget()` leaks on every reconnect.
+/// Uses Rc<RefCell<>> because wasm_bindgen::Closure is !Send (WASM is single-threaded).
 type WsClosures = (
     Closure<dyn FnMut(web_sys::MessageEvent)>,
     Closure<dyn FnMut(web_sys::CloseEvent)>,
 );
+type WsClosureStore = std::rc::Rc<std::cell::RefCell<Option<WsClosures>>>;
 
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
@@ -74,7 +76,7 @@ fn connect_websocket(
     set_hidden_channels: WriteSignal<Vec<usize>>,
     set_network_mode: WriteSignal<String>,
     set_output_track_idx: WriteSignal<Option<usize>>,
-    ws_closures: StoredValue<Option<WsClosures>>,
+    ws_closures: WsClosureStore,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -213,7 +215,7 @@ fn connect_websocket(
 
     // Store closures so they stay alive (preventing JS callback invalidation)
     // and get dropped on next reconnect (preventing memory leak from Closure::forget)
-    ws_closures.set_value(Some((onmessage, onclose)));
+    *ws_closures.borrow_mut() = Some((onmessage, onclose));
 }
 
 /// Mixer page for a specific member
@@ -302,7 +304,7 @@ pub fn MixerPage() -> impl IntoView {
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
     // Closure storage: keeps WS callbacks alive without Closure::forget() leak
-    let ws_closures: StoredValue<Option<WsClosures>> = StoredValue::new(None);
+    let ws_closures: WsClosureStore = std::rc::Rc::new(std::cell::RefCell::new(None));
 
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
