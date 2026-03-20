@@ -65,8 +65,11 @@ async fn list_presets(
 ) -> Result<Json<Vec<PresetInfo>>, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
-    if config.find_member(&member).is_none() {
-        return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+    {
+        let discovered = state.discovered_members.read().await;
+        if !discovered.iter().any(|m| m.id() == member) {
+            return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+        }
     }
     drop(config);
 
@@ -84,8 +87,11 @@ async fn save_preset(
 ) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
-    if config.find_member(&member).is_none() {
-        return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+    {
+        let discovered = state.discovered_members.read().await;
+        if !discovered.iter().any(|m| m.id() == member) {
+            return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
+        }
     }
     drop(config);
 
@@ -211,11 +217,15 @@ async fn restore_preset(
         .get(&member, &name)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Preset"))))?;
 
-    // Get config for REAPER URL and member index
-    let config = state.config.read().await;
-    let member_index = config
-        .member_index(&member)
+    // Get member index from discovered members and REAPER URL from config
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
+    let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     drop(config);
 

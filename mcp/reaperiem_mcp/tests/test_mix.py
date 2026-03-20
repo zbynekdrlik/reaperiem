@@ -11,6 +11,7 @@ from reaperiem_mcp.tools.mix import (
     set_send_mute,
     get_track_meter,
     cb_to_linear,
+    db10_to_linear,
 )
 
 
@@ -140,28 +141,28 @@ async def test_set_send_mute_unmute_message(mock_client):
     assert "send 1" in result.lower()
 
 
-# --- get_track_meter tests (centibel values) ---
+# --- get_track_meter tests (dB*10 values) ---
 
 
 @pytest.mark.asyncio
 async def test_get_track_meter_with_signal(mock_client):
-    """Meter with signal at -2.31 dB (centibels = -231)."""
+    """Meter with signal: dB*10 = -231 means -23.1 dB, -350 means -35.0 dB."""
     # TRACK response after keyword strip: [idx, name, flags, vol, pan, VU_L, VU_R, ...]
     mock_client.send_command = AsyncMock(return_value={
         "TRACK": [1, "PETKA mic", 0, 1.0, 0.0, -231, -350, 2, 3, 5, 0, 0, 0]
     })
     result = await get_track_meter(mock_client, 1)
     assert result["track_index"] == 1
-    assert abs(result["peak_l"] - (-2.31)) < 0.01
-    assert abs(result["peak_r"] - (-3.50)) < 0.01
+    assert abs(result["peak_l"] - (-23.1)) < 0.01
+    assert abs(result["peak_r"] - (-35.0)) < 0.01
     # RMS should be peak - 3 dB
-    assert abs(result["rms_l"] - (-5.31)) < 0.01
-    assert abs(result["rms_r"] - (-6.50)) < 0.01
+    assert abs(result["rms_l"] - (-26.1)) < 0.01
+    assert abs(result["rms_r"] - (-38.0)) < 0.01
 
 
 @pytest.mark.asyncio
 async def test_get_track_meter_silence(mock_client):
-    """Meter at floor (-1500 cb) should report -inf."""
+    """Meter at floor (-1500 dB*10 = -150 dB) should report -inf."""
     mock_client.send_command = AsyncMock(return_value={
         "TRACK": [1, "PETKA mic", 0, 1.0, 0.0, -1500, -1500, 2, 3, 5, 0, 0, 0]
     })
@@ -174,7 +175,7 @@ async def test_get_track_meter_silence(mock_client):
 
 @pytest.mark.asyncio
 async def test_get_track_meter_unity(mock_client):
-    """Meter at 0 dB (centibels = 0) should report 0.0 dB."""
+    """Meter at 0 dB (dB*10 = 0) should report 0.0 dB."""
     mock_client.send_command = AsyncMock(return_value={
         "TRACK": [1, "CLICK", 0, 1.0, 0.0, 0, 0, 2, 3, 5, 0, 0, 0]
     })
@@ -191,20 +192,25 @@ async def test_get_track_meter_not_found(mock_client):
         await get_track_meter(mock_client, 99)
 
 
-# --- cb_to_linear tests ---
+# --- db10_to_linear tests (dB*10 values) ---
 
 
-def test_cb_to_linear_silence():
+def test_db10_to_linear_silence():
     """Floor value -1500 should be 0.0."""
-    assert cb_to_linear(-1500.0) == 0.0
-    assert cb_to_linear(-2000.0) == 0.0
+    assert db10_to_linear(-1500.0) == 0.0
+    assert db10_to_linear(-2000.0) == 0.0
 
 
-def test_cb_to_linear_unity():
-    """0 centibels = 0 dB = linear 1.0."""
-    assert abs(cb_to_linear(0.0) - 1.0) < 0.001
+def test_db10_to_linear_unity():
+    """0 dB*10 = 0 dB = linear 1.0."""
+    assert abs(db10_to_linear(0.0) - 1.0) < 0.001
 
 
-def test_cb_to_linear_minus_6db():
-    """-600 centibels = -6 dB ≈ linear 0.501."""
-    assert abs(cb_to_linear(-600.0) - 0.501) < 0.01
+def test_db10_to_linear_minus_6db():
+    """-60 dB*10 = -6 dB ≈ linear 0.501."""
+    assert abs(db10_to_linear(-60.0) - 0.501) < 0.01
+
+
+def test_cb_to_linear_alias():
+    """cb_to_linear is an alias for db10_to_linear (backwards compat)."""
+    assert cb_to_linear(-60.0) == db10_to_linear(-60.0)

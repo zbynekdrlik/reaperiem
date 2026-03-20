@@ -56,10 +56,12 @@ pub fn run() {
         .join("config.yaml");
 
     let config = if config_path.exists() {
-        Config::load(&config_path).unwrap_or_else(|e| {
+        let cfg = Config::load(&config_path).unwrap_or_else(|e| {
             tracing::warn!(error = %e, "Failed to load config, using defaults");
             Config::default()
-        })
+        });
+        cfg.validate_security();
+        cfg
     } else {
         tracing::info!("No config file found, using defaults");
         Config::default()

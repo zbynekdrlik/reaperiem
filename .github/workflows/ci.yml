@@ -156,6 +156,8 @@ jobs:
             ~/.cargo/git/db/
             iem-mixer/target/
           key: ${{ runner.os }}-cargo-lint-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Check formatting (strict)
         working-directory: iem-mixer
@@ -199,6 +201,8 @@ jobs:
             ~/.cargo/git/db/
             iem-mixer/target/
           key: ${{ runner.os }}-cargo-test-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Create minimal dist folder for rust-embed
         run: |
@@ -237,6 +241,8 @@ jobs:
             ~/.cargo/git/db/
             iem-mixer/iem-ui/target/
           key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('iem-mixer/iem-ui/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Install Trunk
         run: |
@@ -301,6 +307,8 @@ jobs:
             ~/.cargo/git/db/
             iem-mixer/target/
           key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Build server
         working-directory: iem-mixer
@@ -326,16 +334,17 @@ jobs:
       - name: Start server
         working-directory: iem-mixer
         run: |
-          cargo run --package iem-server --features "standalone,audio" --release &
-          # Wait for server to be ready (may take a while if compiling)
-          for i in {1..120}; do
+          # Use pre-built binary instead of cargo run (avoids redundant compilation)
+          ./target/release/iem-server &
+          # Wait for server to be ready
+          for i in {1..30}; do
             if curl -sf http://localhost:8080/ > /dev/null 2>&1; then
               echo "Server ready after $i seconds"
               exit 0
             fi
             sleep 1
           done
-          echo "Server failed to start within 120 seconds"
+          echo "Server failed to start within 30 seconds"
           exit 1
         env:
           RUST_LOG: info
@@ -427,6 +436,8 @@ jobs:
             ~/.cargo/git/db/
             iem-mixer/target/
           key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Install Tauri CLI
         shell: bash
@@ -630,7 +641,9 @@ jobs:
           if ($tlsCert -and $tlsKey) {
             [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
             [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
-            Write-Host "TLS certificates deployed"
+            # Restrict key.pem to current user only (remove inherited permissions)
+            & icacls "$configDir\key.pem" /inheritance:r /grant:r "${env:USERNAME}:(R)" 2>&1 | Out-Null
+            Write-Host "TLS certificates deployed (key.pem restricted to $env:USERNAME)"
           } else {
             Write-Host "::warning::TLS secrets not set - HTTPS will not be available"
           }

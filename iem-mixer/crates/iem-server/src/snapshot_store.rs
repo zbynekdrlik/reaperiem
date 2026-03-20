@@ -3,7 +3,8 @@
 //! Stores mix snapshots per member, following the PinStore pattern.
 //! Each member has their own JSON file in the snapshots/ directory.
 
-use iem_core::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
+use crate::atomic_write;
+use iem_core::{ChannelSnapshot, MixSnapshot, MAX_SNAPSHOTS};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -20,8 +21,11 @@ impl SnapshotStore {
         Self { snapshots_dir }
     }
 
-    /// Get the file path for a member's snapshots
+    /// Get the file path for a member's snapshots.
+    /// Panics if member_id contains invalid characters (path traversal protection).
     fn member_path(&self, member_id: &str) -> PathBuf {
+        iem_core::config::validate_member_id(member_id)
+            .expect("invalid member_id passed to SnapshotStore");
         self.snapshots_dir.join(format!("{}.json", member_id))
     }
 
@@ -42,7 +46,7 @@ impl SnapshotStore {
         std::fs::create_dir_all(&self.snapshots_dir)?;
         let path = self.member_path(member_id);
         let json = serde_json::to_string_pretty(snapshots).map_err(std::io::Error::other)?;
-        std::fs::write(path, json)
+        atomic_write(&path, &json)
     }
 
     /// List all snapshots for a member (newest first)

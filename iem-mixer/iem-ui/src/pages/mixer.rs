@@ -28,7 +28,7 @@ const THROTTLE_INTERVAL_MS: f64 = 50.0;
 
 /// Processed channel for display (handles stereo pairs)
 /// Note: level_db, pan, muted are read via derived signals from channels
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct DisplayChannel {
     track_index: usize,
     display_name: String,
@@ -48,6 +48,14 @@ fn ws_send(ws: ReadSignal<Option<web_sys::WebSocket>>, cmd: &iem_core::ClientMsg
     }
 }
 
+/// Storage for WebSocket closures to prevent memory leaks on reconnect.
+/// Dropping a Closure that was passed to JS via `as_ref().unchecked_ref()` properly
+/// releases the WASM-side allocation. Without this, `Closure::forget()` leaks on every reconnect.
+type WsClosures = (
+    Closure<dyn FnMut(web_sys::MessageEvent)>,
+    Closure<dyn FnMut(web_sys::CloseEvent)>,
+);
+
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
     member: &str,
@@ -66,6 +74,7 @@ fn connect_websocket(
     set_hidden_channels: WriteSignal<Vec<usize>>,
     set_network_mode: WriteSignal<String>,
     set_output_track_idx: WriteSignal<Option<usize>>,
+    ws_closures: StoredValue<Option<WsClosures>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -195,14 +204,16 @@ fn connect_websocket(
         }
     }) as Box<dyn FnMut(web_sys::MessageEvent)>);
     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
-    onmessage.forget();
 
     // Handle close — mark disconnected (reconnect interval will handle retry)
     let onclose = Closure::wrap(Box::new(move |_: web_sys::CloseEvent| {
         set_connected.set(false);
     }) as Box<dyn FnMut(web_sys::CloseEvent)>);
     ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
-    onclose.forget();
+
+    // Store closures so they stay alive (preventing JS callback invalidation)
+    // and get dropped on next reconnect (preventing memory leak from Closure::forget)
+    ws_closures.set_value(Some((onmessage, onclose)));
 }
 
 /// Mixer page for a specific member
@@ -290,6 +301,9 @@ pub fn MixerPage() -> impl IntoView {
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
+    // Closure storage: keeps WS callbacks alive without Closure::forget() leak
+    let ws_closures: StoredValue<Option<WsClosures>> = StoredValue::new(None);
+
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
     Effect::new(move |_| {
@@ -315,6 +329,7 @@ pub fn MixerPage() -> impl IntoView {
             set_hidden_channels,
             set_network_mode,
             set_output_track_idx,
+            ws_closures,
         );
     });
 
@@ -408,7 +423,8 @@ pub fn MixerPage() -> impl IntoView {
     };
 
     // Process channels for display (handle stereo pairs, pin/hide)
-    let display_channels = move || {
+    // Memoized to avoid recomputation on every meter update
+    let display_channels = Memo::new(move |_| {
         let chs = channels.get();
         let member = member_id();
         let my_input = format!("{} MIC", member.to_uppercase());
@@ -505,7 +521,7 @@ pub fn MixerPage() -> impl IntoView {
         }
 
         result
-    };
+    });
 
     // Preset handlers
     let get_current_state = Callback::new(move |_: ()| {
@@ -689,7 +705,7 @@ pub fn MixerPage() -> impl IntoView {
                             />
                         </Show>
                         <ChannelList
-                            display_channels=Signal::derive(display_channels)
+                            display_channels=display_channels.into()
                             meters=meters.into()
                             channels=channels
                             set_channels=set_channels

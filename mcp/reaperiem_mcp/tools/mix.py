@@ -98,10 +98,10 @@ async def get_track_meter(
     Returns peak and RMS levels in dB for both channels.
     REAPER TRACK response (after keyword stripping by _parse_response):
       [0]=index, [1]=name, [2]=flags, [3]=vol, [4]=pan,
-      [5]=VU_PEAK_L (centibels), [6]=VU_PEAK_R (centibels), ...
+      [5]=VU_PEAK_L (dB*10), [6]=VU_PEAK_R (dB*10), ...
 
-    Meter values are integer centibels (e.g., -231 = -2.31 dB).
-    Floor: -1500 cb (-15.0 dB) = silence (verified empirically 2026-02-28).
+    Meter values are dB*10 integers (e.g., -231 = -23.1 dB).
+    Floor: -1500 = -150.0 dB = silence.
 
     Args:
         client: REAPER HTTP client
@@ -119,19 +119,19 @@ async def get_track_meter(
     if track_data is None:
         raise ValueError(f"Track {track_index} not found")
 
-    # Extract peak values from centibels (indices 5,6 after keyword strip)
+    # Extract peak values from dB*10 (indices 5,6 after keyword strip)
     peak_l_db = float("-inf")
     peak_r_db = float("-inf")
 
     if isinstance(track_data, list) and len(track_data) > 6:
-        cb_l = float(track_data[5])
-        cb_r = float(track_data[6])
+        db10_l = float(track_data[5])
+        db10_r = float(track_data[6])
 
-        peak_l_db = cb_l / 100.0 if cb_l > -1500.0 else float("-inf")
-        peak_r_db = cb_r / 100.0 if cb_r > -1500.0 else float("-inf")
+        peak_l_db = db10_l / 10.0 if db10_l > -1500.0 else float("-inf")
+        peak_r_db = db10_r / 10.0 if db10_r > -1500.0 else float("-inf")
     elif isinstance(track_data, list) and len(track_data) > 5:
-        cb_l = float(track_data[5])
-        peak_l_db = cb_l / 100.0 if cb_l > -1500.0 else float("-inf")
+        db10_l = float(track_data[5])
+        peak_l_db = db10_l / 10.0 if db10_l > -1500.0 else float("-inf")
         peak_r_db = peak_l_db  # Mono track
 
     # RMS approximation: peak - 3 dB
@@ -147,14 +147,19 @@ async def get_track_meter(
     }
 
 
-def cb_to_linear(cb: float) -> float:
-    """Convert centibels to linear gain.
+def db10_to_linear(db10: float) -> float:
+    """Convert dB*10 to linear gain.
 
-    REAPER HTTP API meter floor: -1500 centibels = silence.
+    REAPER HTTP API meter values are dB*10 integers.
+    Floor: -1500 = -150.0 dB = silence.
     """
-    if cb <= -1500.0:
+    if db10 <= -1500.0:
         return 0.0
-    return 10.0 ** (cb / 100.0 / 20.0)
+    return 10.0 ** (db10 / 10.0 / 20.0)
+
+
+# Keep old name as alias for backwards compatibility
+cb_to_linear = db10_to_linear
 
 
 def db_to_linear(db: float) -> float:

@@ -300,7 +300,11 @@ async fn audio_diagnostics_handler(
     }
     drop(config);
 
-    let diag = state.audio_diagnostics.lock().unwrap().clone();
+    let diag = state
+        .audio_diagnostics
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     Ok(Json(diag))
 }
 
@@ -312,14 +316,29 @@ async fn audio_diagnostics_handler() -> impl IntoResponse {
     )
 }
 
-/// REAPER proxy handler
+/// REAPER proxy handler (engineer-only, requires auth)
 async fn reaper_proxy(
     state: axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
     method: Method,
     path: Path<String>,
     body: Body,
-) -> impl IntoResponse {
-    proxy::proxy_reaper(state, method, path, body).await
+) -> Result<Response, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    let claims = crate::auth::verify_member_access(&headers, "engineer", &config.jwt_secret)?;
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(iem_core::ApiError::new(
+                "FORBIDDEN",
+                "REAPER proxy is engineer-only",
+            )),
+        ));
+    }
+    drop(config);
+    Ok(proxy::proxy_reaper(state, method, path, body)
+        .await
+        .into_response())
 }
 
 /// Static file routes (WASM assets)

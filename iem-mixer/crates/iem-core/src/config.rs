@@ -14,7 +14,7 @@ pub const DEFAULT_ENGINEER_PIN: &str = "1177";
 /// Constant-time string comparison to prevent timing attacks on PIN verification.
 /// Returns true if both strings are equal, false otherwise.
 #[inline]
-fn constant_time_eq(a: &str, b: &str) -> bool {
+pub fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
@@ -138,6 +138,18 @@ impl Config {
         let content =
             std::fs::read_to_string(path.as_ref()).map_err(|e| ConfigError::Io(e.to_string()))?;
         serde_yaml::from_str(&content).map_err(|e| ConfigError::Parse(e.to_string()))
+    }
+
+    /// Validate that critical security settings are configured.
+    /// Panics if jwt_secret is still the default placeholder.
+    pub fn validate_security(&self) {
+        if self.jwt_secret == "change-me-in-production" || self.jwt_secret.is_empty() {
+            panic!(
+                "FATAL: jwt_secret is not configured! \
+                 Set a unique jwt_secret in config.yaml before starting the server. \
+                 The default 'change-me-in-production' value is not allowed."
+            );
+        }
     }
 
     /// Find a band member by their ID (lowercase name)
@@ -299,6 +311,26 @@ impl DiscoveredMember {
             mix_send_index: None, // Discovered later by querying REAPER send destinations
         })
     }
+}
+
+/// Validate that a member_id is safe for use in filesystem paths.
+/// Rejects path traversal attempts and special characters.
+/// Returns Ok(()) if valid, Err with message if invalid.
+pub fn validate_member_id(member_id: &str) -> Result<(), String> {
+    if member_id.is_empty() {
+        return Err("member_id cannot be empty".to_string());
+    }
+    // Only allow alphanumeric, underscore, and hyphen
+    if !member_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(format!(
+            "member_id '{}' contains invalid characters (only a-z, A-Z, 0-9, _, - allowed)",
+            member_id
+        ));
+    }
+    Ok(())
 }
 
 /// Configuration errors
@@ -509,5 +541,50 @@ inputs: []
             result.is_none(),
             "Non-inear tracks should not be discovered"
         );
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_member_id_accepts_valid_names() {
+        assert!(validate_member_id("petka").is_ok());
+        assert!(validate_member_id("engineer").is_ok());
+        assert!(validate_member_id("STEVO").is_ok());
+        assert!(validate_member_id("marek-2").is_ok());
+        assert!(validate_member_id("band_member").is_ok());
+    }
+
+    #[test]
+    fn test_validate_member_id_rejects_path_traversal() {
+        assert!(validate_member_id("../etc").is_err());
+        assert!(validate_member_id("..").is_err());
+    }
+
+    #[test]
+    fn test_validate_member_id_rejects_empty() {
+        assert!(validate_member_id("").is_err());
+    }
+
+    #[test]
+    fn test_validate_member_id_rejects_special_chars() {
+        assert!(validate_member_id("foo bar").is_err());
+        assert!(validate_member_id("foo.json").is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "jwt_secret is not configured")]
+    fn test_validate_security_panics_on_default() {
+        let config = Config::default();
+        config.validate_security();
+    }
+
+    #[test]
+    fn test_validate_security_passes_with_custom_value() {
+        let mut config = Config::default();
+        config.jwt_secret = "not-the-default-placeholder".to_string();
+        config.validate_security(); // should not panic
     }
 }
