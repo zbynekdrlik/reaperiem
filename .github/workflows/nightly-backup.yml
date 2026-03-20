@@ -17,7 +17,7 @@ jobs:
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
           Push-Location $repoPath
 
-          # Collect all backup data while still on main (projects/ lives here)
+          # Collect all backup data from main working tree
           $tmpDir = "$env:TEMP\reaperiem-backup"
           if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
           New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
@@ -46,17 +46,25 @@ jobs:
             Write-Host "Collected pins.json"
           }
 
-          # Switch to backup branch (create orphan if first time)
+          # Use git worktree instead of checkout to avoid modifying main working tree
+          # This prevents conflicts with REAPER having RPP files open
+          $worktreePath = "$env:TEMP\reaperiem-backup-worktree"
+          if (Test-Path $worktreePath) { Remove-Item $worktreePath -Recurse -Force }
+
           git fetch origin
+
           $backupExists = git ls-remote --heads origin backup
           if ($backupExists) {
-            git checkout -B backup origin/backup
+            git worktree add $worktreePath backup
+            Push-Location $worktreePath
+            git reset --hard origin/backup
           } else {
-            git checkout --orphan backup
+            git worktree add --orphan $worktreePath backup
+            Push-Location $worktreePath
             git rm -rf . 2>$null
           }
 
-          # Restore collected data into backup branch working tree
+          # Copy collected data into worktree
           if (Test-Path "projects") { Remove-Item "projects" -Recurse -Force }
           if (Test-Path "data") { Remove-Item "data" -Recurse -Force }
           if (Test-Path "$tmpDir\projects") {
@@ -84,6 +92,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::Failed to push nightly backup to GitHub"
               Pop-Location
+              git worktree remove $worktreePath --force 2>$null
+              Pop-Location
               exit 1
             }
 
@@ -94,6 +104,8 @@ jobs:
             if ($localHash -ne $remoteHash) {
               Write-Host "::error::Backup verification failed - remote ($remoteHash) doesn't match local ($localHash)"
               Pop-Location
+              git worktree remove $worktreePath --force 2>$null
+              Pop-Location
               exit 1
             }
             Write-Host "Nightly backup pushed and verified: $localHash"
@@ -101,9 +113,8 @@ jobs:
             Write-Host "No changes to backup"
           }
 
-          # Return to main branch and reset to origin/main
-          git checkout main
-          git fetch origin main
-          git reset --hard origin/main
+          # Cleanup worktree (no need to switch branches on main repo)
+          Pop-Location
+          git worktree remove $worktreePath --force 2>$null
           Pop-Location
           exit 0

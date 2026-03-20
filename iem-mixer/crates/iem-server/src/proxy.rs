@@ -88,10 +88,14 @@ pub async fn get_mixer_state(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    // Verify member exists and get send index in one call
-    let (member_index, _member) = config
-        .find_member_with_index(&member_id)
+    // Use discovered members (REAPER source of truth) instead of config
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
     let reaper_url = config.reaper_url.clone();
 
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
@@ -186,10 +190,14 @@ pub async fn poll_mixer_state(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    // Verify member exists and get send index in one call
-    let (member_index, _member) = config
-        .find_member_with_index(&member_id)
+    // Use discovered members (REAPER source of truth) instead of config
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
     let reaper_url = config.reaper_url.clone();
 
     let resolved = state.mixer_cache.read().await.input_track_indices.clone();
@@ -307,13 +315,20 @@ pub async fn batch_control(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    // Verify member exists and get send index in one call
-    let (member_index, _member) = config
-        .find_member_with_index(&member_id)
+    // Use discovered members (REAPER source of truth) instead of config
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
 
     let reaper_url = config.reaper_url.clone();
     let inputs = config.inputs.clone();
+
+    // Use resolved track indices from poller (name-based lookup) instead of sequential i+1
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
 
     drop(config);
 
@@ -321,13 +336,13 @@ pub async fn batch_control(
         BatchOperation::Reset => {
             let vol = db_to_reaper_vol(0.0);
 
-            // Reset all channels in parallel — collect URLs first to avoid
-            // heterogeneous async block types in vec![]
+            // Reset all channels in parallel using resolved track indices
             let urls: Vec<String> = inputs
                 .iter()
                 .enumerate()
-                .flat_map(|(i, _)| {
-                    let t = i + 1;
+                .flat_map(|(i, input)| {
+                    // Use resolved index from poller if available, else fall back to i+1
+                    let t = resolved.get(&input.name).copied().unwrap_or(i + 1);
                     vec![
                         reaper_api::set_send_vol(&reaper_url, t, member_index, vol),
                         reaper_api::set_send_mute(&reaper_url, t, member_index, 0),
@@ -359,12 +374,12 @@ pub async fn batch_control(
             }
         }
         BatchOperation::MuteAll => {
-            // Mute all input channels for this member
+            // Mute all input channels for this member using resolved track indices
             let mut urls: Vec<String> = inputs
                 .iter()
                 .enumerate()
-                .map(|(i, _)| {
-                    let t = i + 1;
+                .map(|(i, input)| {
+                    let t = resolved.get(&input.name).copied().unwrap_or(i + 1);
                     reaper_api::set_send_mute(&reaper_url, t, member_index, 1)
                 })
                 .collect();
@@ -667,10 +682,14 @@ pub async fn set_send_level(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    // Verify member exists
-    let member_index = config
-        .member_index(&member_id)
+    // Use discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
 
     // Validate inputs
     validate_track_index(track_index, config.inputs.len())?;
@@ -727,9 +746,14 @@ pub async fn set_send_pan(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    let member_index = config
-        .member_index(&member_id)
+    // Use discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
 
     // Validate inputs
     validate_track_index(track_index, config.inputs.len())?;
@@ -770,9 +794,14 @@ pub async fn set_send_mute(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
-    let member_index = config
-        .member_index(&member_id)
+    // Use discovered members (REAPER source of truth)
+    let discovered = state.discovered_members.read().await;
+    let member_index = discovered
+        .iter()
+        .find(|m| m.id() == member_id)
+        .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    drop(discovered);
 
     // Validate track index
     validate_track_index(track_index, config.inputs.len())?;

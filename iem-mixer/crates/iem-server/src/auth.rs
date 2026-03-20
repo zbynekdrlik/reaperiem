@@ -7,26 +7,13 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use iem_core::config::constant_time_eq;
 use iem_core::{ApiError, AuthClaims};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
-use subtle::ConstantTimeEq;
 
 use crate::AppState;
-
-/// Constant-time string comparison to prevent timing attacks on PIN verification.
-/// Returns true if both strings are equal, false otherwise.
-/// The comparison takes the same amount of time regardless of where strings differ.
-#[inline]
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    // Length check is not constant-time, but PIN length is fixed (4 digits)
-    // and the length itself is not secret
-    if a.len() != b.len() {
-        return false;
-    }
-    a.as_bytes().ct_eq(b.as_bytes()).into()
-}
 
 /// Login request payload
 #[derive(Debug, Deserialize)]

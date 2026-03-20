@@ -3,6 +3,7 @@
 //! Stores mix presets per member, following the SnapshotStore pattern.
 //! Each member has their own JSON file in the presets/ directory.
 
+use crate::atomic_write;
 use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -20,8 +21,11 @@ impl PresetStore {
         Self { presets_dir }
     }
 
-    /// Get the file path for a member's presets
+    /// Get the file path for a member's presets.
+    /// Panics if member_id contains invalid characters (path traversal protection).
     fn member_path(&self, member_id: &str) -> PathBuf {
+        iem_core::config::validate_member_id(member_id)
+            .expect("invalid member_id passed to PresetStore");
         self.presets_dir.join(format!("{}.json", member_id))
     }
 
@@ -46,7 +50,7 @@ impl PresetStore {
         std::fs::create_dir_all(&self.presets_dir)?;
         let path = self.member_path(member_id);
         let json = serde_json::to_string_pretty(presets).map_err(std::io::Error::other)?;
-        std::fs::write(path, json)
+        atomic_write(&path, &json)
     }
 
     /// List all presets for a member (newest first by updated_at)

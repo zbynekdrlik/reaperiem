@@ -3,6 +3,7 @@
 //! Stores per-member channel customization with JSON file persistence.
 //! Server-side storage ensures preferences follow the member to any device.
 
+use crate::atomic_write;
 use iem_core::Customization;
 use std::path::PathBuf;
 
@@ -19,8 +20,11 @@ impl CustomizationStore {
         Self { customizations_dir }
     }
 
-    /// Get the file path for a member's customization
+    /// Get the file path for a member's customization.
+    /// Panics if member_id contains invalid characters (path traversal protection).
     fn member_path(&self, member_id: &str) -> PathBuf {
+        iem_core::config::validate_member_id(member_id)
+            .expect("invalid member_id passed to CustomizationStore");
         self.customizations_dir.join(format!("{}.json", member_id))
     }
 
@@ -45,7 +49,7 @@ impl CustomizationStore {
         std::fs::create_dir_all(&self.customizations_dir)?;
         let path = self.member_path(member_id);
         let json = serde_json::to_string_pretty(customization).map_err(std::io::Error::other)?;
-        std::fs::write(path, json)
+        atomic_write(&path, &json)
     }
 }
 

@@ -29,6 +29,14 @@ use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+/// Write data to a file atomically by writing to a temp file then renaming.
+/// Prevents corruption on crash/power failure.
+pub fn atomic_write(path: &std::path::Path, data: &str) -> std::io::Result<()> {
+    let tmp_path = path.with_extension("tmp");
+    std::fs::write(&tmp_path, data)?;
+    std::fs::rename(&tmp_path, path)
+}
+
 #[cfg(feature = "audio")]
 use std::sync::Mutex;
 

@@ -3,6 +3,7 @@
 //! Stores custom PINs set by band members in pins.json alongside the config.
 //! Takes priority over config.yaml pins and the default PIN.
 
+use crate::atomic_write;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -32,8 +33,10 @@ impl PinStore {
         self.pins.get(member_id).map(|s| s.as_str())
     }
 
-    /// Set a new PIN for a member and persist to disk
+    /// Set a new PIN for a member and persist to disk.
+    /// Returns error if member_id contains invalid characters.
     pub fn set_pin(&mut self, member_id: &str, pin: &str) -> Result<(), std::io::Error> {
+        iem_core::config::validate_member_id(member_id).map_err(std::io::Error::other)?;
         self.pins.insert(member_id.to_string(), pin.to_string());
         self.save()
     }
@@ -43,7 +46,7 @@ impl PinStore {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(&self.pins).map_err(std::io::Error::other)?;
-        std::fs::write(&self.path, json)
+        atomic_write(&self.path, &json)
     }
 }
 

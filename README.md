@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.72.0 (2026-03-20)
+
+- **Hardening**: App now retries member discovery when REAPER is temporarily unavailable at startup — engineer mix controls auto-recover within 10 seconds instead of staying broken for the entire session
+- **Fix**: Engineer mix monitoring now uses post-fader sends so the engineer hears members' actual output volumes (fader adjustments reflected in real-time)
+- **Perf**: Fixed PWA freezing on Android — consolidated meter animations, throttled WebSocket updates, added server-side change detection to reduce unnecessary broadcasts
+
 ### v1.71.0 (2026-03-19)
 
 - **Fix**: Blank page after deploy — removed service worker caching that served stale WASM/JS assets; all band members' phones auto-fix on next app open (no manual cache clear needed)
