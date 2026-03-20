@@ -639,10 +639,14 @@ jobs:
           $tlsCert = "$env:TLS_CERT_PEM"
           $tlsKey = "$env:TLS_KEY_PEM"
           if ($tlsCert -and $tlsKey) {
+            # Reset key.pem permissions before writing (previous deploy may have restricted it)
+            if (Test-Path "$configDir\key.pem") {
+              & icacls "$configDir\key.pem" /grant "${env:USERNAME}:(F)" 2>&1 | Out-Null
+            }
             [System.IO.File]::WriteAllText("$configDir\cert.pem", $tlsCert)
             [System.IO.File]::WriteAllText("$configDir\key.pem", $tlsKey)
             # Restrict key.pem to current user only (remove inherited permissions)
-            & icacls "$configDir\key.pem" /inheritance:r /grant:r "${env:USERNAME}:(R)" 2>&1 | Out-Null
+            & icacls "$configDir\key.pem" /inheritance:r /grant:r "${env:USERNAME}:(F)" 2>&1 | Out-Null
             Write-Host "TLS certificates deployed (key.pem restricted to $env:USERNAME)"
           } else {
             Write-Host "::warning::TLS secrets not set - HTTPS will not be available"
