@@ -308,6 +308,7 @@ pub fn MixerPage() -> impl IntoView {
 
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
+    let ws_closures_effect = ws_closures.clone();
     Effect::new(move |_| {
         let member = ws_member_id();
         if member.is_empty() {
@@ -331,7 +332,7 @@ pub fn MixerPage() -> impl IntoView {
             set_hidden_channels,
             set_network_mode,
             set_output_track_idx,
-            ws_closures,
+            ws_closures_effect.clone(),
         );
     });
 
