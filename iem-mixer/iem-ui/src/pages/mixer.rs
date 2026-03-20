@@ -367,6 +367,7 @@ pub fn MixerPage() -> impl IntoView {
                     set_hidden_channels,
                     set_network_mode,
                     set_output_track_idx,
+                    ws_closures.clone(),
                 );
             }
         }
