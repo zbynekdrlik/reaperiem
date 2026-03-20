@@ -105,15 +105,9 @@ pub fn LoginPage() -> impl IntoView {
         let _ =
             document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
 
-        // Store closure to prevent drop + cleanup on unmount
-        let closure = std::cell::RefCell::new(Some(closure));
-        on_cleanup(move || {
-            if let Some(cb) = closure.borrow_mut().take() {
-                let doc = web_sys::window().unwrap().document().unwrap();
-                let _ =
-                    doc.remove_event_listener_with_callback("keydown", cb.as_ref().unchecked_ref());
-            }
-        });
+        // Leak closure to keep listener alive (same pattern as mixer.rs reconnect).
+        // Login page is short-lived — user enters PIN and navigates away.
+        closure.forget();
     }
 
     // Create clones for each button
