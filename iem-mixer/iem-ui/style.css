@@ -1005,6 +1005,33 @@ body {
   }
 }
 
+/* Listen volume controls */
+.listen-controls {
+  display: contents;
+}
+
+.listen-volume-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg-channel);
+  border-radius: 10px;
+}
+
+.listen-volume-slider {
+  flex: 1;
+  min-width: 60px;
+  height: 4px;
+}
+
+.listen-volume-label {
+  font-size: 0.7em;
+  min-width: 3.5em;
+  text-align: right;
+  color: var(--text-secondary);
+}
+
 /* Pan slider touch-safe activation states */
 .pan-slider.activating::-webkit-slider-thumb {
   box-shadow: 0 0 8px var(--accent-glow);

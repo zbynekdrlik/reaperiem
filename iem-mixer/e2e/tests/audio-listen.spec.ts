@@ -135,4 +135,149 @@ test.describe("Audio Listen Button (#90)", () => {
     // (auth check happens after upgrade validation)
     expect(audioResp.status()).toBe(400);
   });
+
+  test("volume slider hidden when not listening", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    // Volume slider should NOT be visible before clicking Listen
+    const slider = page.locator(".listen-volume-slider");
+    await expect(slider).toHaveCount(0);
+  });
+
+  test("volume slider visible when listening", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    // Click Listen to start audio
+    await listenBtn.click();
+    await page.waitForTimeout(3000);
+
+    // Check if we entered listening state (need audio source)
+    const btnClass = await listenBtn.getAttribute("class");
+    if (
+      !assume(
+        btnClass?.includes("listening"),
+        "Must be in listening state (requires VBAN source)",
+      )
+    )
+      return;
+
+    // Volume slider should now be visible
+    const slider = page.locator(".listen-volume-slider");
+    await expect(slider).toBeVisible({ timeout: 5000 });
+
+    // dB label should be visible
+    const label = page.locator(".listen-volume-label");
+    await expect(label).toBeVisible();
+    const labelText = await label.textContent();
+    expect(labelText).toContain("dB");
+  });
+
+  test("volume persists in localStorage", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    await listenBtn.click();
+    await page.waitForTimeout(3000);
+
+    const btnClass = await listenBtn.getAttribute("class");
+    if (
+      !assume(
+        btnClass?.includes("listening"),
+        "Must be in listening state (requires VBAN source)",
+      )
+    )
+      return;
+
+    // Change slider to +12 dB
+    const slider = page.locator(".listen-volume-slider");
+    await slider.fill("12");
+
+    // Check localStorage was updated
+    const stored = await page.evaluate(() =>
+      localStorage.getItem("iem_listen_volume"),
+    );
+    expect(stored).toBe("12");
+
+    // Check gain was applied
+    const gainDb = await page.evaluate(() =>
+      (window as any).__iem_audio_gain?.(),
+    );
+    if (gainDb !== undefined) {
+      expect(gainDb).toBeCloseTo(12, 0);
+    }
+  });
+
+  test("dB label shows current value on slider change", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    await listenBtn.click();
+    await page.waitForTimeout(3000);
+
+    const btnClass = await listenBtn.getAttribute("class");
+    if (
+      !assume(
+        btnClass?.includes("listening"),
+        "Must be in listening state (requires VBAN source)",
+      )
+    )
+      return;
+
+    const slider = page.locator(".listen-volume-slider");
+    const label = page.locator(".listen-volume-label");
+
+    // Set to +6 dB
+    await slider.fill("6");
+    await expect(label).toHaveText("+6 dB");
+
+    // Set to 0 dB
+    await slider.fill("0");
+    await expect(label).toHaveText("0 dB");
+
+    // Set to -12 dB
+    await slider.fill("-12");
+    await expect(label).toHaveText("-12 dB");
+  });
 });
