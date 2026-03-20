@@ -167,6 +167,26 @@ pub async fn batch_mute_all(member: &str) -> Result<(), String> {
     }
 }
 
+/// Check if the stored auth token is still valid by hitting a protected endpoint.
+/// Returns false if the server rejects the token (401) or if no token exists.
+pub async fn verify_token_valid(member: &str) -> bool {
+    let token = match crate::auth::get_token() {
+        Some(t) => t,
+        None => return false,
+    };
+
+    let url = format!("{}/mixer/{}", API_BASE, member);
+    let resp = Request::get(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await;
+
+    match resp {
+        Ok(r) => r.ok(),
+        Err(_) => true, // Network error — don't clear auth, might be transient
+    }
+}
+
 /// Change PIN for a member.
 ///
 /// - `old_pin`: current PIN (required for regular members, empty for engineers)

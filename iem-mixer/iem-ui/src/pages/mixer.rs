@@ -58,6 +58,13 @@ type WsClosures = (
 );
 type WsClosureStore = std::rc::Rc<std::cell::RefCell<Option<WsClosures>>>;
 
+/// Counter for consecutive WebSocket failures without receiving data.
+/// Shared across connect_websocket calls via Rc<Cell<>>.
+type WsFailCounter = std::rc::Rc<std::cell::Cell<u32>>;
+
+/// Max consecutive WS failures before redirecting to login
+const MAX_WS_FAILURES: u32 = 3;
+
 /// Create and connect a WebSocket, wiring up message handlers to signals
 fn connect_websocket(
     member: &str,
@@ -77,6 +84,7 @@ fn connect_websocket(
     set_network_mode: WriteSignal<String>,
     set_output_track_idx: WriteSignal<Option<usize>>,
     ws_closures: WsClosureStore,
+    ws_fail_count: WsFailCounter,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -119,6 +127,10 @@ fn connect_websocket(
     // This caps reactive signal storms at ~20/sec instead of unbounded.
     let last_meter_time = std::cell::Cell::new(0.0_f64);
 
+    // Clone fail counter for use in closures
+    let fail_count_msg = ws_fail_count.clone();
+    let fail_count_close = ws_fail_count;
+
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
         if let Some(text) = e.data().as_string() {
@@ -132,6 +144,8 @@ fn connect_websocket(
                         global_muted,
                         output_track_index,
                     } => {
+                        // Successfully received data — reset failure counter
+                        fail_count_msg.set(0);
                         set_channels.update(|chs| {
                             let touched_snapshot: std::collections::HashMap<usize, bool> =
                                 touched.iter().map(|(k, v)| (*k, *v)).collect();
@@ -207,9 +221,10 @@ fn connect_websocket(
     }) as Box<dyn FnMut(web_sys::MessageEvent)>);
     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
 
-    // Handle close — mark disconnected (reconnect interval will handle retry)
+    // Handle close — mark disconnected and increment failure counter
     let onclose = Closure::wrap(Box::new(move |_: web_sys::CloseEvent| {
         set_connected.set(false);
+        fail_count_close.set(fail_count_close.get() + 1);
     }) as Box<dyn FnMut(web_sys::CloseEvent)>);
     ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
 
@@ -306,9 +321,13 @@ pub fn MixerPage() -> impl IntoView {
     // Closure storage: keeps WS callbacks alive without Closure::forget() leak
     let ws_closures: WsClosureStore = std::rc::Rc::new(std::cell::RefCell::new(None));
 
+    // WS failure counter: tracks consecutive failures without receiving data
+    let ws_fail_count: WsFailCounter = std::rc::Rc::new(std::cell::Cell::new(0));
+
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
     let ws_closures_effect = ws_closures.clone();
+    let ws_fail_count_effect = ws_fail_count.clone();
     Effect::new(move |_| {
         let member = ws_member_id();
         if member.is_empty() {
@@ -333,6 +352,7 @@ pub fn MixerPage() -> impl IntoView {
             set_network_mode,
             set_output_track_idx,
             ws_closures_effect.clone(),
+            ws_fail_count_effect.clone(),
         );
     });
 
@@ -343,6 +363,7 @@ pub fn MixerPage() -> impl IntoView {
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
     // since gloo_timers::Interval contains non-Send closures.
     let reconnect_member_id = member_id.clone();
+    let navigate_auth_fail = use_navigate();
     let reconnect_closure = Closure::wrap(Box::new(move || {
         let needs_reconnect = match ws.get_untracked() {
             Some(ref w) => w.ready_state() == web_sys::WebSocket::CLOSED,
@@ -350,27 +371,45 @@ pub fn MixerPage() -> impl IntoView {
         };
         if needs_reconnect {
             let member = reconnect_member_id();
-            if !member.is_empty() {
-                connect_websocket(
-                    &member,
-                    ws,
-                    set_ws,
-                    set_channels,
-                    set_meters,
-                    set_connected,
-                    set_loading,
-                    fader_touched,
-                    set_global_level,
-                    set_global_muted,
-                    global_touched,
-                    set_data_pulse,
-                    set_pinned_channels,
-                    set_hidden_channels,
-                    set_network_mode,
-                    set_output_track_idx,
-                    ws_closures.clone(),
-                );
+            if member.is_empty() {
+                return;
             }
+
+            // After MAX_WS_FAILURES consecutive failures, check if token is invalid
+            if ws_fail_count.get() >= MAX_WS_FAILURES {
+                let nav = navigate_auth_fail.clone();
+                let m = member.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if !crate::api::verify_token_valid(&m).await {
+                        // Token rejected by server — clear auth and redirect to login
+                        crate::auth::clear_auth();
+                        let url = format!("/login?member={}&next=/{}", m, m);
+                        nav(&url, Default::default());
+                    }
+                });
+                return;
+            }
+
+            connect_websocket(
+                &member,
+                ws,
+                set_ws,
+                set_channels,
+                set_meters,
+                set_connected,
+                set_loading,
+                fader_touched,
+                set_global_level,
+                set_global_muted,
+                global_touched,
+                set_data_pulse,
+                set_pinned_channels,
+                set_hidden_channels,
+                set_network_mode,
+                set_output_track_idx,
+                ws_closures.clone(),
+                ws_fail_count.clone(),
+            );
         }
     }) as Box<dyn FnMut()>);
     let interval_id = web_sys::window()
