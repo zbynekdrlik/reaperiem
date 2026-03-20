@@ -85,6 +85,8 @@ fn connect_websocket(
     set_output_track_idx: WriteSignal<Option<usize>>,
     set_soloed: WriteSignal<std::collections::HashSet<usize>>,
     set_pre_solo_mutes: WriteSignal<HashMap<usize, bool>>,
+    channels: ReadSignal<Vec<Channel>>,
+    soloed: ReadSignal<std::collections::HashSet<usize>>,
     ws_closures: WsClosureStore,
     ws_fail_count: WsFailCounter,
 ) {
@@ -214,10 +216,10 @@ fn connect_websocket(
                     iem_core::ServerMsg::NetworkMode { mode } => {
                         set_network_mode.set(mode);
                     }
-                    iem_core::ServerMsg::SoloUpdate { soloed } => {
+                    iem_core::ServerMsg::SoloUpdate { soloed: new_solo } => {
                         let new_soloed: std::collections::HashSet<usize> =
-                            soloed.into_iter().collect();
-                        let current = set_soloed.try_get_untracked().unwrap_or_default();
+                            new_solo.into_iter().collect();
+                        let current = soloed.get_untracked();
                         // Skip echo from our own command
                         if new_soloed != current {
                             if new_soloed.is_empty() && !current.is_empty() {
@@ -225,7 +227,7 @@ fn connect_websocket(
                                 set_pre_solo_mutes.set(HashMap::new());
                             } else if !new_soloed.is_empty() && current.is_empty() {
                                 // Remote entered solo: save current mute states for restore
-                                let chs = set_channels.try_get_untracked().unwrap_or_default();
+                                let chs = channels.get_untracked();
                                 let mut saved = HashMap::new();
                                 for ch in &chs {
                                     saved.insert(ch.track_index, ch.muted);
@@ -376,6 +378,8 @@ pub fn MixerPage() -> impl IntoView {
             set_output_track_idx,
             set_soloed,
             set_pre_solo_mutes,
+            channels,
+            soloed,
             ws_closures_effect.clone(),
             ws_fail_count_effect.clone(),
         );
@@ -434,6 +438,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_output_track_idx,
                 set_soloed,
                 set_pre_solo_mutes,
+                channels,
+                soloed,
                 ws_closures.clone(),
                 ws_fail_count.clone(),
             );
