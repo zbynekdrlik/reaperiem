@@ -4,7 +4,7 @@
 //! Each member has their own JSON file in the snapshots/ directory.
 
 use crate::atomic_write;
-use iem_core::{ChannelSnapshot, MixSnapshot, MAX_SNAPSHOTS};
+use iem_core::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 use std::collections::HashMap;
 use std::path::PathBuf;
 

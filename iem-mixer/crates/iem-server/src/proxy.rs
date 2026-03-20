@@ -342,10 +342,7 @@ pub async fn batch_control(
                 .enumerate()
                 .flat_map(|(i, input)| {
                     // Use resolved index from poller if available, else fall back to i+1
-                    let t = resolved
-                        .get(&input.name)
-                        .copied()
-                        .unwrap_or(i + 1);
+                    let t = resolved.get(&input.name).copied().unwrap_or(i + 1);
                     vec![
                         reaper_api::set_send_vol(&reaper_url, t, member_index, vol),
                         reaper_api::set_send_mute(&reaper_url, t, member_index, 0),
@@ -382,10 +379,7 @@ pub async fn batch_control(
                 .iter()
                 .enumerate()
                 .map(|(i, input)| {
-                    let t = resolved
-                        .get(&input.name)
-                        .copied()
-                        .unwrap_or(i + 1);
+                    let t = resolved.get(&input.name).copied().unwrap_or(i + 1);
                     reaper_api::set_send_mute(&reaper_url, t, member_index, 1)
                 })
                 .collect();
