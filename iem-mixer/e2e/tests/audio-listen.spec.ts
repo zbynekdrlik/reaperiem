@@ -227,7 +227,7 @@ test.describe("Audio Listen Button (#90)", () => {
     const stored = await page.evaluate(() =>
       localStorage.getItem("iem_listen_volume"),
     );
-    expect(stored).toBe("12");
+    expect(parseFloat(stored ?? "0")).toBe(12);
 
     // Check gain was applied
     const gainDb = await page.evaluate(() =>
