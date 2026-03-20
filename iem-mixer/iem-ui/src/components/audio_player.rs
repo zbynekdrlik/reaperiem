@@ -5,7 +5,7 @@
 
 use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::prelude::*;
 
 // JS interop functions from audio_player.js
 #[wasm_bindgen(module = "/audio_player.js")]
@@ -121,12 +121,14 @@ fn ListenVolume(visible: Signal<bool>) -> impl IntoView {
     };
 
     let on_input = move |ev: web_sys::Event| {
-        let target = ev.target().unwrap();
-        let input = target.unchecked_ref::<web_sys::HtmlInputElement>();
-        let db: f32 = input.value().parse().unwrap_or(0.0);
-        set_volume_db.set(db);
-        set_listen_gain(db);
-        let _ = LocalStorage::set(LISTEN_VOLUME_KEY, db);
+        if let Some(target) = ev.target() {
+            let val =
+                js_sys::Reflect::get(&target, &"value".into()).unwrap_or(JsValue::from_str("0"));
+            let db: f32 = val.as_string().unwrap_or_default().parse().unwrap_or(0.0);
+            set_volume_db.set(db);
+            set_listen_gain(db);
+            let _ = LocalStorage::set(LISTEN_VOLUME_KEY, db);
+        }
     };
 
     view! {
