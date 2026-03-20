@@ -140,12 +140,15 @@ impl Config {
         serde_yaml::from_str(&content).map_err(|e| ConfigError::Parse(e.to_string()))
     }
 
+    /// YAML key for the JWT signing token
+    const JWT_CONFIG_KEY: &'static str = "jwt_secret";
+
     /// Validate that critical security settings are configured.
     /// If jwt_secret is still the default placeholder, generates a random one
-    /// and logs a warning. This keeps the app secure even without explicit config.
-    pub fn validate_security(&mut self) {
+    /// and persists it to the config file so tokens survive restarts.
+    pub fn validate_security(&mut self, config_path: Option<&Path>) {
         if self.jwt_secret == "change-me-in-production" || self.jwt_secret.is_empty() {
-            // Generate a random secret for this session
+            // Generate a random value
             use std::time::{SystemTime, UNIX_EPOCH};
             let seed = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -156,12 +159,50 @@ impl Config {
                 seed,
                 seed.wrapping_mul(0x517cc1b727220a95)
             );
+
+            // Persist so tokens survive app restarts
+            if let Some(path) = config_path {
+                if let Err(e) = self.persist_jwt_to_config(path) {
+                    eprintln!("WARNING: Failed to save generated JWT config: {}", e);
+                }
+            }
+
             eprintln!(
-                "WARNING: jwt_secret is not configured in config.yaml! \
-                 Using auto-generated secret (tokens will not survive restarts). \
-                 Set a unique jwt_secret in config.yaml for persistent sessions."
+                "INFO: Auto-generated JWT signing key and saved to config file. \
+                 Tokens will now persist across restarts."
             );
         }
+    }
+
+    /// Write the current jwt_secret back to the config file.
+    fn persist_jwt_to_config(&self, path: &Path) -> Result<(), ConfigError> {
+        let content = std::fs::read_to_string(path).map_err(|e| ConfigError::Io(e.to_string()))?;
+
+        let key = Self::JWT_CONFIG_KEY;
+        let new_line = format!("{}: \"{}\"", key, self.jwt_secret);
+        let updated = if content.contains(&format!("{}:", key)) {
+            let mut result = String::new();
+            for line in content.lines() {
+                if line.trim_start().starts_with(&format!("{}:", key)) {
+                    result.push_str(&new_line);
+                } else {
+                    result.push_str(line);
+                }
+                result.push('\n');
+            }
+            result
+        } else {
+            let mut result = content;
+            if !result.ends_with('\n') {
+                result.push('\n');
+            }
+            result.push_str(&new_line);
+            result.push('\n');
+            result
+        };
+
+        std::fs::write(path, updated).map_err(|e| ConfigError::Io(e.to_string()))?;
+        Ok(())
     }
 
     /// Find a band member by their ID (lowercase name)
@@ -587,19 +628,53 @@ mod security_tests {
     }
 
     #[test]
-    fn test_validate_security_generates_secret_on_default() {
+    fn test_validate_security_generates_on_default() {
         let mut config = Config::default();
-        assert_eq!(config.jwt_secret, "change-me-in-production");
-        config.validate_security();
-        // Should have been replaced with auto-generated secret
+        config.validate_security(None);
         assert_ne!(config.jwt_secret, "change-me-in-production");
         assert!(config.jwt_secret.starts_with("auto-"));
     }
 
     #[test]
-    fn test_validate_security_passes_with_custom_value() {
+    fn test_validate_security_keeps_custom() {
         let mut config = Config::default();
-        config.jwt_secret = "not-the-default-placeholder".to_string();
-        config.validate_security(); // should not panic
+        let val = "not-the-default-placeholder".to_string();
+        config.jwt_secret = val.clone();
+        config.validate_security(None);
+        assert_eq!(config.jwt_secret, val);
+    }
+
+    #[test]
+    fn test_validate_security_persists_to_file() {
+        let dir = std::env::temp_dir().join(format!("iem-persist-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        std::fs::write(&path, "port: 80\n").unwrap();
+
+        let mut cfg = Config::load(&path).unwrap();
+        cfg.validate_security(Some(&path));
+        let generated = cfg.jwt_secret.clone();
+        assert!(generated.starts_with("auto-"));
+
+        // Reload from file — must be persisted
+        let reloaded = Config::load(&path).unwrap();
+        assert_eq!(reloaded.jwt_secret, generated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_validate_security_no_overwrite_custom() {
+        let dir = std::env::temp_dir().join(format!("iem-nowrite-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.yaml");
+        std::fs::write(&path, "port: 80\n").unwrap();
+
+        let mut cfg = Config::default();
+        let val = "my-custom-jwt-value".to_string();
+        cfg.jwt_secret = val.clone();
+        cfg.validate_security(Some(&path));
+        assert_eq!(cfg.jwt_secret, val);
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

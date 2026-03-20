@@ -60,11 +60,11 @@ pub fn run() {
             tracing::warn!(error = %e, "Failed to load config, using defaults");
             Config::default()
         });
-        cfg.validate_security();
+        cfg.validate_security(Some(&config_path));
         cfg
     } else {
         let mut cfg = Config::default();
-        cfg.validate_security();
+        cfg.validate_security(None);
         cfg
     };
 
