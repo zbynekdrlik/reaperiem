@@ -25,9 +25,38 @@ use iem_core::{Config, DiscoveredMember, ServerMsg};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
+
+/// Engineer listen mode state machine.
+/// Controls poller mute suppression during listen and restore phases.
+#[derive(Debug, Clone)]
+pub enum EngineerListenState {
+    /// Not listening — poller broadcasts real REAPER mute state
+    Idle,
+    /// Listening to a member — poller suppresses mix mute broadcasts
+    Active(String),
+    /// ReaScript restoring mute states — poller still suppresses until deadline
+    Restoring(Instant),
+}
+
+impl EngineerListenState {
+    pub fn is_suppressing(&self) -> bool {
+        match self {
+            Self::Idle => false,
+            Self::Active(_) => true,
+            Self::Restoring(deadline) => Instant::now() <= *deadline,
+        }
+    }
+}
+
+impl Default for EngineerListenState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
 
 /// Write data to a file atomically by writing to a temp file then renaming.
 /// Prevents corruption on crash/power failure.
@@ -61,9 +90,9 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
-    /// Currently active listen target for engineer (None = not listening).
-    /// Used to suppress mix channel mute broadcasts during listen mode.
-    pub engineer_listen_target: Arc<RwLock<Option<String>>>,
+    /// Engineer listen mode state (Idle / Active / Restoring).
+    /// Used to suppress mix channel mute broadcasts during listen and restore phases.
+    pub engineer_listen_target: Arc<RwLock<EngineerListenState>>,
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]
     pub audio_tx: broadcast::Sender<bytes::Bytes>,
@@ -133,7 +162,7 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
-            engineer_listen_target: Arc::new(RwLock::new(None)),
+            engineer_listen_target: Arc::new(RwLock::new(EngineerListenState::Idle)),
             #[cfg(feature = "audio")]
             audio_tx,
             #[cfg(feature = "audio")]

@@ -1718,6 +1718,18 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             match cmd {
                                 ClientMsg::ListenStart { member_id } => {
+                                    // Wait for any in-progress restore to complete before starting new listen
+                                    {
+                                        let ls = state.engineer_listen_target.read().await;
+                                        if let crate::EngineerListenState::Restoring(deadline) = &*ls {
+                                            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+                                            if !remaining.is_zero() {
+                                                drop(ls);
+                                                tokio::time::sleep(remaining).await;
+                                            }
+                                        }
+                                    }
+
                                     tracing::info!(target_member = %member_id, "Audio listen started");
 
                                     // Resolve member_id to REAPER track name
@@ -1774,7 +1786,8 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
 
                                     // Track listen state so poller can suppress mix mute broadcasts
                                     if let Some(ref name) = target_name {
-                                        *state.engineer_listen_target.write().await = Some(name.clone());
+                                        *state.engineer_listen_target.write().await =
+                                            crate::EngineerListenState::Active(name.clone());
                                     }
 
                                     audio_rx = Some(state.audio_tx.subscribe());
@@ -1791,8 +1804,13 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
 
-                                    // Clear listen state so poller resumes normal mute broadcasts
-                                    *state.engineer_listen_target.write().await = None;
+                                    // Transition to Restoring — keeps mute suppression active
+                                    // for 2s while ReaScript restores original mute states
+                                    *state.engineer_listen_target.write().await =
+                                        crate::EngineerListenState::Restoring(
+                                            std::time::Instant::now()
+                                                + std::time::Duration::from_secs(2),
+                                        );
 
                                     // Restore pre-listen mute state on ENGINEER inear sends
                                     let config = state.config.read().await;

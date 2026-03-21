@@ -638,7 +638,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             // If engineer is listening, preserve cached mute state for mix channels.
             // Listen mutes sends in REAPER for audio isolation, but this should be
             // invisible in the mixer UI.
-            let listen_active = state.engineer_listen_target.read().await.is_some();
+            let listen_active = state.engineer_listen_target.read().await.is_suppressing();
             if listen_active {
                 let cache = state.mixer_cache.read().await;
                 if let Some(cached_channels) = cache.member_states.get("engineer") {
@@ -1770,7 +1770,8 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             },
         ];
 
-        let listen_active = true;
+        let listen_state = crate::EngineerListenState::Active("MAREK".into());
+        let listen_active = listen_state.is_suppressing();
         if listen_active {
             for ch in &mut mix_channels {
                 if let Some(cached) = cached_channels
@@ -1796,6 +1797,48 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         assert!(
             !mix_channels[2].muted,
             "MAREK should be unmuted (listen target)"
+        );
+    }
+
+    /// Test that Restoring state still suppresses mute broadcasts (deadline in future).
+    #[test]
+    fn test_listen_restoring_still_suppresses_mute_broadcasts() {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let state = crate::EngineerListenState::Restoring(deadline);
+        assert!(
+            state.is_suppressing(),
+            "Restoring with future deadline must suppress mute broadcasts"
+        );
+    }
+
+    /// Test that Restoring state expires and stops suppressing after deadline passes.
+    #[test]
+    fn test_listen_restoring_expires_naturally() {
+        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        let state = crate::EngineerListenState::Restoring(deadline);
+        assert!(
+            !state.is_suppressing(),
+            "Restoring with past deadline must NOT suppress mute broadcasts"
+        );
+    }
+
+    /// Test that Idle state does not suppress.
+    #[test]
+    fn test_listen_idle_does_not_suppress() {
+        let state = crate::EngineerListenState::Idle;
+        assert!(
+            !state.is_suppressing(),
+            "Idle state must not suppress mute broadcasts"
+        );
+    }
+
+    /// Test that Active state suppresses.
+    #[test]
+    fn test_listen_active_suppresses() {
+        let state = crate::EngineerListenState::Active("PETKA".into());
+        assert!(
+            state.is_suppressing(),
+            "Active state must suppress mute broadcasts"
         );
     }
 }

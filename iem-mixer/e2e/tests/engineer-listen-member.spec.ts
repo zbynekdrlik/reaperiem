@@ -558,4 +558,71 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       ).toBe(initialMuteStates[i].classes);
     }
   });
+
+  test("Rapid listen toggle does not corrupt mute state", async ({ page }) => {
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const channelsLoaded = await page
+      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(channelsLoaded, "Channel strips must render")) return;
+
+    // Capture initial mute button states
+    const initialMuteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    if (!assume(initialMuteStates.length > 0, "Need mute buttons to test"))
+      return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    // Rapidly toggle listen on/off 3 times (200ms between each click)
+    for (let i = 0; i < 6; i++) {
+      await listenBtn.click();
+      await page.waitForTimeout(200);
+    }
+
+    // Wait for everything to settle (Restoring phase is 2s + poller cycles)
+    await page.waitForTimeout(4000);
+
+    // Assert mute buttons unchanged after rapid toggling
+    const afterMuteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    expect(afterMuteStates.length).toBe(initialMuteStates.length);
+    for (let i = 0; i < initialMuteStates.length; i++) {
+      expect(
+        afterMuteStates[i].classes,
+        `Mute button ${i} (${initialMuteStates[i].text}) should not change after rapid listen toggles`,
+      ).toBe(initialMuteStates[i].classes);
+    }
+  });
 });
