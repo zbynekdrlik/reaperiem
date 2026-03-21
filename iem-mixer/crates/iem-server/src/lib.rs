@@ -130,6 +130,9 @@ pub struct MixerCache {
     pub snapshot_last_date: HashMap<String, String>,
     /// Solo state per member — transient, in-memory only (member_id -> soloed track indices)
     pub solo_states: HashMap<String, Vec<usize>>,
+    /// Set by ListenStop handler; cleared by poller after full State resync.
+    /// Ensures UI converges to REAPER truth when listen mode ends.
+    pub engineer_needs_resync: bool,
 }
 
 impl MixerCache {

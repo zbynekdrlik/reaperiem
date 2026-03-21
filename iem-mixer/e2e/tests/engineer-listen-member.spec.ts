@@ -625,4 +625,62 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       ).toBe(initialMuteStates[i].classes);
     }
   });
+
+  test("Mute All works correctly after listen cycle", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const channelsLoaded = await page
+      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(channelsLoaded, "Channel strips must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    const muteAllBtn = page.locator(".toolbar-btn-mute-all");
+    if (
+      !assume(await muteAllBtn.isVisible(), "Mute All button must be visible")
+    )
+      return;
+
+    // Start listen → stop listen → wait for Restoring to expire
+    await listenBtn.click();
+    await page.waitForTimeout(1000);
+    await listenBtn.click();
+    await page.waitForTimeout(3000);
+
+    // Click Mute All
+    await muteAllBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Assert all mix channel mute buttons show muted state
+    const muteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    if (!assume(muteStates.length > 0, "Need mute buttons to verify")) return;
+
+    // Every mute button should have the muted class
+    for (let i = 0; i < muteStates.length; i++) {
+      expect(
+        muteStates[i].classes,
+        `Mute button ${i} (${muteStates[i].text}) should show muted after Mute All`,
+      ).toContain("muted");
+    }
+  });
 });

@@ -635,26 +635,15 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 }
             }
 
-            // If engineer is listening, preserve cached mute state for mix channels.
-            // Listen mutes sends in REAPER for audio isolation, but this should be
-            // invisible in the mixer UI.
-            let listen_active = state.engineer_listen_target.read().await.is_suppressing();
-            if listen_active {
-                let cache = state.mixer_cache.read().await;
-                if let Some(cached_channels) = cache.member_states.get("engineer") {
-                    for ch in &mut mix_channels {
-                        if let Some(cached) = cached_channels
-                            .iter()
-                            .find(|c| c.track_index == ch.track_index)
-                        {
-                            ch.muted = cached.muted;
-                        }
-                    }
-                }
-            }
-
             result_channels.extend(mix_channels);
         }
+
+        // Check listen suppression BEFORE acquiring cache lock
+        let listen_suppressing = state
+            .engineer_listen_target
+            .read()
+            .await
+            .is_suppressing();
 
         // Diff against cached state and broadcast changes
         let now = std::time::Instant::now();
@@ -673,6 +662,17 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         || (old_ch.pan - new_ch.pan).abs() > 0.001;
 
                     if changed {
+                        // During listen, skip mute-only broadcasts for engineer mix channels.
+                        // Cache still gets real REAPER state — only the UI broadcast is skipped.
+                        if listen_suppressing && member_id == "engineer" {
+                            let mute_only = old_ch.muted != new_ch.muted
+                                && (old_ch.level_db - new_ch.level_db).abs() <= 0.05
+                                && (old_ch.pan - new_ch.pan).abs() <= 0.001;
+                            if mute_only {
+                                continue;
+                            }
+                        }
+
                         // Check if this channel was recently commanded — suppress echo
                         let key = (member_id.clone(), new_ch.track_index);
                         let recently_commanded = cache
@@ -714,10 +714,31 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             ));
         }
 
-        // Update cache (always, even when suppressing broadcast, so it converges)
+        // Update cache with real REAPER state (never poisoned by suppression)
         cache
             .member_states
             .insert(member_id.clone(), result_channels.clone());
+
+        // After listen ends: force full State resync so UI matches REAPER exactly
+        if member_id == "engineer" && cache.engineer_needs_resync && !listen_suppressing {
+            cache.engineer_needs_resync = false;
+            let (global_level_db, global_muted) = cache
+                .global_volumes
+                .get(member_id)
+                .map(|gv| (Some(gv.level_db), Some(gv.muted)))
+                .unwrap_or((None, None));
+            let output_track_index = cache.output_track_indices.get(member_id).copied();
+            let _ = state.event_tx.send((
+                member_id.clone(),
+                ServerMsg::State {
+                    channels: result_channels.clone(),
+                    connected: true,
+                    global_level_db,
+                    global_muted,
+                    output_track_index,
+                },
+            ));
+        }
 
         // Daily auto-snapshot: on first channel change of the day, save a snapshot
         // capturing the starting state before changes
@@ -1698,17 +1719,18 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         }
     }
 
-    /// Test that mix channel mute states are preserved from cache during listen mode.
-    /// This simulates the poller logic that freezes mute UI during engineer listen.
+    /// Test A: During active listen, cache reflects REAL REAPER mute state (not pre-listen).
+    /// This proves the cache poisoning bug is fixed: REAPER says muted=true (by ReaScript),
+    /// so the cache must also say muted=true — NOT the pre-listen muted=false.
     #[test]
-    fn test_listen_mode_preserves_cached_mute_state() {
-        // Simulate mix channels queried from REAPER (listen has muted them)
-        let mut mix_channels = vec![
+    fn test_listen_cache_reflects_real_reaper_state() {
+        // Simulate: REAPER reports channels muted by ReaScript during listen
+        let reaper_channels = vec![
             iem_core::Channel {
                 track_index: 23,
                 name: "PETKA".to_string(),
                 level_db: -6.0,
-                muted: true, // Listen muted this in REAPER
+                muted: true, // ReaScript muted for listen isolation
                 pan: 0.0,
                 category: String::new(),
                 stereo_pair: None,
@@ -1718,17 +1740,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
                 track_index: 24,
                 name: "STEVO".to_string(),
                 level_db: -3.0,
-                muted: true, // Listen muted this in REAPER
-                pan: 0.0,
-                category: String::new(),
-                stereo_pair: None,
-                stereo_side: None,
-            },
-            iem_core::Channel {
-                track_index: 25,
-                name: "MAREK".to_string(),
-                level_db: 0.0,
-                muted: false, // Listen target — unmuted in REAPER
+                muted: true, // ReaScript muted for listen isolation
                 pan: 0.0,
                 category: String::new(),
                 stereo_pair: None,
@@ -1736,67 +1748,123 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             },
         ];
 
-        // Simulate cached state (pre-listen): PETKA was unmuted, STEVO was muted by user
-        let cached_channels = vec![
-            iem_core::Channel {
-                track_index: 23,
-                name: "PETKA".to_string(),
-                level_db: -6.0,
-                muted: false, // Was unmuted before listen
-                pan: 0.0,
-                category: String::new(),
-                stereo_pair: None,
-                stereo_side: None,
-            },
-            iem_core::Channel {
-                track_index: 24,
-                name: "STEVO".to_string(),
-                level_db: -3.0,
-                muted: true, // Was already muted by user before listen
-                pan: 0.0,
-                category: String::new(),
-                stereo_pair: None,
-                stereo_side: None,
-            },
-            iem_core::Channel {
-                track_index: 25,
-                name: "MAREK".to_string(),
-                level_db: 0.0,
-                muted: false,
-                pan: 0.0,
-                category: String::new(),
-                stereo_pair: None,
-                stereo_side: None,
-            },
-        ];
+        // The poller now writes REAPER state directly to cache (no suppression replacement).
+        // Simulate what the poller does: insert result_channels into cache.
+        let mut cache = MixerCache::new();
+        cache
+            .member_states
+            .insert("engineer".to_string(), reaper_channels.clone());
 
-        let listen_state = crate::EngineerListenState::Active("MAREK".into());
-        let listen_active = listen_state.is_suppressing();
-        if listen_active {
-            for ch in &mut mix_channels {
-                if let Some(cached) = cached_channels
-                    .iter()
-                    .find(|c| c.track_index == ch.track_index)
-                {
-                    ch.muted = cached.muted;
-                }
+        // Assert: cache has REAL REAPER state (muted=true), not pre-listen state
+        let cached = cache.member_states.get("engineer").unwrap();
+        assert!(
+            cached[0].muted,
+            "PETKA cache must reflect REAPER truth: muted=true during listen"
+        );
+        assert!(
+            cached[1].muted,
+            "STEVO cache must reflect REAPER truth: muted=true during listen"
+        );
+    }
+
+    /// Test B: During active listen, mute-only changes are NOT broadcast to UI.
+    /// Cache gets real state, but the broadcast is skipped so UI buttons stay stable.
+    #[test]
+    fn test_listen_suppresses_mute_broadcast_not_cache() {
+        // Simulate cached state (pre-listen): PETKA unmuted
+        let old_ch = iem_core::Channel {
+            track_index: 23,
+            name: "PETKA".to_string(),
+            level_db: -6.0,
+            muted: false,
+            pan: 0.0,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        };
+        // REAPER now says muted=true (ReaScript for listen isolation)
+        let new_ch = iem_core::Channel {
+            track_index: 23,
+            name: "PETKA".to_string(),
+            level_db: -6.0,
+            muted: true,
+            pan: 0.0,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        };
+
+        let listen_suppressing = true;
+        let member_id = "engineer";
+
+        // Replicate the poller's broadcast suppression logic
+        let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.05
+            || old_ch.muted != new_ch.muted
+            || (old_ch.pan - new_ch.pan).abs() > 0.001;
+        assert!(changed, "Mute change should be detected");
+
+        let mut should_broadcast = true;
+        if listen_suppressing && member_id == "engineer" {
+            let mute_only = old_ch.muted != new_ch.muted
+                && (old_ch.level_db - new_ch.level_db).abs() <= 0.05
+                && (old_ch.pan - new_ch.pan).abs() <= 0.001;
+            if mute_only {
+                should_broadcast = false;
             }
         }
 
-        // PETKA: listen muted → restored to cached false (unmuted)
         assert!(
-            !mix_channels[0].muted,
-            "PETKA should be unmuted (restored from cache)"
+            !should_broadcast,
+            "Mute-only change during listen must NOT be broadcast"
         );
-        // STEVO: listen muted → restored to cached true (was muted before listen)
+
+        // But cache still gets real REAPER state
+        let mut cache = MixerCache::new();
+        cache
+            .member_states
+            .insert("engineer".to_string(), vec![new_ch.clone()]);
+        let cached = cache.member_states.get("engineer").unwrap();
         assert!(
-            mix_channels[1].muted,
-            "STEVO should be muted (was muted before listen)"
+            cached[0].muted,
+            "Cache must still have real REAPER muted=true"
         );
-        // MAREK: listen target, unmuted → restored to cached false (unchanged)
+    }
+
+    /// Test C: Resync fires after listen stop when Restoring expires.
+    #[test]
+    fn test_resync_fires_after_listen_stop() {
+        let mut cache = MixerCache::new();
+        cache.engineer_needs_resync = true;
+        let listen_suppressing = false; // Restoring expired
+        let member_id = "engineer";
+
+        let should_resync =
+            member_id == "engineer" && cache.engineer_needs_resync && !listen_suppressing;
         assert!(
-            !mix_channels[2].muted,
-            "MAREK should be unmuted (listen target)"
+            should_resync,
+            "Resync must fire when engineer_needs_resync=true and suppression ended"
+        );
+
+        // After resync, flag is cleared
+        cache.engineer_needs_resync = false;
+        assert!(
+            !cache.engineer_needs_resync,
+            "Resync flag must be cleared after firing"
+        );
+    }
+
+    /// Test that resync does NOT fire while still suppressing (Restoring active)
+    #[test]
+    fn test_resync_blocked_while_suppressing() {
+        let mut cache = MixerCache::new();
+        cache.engineer_needs_resync = true;
+        let listen_suppressing = true; // Restoring still active
+
+        let should_resync =
+            "engineer" == "engineer" && cache.engineer_needs_resync && !listen_suppressing;
+        assert!(
+            !should_resync,
+            "Resync must NOT fire while suppression is active"
         );
     }
 

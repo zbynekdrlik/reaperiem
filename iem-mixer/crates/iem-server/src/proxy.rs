@@ -1804,13 +1804,16 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
 
-                                    // Transition to Restoring — keeps mute suppression active
+                                    // Transition to Restoring — keeps mute broadcast suppression active
                                     // for 2s while ReaScript restores original mute states
                                     *state.engineer_listen_target.write().await =
                                         crate::EngineerListenState::Restoring(
                                             std::time::Instant::now()
                                                 + std::time::Duration::from_secs(2),
                                         );
+
+                                    // Schedule full State resync after Restoring expires
+                                    state.mixer_cache.write().await.engineer_needs_resync = true;
 
                                     // Restore pre-listen mute state on ENGINEER inear sends
                                     let config = state.config.read().await;
