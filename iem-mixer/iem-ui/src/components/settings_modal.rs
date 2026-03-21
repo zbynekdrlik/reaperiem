@@ -14,7 +14,7 @@ fn default_true() -> bool {
 pub struct UserSettings {
     #[serde(default = "default_true")]
     pub double_tap_fader: bool,
-    /// Listen boost in dB (0-24), engineer-only. Applied when Listen starts.
+    /// Listen boost in dB (0-24), engineer-only. Applied immediately via GainNode.
     #[serde(default)]
     pub listen_boost_db: f32,
 }
@@ -112,7 +112,7 @@ pub fn SettingsModal(
                                 <div class="settings-row listen-boost-row">
                                     <div class="settings-label">
                                         <div class="settings-name">"Listen boost"</div>
-                                        <div class="settings-desc">"Applied when Listen starts"</div>
+                                        <div class="settings-desc">"Applied immediately"</div>
                                     </div>
                                     <div class="listen-boost-stepper">
                                         <button
@@ -125,6 +125,7 @@ pub fn SettingsModal(
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;
                                                 settings.save(&mid);
+                                                crate::components::audio_player::set_listen_gain(new_val);
                                             }
                                         >
                                             "\u{2212}"
@@ -145,6 +146,7 @@ pub fn SettingsModal(
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;
                                                 settings.save(&mid);
+                                                crate::components::audio_player::set_listen_gain(new_val);
                                             }
                                         >
                                             "+"

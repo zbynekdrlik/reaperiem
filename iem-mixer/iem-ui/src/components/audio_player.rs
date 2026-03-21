@@ -24,7 +24,7 @@ extern "C" {
     fn is_audio_supported() -> bool;
 
     #[wasm_bindgen(js_name = "setListenGain")]
-    fn set_listen_gain(db: f32);
+    pub fn set_listen_gain(db: f32);
 }
 
 /// Audio listening states
