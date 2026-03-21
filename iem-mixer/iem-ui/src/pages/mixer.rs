@@ -807,7 +807,8 @@ pub fn MixerPage() -> impl IntoView {
                 on_presets=on_presets
                 on_history=on_history
                 is_engineer=is_engineer
-                on_mute_all=is_engineer_own_mixer.then_some(on_mute_all)
+                on_mute_all=on_mute_all
+                is_engineer_own_mixer=is_engineer_own_mixer
                 member_id=member_id()
             />
 

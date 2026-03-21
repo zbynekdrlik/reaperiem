@@ -16,6 +16,9 @@ pub fn Toolbar(
     /// Whether the current user is an engineer (shows Listen button)
     #[prop(default = false)]
     is_engineer: bool,
+    /// Whether engineer is on their own mixer page (shows Mute All)
+    #[prop(default = false)]
+    is_engineer_own_mixer: bool,
     /// Called when Mute All button is clicked (engineer on own mixer only)
     #[prop(optional)]
     on_mute_all: Option<Callback<()>>,
@@ -25,8 +28,8 @@ pub fn Toolbar(
 ) -> impl IntoView {
     view! {
         <div class="toolbar">
-            {on_mute_all.as_ref().map(|cb| {
-                let cb = cb.clone();
+            {(is_engineer_own_mixer && on_mute_all.is_some()).then(|| {
+                let cb = on_mute_all.clone().unwrap();
                 view! {
                     <button
                         class="toolbar-btn toolbar-btn-mute-all"
