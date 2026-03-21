@@ -429,7 +429,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     // - Steady signals (test tones) stay visible even when delta is zero
     {
         let cycle = METER_FULL_BROADCAST_CYCLE.fetch_add(1, Ordering::Relaxed);
-        let force_full = cycle % 7 == 0;
+        let force_full = cycle.is_multiple_of(7);
 
         let cache = state.mixer_cache.read().await;
         let prev = &cache.meters;
@@ -1588,7 +1588,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         current: &HashMap<usize, [f32; 2]>,
         cycle: u64,
     ) -> HashMap<usize, [f32; 2]> {
-        let force_full = cycle % 7 == 0;
+        let force_full = cycle.is_multiple_of(7);
         if force_full && !current.is_empty() {
             current.clone()
         } else {
@@ -1668,7 +1668,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
 
         for cycle in 0..28 {
             let result = simulate_meter_broadcast(&meters, &same, cycle);
-            if cycle % 7 == 0 {
+            if cycle.is_multiple_of(7) {
                 assert_eq!(result.len(), 1, "Cycle {} should be full broadcast", cycle);
             } else {
                 assert!(
