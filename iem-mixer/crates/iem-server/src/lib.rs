@@ -32,9 +32,10 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 /// Engineer listen mode state machine.
 /// Controls poller mute suppression during listen and restore phases.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum EngineerListenState {
     /// Not listening — poller broadcasts real REAPER mute state
+    #[default]
     Idle,
     /// Listening to a member — poller suppresses mix mute broadcasts
     Active(String),
@@ -52,11 +53,6 @@ impl EngineerListenState {
     }
 }
 
-impl Default for EngineerListenState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 /// Write data to a file atomically by writing to a temp file then renaming.
 /// Prevents corruption on crash/power failure.
