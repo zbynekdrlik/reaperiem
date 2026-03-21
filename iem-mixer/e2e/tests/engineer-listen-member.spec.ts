@@ -198,10 +198,11 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     });
   });
 
-  test("ListenStart triggers REAPER listen target switch via EXTSTATE", async ({
+  test("ListenStart triggers REAPER listen target switch via ENGINEER sends", async ({
     request,
   }) => {
-    // This test verifies the REAPER side: EXTSTATE is set and script executes
+    // This test verifies the REAPER side: EXTSTATE is set and script switches
+    // sends on the ENGINEER inear track (not a MONITOR bus)
     // Skip in CI without REAPER — only runs against live iem.lan
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK")
@@ -209,32 +210,37 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
       return;
 
-    // Get first member name from REAPER tracks (inear tracks)
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
     if (!assume(members.length >= 1, "Need at least 1 member")) return;
 
     const memberName = members[0].name.toUpperCase();
 
-    // Set listen target via EXTSTATE
+    // Set listen target to a specific member and trigger switch
     await request.get(
       `http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/${memberName}`,
     );
-
-    // Trigger switch listen script
     await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
-
-    // Wait for script execution
     await new Promise((r) => setTimeout(r, 3000));
 
-    // Read result
     const resultResp = await request.get(
       "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
     );
     const resultText = await resultResp.text();
-
-    // Result should contain OK and the member name
     expect(resultText).toContain("OK");
     expect(resultText.toUpperCase()).toContain(memberName);
+
+    // Now restore all sends (ListenStop equivalent)
+    await request.get(
+      "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
+    );
+    await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
+    await new Promise((r) => setTimeout(r, 3000));
+
+    const restoreResp = await request.get(
+      "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
+    );
+    const restoreText = await restoreResp.text();
+    expect(restoreText).toContain("OK:ALL");
   });
 });

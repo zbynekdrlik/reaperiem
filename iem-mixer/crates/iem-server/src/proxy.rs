@@ -1785,6 +1785,44 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 }
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
+
+                                    // Restore all member sends to ENGINEER inear (unmute all)
+                                    let config = state.config.read().await;
+                                    let reaper_url = config.reaper_url.clone();
+                                    drop(config);
+
+                                    let set_url = format!(
+                                        "{}/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
+                                        reaper_url
+                                    );
+                                    let trigger_url = format!(
+                                        "{}/_/_RS_REAPERIEM_SWITCH_LISTEN",
+                                        reaper_url
+                                    );
+
+                                    let _ = state.http_client.get(&set_url).send().await;
+                                    let _ = state.http_client.get(&trigger_url).send().await;
+
+                                    // Read back result for logging (non-blocking)
+                                    let result_url = format!(
+                                        "{}/_/GET/EXTSTATE/reaperiem/listen_result",
+                                        reaper_url
+                                    );
+                                    let http = state.http_client.clone();
+                                    tokio::spawn(async move {
+                                        tokio::time::sleep(Duration::from_millis(500)).await;
+                                        match http.get(&result_url).send().await {
+                                            Ok(resp) => {
+                                                if let Ok(body) = resp.text().await {
+                                                    tracing::info!(result = %body, "Listen restore result");
+                                                }
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!(error = %e, "Could not read listen restore result");
+                                            }
+                                        }
+                                    });
+
                                     audio_rx = None;
                                     let status = ServerMsg::AudioStatus {
                                         status: "stopped".to_string(),

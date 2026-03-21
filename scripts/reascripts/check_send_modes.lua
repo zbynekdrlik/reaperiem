@@ -16,11 +16,6 @@ local function is_member_inear(name)
     return name:match(" inear$") and not name:match("^ENGINEER ")
 end
 
-local function is_monitor_bus(track)
-    local _, name = reaper.GetTrackName(track)
-    return name:lower() == "monitor bus"
-end
-
 local function check_all_sends()
     local num_tracks = reaper.CountTracks(0)
     local bad_sends = 0
@@ -32,21 +27,17 @@ local function check_all_sends()
         local expect_post_fader = is_member_inear(track_name)
 
         for s = 0, num_sends - 1 do
-            -- Skip sends to MONITOR bus (always post-fader for listen switching)
-            local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
-            if not is_monitor_bus(dest) then
-                local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
+            local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
 
-                if expect_post_fader then
-                    -- Member inear → engineer: must be post-fader (mode 0)
-                    if current_mode ~= 0 then
-                        bad_sends = bad_sends + 1
-                    end
-                else
-                    -- All other sends: must be pre-fader post-FX (mode 3)
-                    if current_mode ~= 3 then
-                        bad_sends = bad_sends + 1
-                    end
+            if expect_post_fader then
+                -- Member inear → engineer: must be post-fader (mode 0)
+                if current_mode ~= 0 then
+                    bad_sends = bad_sends + 1
+                end
+            else
+                -- All other sends: must be pre-fader post-FX (mode 3)
+                if current_mode ~= 3 then
+                    bad_sends = bad_sends + 1
                 end
             end
         end

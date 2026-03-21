@@ -1,21 +1,25 @@
 -- switch_listen_target.lua
--- Switch engineer listen target by muting/unmuting sends on MONITOR bus
+-- Switch engineer listen target by muting/unmuting sends TO the ENGINEER inear track
 -- Action ID: _RS_REAPERIEM_SWITCH_LISTEN
 --
--- Reads EXTSTATE reaperiem/listen_target for target member name (e.g., "PETRONELA", "ENGINEER")
--- Finds MONITOR bus track, iterates its receives, unmutes only the matching source.
+-- Reads EXTSTATE reaperiem/listen_target for target member name (e.g., "PETRONELA")
+-- Finds ENGINEER inear track, iterates sends FROM member inear tracks TO engineer,
+-- unmutes only the matching member's send, mutes all others.
+--
+-- Special target "ALL" unmutes all sends (restores normal engineer mix).
 --
 -- Result written to EXTSTATE reaperiem/listen_result:
 --   OK:<member_name>     — switched successfully
+--   OK:ALL               — all sends restored
 --   FAIL:<reason>        — error
 
--- Find MONITOR bus track
-local function find_monitor_bus()
+-- Find ENGINEER inear track
+local function find_engineer_inear()
   local count = reaper.CountTracks(0)
   for i = 0, count - 1 do
     local track = reaper.GetTrack(0, i)
     local _, name = reaper.GetTrackName(track)
-    if name:lower() == "monitor bus" then
+    if name:upper():match("^ENGINEER%s+INEAR$") then
       return track, i
     end
   end
@@ -29,35 +33,49 @@ if target == "" then
   return
 end
 
-local monitor, _ = find_monitor_bus()
-if not monitor then
-  reaper.SetExtState("reaperiem", "listen_result", "FAIL:monitor_bus_not_found", false)
+local eng_track, _ = find_engineer_inear()
+if not eng_track then
+  reaper.SetExtState("reaperiem", "listen_result", "FAIL:engineer_inear_not_found", false)
   return
 end
 
--- Iterate receives on MONITOR bus (receives = category 1 in GetTrackNumSends)
--- For receives, the "source" is the sending track
-local recv_count = reaper.GetTrackNumSends(monitor, -1) -- -1 = receives
+-- Iterate all tracks, find member inear tracks that have a send to ENGINEER inear
+local track_count = reaper.CountTracks(0)
 local matched = false
+local restore_all = (target:upper() == "ALL")
 
-for i = 0, recv_count - 1 do
-  local src_track = reaper.GetTrackSendInfo_Value(monitor, -1, i, "P_SRCTRACK")
-  if src_track then
-    local _, src_name = reaper.GetTrackName(src_track)
-    -- Match: source track name starts with target name and ends with "inear"
-    local src_member = src_name:match("^(%S+)%s+inear$")
-    if src_member and src_member:upper() == target:upper() then
-      -- Unmute this receive
-      reaper.SetTrackSendInfo_Value(monitor, -1, i, "B_MUTE", 0)
-      matched = true
-    else
-      -- Mute all other receives
-      reaper.SetTrackSendInfo_Value(monitor, -1, i, "B_MUTE", 1)
+for t = 0, track_count - 1 do
+  local track = reaper.GetTrack(0, t)
+  local _, track_name = reaper.GetTrackName(track)
+
+  -- Only process member inear tracks (not ENGINEER inear itself)
+  local member_name = track_name:match("^(%S+)%s+inear$")
+  if member_name and member_name:upper() ~= "ENGINEER" then
+    -- Find this track's send to ENGINEER inear
+    local send_count = reaper.GetTrackNumSends(track, 0) -- 0 = sends
+    for s = 0, send_count - 1 do
+      local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+      if dest == eng_track then
+        if restore_all then
+          -- Unmute all sends (restore normal mix)
+          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 0)
+        elseif member_name:upper() == target:upper() then
+          -- Unmute matching member's send
+          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 0)
+          matched = true
+        else
+          -- Mute all other member sends
+          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 1)
+        end
+        break -- Each member inear has at most one send to engineer
+      end
     end
   end
 end
 
-if matched then
+if restore_all then
+  reaper.SetExtState("reaperiem", "listen_result", "OK:ALL", false)
+elseif matched then
   reaper.SetExtState("reaperiem", "listen_result", "OK:" .. target, false)
 else
   reaper.SetExtState("reaperiem", "listen_result", "FAIL:target_not_found:" .. target, false)
