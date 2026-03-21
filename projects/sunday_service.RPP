@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1774095838 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1774099333 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -114,28 +114,28 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 0
+    SEL 1
     REC 1 2 1 2 0 0 0 0
     VU 76
     TRACKHEIGHT 64 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
-    FX 0
+    FX 1
     TRACKID {67F6A23F-BD22-4725-8A6E-AF8B49652CD9}
     PERF 0
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
-      WNDRECT 24 52 716 202
+      WNDRECT 24 52 716 290
       SHOW 0
       LASTSEL 0
       DOCKED 0
       BYPASS 0 0 0
-      <JS utility/volume_pan ""
-        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      <JS synthesis/tonegenerator ""
+        -12 -6 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {EED0CCED-FA9B-4FBF-B324-8FC9C3FE8DEB}
+      FXID {B36B5D6E-751D-453A-B7F3-2C63D8863381}
       WAK 0 0
     >
   >
@@ -1327,7 +1327,7 @@
     HWOUT 32 0 1 0 0 0 0 -1:U -1
     <FXCHAIN
       WNDRECT 24 52 477 433
-      SHOW 1
+      SHOW 0
       LASTSEL 0
       DOCKED 0
       BYPASS 0 0 0
