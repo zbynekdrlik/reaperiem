@@ -942,14 +942,14 @@ jobs:
             Write-Host "tone_generator.lua already registered"
           }
           # Register setup_monitor_bus.lua
-          if ($content -notmatch "SETUP_MONITOR") {
+          if ($content -notmatch "RS_REAPERIEM_SETUP_MONITOR") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_MONITOR "Custom: Setup MONITOR bus for engineer listen switching" reaperiem\setup_monitor_bus.lua'
             Write-Host "Registered setup_monitor_bus.lua"
           } else {
             Write-Host "setup_monitor_bus.lua already registered"
           }
           # Register switch_listen_target.lua
-          if ($content -notmatch "SWITCH_LISTEN") {
+          if ($content -notmatch "RS_REAPERIEM_SWITCH_LISTEN") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SWITCH_LISTEN "Custom: Switch engineer listen target via MONITOR bus" reaperiem\switch_listen_target.lua'
             Write-Host "Registered switch_listen_target.lua"
           } else {
@@ -1133,6 +1133,34 @@ jobs:
           }
 
           Write-Host "VBAN IEM verified: plugin present and active on engineer track"
+
+      - name: Setup MONITOR bus for engineer listen switching
+        if: steps.reaper-pre.outputs.was_running == 'true'
+        shell: powershell
+        run: |
+          # MONITOR bus setup is idempotent — creates bus if missing, skips if exists
+          # Get dynamically-registered action ID for setup_monitor_bus
+          $monIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_monitor_bus" -UseBasicParsing -TimeoutSec 5).Content
+          $monActionId = ($monIdResp -split "`t")[-1]
+          Write-Host "MONITOR bus setup action ID: $monActionId"
+
+          if (-not $monActionId) {
+            Write-Host "::warning::setup_monitor_bus not registered - listen switching will not work"
+            exit 0
+          }
+
+          # Trigger setup
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$monActionId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Start-Sleep -Seconds 3
+          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/monitor_setup_result" -UseBasicParsing -TimeoutSec 5).Content
+          Write-Host "MONITOR bus setup: $result"
+
+          if ($result -match "FAIL") {
+            Write-Host "::error::MONITOR bus setup failed: $result"
+            exit 1
+          }
+
+          Write-Host "MONITOR bus ready for engineer listen switching"
 
       - name: Activate tone generator for audio testing
         if: steps.reaper-pre.outputs.was_running == 'true'

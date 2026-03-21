@@ -1743,9 +1743,33 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                             reaper_url
                                         );
 
-                                        // Fire-and-forget: set target then trigger script
+                                        // Set target then trigger script
                                         let _ = state.http_client.get(&set_url).send().await;
                                         let _ = state.http_client.get(&trigger_url).send().await;
+
+                                        // Read back result for logging (non-blocking)
+                                        let result_url = format!(
+                                            "{}/_/GET/EXTSTATE/reaperiem/listen_result",
+                                            reaper_url
+                                        );
+                                        let http = state.http_client.clone();
+                                        tokio::spawn(async move {
+                                            tokio::time::sleep(Duration::from_millis(500)).await;
+                                            match http.get(&result_url).send().await {
+                                                Ok(resp) => {
+                                                    if let Ok(body) = resp.text().await {
+                                                        if body.contains("FAIL") {
+                                                            tracing::error!(result = %body, "Listen switch FAILED in REAPER");
+                                                        } else {
+                                                            tracing::info!(result = %body, "Listen switch result");
+                                                        }
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    tracing::warn!(error = %e, "Could not read listen result");
+                                                }
+                                            }
+                                        });
                                     }
 
                                     audio_rx = Some(state.audio_tx.subscribe());
