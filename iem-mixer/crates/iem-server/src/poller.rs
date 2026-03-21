@@ -635,6 +635,24 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 }
             }
 
+            // If engineer is listening, preserve cached mute state for mix channels.
+            // Listen mutes sends in REAPER for audio isolation, but this should be
+            // invisible in the mixer UI.
+            let listen_active = state.engineer_listen_target.read().await.is_some();
+            if listen_active {
+                let cache = state.mixer_cache.read().await;
+                if let Some(cached_channels) = cache.member_states.get("engineer") {
+                    for ch in &mut mix_channels {
+                        if let Some(cached) = cached_channels
+                            .iter()
+                            .find(|c| c.track_index == ch.track_index)
+                        {
+                            ch.muted = cached.muted;
+                        }
+                    }
+                }
+            }
+
             result_channels.extend(mix_channels);
         }
 
@@ -1678,5 +1696,106 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
                 );
             }
         }
+    }
+
+    /// Test that mix channel mute states are preserved from cache during listen mode.
+    /// This simulates the poller logic that freezes mute UI during engineer listen.
+    #[test]
+    fn test_listen_mode_preserves_cached_mute_state() {
+        // Simulate mix channels queried from REAPER (listen has muted them)
+        let mut mix_channels = vec![
+            iem_core::Channel {
+                track_index: 23,
+                name: "PETKA".to_string(),
+                level_db: -6.0,
+                muted: true, // Listen muted this in REAPER
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+            iem_core::Channel {
+                track_index: 24,
+                name: "STEVO".to_string(),
+                level_db: -3.0,
+                muted: true, // Listen muted this in REAPER
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+            iem_core::Channel {
+                track_index: 25,
+                name: "MAREK".to_string(),
+                level_db: 0.0,
+                muted: false, // Listen target — unmuted in REAPER
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+        ];
+
+        // Simulate cached state (pre-listen): PETKA was unmuted, STEVO was muted by user
+        let cached_channels = vec![
+            iem_core::Channel {
+                track_index: 23,
+                name: "PETKA".to_string(),
+                level_db: -6.0,
+                muted: false, // Was unmuted before listen
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+            iem_core::Channel {
+                track_index: 24,
+                name: "STEVO".to_string(),
+                level_db: -3.0,
+                muted: true, // Was already muted by user before listen
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+            iem_core::Channel {
+                track_index: 25,
+                name: "MAREK".to_string(),
+                level_db: 0.0,
+                muted: false,
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+        ];
+
+        let listen_active = true;
+        if listen_active {
+            for ch in &mut mix_channels {
+                if let Some(cached) = cached_channels
+                    .iter()
+                    .find(|c| c.track_index == ch.track_index)
+                {
+                    ch.muted = cached.muted;
+                }
+            }
+        }
+
+        // PETKA: listen muted → restored to cached false (unmuted)
+        assert!(
+            !mix_channels[0].muted,
+            "PETKA should be unmuted (restored from cache)"
+        );
+        // STEVO: listen muted → restored to cached true (was muted before listen)
+        assert!(
+            mix_channels[1].muted,
+            "STEVO should be muted (was muted before listen)"
+        );
+        // MAREK: listen target, unmuted → restored to cached false (unchanged)
+        assert!(
+            !mix_channels[2].muted,
+            "MAREK should be unmuted (listen target)"
+        );
     }
 }

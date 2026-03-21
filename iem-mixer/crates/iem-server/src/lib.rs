@@ -61,6 +61,9 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
+    /// Currently active listen target for engineer (None = not listening).
+    /// Used to suppress mix channel mute broadcasts during listen mode.
+    pub engineer_listen_target: Arc<RwLock<Option<String>>>,
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]
     pub audio_tx: broadcast::Sender<bytes::Bytes>,
@@ -130,6 +133,7 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
+            engineer_listen_target: Arc::new(RwLock::new(None)),
             #[cfg(feature = "audio")]
             audio_tx,
             #[cfg(feature = "audio")]

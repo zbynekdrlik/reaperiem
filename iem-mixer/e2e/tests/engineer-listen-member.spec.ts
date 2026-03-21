@@ -418,4 +418,96 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       }
     }
   });
+
+  test("Listen does not change mute buttons in engineer mixer UI", async ({
+    page,
+  }) => {
+    // This test verifies that when the engineer activates Listen on a member,
+    // the mute buttons in the Mixes tab do NOT visually change.
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    const member = members[0].id;
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    // Wait for channels to load (mix channels appear in engineer's mixer)
+    const channelsLoaded = await page
+      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(channelsLoaded, "Channel strips must render")) return;
+
+    // Capture initial mute button states
+    const initialMuteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    if (!assume(initialMuteStates.length > 0, "Need mute buttons to test"))
+      return;
+
+    // Click Listen button
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+    await listenBtn.click();
+
+    // Wait for listen to activate and poller to run a few cycles
+    await page.waitForTimeout(3000);
+
+    // Capture mute button states after listen activation
+    const afterListenMuteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    // Assert mute buttons did not change
+    expect(afterListenMuteStates.length).toBe(initialMuteStates.length);
+    for (let i = 0; i < initialMuteStates.length; i++) {
+      expect(
+        afterListenMuteStates[i].classes,
+        `Mute button ${i} (${initialMuteStates[i].text}) should not change during listen`,
+      ).toBe(initialMuteStates[i].classes);
+    }
+
+    // Click Listen again to stop
+    await listenBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Verify mute states are still unchanged after stopping listen
+    const afterStopMuteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        ".channel-strip .mute-btn, .channel-strip .btn-mute",
+      );
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    for (let i = 0; i < initialMuteStates.length; i++) {
+      expect(
+        afterStopMuteStates[i].classes,
+        `Mute button ${i} (${initialMuteStates[i].text}) should not change after listen stop`,
+      ).toBe(initialMuteStates[i].classes);
+    }
+  });
 });

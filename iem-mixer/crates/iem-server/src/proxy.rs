@@ -1772,6 +1772,11 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                         });
                                     }
 
+                                    // Track listen state so poller can suppress mix mute broadcasts
+                                    if let Some(ref name) = target_name {
+                                        *state.engineer_listen_target.write().await = Some(name.clone());
+                                    }
+
                                     audio_rx = Some(state.audio_tx.subscribe());
                                     last_audio_time = Instant::now();
                                     let status = ServerMsg::AudioStatus {
@@ -1786,7 +1791,10 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
 
-                                    // Restore all member sends to ENGINEER inear (unmute all)
+                                    // Clear listen state so poller resumes normal mute broadcasts
+                                    *state.engineer_listen_target.write().await = None;
+
+                                    // Restore pre-listen mute state on ENGINEER inear sends
                                     let config = state.config.read().await;
                                     let reaper_url = config.reaper_url.clone();
                                     drop(config);
