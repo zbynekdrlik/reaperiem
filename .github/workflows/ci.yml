@@ -1257,7 +1257,7 @@ jobs:
           }
 
           # Send ListenStart
-          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart","member_id":"engineer"}')
           $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
           $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
           Write-Host "Sent ListenStart command"
@@ -1363,7 +1363,7 @@ jobs:
           }
 
           # Send ListenStart
-          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart","member_id":"engineer"}')
           $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
           $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
 
