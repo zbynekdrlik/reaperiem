@@ -1005,31 +1005,41 @@ body {
   }
 }
 
-/* Listen volume controls */
-.listen-controls {
-  display: contents;
-}
-
-.listen-volume-container {
+/* Listen boost stepper (engineer settings) */
+.listen-boost-row .listen-boost-stepper {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: var(--bg-channel);
-  border-radius: 10px;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 12px;
 }
 
-.listen-volume-slider {
-  flex: 1;
-  min-width: 60px;
-  height: 4px;
+.listen-boost-stepper .boost-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 1.1em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.listen-volume-label {
-  font-size: 0.7em;
-  min-width: 3.5em;
-  text-align: right;
-  color: var(--text-secondary);
+.listen-boost-stepper .boost-btn:active {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+.listen-boost-stepper .boost-value {
+  min-width: 4.5em;
+  text-align: center;
+  font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 /* Pan slider touch-safe activation states */

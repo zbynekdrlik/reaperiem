@@ -135,149 +135,151 @@ test.describe("Audio Listen Button (#90)", () => {
     // (auth check happens after upgrade validation)
     expect(audioResp.status()).toBe(400);
   });
+});
 
-  test("volume slider hidden when not listening", async ({ page }) => {
+test.describe("Listen Boost Settings (#101)", () => {
+  test("engineer settings shows listen boost section", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     if (!(await waitForMixer(page))) return;
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    // Open settings modal
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
 
-    // Volume slider should NOT be visible before clicking Listen
-    const slider = page.locator(".listen-volume-slider");
-    await expect(slider).toHaveCount(0);
+    // Verify stepper controls exist
+    await expect(page.locator('[data-testid="boost-minus"]')).toBeVisible();
+    await expect(page.locator('[data-testid="boost-plus"]')).toBeVisible();
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "0 dB",
+    );
   });
 
-  test("volume slider visible when listening", async ({ page }) => {
+  test("listen boost stepper increments and decrements by 3 dB", async ({
+    page,
+  }) => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     if (!(await waitForMixer(page))) return;
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
 
-    const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    const boostValue = page.locator('[data-testid="boost-value"]');
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    const minusBtn = page.locator('[data-testid="boost-minus"]');
 
-    // Click Listen to start audio
-    await listenBtn.click();
-    await page.waitForTimeout(3000);
+    // Start at 0 dB
+    await expect(boostValue).toHaveText("0 dB");
 
-    // Check if we entered listening state (need audio source)
-    const btnClass = await listenBtn.getAttribute("class");
-    if (
-      !assume(
-        btnClass?.includes("listening"),
-        "Must be in listening state (requires VBAN source)",
-      )
-    )
-      return;
+    // Increment twice: 0 → 3 → 6
+    await plusBtn.click();
+    await expect(boostValue).toHaveText("+3 dB");
+    await plusBtn.click();
+    await expect(boostValue).toHaveText("+6 dB");
 
-    // Volume slider should now be visible
-    const slider = page.locator(".listen-volume-slider");
-    await expect(slider).toBeVisible({ timeout: 5000 });
+    // Decrement once: 6 → 3
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("+3 dB");
 
-    // dB label should be visible
-    const label = page.locator(".listen-volume-label");
-    await expect(label).toBeVisible();
-    const labelText = await label.textContent();
-    expect(labelText).toContain("dB");
+    // Decrement below 0 should clamp to 0
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("0 dB");
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("0 dB");
   });
 
-  test("volume persists in localStorage", async ({ page }) => {
+  test("listen boost persists in localStorage", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     if (!(await waitForMixer(page))) return;
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
 
-    const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
-
-    await listenBtn.click();
-    await page.waitForTimeout(3000);
-
-    const btnClass = await listenBtn.getAttribute("class");
-    if (
-      !assume(
-        btnClass?.includes("listening"),
-        "Must be in listening state (requires VBAN source)",
-      )
-    )
-      return;
-
-    // Change slider to +12 dB
-    const slider = page.locator(".listen-volume-slider");
-    await slider.fill("12");
-
-    // Check localStorage was updated
-    const stored = await page.evaluate(() =>
-      localStorage.getItem("iem_listen_volume"),
-    );
-    expect(parseFloat(stored ?? "0")).toBe(12);
-
-    // Check gain was applied
-    const gainDb = await page.evaluate(() =>
-      (window as any).__iem_audio_gain?.(),
-    );
-    if (gainDb !== undefined) {
-      expect(gainDb).toBeCloseTo(12, 0);
+    // Set boost to +12 dB (4 clicks)
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    for (let i = 0; i < 4; i++) {
+      await plusBtn.click();
     }
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+12 dB",
+    );
+
+    // Verify localStorage contains the boost value
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem("iem_settings_engineer");
+      if (!raw) return null;
+      return JSON.parse(raw);
+    });
+    expect(stored).toBeTruthy();
+    expect(stored.listen_boost_db).toBe(12);
+
+    // Reload and verify persistence
+    await page.reload();
+    if (!(await waitForMixer(page))) return;
+
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+12 dB",
+    );
   });
 
-  test("dB label shows current value on slider change", async ({ page }) => {
+  test("non-engineer settings hides listen boost", async ({ page }) => {
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    const member = members[0].id;
+    await loginAs(page, member);
+    await page.goto(`/${member}`);
+    if (!(await waitForMixer(page))) return;
+
+    // Open settings modal
+    await page.locator(".settings-btn").click();
+
+    // Wait for settings modal to appear
+    await expect(page.locator(".settings-modal")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Audio section should NOT be present for regular members
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toHaveCount(0);
+  });
+
+  test("listen boost clamps at +24 dB maximum", async ({ page }) => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     if (!(await waitForMixer(page))) return;
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
 
-    const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
-
-    await listenBtn.click();
-    await page.waitForTimeout(3000);
-
-    const btnClass = await listenBtn.getAttribute("class");
-    if (
-      !assume(
-        btnClass?.includes("listening"),
-        "Must be in listening state (requires VBAN source)",
-      )
-    )
-      return;
-
-    const slider = page.locator(".listen-volume-slider");
-    const label = page.locator(".listen-volume-label");
-
-    // Set to +6 dB
-    await slider.fill("6");
-    await expect(label).toHaveText("+6 dB");
-
-    // Set to 0 dB
-    await slider.fill("0");
-    await expect(label).toHaveText("0 dB");
-
-    // Set to -12 dB
-    await slider.fill("-12");
-    await expect(label).toHaveText("-12 dB");
+    // Click + 9 times (should clamp at 24)
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    for (let i = 0; i < 9; i++) {
+      await plusBtn.click();
+    }
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+24 dB",
+    );
   });
 });

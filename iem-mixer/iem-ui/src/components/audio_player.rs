@@ -3,9 +3,10 @@
 //! Opens a separate WebSocket to /ws/audio for binary Opus frame streaming.
 //! Uses JS interop (audio_player.js) for WebCodecs decoding and Web Audio playback.
 
-use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
+
+use crate::components::settings_modal::UserSettings;
 
 // JS interop functions from audio_player.js
 #[wasm_bindgen(module = "/audio_player.js")]
@@ -25,8 +26,6 @@ extern "C" {
     #[wasm_bindgen(js_name = "setListenGain")]
     fn set_listen_gain(db: f32);
 }
-
-const LISTEN_VOLUME_KEY: &str = "iem_listen_volume";
 
 /// Audio listening states
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,63 +88,14 @@ pub fn ListenButton() -> impl IntoView {
         ListenState::Unsupported => "\u{1F507} Unsupported",
     };
 
-    let volume_visible = Signal::derive(move || state.get() == ListenState::Listening);
-
     view! {
-        <div class="listen-controls">
-            <button
-                class=btn_class
-                on:click=toggle
-                disabled=move || state.get() == ListenState::Unsupported
-            >
-                {btn_text}
-            </button>
-            <ListenVolume visible=volume_visible />
-        </div>
-    }
-}
-
-/// Volume slider for listen gain control (+18 dB max boost)
-#[component]
-fn ListenVolume(visible: Signal<bool>) -> impl IntoView {
-    let saved: f32 = LocalStorage::get(LISTEN_VOLUME_KEY).unwrap_or(0.0);
-    let (volume_db, set_volume_db) = signal(saved);
-
-    let format_db = move |db: f32| {
-        let rounded = db as i32;
-        if rounded > 0 {
-            format!("+{} dB", rounded)
-        } else {
-            format!("{} dB", rounded)
-        }
-    };
-
-    let on_input = move |ev: web_sys::Event| {
-        if let Some(target) = ev.target() {
-            let val =
-                js_sys::Reflect::get(&target, &"value".into()).unwrap_or(JsValue::from_str("0"));
-            let db: f32 = val.as_string().unwrap_or_default().parse().unwrap_or(0.0);
-            set_volume_db.set(db);
-            set_listen_gain(db);
-            let _ = LocalStorage::set(LISTEN_VOLUME_KEY, db);
-        }
-    };
-
-    view! {
-        <Show when=move || visible.get()>
-            <div class="listen-volume-container">
-                <input
-                    type="range"
-                    class="listen-volume-slider"
-                    min="-60"
-                    max="18"
-                    step="1"
-                    prop:value=move || volume_db.get().to_string()
-                    on:input=on_input
-                />
-                <span class="listen-volume-label">{move || format_db(volume_db.get())}</span>
-            </div>
-        </Show>
+        <button
+            class=btn_class
+            on:click=toggle
+            disabled=move || state.get() == ListenState::Unsupported
+        >
+            {btn_text}
+        </button>
     }
 }
 
@@ -171,9 +121,9 @@ fn start_listening(
     // and resume() won't work (it's also not a user gesture).
     init_audio_player();
 
-    // Restore saved volume gain
-    let saved_vol: f32 = LocalStorage::get(LISTEN_VOLUME_KEY).unwrap_or(0.0);
-    set_listen_gain(saved_vol);
+    // Apply saved listen boost from engineer settings
+    let settings = UserSettings::load("engineer");
+    set_listen_gain(settings.listen_boost_db);
 
     let socket = match web_sys::WebSocket::new(&url) {
         Ok(s) => s,

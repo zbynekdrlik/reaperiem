@@ -14,12 +14,16 @@ fn default_true() -> bool {
 pub struct UserSettings {
     #[serde(default = "default_true")]
     pub double_tap_fader: bool,
+    /// Listen boost in dB (0-24), engineer-only. Applied when Listen starts.
+    #[serde(default)]
+    pub listen_boost_db: f32,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
             double_tap_fader: true,
+            listen_boost_db: 0.0,
         }
     }
 }
@@ -52,9 +56,20 @@ pub fn SettingsModal(
     set_double_tap_fader: WriteSignal<bool>,
     /// Member ID for localStorage persistence
     member_id: String,
+    /// Whether the current user is an engineer (shows Audio section)
+    #[prop(default = false)]
+    is_engineer: bool,
 ) -> impl IntoView {
     // StoredValue is Copy + Send + Sync — closures inside view! can use it freely
     let member_id = StoredValue::new(member_id);
+
+    // Listen boost signal (engineer-only, loaded from settings)
+    let initial_boost = if is_engineer {
+        UserSettings::load(&member_id.get_value()).listen_boost_db
+    } else {
+        0.0
+    };
+    let (listen_boost, set_listen_boost) = signal(initial_boost);
 
     // Get navigate function at component level (Leptos hooks rule)
     let navigate = use_navigate();
@@ -88,6 +103,59 @@ pub fn SettingsModal(
                             </div>
                         </div>
                     </div>
+
+                    {if is_engineer {
+                        Some(view! {
+                            <div class="settings-section" data-testid="listen-boost-section">
+                                <div class="settings-section-title">"Audio"</div>
+
+                                <div class="settings-row listen-boost-row">
+                                    <div class="settings-label">
+                                        <div class="settings-name">"Listen boost"</div>
+                                        <div class="settings-desc">"Applied when Listen starts"</div>
+                                    </div>
+                                    <div class="listen-boost-stepper">
+                                        <button
+                                            class="boost-btn"
+                                            data-testid="boost-minus"
+                                            on:click=move |_| {
+                                                let new_val = (listen_boost.get_untracked() - 3.0).max(0.0);
+                                                set_listen_boost.set(new_val);
+                                                let mid = member_id.get_value();
+                                                let mut settings = UserSettings::load(&mid);
+                                                settings.listen_boost_db = new_val;
+                                                settings.save(&mid);
+                                            }
+                                        >
+                                            "\u{2212}"
+                                        </button>
+                                        <span class="boost-value" data-testid="boost-value">
+                                            {move || {
+                                                let db = listen_boost.get() as i32;
+                                                if db == 0 { "0 dB".to_string() } else { format!("+{} dB", db) }
+                                            }}
+                                        </span>
+                                        <button
+                                            class="boost-btn"
+                                            data-testid="boost-plus"
+                                            on:click=move |_| {
+                                                let new_val = (listen_boost.get_untracked() + 3.0).min(24.0);
+                                                set_listen_boost.set(new_val);
+                                                let mid = member_id.get_value();
+                                                let mut settings = UserSettings::load(&mid);
+                                                settings.listen_boost_db = new_val;
+                                                settings.save(&mid);
+                                            }
+                                        >
+                                            "+"
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        })
+                    } else {
+                        None
+                    }}
 
                     <div class="settings-section">
                         <div class="settings-section-title">"Security"</div>
