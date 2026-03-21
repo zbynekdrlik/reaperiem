@@ -1607,10 +1607,9 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// With the fix, cycle 0 (and every 7th) forces a full broadcast.
     #[test]
     fn test_new_client_receives_meters_via_periodic_full_broadcast() {
-        let cached: HashMap<usize, [f32; 2]> =
-            [(1, [0.251, 0.251]), (23, [0.158, 0.158])]
-                .into_iter()
-                .collect();
+        let cached: HashMap<usize, [f32; 2]> = [(1, [0.251, 0.251]), (23, [0.158, 0.158])]
+            .into_iter()
+            .collect();
         // Same values returned by next poll — delta would be empty
         let current = cached.clone();
 
@@ -1646,12 +1645,11 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
     /// Verify that non-7th cycles still use delta logic
     #[test]
     fn test_non_full_cycle_uses_delta() {
-        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.3, 0.3])]
-            .into_iter()
-            .collect();
+        let prev: HashMap<usize, [f32; 2]> =
+            [(1, [0.5, 0.5]), (2, [0.3, 0.3])].into_iter().collect();
         let current: HashMap<usize, [f32; 2]> = [
-            (1, [0.5, 0.5]),  // unchanged
-            (2, [0.8, 0.8]),  // changed
+            (1, [0.5, 0.5]), // unchanged
+            (2, [0.8, 0.8]), // changed
         ]
         .into_iter()
         .collect();
@@ -1673,7 +1671,11 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             if cycle % 7 == 0 {
                 assert_eq!(result.len(), 1, "Cycle {} should be full broadcast", cycle);
             } else {
-                assert!(result.is_empty(), "Cycle {} should be delta-only (empty)", cycle);
+                assert!(
+                    result.is_empty(),
+                    "Cycle {} should be delta-only (empty)",
+                    cycle
+                );
             }
         }
     }
