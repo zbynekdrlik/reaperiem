@@ -639,11 +639,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         }
 
         // Check listen suppression BEFORE acquiring cache lock
-        let listen_suppressing = state
-            .engineer_listen_target
-            .read()
-            .await
-            .is_suppressing();
+        let listen_suppressing = state.engineer_listen_target.read().await.is_suppressing();
 
         // Diff against cached state and broadcast changes
         let now = std::time::Instant::now();
