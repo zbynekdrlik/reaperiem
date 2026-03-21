@@ -69,30 +69,12 @@ NEVER: "It should work now" / "The icon should appear"
 - **Icon pixel verification**: verify_icons.py tests in CI
 - **Process control**: Start/stop apps remotely
 
-### CAWE Forbidden Behaviors
+### CAWE Rules
 
-```
-❌ Claim success without downloading/viewing verification artifacts
-❌ Use speculative language ("should", "will probably", "might")
-❌ Ask user to verify something you can verify yourself
-❌ Ignore CI artifacts and rely on user reports
-❌ Treat user as your testing tool
-```
-
-### CAWE Success Reporting
-
-**Only use these phrases:**
-
-- `VERIFIED: I downloaded the screenshot and saw headphones icon`
-- `FAILED: Screenshot shows blue rectangle, not headphones`
-- `NOT VERIFIED: CI still running, artifact not yet available`
-
-**Never use these phrases:**
-
-- "The icon should now appear correctly"
-- "This should fix the issue"
-- "It will probably work after cache clear"
-- "I believe the fix is correct"
+- Never claim success without downloading/viewing verification artifacts
+- Never use speculative language ("should", "will probably", "might")
+- Never ask user to verify something you can verify yourself
+- Use: `VERIFIED: [what you saw]` / `FAILED: [what was wrong]` / `NOT VERIFIED: CI still running`
 
 ---
 
@@ -141,16 +123,6 @@ NEVER: "It should work now" / "The icon should appear"
 8. **After merge: Update README.md changelog** with user-facing changes from the PR
 
 If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
-
-### ⚠️ PR MERGE REQUIRES EXPLICIT USER APPROVAL
-
-**CRITICAL: You MUST NOT merge any PR without the user's explicit approval in the conversation.**
-
-- Present the green PR URL to the user
-- Wait for the user to explicitly approve (e.g., "approved", "merge it", "do it", "go ahead")
-- Only THEN run `gh pr merge`
-- **NEVER auto-merge, even if all CI checks pass**
-- **NEVER assume approval — silence is NOT approval**
 
 ### ⚠️ CHANGELOG MAINTENANCE (MANDATORY)
 
@@ -490,19 +462,20 @@ mcp/reaperiem_mcp/
 
 ### Registered ReaScripts (all in scripts/reascripts/)
 
-| Script                      | Action ID                    | Type     | Purpose                                         |
-| --------------------------- | ---------------------------- | -------- | ----------------------------------------------- |
-| meter_bridge.lua            | `_RS_REAPERIEM_METER_BRIDGE` | Deferred | L/R stereo meters + dynamic script registration |
-| set_hardware_output.lua     | `_RS_REAPERIEM_SET_HW_OUT`   | One-shot | Set Dante output routing                        |
-| rename_track.lua            | `_RS_REAPERIEM_RENAME_TRACK` | One-shot | Rename tracks live                              |
-| check_send_modes.lua        | `_RS_REAPERIEM_CHECK_SENDS`  | One-shot | Verify all sends are pre-fader                  |
-| fix_send_mode.lua           | `_RS_REAPERIEM_FIX_SENDS`    | One-shot | Fix sends to pre-fader post-FX                  |
-| setup_vban.lua              | `_RS_REAPERIEM_SETUP_VBAN`   | One-shot | Insert VBAN IEM VST3 on engineer track          |
-| check_vban.lua              | `_RS_REAPERIEM_CHECK_VBAN`   | One-shot | Verify VBAN IEM VST3 status                     |
-| setup_iem_project.lua       | -                            | One-shot | Initial project setup                           |
-| merge_stereo_inputs.lua     | -                            | One-shot | Merge mono inputs to stereo                     |
-| set_colors.lua              | -                            | One-shot | Set track colors                                |
-| create_sends_for_member.lua | -                            | One-shot | Create sends for new member                     |
+| Script                      | Action ID                    | Type     | Purpose                                             |
+| --------------------------- | ---------------------------- | -------- | --------------------------------------------------- |
+| meter_bridge.lua            | `_RS_REAPERIEM_METER_BRIDGE` | Deferred | L/R stereo meters + dynamic script registration     |
+| set_hardware_output.lua     | `_RS_REAPERIEM_SET_HW_OUT`   | One-shot | Set Dante output routing                            |
+| rename_track.lua            | `_RS_REAPERIEM_RENAME_TRACK` | One-shot | Rename tracks live                                  |
+| check_send_modes.lua        | `_RS_REAPERIEM_CHECK_SENDS`  | One-shot | Verify all sends are pre-fader                      |
+| fix_send_mode.lua           | `_RS_REAPERIEM_FIX_SENDS`    | One-shot | Fix sends to pre-fader post-FX                      |
+| setup_vban.lua              | `_RS_REAPERIEM_SETUP_VBAN`   | One-shot | Insert VBAN IEM VST3 on engineer track              |
+| check_vban.lua              | `_RS_REAPERIEM_CHECK_VBAN`   | One-shot | Verify VBAN IEM VST3 status                         |
+| setup_iem_project.lua       | -                            | One-shot | Initial project setup                               |
+| merge_stereo_inputs.lua     | -                            | One-shot | Merge mono inputs to stereo                         |
+| set_colors.lua              | -                            | One-shot | Set track colors                                    |
+| create_sends_for_member.lua | -                            | One-shot | Create sends for new member                         |
+| tone_generator.lua          | `_RS_REAPERIEM_TONE_GEN`     | One-shot | Toggle test tone on engineer track (CI audio tests) |
 
 ### Common Operational Tasks
 
@@ -612,6 +585,17 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 **CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
 
+### ⚠️ NEVER STOP AT PARTIAL CI GREEN (STRICT)
+
+**ALL CI jobs must pass — including Deploy — before reporting to the user.** If deploy fails (even for infrastructure reasons like REAPER being unreachable), you MUST:
+
+1. Investigate the root cause (SSH to iem.lan, check REAPER, check processes)
+2. Fix the issue (restart REAPER, clear locks, fix config)
+3. Re-run or re-push until ALL jobs are green
+4. Only THEN report success
+
+**NEVER declare "all code jobs passed" as success when deploy failed.** You own the ENTIRE pipeline end-to-end. Partial green = not done. Iterate until fully green and PR is mergeable.
+
 ### ⚠️ VERSION BUMP REQUIREMENT
 
 **BUMP VERSION AT THE START OF EVERY DEVELOPMENT SESSION that will deploy to production.**
@@ -685,26 +669,12 @@ gh run watch <run-id>
 gh run view <run-id> --log-failed
 ```
 
-### CI Must Pass:
+### ⚠️ TDD MANDATORY
 
-- ✅ Test Integrity Check (no ignored/skipped tests)
-- ✅ Lint & Format (cargo fmt, clippy)
-- ✅ Unit Tests (cargo test)
-- ✅ **E2E Tests (Playwright)** - Full browser testing of web UI
-- ✅ Build WASM (trunk build)
-- ✅ Build Tauri (Windows) — PRs and main only
-- ✅ Verify Version Bump — PRs only
-
-### ⚠️ TDD MANDATORY — NO EXCEPTIONS, NO EXCUSES
-
-**THIS IS THE #1 MOST VIOLATED RULE IN THIS PROJECT. Claude has repeatedly ignored TDD and shipped broken features. This stops now.**
-
-**STRICT ENFORCEMENT:**
-
-- **Every implementation plan MUST have test steps BEFORE code steps.** A plan without test steps is rejected.
+- **Every plan MUST have test steps BEFORE code steps.** A plan without test steps is rejected.
 - **Every bug fix starts with a failing test.** No test = no fix = no commit.
 - **Every new feature starts with tests describing expected behavior.** No tests = no implementation.
-- **The user is NOT your test suite.** You must catch regressions yourself through automated tests.
+- **The user is NOT your test suite.** Catch regressions with automated tests.
 
 **For bug fixes — REPRODUCE BEFORE FIXING:**
 
@@ -736,195 +706,39 @@ A plan that goes straight to "implement X" without "write tests for X" first
 is WRONG and must be rewritten.
 ```
 
-**Why this is non-negotiable:** Without reproducing the bug first, fixes routinely introduce NEW bugs or don't actually fix the reported issue. A test that captures the bug is PROOF you understand the problem. Code without a failing test first is guessing. Claude has shipped broken pan animations, broken settings that don't persist, and broken meters — all because tests were skipped.
+**Test quality rules:**
 
-```
-❌ NEVER: Read bug report → write code fix → hope it works → push
-❌ NEVER: Write a plan with only implementation steps and no test steps
-❌ NEVER: Use the user as a tester — "verify on live app" is NOT a substitute for automated tests
-✅ ALWAYS: Read bug report → write failing test → confirm failure → write fix → confirm pass → push
-✅ ALWAYS: Plan = test steps first, then implementation steps
-✅ ALWAYS: New E2E/integration tests for every feature, covering actual behavior not just rendering
-```
-
-**Test comprehensiveness requirements:**
-
-- **E2E tests must test REAL behavior** — not just "element exists" but "element does X when interacted with"
-- **Integration tests must verify server-side logic** — WebSocket messages, REAPER API calls, cache behavior
-- **Unit tests must cover edge cases** — string comparisons (case sensitivity!), category classification, conversion formulas
-- **Every bug that reaches production gets a regression test** — so it never happens again
-- **Animation tests must verify intermediate values** — not just "animation class exists" but "value changed over time"
-- **Settings tests must verify persistence** — save setting, reload page, verify setting is still there
-- **Visual/icon tests must verify actual pixel data** — not just "file exists" but verify specific pixel values match expected
-
-**UI E2E tests MUST test interactions, not just DOM:**
-
-- Button test = click it + verify the side effect (API call, state change, navigation)
-- Fader test = drag it + verify the value sent via WebSocket
-- "Element exists" tests prove rendering, NOT functionality
+- Tests must verify **behavior**, not just rendering ("element does X when clicked", not "element exists")
+- Every bug that reaches production gets a regression test
 - Use `page.waitForRequest()` to verify API calls fire without needing REAPER
+- Settings tests must verify persistence (save, reload, verify)
+- Visual/icon tests must verify pixel data, not just file existence
 
 ### ⚠️ USER-REPORTED ISSUES: E2E HARDENING FIRST, CODE SECOND
 
-**When the user reports a bug or issue, DO NOT start writing fix code. Start by writing an E2E test that catches the issue on the REAL deployed version.**
-
-This rule exists because Claude has repeatedly "fixed" the audio streaming "No Source" issue 20+ times with code changes that passed synthetic CI tests but never fixed the real problem on iem.lan. The fix always looked correct in isolation but never tested against the actual deployed system.
-
-**MANDATORY workflow for every user-reported issue:**
+**When the user reports a bug, DO NOT start coding. Write a failing E2E test against the REAL deployed system first.**
 
 ```
-Phase 1: E2E HARDENING (do this FIRST — do NOT skip to Phase 2)
-  1. Write an E2E test that reproduces the EXACT issue the user reported
-  2. Run the test against the REAL deployed system (iem.lan / 10.77.9.231)
-  3. Confirm the test FAILS — proving it catches the real bug
-  4. If the test passes, your test is WRONG — the bug exists, your test doesn't detect it
-  5. DO NOT proceed to Phase 2 until you have a failing E2E test on the live system
-
-Phase 2: FIX (only after Phase 1 is complete)
-  1. Write the code fix
-  2. Deploy to iem.lan
-  3. Run the E2E test from Phase 1 against the deployed fix
-  4. Confirm the test PASSES on the REAL system
-  5. Only then report success to the user
+Phase 1: Write E2E test → run against iem.lan/10.77.9.231 → confirm it FAILS (catches the bug)
+Phase 2: Write fix → deploy → run E2E test on live system → confirm it PASSES → report success
 ```
 
-**NEVER DO:**
-
-```
-❌ Write a fix without an E2E test that catches the issue on the live system
-❌ Write synthetic/localhost tests and claim the issue is fixed
-❌ Skip Phase 1 because "the fix is obvious"
-❌ Report success based on CI passing — CI uses synthetic data, not real REAPER
-```
-
-**The key difference from regular TDD:** Regular TDD tests run in CI with synthetic data. For user-reported issues, the E2E test MUST run against the real deployed system (iem.lan) to prove the fix works in production, not just in CI.
+CI uses synthetic data. User-reported issues MUST be verified against the real deployed system.
 
 ### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
 
-**NEVER claim a visual fix (icons, images, colors) is done without automated verification.**
+For icon/image fixes: write pixel-level automated test BEFORE generating the asset, verify with CI screenshot artifact. Never claim visual fixes without downloading and checking the artifact yourself. See CAWE rules above for reporting format.
 
-Claude has repeatedly:
+### Known Test Gaps
 
-1. Generated icon files and claimed "headphones icon is ready"
-2. Ignored test results showing the icon had wrong transparency (alpha=1 instead of alpha=0)
-3. Made the user report the same issue 3+ times before actually fixing it
-
-**For icon/image fixes — MANDATORY verification:**
-
-```python
-# Example: Verify icon is headphones (not solid rectangle)
-from PIL import Image
-img = Image.open("icon.png").convert("RGBA")
-
-# Check center is transparent (gap between ear cups)
-center = img.getpixel((16, 16))
-assert center[3] == 0, f"Center not transparent: alpha={center[3]}"
-
-# Check ear area is blue
-ear = img.getpixel((7, 20))
-assert ear[2] > 200 and ear[3] == 255, f"Ear not blue: {ear}"
-
-# Check corner is transparent
-corner = img.getpixel((0, 0))
-assert corner[3] == 0, f"Corner not transparent: alpha={corner[3]}"
-```
-
-**NEVER DO:**
-
-```
-❌ "The icon looks correct to me" — your visual inspection means nothing without pixel tests
-❌ "The icon should now appear correctly" — NEVER use "should", only verified facts
-❌ "It should work now" — this is FORBIDDEN language, you must VERIFY
-❌ Claim fix is done after seeing a thumbnail — verify with automated test
-❌ Ignore test results showing alpha=1 (almost transparent but wrong)
-❌ Use the user as your visual verification tool
-❌ Report success without downloading and checking the CI screenshot artifact
-```
-
-**ALWAYS DO:**
-
-```
-✅ Write pixel-level test BEFORE generating icon
-✅ Run test and confirm it FAILS on old icon
-✅ Generate new icon
-✅ Run test and confirm it PASSES
-✅ Download the CI taskbar screenshot artifact and visually verify
-✅ If Windows icon cache is persistent, add reboot step to CI
-✅ Only claim "VERIFIED: icon shows headphones" after checking screenshot
-```
-
-**FORBIDDEN PHRASES (never use these):**
-
-- "should work" / "should appear" / "should be fixed"
-- "it will probably" / "it might"
-- "I believe" / "I think it's fixed"
-- "The fix should take effect"
-
-**REQUIRED PHRASES (use these instead):**
-
-- "VERIFIED: I checked the screenshot and saw [X]"
-- "NOT YET VERIFIED: CI is still running"
-- "FAILED: screenshot shows [X] instead of [Y]"
-
-### ⚠️ MANDATORY: Comprehensive Testing
-
-**Every feature MUST have full test coverage before merging:**
-
-```
-Unit Tests:
-  - All Rust functions in iem-core, iem-server
-  - Edge cases and error handling
-
-Integration Tests:
-  - API endpoints (/api/members, /api/mixer/*, /api/auth)
-  - REAPER proxy functionality
-  - Authentication flow
-
-E2E Tests (Playwright):
-  - Landing page loads with member cards
-  - Login flow (PIN entry, JWT storage)
-  - Mixer page renders with faders
-  - Fader controls actually work
-  - Navigation between pages
-  - Mobile viewport testing
-  - Error states and loading spinners
-```
-
-### ⚠️ TESTS ARE WEAK — TREAT AS UNRELIABLE UNTIL PROVEN OTHERWISE
-
-**STRICT RULE: Current E2E and integration tests are known to be weak. They have repeatedly allowed broken features to deploy while showing green CI. Every feature you implement or claim as "done" MUST be verified beyond what the existing tests check.**
-
-**THE PROBLEM:** Tests mostly verify "UI renders" and "element exists" — they do NOT verify that features actually work. A green CI run does NOT mean the feature works. assume() guards hide failures instead of catching them.
-
-**MANDATORY for every feature/fix:**
-
-1. **Do NOT trust existing tests** — they are superficial. Read them critically.
-2. **Write NEW tests that verify actual behavior**, not just rendering:
-   - Does the fader actually send a value to REAPER? (not just "fader exists")
-   - Does mute actually mute? (not just "button renders")
-   - Does the animation actually animate? (not just "class exists")
-   - Does the setting actually persist? (not just "modal opens")
-3. **Verify on the live app** after deploy — open http://10.77.9.231/ in a browser and manually test every feature you changed
-4. **If you cannot write a meaningful test** (e.g., REAPER not available in CI), explicitly document what is NOT tested and flag it to the user
-5. **Never claim a feature is "done"** based solely on CI passing — CI passing means the code compiles and superficial checks pass, nothing more
-
-**Current test gaps (known):**
+Existing tests are mostly rendering checks. Green CI does NOT guarantee features work. Write behavior tests, not just DOM checks.
 
 - E2E tests run without REAPER — most mixer functionality is assume()-skipped
-- No integration tests verify WebSocket message flow end-to-end
-- No tests verify that settings actually persist across page reloads
-- No tests verify pan/fader animations actually animate (timing, intermediate values)
-- No tests verify meter values change in response to send controls
-- Mute, pan, fader commands are not verified against REAPER
+- No WebSocket message flow integration tests
+- No settings persistence tests (save → reload → verify)
+- Mute, pan, fader commands not verified against REAPER
 
-**After EVERY deploy, manually verify:**
-
-- Open mixer in browser
-- Move a fader → REAPER value changes (check REAPER directly)
-- Click mute → channel mutes in REAPER
-- If controls don't work, CI HAS FAILED even if green!
-
-**E2E tests must be expanded aggressively** — if a feature exists, it needs an E2E test that verifies it works end-to-end with REAPER, not just that "the UI renders".
+After every deploy, manually verify: fader → REAPER value changes, mute → channel mutes in REAPER.
 
 **Test files location:**
 
@@ -940,64 +754,17 @@ cargo test --workspace           # Unit + integration
 npx playwright test              # E2E (requires trunk serve)
 ```
 
-### After Release (tags):
-
-```bash
-# Verify deployment to iem.lan
-curl -sf http://iem.lan/ && echo "Deploy OK" || echo "Deploy FAILED"
-
-# Check release artifacts exist
-gh release view <tag>
-```
-
-### NEVER DO:
-
-```
-❌ Push and walk away without checking CI
-❌ Ignore failing CI jobs
-❌ Skip verifying deployment after release
-❌ Merge/release with failing tests
-```
-
 ---
 
-## ⚠️ ZERO TOLERANCE CI POLICY
+## CI Policy
 
-**FUNDAMENTAL RULE: If it's not tested, it's broken.**
+- No `#[ignore]`, no `skip`, no `continue-on-error: true` (enforced by test-integrity job)
+- `continue-on-error` requires explicit written user approval
+- CI test-integrity job counts tests (fails if < threshold), scans for skips/ignores
 
-### CI MUST:
+### GitHub Secrets
 
-- ❌ NEVER skip tests (no `#[ignore]`, no `skip`, no conditional `if`)
-- ❌ NEVER have conditional test execution (no `if: always()` bypass)
-- ❌ NEVER pass with 0 tests (must verify test count > 0)
-- ❌ NEVER deploy without E2E verification
-- ❌ **NEVER use `continue-on-error: true`** — every step must pass or FAIL the build. No silent failures. This is enforced by the `Ban continue-on-error in CI` integrity check. **DO NOT add `continue-on-error` without explicit written approval from the user in the conversation.**
-- ✅ ALWAYS run ALL tests on EVERY push
-- ✅ ALWAYS verify deployed app responds correctly
-- ✅ ALWAYS fail if any test is skipped or ignored
-
-### Required Test Coverage:
-
-| Component     | Test Type   | Must Test                                        |
-| ------------- | ----------- | ------------------------------------------------ |
-| API endpoints | Integration | Every endpoint returns expected data             |
-| REAPER proxy  | Integration | Commands reach REAPER and return valid responses |
-| Auth flow     | Integration | Login/logout/token refresh                       |
-| Mixer UI      | E2E         | Page loads, faders work, presets save            |
-| Deploy        | Smoke       | HTTP 200 from http://iem.lan/                    |
-
-### Meta-Test Requirement:
-
-CI must include a "test-integrity" job that:
-
-1. Counts total tests and fails if < minimum threshold
-2. Scans for `#[ignore]` and fails if any found
-3. Scans for `skip` patterns and fails if any found
-4. Verifies no `if:` conditions bypass test execution
-
-### GitHub Secrets Required:
-
-- `IEM_LAN_SSH_KEY` - SSH key for deploy@iem.lan (set via `gh secret set`)
+- `IEM_LAN_SSH_KEY` - SSH key for deploy@iem.lan
 - `TAURI_SIGNING_PRIVATE_KEY` - For updater signatures (optional)
 
 ---
