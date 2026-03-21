@@ -1192,6 +1192,20 @@ jobs:
             exit 1
           }
 
+          # After MONITOR bus setup, VBAN moved from ENGINEER inear to MONITOR bus.
+          # Route tone gen signal: switch listen target to ENGINEER so its send is unmuted.
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/ENGINEER" -UseBasicParsing | Out-Null
+          $switchIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_switch_listen_target" -UseBasicParsing -TimeoutSec 5).Content
+          $switchActionId = ($switchIdResp -split "`t")[-1]
+          if ($switchActionId) {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$switchActionId" -UseBasicParsing | Out-Null
+            Start-Sleep -Seconds 2
+            $listenResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result" -UseBasicParsing).Content
+            Write-Host "Listen switch to ENGINEER: $listenResult"
+          } else {
+            Write-Host "::warning::switch_listen_target not registered - tone gen signal may not reach VBAN"
+          }
+
       - name: Test audio pipeline (VBAN UDP to WebSocket Opus frames)
         shell: powershell
         run: |
