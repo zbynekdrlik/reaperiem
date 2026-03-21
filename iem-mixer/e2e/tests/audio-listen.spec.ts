@@ -136,3 +136,150 @@ test.describe("Audio Listen Button (#90)", () => {
     expect(audioResp.status()).toBe(400);
   });
 });
+
+test.describe("Listen Boost Settings (#101)", () => {
+  test("engineer settings shows listen boost section", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    // Open settings modal
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+
+    // Verify stepper controls exist
+    await expect(page.locator('[data-testid="boost-minus"]')).toBeVisible();
+    await expect(page.locator('[data-testid="boost-plus"]')).toBeVisible();
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "0 dB",
+    );
+  });
+
+  test("listen boost stepper increments and decrements by 3 dB", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+
+    const boostValue = page.locator('[data-testid="boost-value"]');
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    const minusBtn = page.locator('[data-testid="boost-minus"]');
+
+    // Start at 0 dB
+    await expect(boostValue).toHaveText("0 dB");
+
+    // Increment twice: 0 → 3 → 6
+    await plusBtn.click();
+    await expect(boostValue).toHaveText("+3 dB");
+    await plusBtn.click();
+    await expect(boostValue).toHaveText("+6 dB");
+
+    // Decrement once: 6 → 3
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("+3 dB");
+
+    // Decrement below 0 should clamp to 0
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("0 dB");
+    await minusBtn.click();
+    await expect(boostValue).toHaveText("0 dB");
+  });
+
+  test("listen boost persists in localStorage", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+
+    // Set boost to +12 dB (4 clicks)
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    for (let i = 0; i < 4; i++) {
+      await plusBtn.click();
+    }
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+12 dB",
+    );
+
+    // Verify localStorage contains the boost value
+    const stored = await page.evaluate(() => {
+      const raw = localStorage.getItem("iem_settings_engineer");
+      if (!raw) return null;
+      return JSON.parse(raw);
+    });
+    expect(stored).toBeTruthy();
+    expect(stored.listen_boost_db).toBe(12);
+
+    // Reload and verify persistence
+    await page.reload();
+    if (!(await waitForMixer(page))) return;
+
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+12 dB",
+    );
+  });
+
+  test("non-engineer settings hides listen boost", async ({ page }) => {
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    const member = members[0].id;
+    await loginAs(page, member);
+    await page.goto(`/${member}`);
+    if (!(await waitForMixer(page))) return;
+
+    // Open settings modal
+    await page.locator(".settings-btn").click();
+
+    // Wait for settings modal to appear
+    await expect(page.locator(".settings-modal")).toBeVisible({
+      timeout: 5000,
+    });
+
+    // Audio section should NOT be present for regular members
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toHaveCount(0);
+  });
+
+  test("listen boost clamps at +24 dB maximum", async ({ page }) => {
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    await page.locator(".settings-btn").click();
+    await expect(
+      page.locator('[data-testid="listen-boost-section"]'),
+    ).toBeVisible({ timeout: 5000 });
+
+    // Click + 9 times (should clamp at 24)
+    const plusBtn = page.locator('[data-testid="boost-plus"]');
+    for (let i = 0; i < 9; i++) {
+      await plusBtn.click();
+    }
+    await expect(page.locator('[data-testid="boost-value"]')).toHaveText(
+      "+24 dB",
+    );
+  });
+});

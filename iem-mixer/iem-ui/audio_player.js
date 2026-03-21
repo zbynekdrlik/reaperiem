@@ -2,6 +2,7 @@
 // Used by the ListenButton Leptos component via wasm_bindgen JS interop
 
 let audioContext = null;
+let gainNode = null;
 let nextStartTime = 0;
 let frameIndex = 0;
 let lastAudioLevel = -150;
@@ -25,6 +26,9 @@ export function initAudioPlayer() {
     return;
   }
   audioContext = new AudioContext({ sampleRate: 48000 });
+  gainNode = audioContext.createGain();
+  gainNode.gain.value = 1.0;
+  gainNode.connect(audioContext.destination);
   nextStartTime = 0;
   frameIndex = 0;
   lastAudioLevel = -150;
@@ -176,7 +180,7 @@ function scheduleAudioData(audioData) {
   // Schedule playback with seamless timing
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
-  source.connect(audioContext.destination);
+  source.connect(gainNode || audioContext.destination);
 
   const now = audioContext.currentTime;
   if (nextStartTime <= now) {
@@ -199,6 +203,7 @@ export function stopAudioPlayer() {
     }
     decoder = null;
   }
+  gainNode = null;
   if (audioContext) {
     audioContext.close();
     audioContext = null;
@@ -234,8 +239,29 @@ export function getAudioError() {
   return lastError;
 }
 
+/**
+ * Set the listen gain in dB. Range: -60 to +18.
+ * @param {number} db - Gain in dB (0 = unity, +18 = max boost)
+ */
+export function setListenGain(db) {
+  if (!gainNode) return;
+  const linear = Math.pow(10, db / 20);
+  gainNode.gain.setValueAtTime(linear, audioContext.currentTime);
+}
+
+/**
+ * Get the current listen gain in dB.
+ * @returns {number} Current gain in dB
+ */
+export function getListenGain() {
+  if (!gainNode) return 0;
+  const linear = gainNode.gain.value;
+  return linear > 0.00001 ? 20 * Math.log10(linear) : -60;
+}
+
 // Expose for E2E testing (Playwright can access via page.evaluate)
 if (typeof window !== "undefined") {
   window.__iem_audio_level = getAudioLevel;
   window.__iem_audio_error = getAudioError;
+  window.__iem_audio_gain = getListenGain;
 }

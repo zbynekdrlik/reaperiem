@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.75.0 (2026-03-20)
+
+- **Feature**: Solo state now syncs across devices — solo a channel on your phone and your laptop shows it too
+- **Feature**: New connections receive current solo state immediately (no stale UI on second tab)
+
 ### v1.74.0 (2026-03-20)
 
 - **Fix**: Phones no longer stuck on infinite spinner after app restart — JWT signing key now persists to config.yaml so cached tokens remain valid across restarts

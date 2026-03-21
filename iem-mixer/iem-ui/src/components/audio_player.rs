@@ -6,6 +6,8 @@
 use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 
+use crate::components::settings_modal::UserSettings;
+
 // JS interop functions from audio_player.js
 #[wasm_bindgen(module = "/audio_player.js")]
 extern "C" {
@@ -20,6 +22,9 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "isAudioSupported")]
     fn is_audio_supported() -> bool;
+
+    #[wasm_bindgen(js_name = "setListenGain")]
+    pub fn set_listen_gain(db: f32);
 }
 
 /// Audio listening states
@@ -115,6 +120,10 @@ fn start_listening(
     // If we wait for the async on_open callback, the context will be suspended
     // and resume() won't work (it's also not a user gesture).
     init_audio_player();
+
+    // Apply saved listen boost from engineer settings
+    let settings = UserSettings::load("engineer");
+    set_listen_gain(settings.listen_boost_db);
 
     let socket = match web_sys::WebSocket::new(&url) {
         Ok(s) => s,
