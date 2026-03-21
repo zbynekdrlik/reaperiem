@@ -665,9 +665,7 @@ pub fn MixerPage() -> impl IntoView {
 
     // Toolbar callbacks
     // Show engineer toolbar (Mute All + Listen) on any page when logged in as engineer
-    let is_engineer = crate::auth::get_auth()
-        .map(|a| a.engineer)
-        .unwrap_or(false);
+    let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
     // Mute All only on /engineer (engineer's own mixer)
     let is_engineer_own_mixer = is_engineer && member_id() == "engineer";
 
