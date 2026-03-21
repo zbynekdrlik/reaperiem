@@ -218,7 +218,7 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
 
       ws.on("open", () => {
         // Send ListenStart
-        ws.send(JSON.stringify({ cmd: "ListenStart" }));
+        ws.send(JSON.stringify({ cmd: "ListenStart", member_id: "engineer" }));
       });
 
       ws.on("message", (data: Buffer, isBinary: boolean) => {
@@ -325,7 +325,7 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
       }, 10000);
 
       ws.on("open", () => {
-        ws.send(JSON.stringify({ cmd: "ListenStart" }));
+        ws.send(JSON.stringify({ cmd: "ListenStart", member_id: "engineer" }));
       });
 
       ws.on("message", (data: Buffer, isBinary: boolean) => {

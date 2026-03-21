@@ -40,10 +40,16 @@ enum ListenState {
 ///
 /// Opens a separate WebSocket connection to /ws/audio when activated.
 /// Receives binary Opus frames and plays them via Web Audio API.
+/// `member_id` specifies whose mix to listen to (e.g., "petka", "engineer").
 #[component]
-pub fn ListenButton() -> impl IntoView {
+pub fn ListenButton(
+    /// Which member's mix to listen to
+    member_id: String,
+) -> impl IntoView {
+    let member_id = member_id.clone();
     let (state, set_state) = signal(ListenState::Idle);
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
+    let (listen_target, set_listen_target) = signal(String::new());
 
     // Check browser support on mount
     Effect::new(move || {
@@ -60,6 +66,7 @@ pub fn ListenButton() -> impl IntoView {
         stop_audio_player();
     });
 
+    let member_id_toggle = member_id.clone();
     let toggle = move |_: web_sys::MouseEvent| {
         if state.get() == ListenState::Unsupported {
             return;
@@ -67,10 +74,16 @@ pub fn ListenButton() -> impl IntoView {
 
         if state.get() == ListenState::Idle || state.get() == ListenState::NoSource {
             // Start listening
-            start_listening(set_state, set_ws);
+            start_listening(
+                set_state,
+                set_ws,
+                set_listen_target,
+                member_id_toggle.clone(),
+            );
         } else {
             // Stop listening
             stop_listening(ws, set_state, set_ws);
+            set_listen_target.set(String::new());
         }
     };
 
@@ -82,10 +95,22 @@ pub fn ListenButton() -> impl IntoView {
     };
 
     let btn_text = move || match state.get() {
-        ListenState::Idle => "\u{1F50A} Listen",
-        ListenState::Listening => "\u{1F50A} Listening...",
-        ListenState::NoSource => "\u{1F50A} No Source",
-        ListenState::Unsupported => "\u{1F507} Unsupported",
+        ListenState::Idle => "\u{1F50A} Listen".to_string(),
+        ListenState::Listening => {
+            let target = listen_target.get();
+            if target.is_empty() || target == "engineer" {
+                "\u{1F50A} Listening...".to_string()
+            } else {
+                let mut chars = target.chars();
+                let cap: String = match chars.next() {
+                    None => String::new(),
+                    Some(c) => c.to_uppercase().chain(chars).collect(),
+                };
+                format!("\u{1F50A} Listening ({})...", cap)
+            }
+        }
+        ListenState::NoSource => "\u{1F50A} No Source".to_string(),
+        ListenState::Unsupported => "\u{1F507} Unsupported".to_string(),
     };
 
     view! {
@@ -102,6 +127,8 @@ pub fn ListenButton() -> impl IntoView {
 fn start_listening(
     set_state: WriteSignal<ListenState>,
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
+    set_listen_target: WriteSignal<String>,
+    member_id: String,
 ) {
     // Build WebSocket URL
     let auth = match crate::auth::get_auth() {
@@ -134,10 +161,14 @@ fn start_listening(
     };
     socket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
-    // On open: send ListenStart (audio player already initialized above)
+    // On open: send ListenStart with member_id (audio player already initialized above)
+    let member_id_open = member_id.clone();
     let on_open = Closure::wrap(Box::new(move |_: web_sys::Event| {
-        // Send ListenStart command
-        let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStart).unwrap_or_default();
+        // Send ListenStart command with target member
+        let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStart {
+            member_id: member_id_open.clone(),
+        })
+        .unwrap_or_default();
         if let Some(w) = web_sys::window() {
             if let Ok(ws_val) = js_sys::Reflect::get(&w, &"__iem_audio_ws".into()) {
                 if let Some(ws) = ws_val.dyn_ref::<web_sys::WebSocket>() {
@@ -177,7 +208,10 @@ fn start_listening(
         // Text message = status update
         if let Some(text) = event.data().as_string() {
             if let Ok(msg) = serde_json::from_str::<iem_core::ServerMsg>(&text) {
-                if let iem_core::ServerMsg::AudioStatus { status } = msg {
+                if let iem_core::ServerMsg::AudioStatus { status, target } = msg {
+                    if let Some(t) = target {
+                        set_listen_target.set(t);
+                    }
                     match status.as_str() {
                         "listening" => set_state_msg.set(ListenState::Listening),
                         "no_source" => set_state_msg.set(ListenState::NoSource),

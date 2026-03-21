@@ -1353,7 +1353,7 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("SetSolo should not reach apply_command_to_cache".to_string());
         }
-        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+        iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
         }
@@ -1495,7 +1495,7 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::SetSolo { .. } => {
             unreachable!("SetSolo handled before apply_command_to_cache")
         }
-        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+        iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
@@ -1717,12 +1717,42 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             match cmd {
-                                ClientMsg::ListenStart => {
-                                    tracing::info!("Audio listen started");
+                                ClientMsg::ListenStart { member_id } => {
+                                    tracing::info!(target_member = %member_id, "Audio listen started");
+
+                                    // Resolve member_id to REAPER track name
+                                    let target_name = {
+                                        let discovered = state.discovered_members.read().await;
+                                        discovered.iter()
+                                            .find(|m| m.id() == member_id)
+                                            .map(|m| m.name.clone())
+                                    };
+
+                                    if let Some(ref name) = target_name {
+                                        // Set listen target via EXTSTATE and trigger ReaScript
+                                        let config = state.config.read().await;
+                                        let reaper_url = config.reaper_url.clone();
+                                        drop(config);
+
+                                        let set_url = format!(
+                                            "{}/_/SET/EXTSTATE/reaperiem/listen_target/{}",
+                                            reaper_url, name
+                                        );
+                                        let trigger_url = format!(
+                                            "{}/_/_RS_REAPERIEM_SWITCH_LISTEN",
+                                            reaper_url
+                                        );
+
+                                        // Fire-and-forget: set target then trigger script
+                                        let _ = state.http_client.get(&set_url).send().await;
+                                        let _ = state.http_client.get(&trigger_url).send().await;
+                                    }
+
                                     audio_rx = Some(state.audio_tx.subscribe());
                                     last_audio_time = Instant::now();
                                     let status = ServerMsg::AudioStatus {
                                         status: "listening".to_string(),
+                                        target: Some(member_id),
                                     };
                                     let json = serde_json::to_string(&status).unwrap_or_default();
                                     if socket.send(Message::Text(json.into())).await.is_err() {
@@ -1734,6 +1764,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                     audio_rx = None;
                                     let status = ServerMsg::AudioStatus {
                                         status: "stopped".to_string(),
+                                        target: None,
                                     };
                                     let json = serde_json::to_string(&status).unwrap_or_default();
                                     if socket.send(Message::Text(json.into())).await.is_err() {
@@ -1781,6 +1812,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                 if last_audio_time.elapsed() > Duration::from_secs(5) {
                     let status = ServerMsg::AudioStatus {
                         status: "no_source".to_string(),
+                        target: None,
                     };
                     let json = serde_json::to_string(&status).unwrap_or_default();
                     if socket.send(Message::Text(json.into())).await.is_err() {

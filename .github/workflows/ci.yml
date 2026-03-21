@@ -941,6 +941,20 @@ jobs:
           } else {
             Write-Host "tone_generator.lua already registered"
           }
+          # Register setup_monitor_bus.lua
+          if ($content -notmatch "SETUP_MONITOR") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_MONITOR "Custom: Setup MONITOR bus for engineer listen switching" reaperiem\setup_monitor_bus.lua'
+            Write-Host "Registered setup_monitor_bus.lua"
+          } else {
+            Write-Host "setup_monitor_bus.lua already registered"
+          }
+          # Register switch_listen_target.lua
+          if ($content -notmatch "SWITCH_LISTEN") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SWITCH_LISTEN "Custom: Switch engineer listen target via MONITOR bus" reaperiem\switch_listen_target.lua'
+            Write-Host "Registered switch_listen_target.lua"
+          } else {
+            Write-Host "switch_listen_target.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -964,7 +978,7 @@ jobs:
           }
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_monitor_bus.lua|switch_listen_target.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
           Start-Sleep -Seconds 3
           $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
           Write-Host "Dynamic registration result: $result"
@@ -1070,7 +1084,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_monitor_bus.lua|switch_listen_target.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"
