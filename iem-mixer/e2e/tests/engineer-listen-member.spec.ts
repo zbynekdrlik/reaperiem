@@ -419,6 +419,54 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     }
   });
 
+  test("Listen produces audio output within 3 seconds on engineer page", async ({
+    page,
+  }) => {
+    // This test requires REAPER with active audio — live only
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    // Click Listen — should produce audio within 3 seconds (no mute toggle needed)
+    await listenBtn.click();
+
+    // Poll __iem_audio_level() for up to 3 seconds
+    let audioLevel = -150;
+    for (let i = 0; i < 15; i++) {
+      await page.waitForTimeout(200);
+      audioLevel = await page.evaluate(() => {
+        return typeof window.__iem_audio_level === "function"
+          ? window.__iem_audio_level()
+          : -150;
+      });
+      if (audioLevel > -100) break;
+    }
+
+    expect(
+      audioLevel,
+      `Audio level should be > -100 dB within 3s of Listen click, got ${audioLevel} dB`,
+    ).toBeGreaterThan(-100);
+
+    // Cleanup: stop listening
+    await listenBtn.click();
+  });
+
   test("Listen does not change mute buttons in engineer mixer UI", async ({
     page,
   }) => {
