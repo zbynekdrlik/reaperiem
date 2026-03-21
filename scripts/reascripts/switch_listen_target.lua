@@ -8,6 +8,10 @@
 --
 -- Special target "ALL" unmutes all sends (restores normal engineer mix).
 --
+-- Mute state preservation:
+--   On ListenStart: saves current mute states to EXTSTATE reaperiem/listen_mute_backup
+--   On ListenStop:  restores mute states from backup, then clears backup
+--
 -- Result written to EXTSTATE reaperiem/listen_result:
 --   OK:<member_name>     — switched successfully
 --   OK:ALL               — all sends restored
@@ -26,6 +30,57 @@ local function find_engineer_inear()
   return nil, -1
 end
 
+-- Collect all member inear sends to engineer: returns list of {track, name, send_idx, mute_state}
+local function collect_member_sends(eng_track)
+  local sends = {}
+  local track_count = reaper.CountTracks(0)
+  for t = 0, track_count - 1 do
+    local track = reaper.GetTrack(0, t)
+    local _, track_name = reaper.GetTrackName(track)
+    local member_name = track_name:match("^(%S+)%s+inear$")
+    if member_name and member_name:upper() ~= "ENGINEER" then
+      local send_count = reaper.GetTrackNumSends(track, 0)
+      for s = 0, send_count - 1 do
+        local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+        if dest == eng_track then
+          local muted = reaper.GetTrackSendInfo_Value(track, 0, s, "B_MUTE")
+          table.insert(sends, {
+            track = track,
+            name = member_name:upper(),
+            send_idx = s,
+            mute_state = muted
+          })
+          break
+        end
+      end
+    end
+  end
+  return sends
+end
+
+-- Save mute states as EXTSTATE: "NAME1:0;NAME2:1;NAME3:0"
+local function save_mute_backup(sends)
+  local parts = {}
+  for _, s in ipairs(sends) do
+    table.insert(parts, s.name .. ":" .. tostring(math.floor(s.mute_state)))
+  end
+  reaper.SetExtState("reaperiem", "listen_mute_backup", table.concat(parts, ";"), false)
+end
+
+-- Parse mute backup EXTSTATE into {NAME = mute_value} table
+local function parse_mute_backup()
+  local backup_str = reaper.GetExtState("reaperiem", "listen_mute_backup")
+  if backup_str == "" then return nil end
+  local result = {}
+  for entry in backup_str:gmatch("[^;]+") do
+    local name, val = entry:match("^(%S+):(%d+)$")
+    if name and val then
+      result[name:upper()] = tonumber(val)
+    end
+  end
+  return result
+end
+
 -- Main
 local target = reaper.GetExtState("reaperiem", "listen_target")
 if target == "" then
@@ -39,44 +94,52 @@ if not eng_track then
   return
 end
 
--- Iterate all tracks, find member inear tracks that have a send to ENGINEER inear
-local track_count = reaper.CountTracks(0)
-local matched = false
+local sends = collect_member_sends(eng_track)
 local restore_all = (target:upper() == "ALL")
 
-for t = 0, track_count - 1 do
-  local track = reaper.GetTrack(0, t)
-  local _, track_name = reaper.GetTrackName(track)
-
-  -- Only process member inear tracks (not ENGINEER inear itself)
-  local member_name = track_name:match("^(%S+)%s+inear$")
-  if member_name and member_name:upper() ~= "ENGINEER" then
-    -- Find this track's send to ENGINEER inear
-    local send_count = reaper.GetTrackNumSends(track, 0) -- 0 = sends
-    for s = 0, send_count - 1 do
-      local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
-      if dest == eng_track then
-        if restore_all then
-          -- Unmute all sends (restore normal mix)
-          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 0)
-        elseif member_name:upper() == target:upper() then
-          -- Unmute matching member's send
-          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 0)
-          matched = true
-        else
-          -- Mute all other member sends
-          reaper.SetTrackSendInfo_Value(track, 0, s, "B_MUTE", 1)
-        end
-        break -- Each member inear has at most one send to engineer
+if restore_all then
+  -- ListenStop: restore mute states from backup
+  local backup = parse_mute_backup()
+  if backup then
+    for _, s in ipairs(sends) do
+      local saved = backup[s.name]
+      if saved then
+        reaper.SetTrackSendInfo_Value(s.track, 0, s.send_idx, "B_MUTE", saved)
+      else
+        -- Member not in backup (new member added since listen started) — unmute
+        reaper.SetTrackSendInfo_Value(s.track, 0, s.send_idx, "B_MUTE", 0)
       end
     end
+  else
+    -- No backup exists (edge case) — fall back to unmute all
+    for _, s in ipairs(sends) do
+      reaper.SetTrackSendInfo_Value(s.track, 0, s.send_idx, "B_MUTE", 0)
+    end
   end
-end
-
-if restore_all then
+  -- Clear backup
+  reaper.SetExtState("reaperiem", "listen_mute_backup", "", false)
   reaper.SetExtState("reaperiem", "listen_result", "OK:ALL", false)
-elseif matched then
-  reaper.SetExtState("reaperiem", "listen_result", "OK:" .. target, false)
 else
-  reaper.SetExtState("reaperiem", "listen_result", "FAIL:target_not_found:" .. target, false)
+  -- ListenStart: save current mute states if no backup exists yet
+  local existing_backup = reaper.GetExtState("reaperiem", "listen_mute_backup")
+  if existing_backup == "" then
+    save_mute_backup(sends)
+  end
+
+  -- Mute all except target
+  local matched = false
+  for _, s in ipairs(sends) do
+    if s.name == target:upper() then
+      reaper.SetTrackSendInfo_Value(s.track, 0, s.send_idx, "B_MUTE", 0)
+      matched = true
+    else
+      reaper.SetTrackSendInfo_Value(s.track, 0, s.send_idx, "B_MUTE", 1)
+    end
+  end
+
+  if matched then
+    reaper.SetExtState("reaperiem", "listen_result", "OK:" .. target, false)
+  else
+    reaper.SetExtState("reaperiem", "listen_result", "FAIL:target_not_found:" .. target, false)
+  end
 end

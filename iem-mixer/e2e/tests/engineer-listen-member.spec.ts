@@ -243,4 +243,179 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const restoreText = await restoreResp.text();
     expect(restoreText).toContain("OK:ALL");
   });
+
+  test("ListenStop restores pre-listen mute state instead of unmuting all", async ({
+    request,
+  }) => {
+    // This test verifies Bug 1: ListenStop should restore mute states, not unmute everything.
+    // Pre-mute one member's send, listen on another, stop listening, verify mute preserved.
+    const reaperCheck = await request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
+    const membersResp = await request.get("/api/members");
+    const members = await membersResp.json();
+    if (
+      !assume(
+        members.length >= 2,
+        "Need at least 2 members for mute preservation test",
+      )
+    )
+      return;
+
+    // Find ENGINEER inear track and member inear tracks with sends to it
+    const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+    const tracksText = await tracksResp.text();
+    const lines = tracksText.split("\n");
+
+    // Find engineer inear track index
+    let engineerTrackIdx = -1;
+    const memberInears: { name: string; trackIdx: number }[] = [];
+    for (const line of lines) {
+      const parts = line.split("\t");
+      if (parts[0] === "TRACK" && parts.length > 2) {
+        const idx = parseInt(parts[1]);
+        const name = parts[2];
+        if (name.toUpperCase().match(/^ENGINEER\s+INEAR$/)) {
+          engineerTrackIdx = idx;
+        }
+        const memberMatch = name.match(/^(\S+)\s+inear$/i);
+        if (memberMatch && !memberMatch[1].toUpperCase().match(/^ENGINEER$/)) {
+          memberInears.push({
+            name: memberMatch[1].toUpperCase(),
+            trackIdx: idx,
+          });
+        }
+      }
+    }
+    if (!assume(engineerTrackIdx >= 0, "ENGINEER inear track must exist"))
+      return;
+    if (
+      !assume(memberInears.length >= 2, "Need at least 2 member inear tracks")
+    )
+      return;
+
+    // Find send indices from member inear tracks to ENGINEER inear
+    const memberSends: { name: string; trackIdx: number; sendIdx: number }[] =
+      [];
+    for (const m of memberInears) {
+      for (let s = 0; s < 10; s++) {
+        const sendResp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${m.trackIdx}/SEND/${s}`,
+        );
+        const sendText = await sendResp.text();
+        const sendParts = sendText.split("\t");
+        if (sendParts[0] !== "SEND") break;
+        const destTrack = parseInt(sendParts[6]);
+        if (destTrack === engineerTrackIdx) {
+          memberSends.push({ ...m, sendIdx: s });
+          break;
+        }
+      }
+    }
+    if (
+      !assume(
+        memberSends.length >= 2,
+        "Need at least 2 members with sends to ENGINEER",
+      )
+    )
+      return;
+
+    const muteTarget = memberSends[0]; // This member will be pre-muted
+    const listenTarget = memberSends[1]; // We'll listen to this member
+
+    // Save original mute states for cleanup
+    const originalMutes: {
+      trackIdx: number;
+      sendIdx: number;
+      muted: boolean;
+    }[] = [];
+    for (const ms of memberSends) {
+      const resp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+      );
+      const text = await resp.text();
+      const parts = text.split("\t");
+      const muteFlag = parseInt(parts[3] || "0");
+      originalMutes.push({
+        trackIdx: ms.trackIdx,
+        sendIdx: ms.sendIdx,
+        muted: (muteFlag & 8) !== 0,
+      });
+    }
+
+    try {
+      // Step 1: Pre-mute first member's send to ENGINEER inear
+      await request.get(
+        `http://iem.lan:8080/_/SET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}/MUTE/1`,
+      );
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Verify the mute took effect
+      const verifyResp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}`,
+      );
+      const verifyText = await verifyResp.text();
+      const verifyParts = verifyText.split("\t");
+      const verifyMuteFlag = parseInt(verifyParts[3] || "0");
+      if (
+        !assume(
+          (verifyMuteFlag & 8) !== 0,
+          `${muteTarget.name} send must be muted before listen test`,
+        )
+      )
+        return;
+
+      // Step 2: ListenStart on the second member
+      await request.get(
+        `http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/${listenTarget.name}`,
+      );
+      await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
+      await new Promise((r) => setTimeout(r, 3000));
+
+      const listenResult = await request.get(
+        "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
+      );
+      const listenText = await listenResult.text();
+      expect(listenText).toContain("OK");
+
+      // Step 3: ListenStop (target="ALL")
+      await request.get(
+        "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
+      );
+      await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
+      await new Promise((r) => setTimeout(r, 3000));
+
+      const stopResult = await request.get(
+        "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
+      );
+      const stopText = await stopResult.text();
+      expect(stopText).toContain("OK:ALL");
+
+      // Step 4: ASSERT - pre-muted member's send should STILL be muted
+      const afterResp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}`,
+      );
+      const afterText = await afterResp.text();
+      const afterParts = afterText.split("\t");
+      const afterMuteFlag = parseInt(afterParts[3] || "0");
+      expect(
+        (afterMuteFlag & 8) !== 0,
+        `${muteTarget.name}'s send should still be muted after ListenStop, but flag was ${afterMuteFlag}`,
+      ).toBe(true);
+    } finally {
+      // Cleanup: restore original mute states
+      // Also clear any listen backup EXTSTATE
+      await request.get(
+        "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_mute_backup/",
+      );
+      for (const orig of originalMutes) {
+        await request.get(
+          `http://iem.lan:8080/_/SET/TRACK/${orig.trackIdx}/SEND/${orig.sendIdx}/MUTE/${orig.muted ? 1 : 0}`,
+        );
+      }
+    }
+  });
 });

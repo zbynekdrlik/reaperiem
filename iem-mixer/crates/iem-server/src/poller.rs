@@ -19,6 +19,11 @@ use crate::{AppState, GlobalVolState};
 /// Whether the meter bridge ReaScript has been triggered this session
 static METER_BRIDGE_STARTED: AtomicBool = AtomicBool::new(false);
 
+/// Counter for periodic full meter broadcasts (every 7 cycles ≈ 1s at 150ms interval).
+/// New WebSocket clients need full meter data within ~1 second of connecting,
+/// and steady signals (test tones) would never trigger delta-only broadcasts.
+static METER_FULL_BROADCAST_CYCLE: AtomicU64 = AtomicU64::new(0);
+
 /// REAPER action ID for the meter bridge ReaScript
 const METER_BRIDGE_ACTION: &str = "_RS_REAPERIEM_METER_BRIDGE";
 
@@ -418,24 +423,36 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         return;
     }
 
-    // Only broadcast meters that actually changed (threshold: 0.01 linear ≈ -40 dB).
-    // During silence this sends nothing; during active playing only ~10-15 channels.
+    // Broadcast meters: delta-only most of the time, full broadcast every 7 cycles (~1s).
+    // The periodic full broadcast ensures:
+    // - New WebSocket clients receive meter data within ~1 second of connecting
+    // - Steady signals (test tones) stay visible even when delta is zero
     {
+        let cycle = METER_FULL_BROADCAST_CYCLE.fetch_add(1, Ordering::Relaxed);
+        let force_full = cycle % 7 == 0;
+
         let cache = state.mixer_cache.read().await;
         let prev = &cache.meters;
-        let changed: HashMap<usize, [f32; 2]> = meters
-            .iter()
-            .filter(|(idx, [l, r])| {
-                prev.get(idx)
-                    .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
-            })
-            .map(|(k, v)| (*k, *v))
-            .collect();
 
-        if !changed.is_empty() {
+        let to_broadcast = if force_full && !meters.is_empty() {
+            meters.clone()
+        } else {
+            meters
+                .iter()
+                .filter(|(idx, [l, r])| {
+                    prev.get(idx)
+                        .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+                })
+                .map(|(k, v)| (*k, *v))
+                .collect()
+        };
+
+        if !to_broadcast.is_empty() {
             let _ = state.event_tx.send((
                 String::new(), // broadcast to all
-                ServerMsg::Meters { meters: changed },
+                ServerMsg::Meters {
+                    meters: to_broadcast,
+                },
             ));
         }
     }
@@ -1558,5 +1575,106 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             !needs_rediscovery(&members),
             "Empty member list should not trigger rediscovery"
         );
+    }
+
+    // ================================================================
+    // Periodic full meter broadcast tests (Bug #2: meters not showing)
+    // ================================================================
+
+    /// Helper: simulate the meter broadcast logic used in poll_reaper_and_broadcast.
+    /// Returns what would be broadcast given current meters, cached (prev) meters, and cycle count.
+    fn simulate_meter_broadcast(
+        prev: &HashMap<usize, [f32; 2]>,
+        current: &HashMap<usize, [f32; 2]>,
+        cycle: u64,
+    ) -> HashMap<usize, [f32; 2]> {
+        let force_full = cycle % 7 == 0;
+        if force_full && !current.is_empty() {
+            current.clone()
+        } else {
+            current
+                .iter()
+                .filter(|(idx, [l, r])| {
+                    prev.get(idx)
+                        .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+                })
+                .map(|(k, v)| (*k, *v))
+                .collect()
+        }
+    }
+
+    /// Bug 2 reproduction: new client connects, meters are stable → delta is empty → no broadcast.
+    /// With the fix, cycle 0 (and every 7th) forces a full broadcast.
+    #[test]
+    fn test_new_client_receives_meters_via_periodic_full_broadcast() {
+        let cached: HashMap<usize, [f32; 2]> =
+            [(1, [0.251, 0.251]), (23, [0.158, 0.158])]
+                .into_iter()
+                .collect();
+        // Same values returned by next poll — delta would be empty
+        let current = cached.clone();
+
+        // On a non-full cycle, delta is empty (this was the bug)
+        let delta_only = simulate_meter_broadcast(&cached, &current, 1);
+        assert!(
+            delta_only.is_empty(),
+            "Delta-only broadcast on unchanged meters should be empty"
+        );
+
+        // On a full broadcast cycle (every 7th), ALL meters are sent regardless of delta
+        let full = simulate_meter_broadcast(&cached, &current, 7);
+        assert_eq!(
+            full.len(),
+            2,
+            "Full broadcast cycle should send all meters, got {}",
+            full.len()
+        );
+        assert!(full.contains_key(&1));
+        assert!(full.contains_key(&23));
+    }
+
+    /// Verify that cycle 0 triggers full broadcast (first poll after startup)
+    #[test]
+    fn test_cycle_zero_triggers_full_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> = HashMap::new();
+        let current: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+
+        let result = simulate_meter_broadcast(&prev, &current, 0);
+        assert_eq!(result.len(), 1, "Cycle 0 should force full broadcast");
+    }
+
+    /// Verify that non-7th cycles still use delta logic
+    #[test]
+    fn test_non_full_cycle_uses_delta() {
+        let prev: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5]), (2, [0.3, 0.3])]
+            .into_iter()
+            .collect();
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]),  // unchanged
+            (2, [0.8, 0.8]),  // changed
+        ]
+        .into_iter()
+        .collect();
+
+        // Cycle 3 is not a full broadcast cycle
+        let result = simulate_meter_broadcast(&prev, &current, 3);
+        assert_eq!(result.len(), 1, "Only changed track should be broadcast");
+        assert!(result.contains_key(&2));
+    }
+
+    /// Verify that full broadcast cycles are every 7th: 0, 7, 14, 21...
+    #[test]
+    fn test_full_broadcast_cycle_frequency() {
+        let meters: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+        let same = meters.clone();
+
+        for cycle in 0..28 {
+            let result = simulate_meter_broadcast(&meters, &same, cycle);
+            if cycle % 7 == 0 {
+                assert_eq!(result.len(), 1, "Cycle {} should be full broadcast", cycle);
+            } else {
+                assert!(result.is_empty(), "Cycle {} should be delta-only (empty)", cycle);
+            }
+        }
     }
 }
