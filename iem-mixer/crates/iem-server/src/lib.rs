@@ -53,7 +53,6 @@ impl EngineerListenState {
     }
 }
 
-
 /// Write data to a file atomically by writing to a temp file then renaming.
 /// Prevents corruption on crash/power failure.
 pub fn atomic_write(path: &std::path::Path, data: &str) -> std::io::Result<()> {
