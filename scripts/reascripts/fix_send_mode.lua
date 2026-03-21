@@ -25,6 +25,11 @@ local function is_member_inear(name)
     return name:match(" inear$") and not name:match("^ENGINEER ")
 end
 
+local function is_monitor_bus(track)
+    local _, name = reaper.GetTrackName(track)
+    return name:lower() == "monitor bus"
+end
+
 local function fix_all_sends()
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
@@ -45,15 +50,21 @@ local function fix_all_sends()
         local target_mode = expect_post_fader and 0 or 3
 
         for s = 0, num_sends - 1 do
-            total_sends = total_sends + 1
-            local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
+            -- Skip sends to MONITOR bus (always post-fader for listen switching)
+            local dest = reaper.GetTrackSendInfo_Value(track, 0, s, "P_DESTTRACK")
+            if is_monitor_bus(dest) then
+                total_sends = total_sends + 1
+            else
+                total_sends = total_sends + 1
+                local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
 
-            if current_mode ~= target_mode then
-                reaper.SetTrackSendInfo_Value(track, 0, s, "I_SENDMODE", target_mode)
-                fixed_sends = fixed_sends + 1
-                local mode_name = expect_post_fader and "post-fader" or "pre-fader post-FX"
-                log(string.format("  Fixed: %s send %d (was mode %d -> now %d [%s])",
-                    track_name, s, current_mode, target_mode, mode_name))
+                if current_mode ~= target_mode then
+                    reaper.SetTrackSendInfo_Value(track, 0, s, "I_SENDMODE", target_mode)
+                    fixed_sends = fixed_sends + 1
+                    local mode_name = expect_post_fader and "post-fader" or "pre-fader post-FX"
+                    log(string.format("  Fixed: %s send %d (was mode %d -> now %d [%s])",
+                        track_name, s, current_mode, target_mode, mode_name))
+                end
             end
         end
     end
