@@ -4,7 +4,7 @@
 //! Each member has their own JSON file in the presets/ directory.
 
 use crate::atomic_write;
-use iem_core::{ChannelPreset, PresetEntry, MAX_PRESETS};
+use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
