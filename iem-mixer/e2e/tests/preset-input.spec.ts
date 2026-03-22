@@ -1,7 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
+// Must navigate to app origin first so localStorage is accessible
 async function loginAs(page: Page, member: string) {
+  await page.goto("/");
   const response = await page.request.post("/api/auth", {
     data: { member, pin: "7711" },
   });
