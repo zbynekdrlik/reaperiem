@@ -7,6 +7,7 @@ let nextStartTime = 0;
 let frameIndex = 0;
 let lastAudioLevel = -150;
 let lastError = null;
+let pendingFrames = [];
 
 /**
  * Initialize the audio player. Must be called from a user gesture (click).
@@ -51,6 +52,20 @@ export function initAudioPlayer() {
       });
   }
 
+  // When context transitions to "running", drain any buffered frames
+  audioContext.onstatechange = () => {
+    if (audioContext.state === "running" && pendingFrames.length > 0) {
+      console.log(
+        `[audio] Context running — draining ${pendingFrames.length} buffered frames`,
+      );
+      nextStartTime = 0;
+      const frames = pendingFrames.splice(0);
+      for (const frame of frames) {
+        decodeWithWebCodecs(frame);
+      }
+    }
+  };
+
   console.log(
     "[audio] Player initialized, sampleRate:",
     audioContext.sampleRate,
@@ -70,21 +85,18 @@ export function feedOpusFrame(opusData) {
   // Diagnostic: log frame info (throttled to every 50th frame to avoid spam)
   if (frameIndex % 50 === 0) {
     console.log(
-      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}`,
+      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}, pending=${pendingFrames.length}`,
     );
   }
 
-  // Fallback resume attempt — may fail on mobile (not a user gesture).
-  // The primary resume happens in initAudioPlayer() during the click handler.
-  if (audioContext.state === "suspended") {
-    audioContext.resume().catch(() => {
-      // Expected to fail on mobile — initAudioPlayer should have unlocked it
-      if (frameIndex % 50 === 0) {
-        console.warn(
-          "[audio] Context still suspended — resume rejected (not a user gesture)",
-        );
-      }
-    });
+  // Buffer frames while context is not running (resume pending)
+  if (audioContext.state !== "running") {
+    if (pendingFrames.length < 50) {
+      pendingFrames.push(new Uint8Array(opusData));
+    }
+    // Keep trying to resume — may succeed on some browsers without gesture
+    audioContext.resume().catch(() => {});
+    return;
   }
 
   // Use WebCodecs AudioDecoder if available (Chrome, Edge, Safari 16.4+)
@@ -211,6 +223,7 @@ export function stopAudioPlayer() {
   nextStartTime = 0;
   lastAudioLevel = -150;
   lastError = null;
+  pendingFrames = [];
   console.log("[audio] Player stopped");
 }
 

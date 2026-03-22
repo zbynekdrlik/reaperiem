@@ -1353,7 +1353,7 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("SetSolo should not reach apply_command_to_cache".to_string());
         }
-        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+        iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
         }
@@ -1495,7 +1495,7 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::SetSolo { .. } => {
             unreachable!("SetSolo handled before apply_command_to_cache")
         }
-        iem_core::ClientMsg::ListenStart | iem_core::ClientMsg::ListenStop => {
+        iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
@@ -1717,12 +1717,51 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             match cmd {
-                                ClientMsg::ListenStart => {
-                                    tracing::info!("Audio listen started");
+                                ClientMsg::ListenStart { member_id } => {
+                                    tracing::info!(target_member = %member_id, "Audio listen started");
+
+                                    // On band member page: mute all other member sends to ENGINEER
+                                    // except the target member's send (app-level solo via send muting)
+                                    if member_id != "engineer" {
+                                        let config = state.config.read().await;
+                                        let reaper_url = config.reaper_url.clone();
+                                        drop(config);
+
+                                        // Get all non-engineer members with mix_send_index
+                                        let discovered = state.discovered_members.read().await;
+                                        let members_with_sends: Vec<(String, usize, usize)> = discovered.iter()
+                                            .filter(|m| m.id() != "engineer" && m.mix_send_index.is_some())
+                                            .map(|m| (m.id(), m.track_index, m.mix_send_index.unwrap()))
+                                            .collect();
+                                        drop(discovered);
+
+                                        // 1. Query current mute states and save them
+                                        let mut saved_mutes = Vec::new();
+                                        for (_, track_idx, send_idx) in &members_with_sends {
+                                            if let Ok((_vol, muted, _pan)) = query_send_state(
+                                                &state.http_client, &reaper_url, *track_idx, *send_idx
+                                            ).await {
+                                                saved_mutes.push((*track_idx, *send_idx, muted));
+                                            }
+                                        }
+
+                                        // 2. Mute all sends except target member's, unmute target's
+                                        for (mid, track_idx, send_idx) in &members_with_sends {
+                                            let mute_val = if *mid == member_id { 0 } else { 1 };
+                                            let url = reaper_api::set_send_mute(&reaper_url, *track_idx, *send_idx, mute_val);
+                                            let _ = state.http_client.get(&url).send().await;
+                                        }
+
+                                        // 3. Store saved states for restoration
+                                        *state.engineer_listen_target.write().await =
+                                            crate::ListenTarget::Member(saved_mutes);
+                                    }
+
                                     audio_rx = Some(state.audio_tx.subscribe());
                                     last_audio_time = Instant::now();
                                     let status = ServerMsg::AudioStatus {
                                         status: "listening".to_string(),
+                                        target: Some(member_id),
                                     };
                                     let json = serde_json::to_string(&status).unwrap_or_default();
                                     if socket.send(Message::Text(json.into())).await.is_err() {
@@ -1731,9 +1770,25 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 }
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
+
+                                    // Restore saved mute states if band member listen was active
+                                    let listen_state = state.engineer_listen_target.read().await.clone();
+                                    if let crate::ListenTarget::Member(saved_mutes) = listen_state {
+                                        let config = state.config.read().await;
+                                        let reaper_url = config.reaper_url.clone();
+                                        drop(config);
+                                        for (track_idx, send_idx, was_muted) in &saved_mutes {
+                                            let mute_val = if *was_muted { 1 } else { 0 };
+                                            let url = reaper_api::set_send_mute(&reaper_url, *track_idx, *send_idx, mute_val);
+                                            let _ = state.http_client.get(&url).send().await;
+                                        }
+                                    }
+                                    *state.engineer_listen_target.write().await = crate::ListenTarget::Idle;
+
                                     audio_rx = None;
                                     let status = ServerMsg::AudioStatus {
                                         status: "stopped".to_string(),
+                                        target: None,
                                     };
                                     let json = serde_json::to_string(&status).unwrap_or_default();
                                     if socket.send(Message::Text(json.into())).await.is_err() {
@@ -1781,6 +1836,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                 if last_audio_time.elapsed() > Duration::from_secs(5) {
                     let status = ServerMsg::AudioStatus {
                         status: "no_source".to_string(),
+                        target: None,
                     };
                     let json = serde_json::to_string(&status).unwrap_or_default();
                     if socket.send(Message::Text(json.into())).await.is_err() {

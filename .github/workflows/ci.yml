@@ -771,13 +771,47 @@ jobs:
           # Restart REAPER with project
           if ($reaperRunning) {
             Write-Host "Restarting REAPER..."
+
+            # Force-create (or update) the StartREAPER task with the correct project path
+            $reaperExe = "C:\Program Files\REAPER (x64)\reaper.exe"
+            $projectPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
+            $taskArgs = "/create /tn `"StartREAPER`" /tr `"`"$reaperExe`" `"$projectPath`"`" /sc once /st 00:00 /f"
+            Start-Process schtasks -ArgumentList $taskArgs -Wait -NoNewWindow
+            Write-Host "StartREAPER task created/updated with project path"
+
             schtasks /run /tn "StartREAPER" 2>&1 | Out-Null
-            Start-Sleep -Seconds 15
-            $back = Get-Process -Name "reaper" -ErrorAction SilentlyContinue
-            if ($back) {
-              Write-Host "REAPER restarted (PID $($back.Id))"
-            } else {
-              Write-Host "::warning::REAPER did not restart"
+
+            # Wait up to 30 seconds for REAPER HTTP API to respond with project loaded
+            $reaperReady = $false
+            $waited = 0
+            while ($waited -lt 30) {
+              Start-Sleep -Seconds 3
+              $waited += 3
+              try {
+                $ntrackResp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+                # Response format: "NTRACK\t33" — extract the number after the tab
+                $ntrackParts = $ntrackResp.Content.Trim() -split "`t"
+                $ntrack = [int]$ntrackParts[-1]
+                if ($ntrack -gt 0) {
+                  Write-Host "REAPER restarted and project loaded (NTRACK=$ntrack, waited ${waited}s)"
+                  $reaperReady = $true
+                  break
+                }
+              } catch {}
+            }
+
+            if (-not $reaperReady) {
+              Write-Host "::error::REAPER did not come back with project loaded within 30s after VST3 deploy"
+              Write-Host "::error::Check iem.lan: Is the StartREAPER task configured? Is the project path correct?"
+              exit 1
+            }
+
+            # Save the project now that REAPER is back up
+            try {
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+              Write-Host "REAPER project saved"
+            } catch {
+              Write-Host "::warning::Could not save REAPER project after restart: $_"
             }
           }
           Write-Host "VST3 bundle contents:"
@@ -1075,7 +1109,12 @@ jobs:
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"
           } catch {
-            Write-Host "::warning::Could not trigger dynamic registration: $_"
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::Could not trigger dynamic registration: $_"
+              exit 1
+            } else {
+              Write-Host "::warning::Could not trigger dynamic registration: $_"
+            }
           }
 
           $setupId = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_setup_vban" -UseBasicParsing -TimeoutSec 5).Content
@@ -1243,7 +1282,7 @@ jobs:
           }
 
           # Send ListenStart
-          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart","member_id":"engineer"}')
           $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
           $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
           Write-Host "Sent ListenStart command"
@@ -1349,7 +1388,7 @@ jobs:
           }
 
           # Send ListenStart
-          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart"}')
+          $msg = [System.Text.Encoding]::UTF8.GetBytes('{"cmd":"ListenStart","member_id":"engineer"}')
           $segment = New-Object System.ArraySegment[byte]($msg, 0, $msg.Length)
           $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true, $ct.Token).Wait()
 

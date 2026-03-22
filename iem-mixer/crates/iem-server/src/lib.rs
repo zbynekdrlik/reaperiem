@@ -29,6 +29,18 @@ use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
+/// Listen mode target tracking.
+/// Tracks saved mute states during band member listen for restoration.
+#[derive(Debug, Clone, Default)]
+pub enum ListenTarget {
+    /// Not listening — no mute overrides active
+    #[default]
+    Idle,
+    /// Listening on band member page — mute states saved for restoration.
+    /// Contains: Vec<(track_index, send_index, was_muted_before)>
+    Member(Vec<(usize, usize, bool)>),
+}
+
 /// Write data to a file atomically by writing to a temp file then renaming.
 /// Prevents corruption on crash/power failure.
 pub fn atomic_write(path: &std::path::Path, data: &str) -> std::io::Result<()> {
@@ -61,6 +73,9 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
+    /// Listen mode target (Idle / Member).
+    /// Tracks saved mute states during band member listen for restoration.
+    pub engineer_listen_target: Arc<RwLock<ListenTarget>>,
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]
     pub audio_tx: broadcast::Sender<bytes::Bytes>,
@@ -130,6 +145,7 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
+            engineer_listen_target: Arc::new(RwLock::new(ListenTarget::Idle)),
             #[cfg(feature = "audio")]
             audio_tx,
             #[cfg(feature = "audio")]

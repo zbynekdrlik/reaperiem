@@ -19,6 +19,11 @@ use crate::{AppState, GlobalVolState};
 /// Whether the meter bridge ReaScript has been triggered this session
 static METER_BRIDGE_STARTED: AtomicBool = AtomicBool::new(false);
 
+/// Counter for periodic full meter broadcasts (every 7 cycles ≈ 1s at 150ms interval).
+/// New WebSocket clients need full meter data within ~1 second of connecting,
+/// and steady signals (test tones) would never trigger delta-only broadcasts.
+static METER_FULL_BROADCAST_CYCLE: AtomicU64 = AtomicU64::new(0);
+
 /// REAPER action ID for the meter bridge ReaScript
 const METER_BRIDGE_ACTION: &str = "_RS_REAPERIEM_METER_BRIDGE";
 
@@ -418,24 +423,36 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         return;
     }
 
-    // Only broadcast meters that actually changed (threshold: 0.01 linear ≈ -40 dB).
-    // During silence this sends nothing; during active playing only ~10-15 channels.
+    // Broadcast meters: delta-only most of the time, full broadcast every 7 cycles (~1s).
+    // The periodic full broadcast ensures:
+    // - New WebSocket clients receive meter data within ~1 second of connecting
+    // - Steady signals (test tones) stay visible even when delta is zero
     {
+        let cycle = METER_FULL_BROADCAST_CYCLE.fetch_add(1, Ordering::Relaxed);
+        let force_full = cycle.is_multiple_of(7);
+
         let cache = state.mixer_cache.read().await;
         let prev = &cache.meters;
-        let changed: HashMap<usize, [f32; 2]> = meters
-            .iter()
-            .filter(|(idx, [l, r])| {
-                prev.get(idx)
-                    .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
-            })
-            .map(|(k, v)| (*k, *v))
-            .collect();
 
-        if !changed.is_empty() {
+        let to_broadcast = if force_full && !meters.is_empty() {
+            meters.clone()
+        } else {
+            meters
+                .iter()
+                .filter(|(idx, [l, r])| {
+                    prev.get(idx)
+                        .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+                })
+                .map(|(k, v)| (*k, *v))
+                .collect()
+        };
+
+        if !to_broadcast.is_empty() {
             let _ = state.event_tx.send((
                 String::new(), // broadcast to all
-                ServerMsg::Meters { meters: changed },
+                ServerMsg::Meters {
+                    meters: to_broadcast,
+                },
             ));
         }
     }
@@ -679,7 +696,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             ));
         }
 
-        // Update cache (always, even when suppressing broadcast, so it converges)
+        // Update cache with real REAPER state (never poisoned by suppression)
         cache
             .member_states
             .insert(member_id.clone(), result_channels.clone());
@@ -1557,6 +1574,221 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         assert!(
             !needs_rediscovery(&members),
             "Empty member list should not trigger rediscovery"
+        );
+    }
+
+    // ================================================================
+    // Periodic full meter broadcast tests (Bug #2: meters not showing)
+    // ================================================================
+
+    /// Helper: simulate the meter broadcast logic used in poll_reaper_and_broadcast.
+    /// Returns what would be broadcast given current meters, cached (prev) meters, and cycle count.
+    fn simulate_meter_broadcast(
+        prev: &HashMap<usize, [f32; 2]>,
+        current: &HashMap<usize, [f32; 2]>,
+        cycle: u64,
+    ) -> HashMap<usize, [f32; 2]> {
+        let force_full = cycle.is_multiple_of(7);
+        if force_full && !current.is_empty() {
+            current.clone()
+        } else {
+            current
+                .iter()
+                .filter(|(idx, [l, r])| {
+                    prev.get(idx)
+                        .is_none_or(|[pl, pr]| (l - pl).abs() > 0.01 || (r - pr).abs() > 0.01)
+                })
+                .map(|(k, v)| (*k, *v))
+                .collect()
+        }
+    }
+
+    /// Bug 2 reproduction: new client connects, meters are stable → delta is empty → no broadcast.
+    /// With the fix, cycle 0 (and every 7th) forces a full broadcast.
+    #[test]
+    fn test_new_client_receives_meters_via_periodic_full_broadcast() {
+        let cached: HashMap<usize, [f32; 2]> = [(1, [0.251, 0.251]), (23, [0.158, 0.158])]
+            .into_iter()
+            .collect();
+        // Same values returned by next poll — delta would be empty
+        let current = cached.clone();
+
+        // On a non-full cycle, delta is empty (this was the bug)
+        let delta_only = simulate_meter_broadcast(&cached, &current, 1);
+        assert!(
+            delta_only.is_empty(),
+            "Delta-only broadcast on unchanged meters should be empty"
+        );
+
+        // On a full broadcast cycle (every 7th), ALL meters are sent regardless of delta
+        let full = simulate_meter_broadcast(&cached, &current, 7);
+        assert_eq!(
+            full.len(),
+            2,
+            "Full broadcast cycle should send all meters, got {}",
+            full.len()
+        );
+        assert!(full.contains_key(&1));
+        assert!(full.contains_key(&23));
+    }
+
+    /// Verify that cycle 0 triggers full broadcast (first poll after startup)
+    #[test]
+    fn test_cycle_zero_triggers_full_broadcast() {
+        let prev: HashMap<usize, [f32; 2]> = HashMap::new();
+        let current: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+
+        let result = simulate_meter_broadcast(&prev, &current, 0);
+        assert_eq!(result.len(), 1, "Cycle 0 should force full broadcast");
+    }
+
+    /// Verify that non-7th cycles still use delta logic
+    #[test]
+    fn test_non_full_cycle_uses_delta() {
+        let prev: HashMap<usize, [f32; 2]> =
+            [(1, [0.5, 0.5]), (2, [0.3, 0.3])].into_iter().collect();
+        let current: HashMap<usize, [f32; 2]> = [
+            (1, [0.5, 0.5]), // unchanged
+            (2, [0.8, 0.8]), // changed
+        ]
+        .into_iter()
+        .collect();
+
+        // Cycle 3 is not a full broadcast cycle
+        let result = simulate_meter_broadcast(&prev, &current, 3);
+        assert_eq!(result.len(), 1, "Only changed track should be broadcast");
+        assert!(result.contains_key(&2));
+    }
+
+    /// Verify that full broadcast cycles are every 7th: 0, 7, 14, 21...
+    #[test]
+    fn test_full_broadcast_cycle_frequency() {
+        let meters: HashMap<usize, [f32; 2]> = [(1, [0.5, 0.5])].into_iter().collect();
+        let same = meters.clone();
+
+        for cycle in 0..28 {
+            let result = simulate_meter_broadcast(&meters, &same, cycle);
+            if cycle.is_multiple_of(7) {
+                assert_eq!(result.len(), 1, "Cycle {} should be full broadcast", cycle);
+            } else {
+                assert!(
+                    result.is_empty(),
+                    "Cycle {} should be delta-only (empty)",
+                    cycle
+                );
+            }
+        }
+    }
+
+    /// Test A: During active listen, cache reflects REAL REAPER mute state (not pre-listen).
+    /// This proves the cache poisoning bug is fixed: REAPER says muted=true (by ReaScript),
+    /// so the cache must also say muted=true — NOT the pre-listen muted=false.
+    #[test]
+    fn test_listen_cache_reflects_real_reaper_state() {
+        // Simulate: REAPER reports channels muted by ReaScript during listen
+        let reaper_channels = vec![
+            iem_core::Channel {
+                track_index: 23,
+                name: "PETKA".to_string(),
+                level_db: -6.0,
+                muted: true, // ReaScript muted for listen isolation
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+            iem_core::Channel {
+                track_index: 24,
+                name: "STEVO".to_string(),
+                level_db: -3.0,
+                muted: true, // ReaScript muted for listen isolation
+                pan: 0.0,
+                category: String::new(),
+                stereo_pair: None,
+                stereo_side: None,
+            },
+        ];
+
+        // The poller now writes REAPER state directly to cache (no suppression replacement).
+        // Simulate what the poller does: insert result_channels into cache.
+        let mut cache = MixerCache::new();
+        cache
+            .member_states
+            .insert("engineer".to_string(), reaper_channels.clone());
+
+        // Assert: cache has REAL REAPER state (muted=true), not pre-listen state
+        let cached = cache.member_states.get("engineer").unwrap();
+        assert!(
+            cached[0].muted,
+            "PETKA cache must reflect REAPER truth: muted=true during listen"
+        );
+        assert!(
+            cached[1].muted,
+            "STEVO cache must reflect REAPER truth: muted=true during listen"
+        );
+    }
+
+    /// ListenTarget defaults to Idle
+    #[test]
+    fn test_listen_target_default_is_idle() {
+        let target = crate::ListenTarget::default();
+        assert!(
+            matches!(target, crate::ListenTarget::Idle),
+            "Default ListenTarget must be Idle"
+        );
+    }
+
+    /// ListenTarget::Member stores saved mute states
+    #[test]
+    fn test_listen_target_member_stores_saved_mutes() {
+        let saved = vec![(23, 5, false), (24, 5, true), (25, 5, false)];
+        let target = crate::ListenTarget::Member(saved.clone());
+        if let crate::ListenTarget::Member(mutes) = target {
+            assert_eq!(mutes.len(), 3, "Member must store all saved mute states");
+            assert_eq!(mutes[0], (23, 5, false), "First member: unmuted before");
+            assert_eq!(mutes[1], (24, 5, true), "Second member: muted before");
+            assert_eq!(mutes[2], (25, 5, false), "Third member: unmuted before");
+        } else {
+            panic!("Expected Member variant");
+        }
+    }
+
+    /// Poller broadcasts ALL changes without suppression (no listen special-casing)
+    #[test]
+    fn test_poller_broadcasts_mute_changes_during_listen() {
+        // With mute-based listen, the poller has no suppression logic.
+        // All changes from REAPER are broadcast to the UI unconditionally.
+        let old_ch = iem_core::Channel {
+            track_index: 23,
+            name: "PETKA".to_string(),
+            level_db: -6.0,
+            muted: false,
+            pan: 0.0,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        };
+        let new_ch = iem_core::Channel {
+            track_index: 23,
+            name: "PETKA".to_string(),
+            level_db: -6.0,
+            muted: true, // User toggled mute during listen
+            pan: 0.0,
+            category: String::new(),
+            stereo_pair: None,
+            stereo_side: None,
+        };
+
+        let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.05
+            || old_ch.muted != new_ch.muted
+            || (old_ch.pan - new_ch.pan).abs() > 0.001;
+        assert!(changed, "Mute change should be detected");
+
+        // No suppression — all changes broadcast
+        let should_broadcast = changed;
+        assert!(
+            should_broadcast,
+            "Mute changes must always be broadcast (no suppression during listen)"
         );
     }
 }

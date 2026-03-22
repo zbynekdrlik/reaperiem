@@ -139,7 +139,7 @@ test.describe("Engineer Mute All (#88)", () => {
     expect(body.operation).toBe("mute_all");
   });
 
-  test("Mute All hidden + Presets/History shown when engineer views member mixer", async ({
+  test("Mute All hidden + Listen shown when engineer views member mixer", async ({
     page,
   }) => {
     await page.goto("/");
@@ -158,13 +158,10 @@ test.describe("Engineer Mute All (#88)", () => {
 
     // No Mute All on member's mixer
     await expect(page.locator(".toolbar-btn-mute-all")).toHaveCount(0);
-    // Presets and History should be visible
-    await expect(
-      page.locator(".toolbar-btn", { hasText: "Presets" }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".toolbar-btn", { hasText: "History" }),
-    ).toBeVisible();
+    // Listen button should be visible (engineer can listen to member's mix)
+    await expect(page.locator(".toolbar-btn-listen")).toBeVisible({
+      timeout: 5000,
+    });
   });
 
   test("engineer own mixer shows Mute All, no Presets/History", async ({

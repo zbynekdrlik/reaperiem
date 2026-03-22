@@ -27,7 +27,8 @@ pub enum ClientMsg {
     /// Set solo state for this member (full replacement, syncs across devices)
     SetSolo { soloed: Vec<usize> },
     /// Start listening to audio stream (engineer only)
-    ListenStart,
+    /// member_id specifies whose mix to listen to (e.g., "petka", "engineer")
+    ListenStart { member_id: String },
     /// Stop listening to audio stream
     ListenStop,
 }
@@ -70,7 +71,11 @@ pub enum ServerMsg {
     /// Solo state update (sent on connect and after changes)
     SoloUpdate { soloed: Vec<usize> },
     /// Audio streaming status update
-    AudioStatus { status: String },
+    AudioStatus {
+        status: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
+    },
 }
 
 #[cfg(test)]
@@ -288,9 +293,23 @@ mod tests {
 
     #[test]
     fn test_client_msg_listen_start_serialization() {
-        let msg = ClientMsg::ListenStart;
+        let msg = ClientMsg::ListenStart {
+            member_id: "petka".to_string(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"cmd\":\"ListenStart\""));
+        assert!(json.contains("\"member_id\":\"petka\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_listen_start_engineer_own_mix() {
+        let msg = ClientMsg::ListenStart {
+            member_id: "engineer".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"member_id\":\"engineer\""));
         let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
@@ -308,12 +327,42 @@ mod tests {
     fn test_server_msg_audio_status_serialization() {
         let msg = ServerMsg::AudioStatus {
             status: "no_source".to_string(),
+            target: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"AudioStatus\""));
         assert!(json.contains("\"status\":\"no_source\""));
+        // target should be omitted when None
+        assert!(!json.contains("target"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_audio_status_with_target() {
+        let msg = ServerMsg::AudioStatus {
+            status: "listening".to_string(),
+            target: Some("petka".to_string()),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"status\":\"listening\""));
+        assert!(json.contains("\"target\":\"petka\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_audio_status_backwards_compat() {
+        // Old AudioStatus without target field should still deserialize
+        let json = r#"{"event":"AudioStatus","data":{"status":"stopped"}}"#;
+        let decoded: ServerMsg = serde_json::from_str(json).unwrap();
+        match decoded {
+            ServerMsg::AudioStatus { status, target } => {
+                assert_eq!(status, "stopped");
+                assert_eq!(target, None);
+            }
+            _ => panic!("Expected AudioStatus variant"),
+        }
     }
 
     #[test]

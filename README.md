@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.79.0 (2026-03-21)
+
+- **Feature**: Listen volume boost setting (0-24 dB in 3 dB steps) in engineer Settings modal
+- **Fix**: Listen boost applies immediately while listening — no need to stop and restart Listen mode
+- **Feature**: Keyboard PIN entry on desktop — type digits directly instead of tapping number pad
+
 ### v1.75.0 (2026-03-20)
 
 - **Feature**: Solo state now syncs across devices — solo a channel on your phone and your laptop shows it too

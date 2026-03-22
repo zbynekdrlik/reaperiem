@@ -238,7 +238,7 @@ fn connect_websocket(
                         }
                     }
                     iem_core::ServerMsg::AudioStatus { .. } => {
-                        // Audio status handled by ListenButton's own WebSocket
+                        // Audio status handled by ListenButton's own audio WebSocket
                     }
                 }
             }
@@ -664,10 +664,10 @@ pub fn MixerPage() -> impl IntoView {
     });
 
     // Toolbar callbacks
-    // Only show engineer-specific toolbar (Mute All, no Presets/History) on /engineer
-    let is_engineer_own_mixer = crate::auth::get_auth()
-        .map(|a| a.engineer && member_id() == "engineer")
-        .unwrap_or(false);
+    // Show engineer toolbar (Mute All + Listen) on any page when logged in as engineer
+    let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
+    // Mute All only on /engineer (engineer's own mixer)
+    let is_engineer_own_mixer = is_engineer && member_id() == "engineer";
 
     let on_presets = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(true);
@@ -806,8 +806,10 @@ pub fn MixerPage() -> impl IntoView {
             <Toolbar
                 on_presets=on_presets
                 on_history=on_history
-                is_engineer=is_engineer_own_mixer
+                is_engineer=is_engineer
                 on_mute_all=on_mute_all
+                is_engineer_own_mixer=is_engineer_own_mixer
+                member_id=member_id()
             />
 
             <PresetModal
