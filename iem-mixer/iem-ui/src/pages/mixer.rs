@@ -649,10 +649,16 @@ pub fn MixerPage() -> impl IntoView {
                 },
             );
         }
+        let current_stems_level = if stems_bus_idx.get_untracked().is_some() {
+            Some(stems_level.get_untracked())
+        } else {
+            None
+        };
         PresetData {
             channels: channel_states,
             created_at: None,
             updated_at: None,
+            stems_level_db: current_stems_level,
         }
     });
 
