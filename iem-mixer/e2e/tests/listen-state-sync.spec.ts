@@ -171,16 +171,15 @@ async function getUiMuteStates(page: Page) {
 }
 
 test.describe("Listen State Sync — LIVE system via WebSocket", () => {
-  test.beforeEach(async ({ request }) => {
-    const reaperCheck = await request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    test.skip(!reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080");
-  });
-
   test("Test A: Engineer page listen does NOT change any REAPER state", async ({
     page,
   }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
     const token = await getAuthToken(page.request);
     if (!assume(token, "Auth must succeed")) return;
 
@@ -240,6 +239,12 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
   test("Test B: Band member page listen solos that member's track", async ({
     page,
   }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
     const token = await getAuthToken(page.request);
     if (!assume(token, "Auth must succeed")) return;
 
@@ -303,6 +308,12 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
   test("Test C: Mute buttons on engineer Mixes tab never change during listen", async ({
     page,
   }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
     const token = await getAuthToken(page.request);
     if (!assume(token, "Auth must succeed")) return;
 
@@ -363,6 +374,12 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
   test("Test D: Engineer can change mute/volume while listening", async ({
     page,
   }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
     const token = await getAuthToken(page.request);
     if (!assume(token, "Auth must succeed")) return;
 
@@ -436,6 +453,12 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
   });
 
   test("Rapid listen toggles preserve mute state", async ({ page }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
+      return;
+
     const token = await getAuthToken(page.request);
     if (!assume(token, "Auth must succeed")) return;
 
