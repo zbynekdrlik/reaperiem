@@ -4,10 +4,10 @@ import { WebSocket as WsClient } from "ws";
 /**
  * Listen Feature State Synchronization Tests — LIVE system
  *
- * v1.88.0: Listen uses SOLO (non-destructive) instead of mute.
+ * v1.89.0: Listen uses send muting for band member audio isolation.
  * - Engineer page listen: just streams audio, touches NOTHING in REAPER
- * - Band member page listen: solos that member's inear track, streams audio
- * - Mute buttons never change during listen (no suppression needed)
+ * - Band member page listen: mutes all other member sends to ENGINEER except target
+ * - On stop, all mute states are restored to their original values
  */
 
 async function loginAs(page: Page, member: string, pin: string = "7711") {
@@ -112,23 +112,6 @@ async function getReaperSendMute(
   const parts = text.split("\t");
   const muteFlag = parseInt(parts[3] || "0");
   return (muteFlag & 8) !== 0;
-}
-
-async function getReaperTrackSolo(
-  request: APIRequestContext,
-  trackIdx: number,
-): Promise<boolean> {
-  const resp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
-  const text = await resp.text();
-  for (const line of text.split("\n")) {
-    const parts = line.split("\t");
-    if (parts[0] === "TRACK" && parseInt(parts[1]) === trackIdx) {
-      const flags = parseInt(parts[3] || "0");
-      // Solo bits are at positions 4-5 (mask 0x30)
-      return (flags & 0x30) !== 0;
-    }
-  }
-  return false;
 }
 
 function createAudioWs(wsUrl: string, token: string): Promise<WsClient> {
@@ -236,7 +219,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     }
   });
 
-  test("Test B: Band member page listen solos that member's track", async ({
+  test("Test B: Band member page listen mutes other sends to ENGINEER", async ({
     page,
   }) => {
     const reaperCheck = await page.request
@@ -249,7 +232,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     if (!assume(token, "Auth must succeed")) return;
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 1, "Need 1+ member sends"))
+    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
       return;
 
     const target = info!.memberSends[0];
@@ -267,28 +250,40 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
 
     const ws = await createAudioWs(WS_URL, token!);
     try {
-      // ListenStart on band member — should solo their inear track
+      // ListenStart on band member — should mute all other sends, unmute target's
       ws.send(JSON.stringify({ cmd: "ListenStart", member_id: memberId }));
       await page.waitForTimeout(2000);
 
-      // Check: target track should be soloed
-      const soloed = await getReaperTrackSolo(page.request, target.trackIdx);
+      // Check: target member's send should be unmuted
+      const targetMute = await getReaperSendMute(
+        page.request,
+        target.trackIdx,
+        target.sendIdx,
+      );
       expect(
-        soloed,
-        `${target.name} inear should be soloed during listen`,
-      ).toBe(true);
+        targetMute,
+        `${target.name} send to ENGINEER should be unmuted during listen`,
+      ).toBe(false);
 
-      // ListenStop — should unsolo
+      // Check: all other members' sends should be muted
+      for (const ms of info!.memberSends) {
+        if (ms.name === target.name) continue;
+        const muted = await getReaperSendMute(
+          page.request,
+          ms.trackIdx,
+          ms.sendIdx,
+        );
+        expect(
+          muted,
+          `${ms.name} send to ENGINEER should be muted during listen`,
+        ).toBe(true);
+      }
+
+      // ListenStop — should restore original mute states
       ws.send(JSON.stringify({ cmd: "ListenStop" }));
       await page.waitForTimeout(2000);
 
-      const unsoloed = await getReaperTrackSolo(page.request, target.trackIdx);
-      expect(
-        unsoloed,
-        `${target.name} inear should NOT be soloed after listen stop`,
-      ).toBe(false);
-
-      // All mute states unchanged throughout
+      // All mute states restored to original
       for (const ms of info!.memberSends) {
         const afterMute = await getReaperSendMute(
           page.request,
@@ -297,7 +292,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
         );
         expect(
           afterMute,
-          `${ms.name}: mute changed during solo-based listen`,
+          `${ms.name}: mute not restored after listen stop (was ${beforeMutes[ms.name]}, got ${afterMute})`,
         ).toBe(beforeMutes[ms.name]);
       }
     } finally {
@@ -305,7 +300,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     }
   });
 
-  test("Test C: Mute buttons on engineer Mixes tab never change during listen", async ({
+  test("Test C: Mute buttons restore after band member listen stop", async ({
     page,
   }) => {
     const reaperCheck = await page.request
@@ -343,27 +338,18 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
           member_id: info!.memberSends[0].name.toLowerCase(),
         }),
       );
+      // Wait for mute changes to propagate via poller
+      await page.waitForTimeout(5000);
 
-      // Poll mute buttons every 500ms for 5 seconds — assert NONE change
-      for (let i = 0; i < 10; i++) {
-        await page.waitForTimeout(500);
-        const current = await getUiMuteStates(page);
-        for (let j = 0; j < initialStates.length && j < current.length; j++) {
-          expect(
-            current[j].classes,
-            `${initialStates[j].name}: mute changed at poll ${i} during listen`,
-          ).toBe(initialStates[j].classes);
-        }
-      }
-
+      // After ListenStop, mute buttons should restore to original states
       ws.send(JSON.stringify({ cmd: "ListenStop" }));
-      await page.waitForTimeout(3000);
+      await page.waitForTimeout(5000);
 
       const afterListen = await getUiMuteStates(page);
       for (let i = 0; i < initialStates.length && i < afterListen.length; i++) {
         expect(
           afterListen[i].classes,
-          `${initialStates[i].name}: mute changed AFTER listen stop`,
+          `${initialStates[i].name}: mute not restored after listen stop`,
         ).toBe(initialStates[i].classes);
       }
     } finally {
@@ -371,7 +357,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     }
   });
 
-  test("Test D: Engineer can change mute/volume while listening", async ({
+  test("Test D: Mute states restore to pre-listen values after stop", async ({
     page,
   }) => {
     const reaperCheck = await page.request
@@ -387,68 +373,62 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
       return;
 
-    await page.goto("/");
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(mixerLoaded, "Mixer must load")) return;
-    await page.click(".category-tab.mixes");
-    await page.waitForTimeout(3000);
-
-    const targetName = info!.memberSends[0].name;
-    const muteBtn = page.locator(
-      `.channel:has(.ch-name:text-is("${targetName}")) .mute-btn`,
+    // Pre-mute first member's send to verify it's preserved through listen cycle
+    const muteTarget = info!.memberSends[0];
+    await page.request.get(
+      `http://iem.lan:8080/_/SET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}/MUTE/1`,
     );
-    if (
-      !assume(
-        await muteBtn.isVisible(),
-        `${targetName} mute button must be visible`,
-      )
-    )
-      return;
+    await page.waitForTimeout(500);
 
-    // Start listening
+    // Record all mute states before listen
+    const beforeMutes: Record<string, boolean> = {};
+    for (const ms of info!.memberSends) {
+      beforeMutes[ms.name] = await getReaperSendMute(
+        page.request,
+        ms.trackIdx,
+        ms.sendIdx,
+      );
+    }
+    expect(
+      beforeMutes[muteTarget.name],
+      "Pre-muted member should be muted",
+    ).toBe(true);
+
     const ws = await createAudioWs(WS_URL, token!);
     try {
+      // Listen on second member
       ws.send(
         JSON.stringify({
           cmd: "ListenStart",
           member_id: info!.memberSends[1].name.toLowerCase(),
         }),
       );
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(2000);
 
-      // Record initial mute state
-      const beforeClasses = await muteBtn.getAttribute("class");
-
-      // Click mute on a channel during listen
-      await muteBtn.click();
-      await page.waitForTimeout(1500);
-
-      // Assert mute button changed (UI responds normally during listen)
-      const afterClickClasses = await muteBtn.getAttribute("class");
-      expect(
-        afterClickClasses,
-        `${targetName}: mute button should change after click during listen`,
-      ).not.toBe(beforeClasses);
-
-      // Stop listening
+      // Stop listening — should restore all mute states
       ws.send(JSON.stringify({ cmd: "ListenStop" }));
       await page.waitForTimeout(2000);
 
-      // Assert mute button still shows the user's change
-      const afterStopClasses = await muteBtn.getAttribute("class");
-      expect(
-        afterStopClasses,
-        `${targetName}: user's mute change should persist after listen stop`,
-      ).toBe(afterClickClasses);
+      // All mute states should be restored to pre-listen values
+      for (const ms of info!.memberSends) {
+        const afterMute = await getReaperSendMute(
+          page.request,
+          ms.trackIdx,
+          ms.sendIdx,
+        );
+        expect(
+          afterMute,
+          `${ms.name}: mute not restored (expected ${beforeMutes[ms.name]}, got ${afterMute})`,
+        ).toBe(beforeMutes[ms.name]);
+      }
     } finally {
       ws.close();
-      // Restore mute state
-      await muteBtn.click();
-      await page.waitForTimeout(500);
+      // Restore: unmute all sends for clean state
+      for (const ms of info!.memberSends) {
+        await page.request.get(
+          `http://iem.lan:8080/_/SET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}/MUTE/0`,
+        );
+      }
     }
   });
 

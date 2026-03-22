@@ -30,14 +30,15 @@ use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
 /// Listen mode target tracking.
-/// Tracks whether a REAPER track is soloed for listen audio isolation.
+/// Tracks saved mute states during band member listen for restoration.
 #[derive(Debug, Clone, Default)]
 pub enum ListenTarget {
-    /// Not listening — no solo active
+    /// Not listening — no mute overrides active
     #[default]
     Idle,
-    /// A track is soloed for listen isolation (1-based REAPER track index)
-    Soloed(usize),
+    /// Listening on band member page — mute states saved for restoration.
+    /// Contains: Vec<(track_index, send_index, was_muted_before)>
+    Member(Vec<(usize, usize, bool)>),
 }
 
 /// Write data to a file atomically by writing to a temp file then renaming.
@@ -72,8 +73,8 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
-    /// Listen mode target (Idle / Soloed).
-    /// Tracks which REAPER track is soloed for listen audio isolation.
+    /// Listen mode target (Idle / Member).
+    /// Tracks saved mute states during band member listen for restoration.
     pub engineer_listen_target: Arc<RwLock<ListenTarget>>,
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]

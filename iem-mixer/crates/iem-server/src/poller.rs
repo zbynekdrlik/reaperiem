@@ -1738,21 +1738,25 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         );
     }
 
-    /// ListenTarget::Soloed stores track index
+    /// ListenTarget::Member stores saved mute states
     #[test]
-    fn test_listen_target_soloed_stores_track_index() {
-        let target = crate::ListenTarget::Soloed(23);
-        if let crate::ListenTarget::Soloed(idx) = target {
-            assert_eq!(idx, 23, "Soloed must store the correct track index");
+    fn test_listen_target_member_stores_saved_mutes() {
+        let saved = vec![(23, 5, false), (24, 5, true), (25, 5, false)];
+        let target = crate::ListenTarget::Member(saved.clone());
+        if let crate::ListenTarget::Member(mutes) = target {
+            assert_eq!(mutes.len(), 3, "Member must store all saved mute states");
+            assert_eq!(mutes[0], (23, 5, false), "First member: unmuted before");
+            assert_eq!(mutes[1], (24, 5, true), "Second member: muted before");
+            assert_eq!(mutes[2], (25, 5, false), "Third member: unmuted before");
         } else {
-            panic!("Expected Soloed variant");
+            panic!("Expected Member variant");
         }
     }
 
     /// Poller broadcasts ALL changes without suppression (no listen special-casing)
     #[test]
     fn test_poller_broadcasts_mute_changes_during_listen() {
-        // With the new solo-based listen, the poller has no suppression logic.
+        // With mute-based listen, the poller has no suppression logic.
         // All changes from REAPER are broadcast to the UI unconditionally.
         let old_ch = iem_core::Channel {
             track_index: 23,
@@ -1784,7 +1788,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         let should_broadcast = changed;
         assert!(
             should_broadcast,
-            "Mute changes must always be broadcast (no suppression in solo-based listen)"
+            "Mute changes must always be broadcast (no suppression during listen)"
         );
     }
 }
