@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.89.0 (2026-03-22)
+
+- **Fix**: Band member Listen now works — mutes other member sends to ENGINEER for true audio isolation (solo-based approach didn't affect send routing)
+- **Fix**: Listen mute states fully restored after stopping Listen on band member pages
+- **Fix**: CI deploy hardened — REAPER restart verifies project loaded (NTRACK > 0), creates StartREAPER task with correct project path, fails deploy if REAPER doesn't come back
+
 ### v1.79.0 (2026-03-21)
 
 - **Feature**: Listen volume boost setting (0-24 dB in 3 dB steps) in engineer Settings modal
