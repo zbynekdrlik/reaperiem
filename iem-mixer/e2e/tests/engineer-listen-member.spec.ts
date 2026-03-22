@@ -648,6 +648,12 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   });
 
   test("Mute All works correctly after listen cycle", async ({ page }) => {
+    const reaperCheck = await page.request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable for Mute All"))
+      return;
+
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
