@@ -31,6 +31,9 @@ pub struct PresetEntry {
     pub created_at: i64,
     /// Unix timestamp (seconds) when preset was last updated
     pub updated_at: i64,
+    /// Stems bus volume in dB (None for presets saved before stems-bus feature)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stems_level_db: Option<f32>,
 }
 
 impl PresetEntry {
@@ -42,6 +45,7 @@ impl PresetEntry {
             channels,
             created_at: now,
             updated_at: now,
+            stems_level_db: None,
         }
     }
 }
@@ -88,6 +92,7 @@ mod tests {
             channels,
             created_at: 1709582400,
             updated_at: 1709582500,
+            stems_level_db: None,
         };
 
         let json = serde_json::to_string(&preset).unwrap();
@@ -109,6 +114,38 @@ mod tests {
         assert_eq!(preset.name, "test");
         assert!(preset.created_at > 0);
         assert_eq!(preset.created_at, preset.updated_at);
+    }
+
+    #[test]
+    fn test_preset_entry_backwards_compat_without_stems() {
+        // Old presets without stems_level_db should still deserialize
+        let json = r#"{"name":"old","channels":{},"created_at":100,"updated_at":200}"#;
+        let parsed: PresetEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.stems_level_db, None);
+    }
+
+    #[test]
+    fn test_preset_entry_with_stems_level() {
+        let mut channels = HashMap::new();
+        channels.insert(
+            1,
+            ChannelPreset {
+                vol: -6.0,
+                mute: false,
+                pan: 0.0,
+            },
+        );
+        let preset = PresetEntry {
+            name: "with_stems".to_string(),
+            channels,
+            created_at: 100,
+            updated_at: 200,
+            stems_level_db: Some(-3.0),
+        };
+        let json = serde_json::to_string(&preset).unwrap();
+        assert!(json.contains("\"stems_level_db\":-3.0"));
+        let parsed: PresetEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.stems_level_db, Some(-3.0));
     }
 
     #[test]

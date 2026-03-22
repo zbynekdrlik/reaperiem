@@ -19,6 +19,10 @@ pub enum ClientMsg {
     SetGlobalLevel { level_db: f32 },
     /// Set global IEM output mute for this member
     SetGlobalMute { muted: bool },
+    /// Set stems group bus volume for this member
+    SetStemsLevel { level_db: f32 },
+    /// Set stems group bus mute for this member
+    SetStemsMute { muted: bool },
     /// Update channel customization (pin/hide preferences)
     UpdateCustomization {
         pinned: Vec<usize>,
@@ -47,6 +51,12 @@ pub enum ServerMsg {
         global_muted: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output_track_index: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stems_level_db: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stems_muted: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stems_bus_index: Option<usize>,
     },
     /// Meter levels (sent every ~150ms) — stereo [left, right] peaks
     Meters { meters: HashMap<usize, [f32; 2]> },
@@ -59,6 +69,8 @@ pub enum ServerMsg {
     },
     /// Global IEM output volume changed
     GlobalVolumeUpdate { level_db: f32, muted: bool },
+    /// Stems group bus volume changed
+    StemsVolumeUpdate { level_db: f32, muted: bool },
     /// REAPER connection status changed
     ConnectionChanged { connected: bool },
     /// Channel customization update (sent on connect and after changes)
@@ -136,6 +148,9 @@ mod tests {
             global_level_db: None,
             global_muted: None,
             output_track_index: None,
+            stems_level_db: None,
+            stems_muted: None,
+            stems_bus_index: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"State\""));
@@ -143,6 +158,9 @@ mod tests {
         assert!(!json.contains("global_level_db"));
         assert!(!json.contains("global_muted"));
         assert!(!json.contains("output_track_index"));
+        assert!(!json.contains("stems_level_db"));
+        assert!(!json.contains("stems_muted"));
+        assert!(!json.contains("stems_bus_index"));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
@@ -155,6 +173,9 @@ mod tests {
             global_level_db: Some(-3.5),
             global_muted: Some(false),
             output_track_index: Some(23),
+            stems_level_db: None,
+            stems_muted: None,
+            stems_bus_index: None,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"global_level_db\":-3.5"));
@@ -174,11 +195,17 @@ mod tests {
                 global_level_db,
                 global_muted,
                 output_track_index,
+                stems_level_db,
+                stems_muted,
+                stems_bus_index,
                 ..
             } => {
                 assert_eq!(global_level_db, None);
                 assert_eq!(global_muted, None);
                 assert_eq!(output_track_index, None);
+                assert_eq!(stems_level_db, None);
+                assert_eq!(stems_muted, None);
+                assert_eq!(stems_bus_index, None);
             }
             _ => panic!("Expected State variant"),
         }
@@ -394,6 +421,79 @@ mod tests {
         assert!(json.contains("\"event\":\"SoloUpdate\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_stems_level_serialization() {
+        let msg = ClientMsg::SetStemsLevel { level_db: -3.0 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetStemsLevel\""));
+        assert!(json.contains("\"level_db\":-3.0"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_stems_mute_serialization() {
+        let msg = ClientMsg::SetStemsMute { muted: true };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetStemsMute\""));
+        assert!(json.contains("\"muted\":true"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_stems_volume_update_serialization() {
+        let msg = ServerMsg::StemsVolumeUpdate {
+            level_db: -6.0,
+            muted: false,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"StemsVolumeUpdate\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_state_with_stems_fields() {
+        let msg = ServerMsg::State {
+            channels: vec![],
+            connected: true,
+            global_level_db: Some(-3.5),
+            global_muted: Some(false),
+            output_track_index: Some(23),
+            stems_level_db: Some(-6.0),
+            stems_muted: Some(false),
+            stems_bus_index: Some(33),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"stems_level_db\":-6.0"));
+        assert!(json.contains("\"stems_muted\":false"));
+        assert!(json.contains("\"stems_bus_index\":33"));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_state_stems_backwards_compat() {
+        // Old State messages without stems fields should still deserialize
+        let json =
+            r#"{"event":"State","data":{"channels":[],"connected":true,"global_level_db":-3.5}}"#;
+        let decoded: ServerMsg = serde_json::from_str(json).unwrap();
+        match decoded {
+            ServerMsg::State {
+                stems_level_db,
+                stems_muted,
+                stems_bus_index,
+                ..
+            } => {
+                assert_eq!(stems_level_db, None);
+                assert_eq!(stems_muted, None);
+                assert_eq!(stems_bus_index, None);
+            }
+            _ => panic!("Expected State variant"),
+        }
     }
 
     #[test]

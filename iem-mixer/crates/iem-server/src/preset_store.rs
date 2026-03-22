@@ -4,7 +4,7 @@
 //! Each member has their own JSON file in the presets/ directory.
 
 use crate::atomic_write;
-use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
+use iem_core::{ChannelPreset, PresetEntry, MAX_PRESETS};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -69,6 +69,17 @@ impl PresetStore {
         name: &str,
         channels: HashMap<usize, ChannelPreset>,
     ) -> Result<PresetEntry, PresetError> {
+        self.save_with_stems(member_id, name, channels, None)
+    }
+
+    /// Save a preset with optional stems bus volume
+    pub fn save_with_stems(
+        &self,
+        member_id: &str,
+        name: &str,
+        channels: HashMap<usize, ChannelPreset>,
+        stems_level_db: Option<f32>,
+    ) -> Result<PresetEntry, PresetError> {
         let mut presets = self.load_all(member_id);
 
         // Check limit only for new presets
@@ -84,6 +95,7 @@ impl PresetStore {
                 channels,
                 created_at: existing.created_at,
                 updated_at: now,
+                stems_level_db,
             }
         } else {
             // New preset
@@ -92,6 +104,7 @@ impl PresetStore {
                 channels,
                 created_at: now,
                 updated_at: now,
+                stems_level_db,
             }
         };
 

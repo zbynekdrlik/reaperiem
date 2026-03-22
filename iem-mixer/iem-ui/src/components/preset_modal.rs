@@ -45,6 +45,8 @@ struct PresetEntry {
     channels: std::collections::HashMap<usize, ChannelState>,
     created_at: i64,
     updated_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stems_level_db: Option<f32>,
 }
 
 /// Request to save a preset
@@ -52,6 +54,8 @@ struct PresetEntry {
 struct SavePresetRequest {
     name: String,
     channels: std::collections::HashMap<usize, ChannelState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stems_level_db: Option<f32>,
 }
 
 /// Format timestamp for display in Slovak format (DD.MM. HH:MM)
@@ -113,6 +117,7 @@ async fn save_preset_api(
     let req = SavePresetRequest {
         name: name.to_string(),
         channels,
+        stems_level_db: None,
     };
 
     let resp = gloo_net::http::Request::post(&url)
@@ -142,6 +147,7 @@ async fn update_preset_api(
     let req = SavePresetRequest {
         name: name.to_string(),
         channels,
+        stems_level_db: None,
     };
 
     let resp = gloo_net::http::Request::put(&url)
