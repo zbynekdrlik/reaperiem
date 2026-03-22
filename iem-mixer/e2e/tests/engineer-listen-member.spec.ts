@@ -198,12 +198,10 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     });
   });
 
-  test("ListenStart triggers REAPER listen target switch via ENGINEER sends", async ({
+  test("ListenStart on band member solos their inear track via REAPER API", async ({
     request,
   }) => {
-    // This test verifies the REAPER side: EXTSTATE is set and script switches
-    // sends on the ENGINEER inear track (not a MONITOR bus)
-    // Skip in CI without REAPER — only runs against live iem.lan
+    // This test verifies the REAPER side: solo is set on the member's inear track
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
@@ -214,41 +212,85 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const members = await membersResp.json();
     if (!assume(members.length >= 1, "Need at least 1 member")) return;
 
-    const memberName = members[0].name.toUpperCase();
+    const member = members[0];
+    const memberId = member.id;
 
-    // Set listen target to a specific member and trigger switch
-    await request.get(
-      `http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/${memberName}`,
-    );
-    await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
-    await new Promise((r) => setTimeout(r, 3000));
+    // Find member's inear track
+    const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+    const tracksText = await tracksResp.text();
+    let memberTrackIdx = -1;
+    for (const line of tracksText.split("\n")) {
+      const parts = line.split("\t");
+      if (parts[0] === "TRACK" && parts.length > 2) {
+        const name = parts[2];
+        if (name.toUpperCase() === `${member.name.toUpperCase()} INEAR`) {
+          memberTrackIdx = parseInt(parts[1]);
+          break;
+        }
+      }
+    }
+    if (!assume(memberTrackIdx >= 0, "Member inear track must exist")) return;
 
-    const resultResp = await request.get(
-      "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
-    );
-    const resultText = await resultResp.text();
-    expect(resultText).toContain("OK");
-    expect(resultText.toUpperCase()).toContain(memberName);
+    // Authenticate and send ListenStart via audio WS
+    const authResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    if (!assume(authResp.status() === 200, "Auth must succeed")) return;
+    const authData = await authResp.json();
 
-    // Now restore all sends (ListenStop equivalent)
-    await request.get(
-      "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
+    const { WebSocket: WsClient } = await import("ws");
+    const ws = new WsClient(
+      `ws://10.77.9.231/ws/audio?token=${authData.token}`,
     );
-    await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", () => resolve());
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WS timeout")), 5000);
+    });
 
-    const restoreResp = await request.get(
-      "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
-    );
-    const restoreText = await restoreResp.text();
-    expect(restoreText).toContain("OK:ALL");
+    try {
+      ws.send(JSON.stringify({ cmd: "ListenStart", member_id: memberId }));
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Verify track is soloed
+      const soloResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+      const soloText = await soloResp.text();
+      for (const line of soloText.split("\n")) {
+        const parts = line.split("\t");
+        if (parts[0] === "TRACK" && parseInt(parts[1]) === memberTrackIdx) {
+          const flags = parseInt(parts[3] || "0");
+          expect(
+            (flags & 0x30) !== 0,
+            `${member.name} inear (track ${memberTrackIdx}) should be soloed, flags=${flags}`,
+          ).toBe(true);
+        }
+      }
+
+      // ListenStop — unsolo
+      ws.send(JSON.stringify({ cmd: "ListenStop" }));
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const afterResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+      const afterText = await afterResp.text();
+      for (const line of afterText.split("\n")) {
+        const parts = line.split("\t");
+        if (parts[0] === "TRACK" && parseInt(parts[1]) === memberTrackIdx) {
+          const flags = parseInt(parts[3] || "0");
+          expect(
+            (flags & 0x30) === 0,
+            `${member.name} inear should NOT be soloed after stop, flags=${flags}`,
+          ).toBe(true);
+        }
+      }
+    } finally {
+      ws.close();
+    }
   });
 
-  test("ListenStop restores pre-listen mute state instead of unmuting all", async ({
+  test("Listen does not change mute states (solo-based isolation)", async ({
     request,
   }) => {
-    // This test verifies Bug 1: ListenStop should restore mute states, not unmute everything.
-    // Pre-mute one member's send, listen on another, stop listening, verify mute preserved.
+    // This test verifies that listen never touches mute state
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
@@ -265,12 +307,11 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     )
       return;
 
-    // Find ENGINEER inear track and member inear tracks with sends to it
+    // Find member inear tracks and their sends to ENGINEER
     const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
     const tracksText = await tracksResp.text();
     const lines = tracksText.split("\n");
 
-    // Find engineer inear track index
     let engineerTrackIdx = -1;
     const memberInears: { name: string; trackIdx: number }[] = [];
     for (const line of lines) {
@@ -323,15 +364,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     )
       return;
 
-    const muteTarget = memberSends[0]; // This member will be pre-muted
-    const listenTarget = memberSends[1]; // We'll listen to this member
-
-    // Save original mute states for cleanup
-    const originalMutes: {
-      trackIdx: number;
-      sendIdx: number;
-      muted: boolean;
-    }[] = [];
+    // Record original mute states
+    const originalMutes: Record<string, boolean> = {};
     for (const ms of memberSends) {
       const resp = await request.get(
         `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
@@ -339,62 +373,62 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       const text = await resp.text();
       const parts = text.split("\t");
       const muteFlag = parseInt(parts[3] || "0");
-      originalMutes.push({
-        trackIdx: ms.trackIdx,
-        sendIdx: ms.sendIdx,
-        muted: (muteFlag & 8) !== 0,
-      });
+      originalMutes[ms.name] = (muteFlag & 8) !== 0;
     }
 
+    // Pre-mute first member to verify it's preserved
+    const muteTarget = memberSends[0];
+    await request.get(
+      `http://iem.lan:8080/_/SET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}/MUTE/1`,
+    );
+    await new Promise((r) => setTimeout(r, 500));
+
+    const authResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    if (!assume(authResp.status() === 200, "Auth must succeed")) return;
+    const authData = await authResp.json();
+
+    const { WebSocket: WsClient } = await import("ws");
+    const ws = new WsClient(
+      `ws://10.77.9.231/ws/audio?token=${authData.token}`,
+    );
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", () => resolve());
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WS timeout")), 5000);
+    });
+
     try {
-      // Step 1: Pre-mute first member's send to ENGINEER inear
-      await request.get(
-        `http://iem.lan:8080/_/SET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}/MUTE/1`,
+      // Listen on second member
+      ws.send(
+        JSON.stringify({
+          cmd: "ListenStart",
+          member_id: memberSends[1].name.toLowerCase(),
+        }),
       );
-      await new Promise((r) => setTimeout(r, 500));
-
-      // Verify the mute took effect
-      const verifyResp = await request.get(
-        `http://iem.lan:8080/_/GET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}`,
-      );
-      const verifyText = await verifyResp.text();
-      const verifyParts = verifyText.split("\t");
-      const verifyMuteFlag = parseInt(verifyParts[3] || "0");
-      if (
-        !assume(
-          (verifyMuteFlag & 8) !== 0,
-          `${muteTarget.name} send must be muted before listen test`,
-        )
-      )
-        return;
-
-      // Step 2: ListenStart on the second member
-      await request.get(
-        `http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/${listenTarget.name}`,
-      );
-      await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
       await new Promise((r) => setTimeout(r, 3000));
 
-      const listenResult = await request.get(
-        "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
-      );
-      const listenText = await listenResult.text();
-      expect(listenText).toContain("OK");
+      // All mutes unchanged during listen
+      for (const ms of memberSends) {
+        const resp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+        );
+        const text = await resp.text();
+        const parts = text.split("\t");
+        const muteFlag = parseInt(parts[3] || "0");
+        const muted = (muteFlag & 8) !== 0;
+        if (ms.name === muteTarget.name) {
+          expect(muted, `${ms.name} should still be muted during listen`).toBe(
+            true,
+          );
+        }
+      }
 
-      // Step 3: ListenStop (target="ALL")
-      await request.get(
-        "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
-      );
-      await request.get("http://iem.lan:8080/_/_RS_REAPERIEM_SWITCH_LISTEN");
-      await new Promise((r) => setTimeout(r, 3000));
+      ws.send(JSON.stringify({ cmd: "ListenStop" }));
+      await new Promise((r) => setTimeout(r, 2000));
 
-      const stopResult = await request.get(
-        "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/listen_result",
-      );
-      const stopText = await stopResult.text();
-      expect(stopText).toContain("OK:ALL");
-
-      // Step 4: ASSERT - pre-muted member's send should STILL be muted
+      // After listen: pre-muted member still muted
       const afterResp = await request.get(
         `http://iem.lan:8080/_/GET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}`,
       );
@@ -403,17 +437,14 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       const afterMuteFlag = parseInt(afterParts[3] || "0");
       expect(
         (afterMuteFlag & 8) !== 0,
-        `${muteTarget.name}'s send should still be muted after ListenStop, but flag was ${afterMuteFlag}`,
+        `${muteTarget.name} should still be muted after listen cycle`,
       ).toBe(true);
     } finally {
-      // Cleanup: restore original mute states
-      // Also clear any listen backup EXTSTATE
-      await request.get(
-        "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/listen_mute_backup/",
-      );
-      for (const orig of originalMutes) {
+      ws.close();
+      // Restore original mute states
+      for (const ms of memberSends) {
         await request.get(
-          `http://iem.lan:8080/_/SET/TRACK/${orig.trackIdx}/SEND/${orig.sendIdx}/MUTE/${orig.muted ? 1 : 0}`,
+          `http://iem.lan:8080/_/SET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}/MUTE/${originalMutes[ms.name] ? 1 : 0}`,
         );
       }
     }
@@ -489,15 +520,13 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Wait for channels to load (mix channels appear in engineer's mixer)
     const channelsLoaded = await page
-      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .waitForSelector(".channel", { timeout: 10000 })
       .catch(() => null);
     if (!assume(channelsLoaded, "Channel strips must render")) return;
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -518,9 +547,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Capture mute button states after listen activation
     const afterListenMuteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -542,9 +569,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Verify mute states are still unchanged after stopping listen
     const afterStopMuteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -575,15 +600,13 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     if (!assume(toolbarLoaded, "Toolbar must render")) return;
 
     const channelsLoaded = await page
-      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .waitForSelector(".channel", { timeout: 10000 })
       .catch(() => null);
     if (!assume(channelsLoaded, "Channel strips must render")) return;
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -603,14 +626,12 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       await page.waitForTimeout(200);
     }
 
-    // Wait for everything to settle (Restoring phase is 2s + poller cycles)
-    await page.waitForTimeout(4000);
+    // Wait for everything to settle
+    await page.waitForTimeout(3000);
 
     // Assert mute buttons unchanged after rapid toggling
     const afterMuteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -638,7 +659,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     if (!assume(toolbarLoaded, "Toolbar must render")) return;
 
     const channelsLoaded = await page
-      .waitForSelector(".channel-strip", { timeout: 10000 })
+      .waitForSelector(".channel", { timeout: 10000 })
       .catch(() => null);
     if (!assume(channelsLoaded, "Channel strips must render")) return;
 
@@ -652,11 +673,11 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     )
       return;
 
-    // Start listen → stop listen → wait for Restoring to expire
+    // Start listen → stop listen
     await listenBtn.click();
     await page.waitForTimeout(1000);
     await listenBtn.click();
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(2000);
 
     // Click Mute All
     await muteAllBtn.click();
@@ -664,9 +685,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Assert all mix channel mute buttons show muted state
     const muteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(
-        ".channel-strip .mute-btn, .channel-strip .btn-mute",
-      );
+      const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
@@ -675,12 +694,12 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     if (!assume(muteStates.length > 0, "Need mute buttons to verify")) return;
 
-    // Every mute button should have the muted class
+    // Every mute button should have the muted class (class "on" = muted)
     for (let i = 0; i < muteStates.length; i++) {
       expect(
         muteStates[i].classes,
         `Mute button ${i} (${muteStates[i].text}) should show muted after Mute All`,
-      ).toContain("muted");
+      ).toContain(" on");
     }
   });
 });

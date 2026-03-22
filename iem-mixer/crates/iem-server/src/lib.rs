@@ -25,32 +25,19 @@ use iem_core::{Config, DiscoveredMember, ServerMsg};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::{RwLock, broadcast};
 use tower_http::cors::CorsLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
 
-/// Engineer listen mode state machine.
-/// Controls poller mute suppression during listen and restore phases.
+/// Listen mode target tracking.
+/// Tracks whether a REAPER track is soloed for listen audio isolation.
 #[derive(Debug, Clone, Default)]
-pub enum EngineerListenState {
-    /// Not listening — poller broadcasts real REAPER mute state
+pub enum ListenTarget {
+    /// Not listening — no solo active
     #[default]
     Idle,
-    /// Listening to a member — poller suppresses mix mute broadcasts
-    Active(String),
-    /// ReaScript restoring mute states — poller still suppresses until deadline
-    Restoring(Instant),
-}
-
-impl EngineerListenState {
-    pub fn is_suppressing(&self) -> bool {
-        match self {
-            Self::Idle => false,
-            Self::Active(_) => true,
-            Self::Restoring(deadline) => Instant::now() <= *deadline,
-        }
-    }
+    /// A track is soloed for listen isolation (1-based REAPER track index)
+    Soloed(usize),
 }
 
 /// Write data to a file atomically by writing to a temp file then renaming.
@@ -85,9 +72,9 @@ pub struct AppState {
     pub customization_store: Arc<customization_store::CustomizationStore>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
-    /// Engineer listen mode state (Idle / Active / Restoring).
-    /// Used to suppress mix channel mute broadcasts during listen and restore phases.
-    pub engineer_listen_target: Arc<RwLock<EngineerListenState>>,
+    /// Listen mode target (Idle / Soloed).
+    /// Tracks which REAPER track is soloed for listen audio isolation.
+    pub engineer_listen_target: Arc<RwLock<ListenTarget>>,
     /// Broadcast channel for audio Opus frames (engineer listening)
     #[cfg(feature = "audio")]
     pub audio_tx: broadcast::Sender<bytes::Bytes>,
@@ -130,9 +117,6 @@ pub struct MixerCache {
     pub snapshot_last_date: HashMap<String, String>,
     /// Solo state per member — transient, in-memory only (member_id -> soloed track indices)
     pub solo_states: HashMap<String, Vec<usize>>,
-    /// Set by ListenStop handler; cleared by poller after full State resync.
-    /// Ensures UI converges to REAPER truth when listen mode ends.
-    pub engineer_needs_resync: bool,
 }
 
 impl MixerCache {
@@ -160,7 +144,7 @@ impl AppState {
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
-            engineer_listen_target: Arc::new(RwLock::new(EngineerListenState::Idle)),
+            engineer_listen_target: Arc::new(RwLock::new(ListenTarget::Idle)),
             #[cfg(feature = "audio")]
             audio_tx,
             #[cfg(feature = "audio")]

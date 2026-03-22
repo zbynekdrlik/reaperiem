@@ -1718,76 +1718,29 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                         if let Ok(cmd) = serde_json::from_str::<ClientMsg>(&text) {
                             match cmd {
                                 ClientMsg::ListenStart { member_id } => {
-                                    // Wait for any in-progress restore to complete before starting new listen
-                                    {
-                                        let ls = state.engineer_listen_target.read().await;
-                                        if let crate::EngineerListenState::Restoring(deadline) = &*ls {
-                                            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
-                                            if !remaining.is_zero() {
-                                                drop(ls);
-                                                tokio::time::sleep(remaining).await;
-                                            }
-                                        }
-                                    }
-
                                     tracing::info!(target_member = %member_id, "Audio listen started");
 
-                                    // Resolve member_id to REAPER track name
-                                    let target_name = {
-                                        let discovered = state.discovered_members.read().await;
-                                        discovered.iter()
-                                            .find(|m| m.id() == member_id)
-                                            .map(|m| m.name.clone())
-                                    };
-
-                                    if let Some(ref name) = target_name {
-                                        // Set listen target via EXTSTATE and trigger ReaScript
-                                        let config = state.config.read().await;
-                                        let reaper_url = config.reaper_url.clone();
-                                        drop(config);
-
-                                        let set_url = format!(
-                                            "{}/_/SET/EXTSTATE/reaperiem/listen_target/{}",
-                                            reaper_url, name
-                                        );
-                                        let trigger_url = format!(
-                                            "{}/_/_RS_REAPERIEM_SWITCH_LISTEN",
-                                            reaper_url
-                                        );
-
-                                        // Set target then trigger script
-                                        let _ = state.http_client.get(&set_url).send().await;
-                                        let _ = state.http_client.get(&trigger_url).send().await;
-
-                                        // Read back result for logging (non-blocking)
-                                        let result_url = format!(
-                                            "{}/_/GET/EXTSTATE/reaperiem/listen_result",
-                                            reaper_url
-                                        );
-                                        let http = state.http_client.clone();
-                                        tokio::spawn(async move {
-                                            tokio::time::sleep(Duration::from_millis(500)).await;
-                                            match http.get(&result_url).send().await {
-                                                Ok(resp) => {
-                                                    if let Ok(body) = resp.text().await {
-                                                        if body.contains("FAIL") {
-                                                            tracing::error!(result = %body, "Listen switch FAILED in REAPER");
-                                                        } else {
-                                                            tracing::info!(result = %body, "Listen switch result");
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    tracing::warn!(error = %e, "Could not read listen result");
-                                                }
-                                            }
-                                        });
-                                    }
-
-                                    // Track listen state so poller can suppress mix mute broadcasts
-                                    if let Some(ref name) = target_name {
-                                        *state.engineer_listen_target.write().await =
-                                            crate::EngineerListenState::Active(name.clone());
+                                    // On band member page: solo their inear track for audio isolation
+                                    if member_id != "engineer" {
+                                        let target_track_idx = {
+                                            let discovered = state.discovered_members.read().await;
+                                            discovered.iter()
+                                                .find(|m| m.id() == member_id)
+                                                .map(|m| m.track_index)
+                                        };
+                                        if let Some(track_idx) = target_track_idx {
+                                            let config = state.config.read().await;
+                                            let reaper_url = config.reaper_url.clone();
+                                            drop(config);
+                                            let solo_url = format!(
+                                                "{}/_/SET/TRACK/{}/SOLO/1",
+                                                reaper_url, track_idx
+                                            );
+                                            let _ = state.http_client.get(&solo_url).send().await;
+                                            // Store which track is soloed so ListenStop can unsolo it
+                                            *state.engineer_listen_target.write().await =
+                                                crate::ListenTarget::Soloed(track_idx);
+                                        }
                                     }
 
                                     audio_rx = Some(state.audio_tx.subscribe());
@@ -1804,53 +1757,19 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
 
-                                    // Transition to Restoring — keeps mute broadcast suppression active
-                                    // for 2s while ReaScript restores original mute states
-                                    *state.engineer_listen_target.write().await =
-                                        crate::EngineerListenState::Restoring(
-                                            std::time::Instant::now()
-                                                + std::time::Duration::from_secs(2),
+                                    // Unsolo if a track was soloed during listen
+                                    let listen_state = state.engineer_listen_target.read().await.clone();
+                                    if let crate::ListenTarget::Soloed(track_idx) = listen_state {
+                                        let config = state.config.read().await;
+                                        let reaper_url = config.reaper_url.clone();
+                                        drop(config);
+                                        let unsolo_url = format!(
+                                            "{}/_/SET/TRACK/{}/SOLO/0",
+                                            reaper_url, track_idx
                                         );
-
-                                    // Schedule full State resync after Restoring expires
-                                    state.mixer_cache.write().await.engineer_needs_resync = true;
-
-                                    // Restore pre-listen mute state on ENGINEER inear sends
-                                    let config = state.config.read().await;
-                                    let reaper_url = config.reaper_url.clone();
-                                    drop(config);
-
-                                    let set_url = format!(
-                                        "{}/_/SET/EXTSTATE/reaperiem/listen_target/ALL",
-                                        reaper_url
-                                    );
-                                    let trigger_url = format!(
-                                        "{}/_/_RS_REAPERIEM_SWITCH_LISTEN",
-                                        reaper_url
-                                    );
-
-                                    let _ = state.http_client.get(&set_url).send().await;
-                                    let _ = state.http_client.get(&trigger_url).send().await;
-
-                                    // Read back result for logging (non-blocking)
-                                    let result_url = format!(
-                                        "{}/_/GET/EXTSTATE/reaperiem/listen_result",
-                                        reaper_url
-                                    );
-                                    let http = state.http_client.clone();
-                                    tokio::spawn(async move {
-                                        tokio::time::sleep(Duration::from_millis(500)).await;
-                                        match http.get(&result_url).send().await {
-                                            Ok(resp) => {
-                                                if let Ok(body) = resp.text().await {
-                                                    tracing::info!(result = %body, "Listen restore result");
-                                                }
-                                            }
-                                            Err(e) => {
-                                                tracing::warn!(error = %e, "Could not read listen restore result");
-                                            }
-                                        }
-                                    });
+                                        let _ = state.http_client.get(&unsolo_url).send().await;
+                                    }
+                                    *state.engineer_listen_target.write().await = crate::ListenTarget::Idle;
 
                                     audio_rx = None;
                                     let status = ServerMsg::AudioStatus {

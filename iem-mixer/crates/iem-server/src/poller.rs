@@ -638,9 +638,6 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             result_channels.extend(mix_channels);
         }
 
-        // Check listen suppression BEFORE acquiring cache lock
-        let listen_suppressing = state.engineer_listen_target.read().await.is_suppressing();
-
         // Diff against cached state and broadcast changes
         let now = std::time::Instant::now();
         let echo_suppress_window = Duration::from_millis(500);
@@ -658,17 +655,6 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                         || (old_ch.pan - new_ch.pan).abs() > 0.001;
 
                     if changed {
-                        // During listen, skip mute-only broadcasts for engineer mix channels.
-                        // Cache still gets real REAPER state — only the UI broadcast is skipped.
-                        if listen_suppressing && member_id == "engineer" {
-                            let mute_only = old_ch.muted != new_ch.muted
-                                && (old_ch.level_db - new_ch.level_db).abs() <= 0.05
-                                && (old_ch.pan - new_ch.pan).abs() <= 0.001;
-                            if mute_only {
-                                continue;
-                            }
-                        }
-
                         // Check if this channel was recently commanded — suppress echo
                         let key = (member_id.clone(), new_ch.track_index);
                         let recently_commanded = cache
@@ -714,27 +700,6 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         cache
             .member_states
             .insert(member_id.clone(), result_channels.clone());
-
-        // After listen ends: force full State resync so UI matches REAPER exactly
-        if member_id == "engineer" && cache.engineer_needs_resync && !listen_suppressing {
-            cache.engineer_needs_resync = false;
-            let (global_level_db, global_muted) = cache
-                .global_volumes
-                .get(member_id)
-                .map(|gv| (Some(gv.level_db), Some(gv.muted)))
-                .unwrap_or((None, None));
-            let output_track_index = cache.output_track_indices.get(member_id).copied();
-            let _ = state.event_tx.send((
-                member_id.clone(),
-                ServerMsg::State {
-                    channels: result_channels.clone(),
-                    connected: true,
-                    global_level_db,
-                    global_muted,
-                    output_track_index,
-                },
-            ));
-        }
 
         // Daily auto-snapshot: on first channel change of the day, save a snapshot
         // capturing the starting state before changes
@@ -1763,11 +1728,32 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
         );
     }
 
-    /// Test B: During active listen, mute-only changes are NOT broadcast to UI.
-    /// Cache gets real state, but the broadcast is skipped so UI buttons stay stable.
+    /// ListenTarget defaults to Idle
     #[test]
-    fn test_listen_suppresses_mute_broadcast_not_cache() {
-        // Simulate cached state (pre-listen): PETKA unmuted
+    fn test_listen_target_default_is_idle() {
+        let target = crate::ListenTarget::default();
+        assert!(
+            matches!(target, crate::ListenTarget::Idle),
+            "Default ListenTarget must be Idle"
+        );
+    }
+
+    /// ListenTarget::Soloed stores track index
+    #[test]
+    fn test_listen_target_soloed_stores_track_index() {
+        let target = crate::ListenTarget::Soloed(23);
+        if let crate::ListenTarget::Soloed(idx) = target {
+            assert_eq!(idx, 23, "Soloed must store the correct track index");
+        } else {
+            panic!("Expected Soloed variant");
+        }
+    }
+
+    /// Poller broadcasts ALL changes without suppression (no listen special-casing)
+    #[test]
+    fn test_poller_broadcasts_mute_changes_during_listen() {
+        // With the new solo-based listen, the poller has no suppression logic.
+        // All changes from REAPER are broadcast to the UI unconditionally.
         let old_ch = iem_core::Channel {
             track_index: 23,
             name: "PETKA".to_string(),
@@ -1778,131 +1764,27 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             stereo_pair: None,
             stereo_side: None,
         };
-        // REAPER now says muted=true (ReaScript for listen isolation)
         let new_ch = iem_core::Channel {
             track_index: 23,
             name: "PETKA".to_string(),
             level_db: -6.0,
-            muted: true,
+            muted: true, // User toggled mute during listen
             pan: 0.0,
             category: String::new(),
             stereo_pair: None,
             stereo_side: None,
         };
 
-        let listen_suppressing = true;
-        let member_id = "engineer";
-
-        // Replicate the poller's broadcast suppression logic
         let changed = (old_ch.level_db - new_ch.level_db).abs() > 0.05
             || old_ch.muted != new_ch.muted
             || (old_ch.pan - new_ch.pan).abs() > 0.001;
         assert!(changed, "Mute change should be detected");
 
-        let mut should_broadcast = true;
-        if listen_suppressing && member_id == "engineer" {
-            let mute_only = old_ch.muted != new_ch.muted
-                && (old_ch.level_db - new_ch.level_db).abs() <= 0.05
-                && (old_ch.pan - new_ch.pan).abs() <= 0.001;
-            if mute_only {
-                should_broadcast = false;
-            }
-        }
-
+        // No suppression — all changes broadcast
+        let should_broadcast = changed;
         assert!(
-            !should_broadcast,
-            "Mute-only change during listen must NOT be broadcast"
-        );
-
-        // But cache still gets real REAPER state
-        let mut cache = MixerCache::new();
-        cache
-            .member_states
-            .insert("engineer".to_string(), vec![new_ch.clone()]);
-        let cached = cache.member_states.get("engineer").unwrap();
-        assert!(
-            cached[0].muted,
-            "Cache must still have real REAPER muted=true"
-        );
-    }
-
-    /// Test C: Resync fires after listen stop when Restoring expires.
-    #[test]
-    fn test_resync_fires_after_listen_stop() {
-        let mut cache = MixerCache::new();
-        cache.engineer_needs_resync = true;
-        let listen_suppressing = false; // Restoring expired
-        let member_id = "engineer";
-
-        let should_resync =
-            member_id == "engineer" && cache.engineer_needs_resync && !listen_suppressing;
-        assert!(
-            should_resync,
-            "Resync must fire when engineer_needs_resync=true and suppression ended"
-        );
-
-        // After resync, flag is cleared
-        cache.engineer_needs_resync = false;
-        assert!(
-            !cache.engineer_needs_resync,
-            "Resync flag must be cleared after firing"
-        );
-    }
-
-    /// Test that resync does NOT fire while still suppressing (Restoring active)
-    #[test]
-    fn test_resync_blocked_while_suppressing() {
-        let mut cache = MixerCache::new();
-        cache.engineer_needs_resync = true;
-        let listen_suppressing = true; // Restoring still active
-
-        let should_resync =
-            "engineer" == "engineer" && cache.engineer_needs_resync && !listen_suppressing;
-        assert!(
-            !should_resync,
-            "Resync must NOT fire while suppression is active"
-        );
-    }
-
-    /// Test that Restoring state still suppresses mute broadcasts (deadline in future).
-    #[test]
-    fn test_listen_restoring_still_suppresses_mute_broadcasts() {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-        let state = crate::EngineerListenState::Restoring(deadline);
-        assert!(
-            state.is_suppressing(),
-            "Restoring with future deadline must suppress mute broadcasts"
-        );
-    }
-
-    /// Test that Restoring state expires and stops suppressing after deadline passes.
-    #[test]
-    fn test_listen_restoring_expires_naturally() {
-        let deadline = std::time::Instant::now() - std::time::Duration::from_secs(1);
-        let state = crate::EngineerListenState::Restoring(deadline);
-        assert!(
-            !state.is_suppressing(),
-            "Restoring with past deadline must NOT suppress mute broadcasts"
-        );
-    }
-
-    /// Test that Idle state does not suppress.
-    #[test]
-    fn test_listen_idle_does_not_suppress() {
-        let state = crate::EngineerListenState::Idle;
-        assert!(
-            !state.is_suppressing(),
-            "Idle state must not suppress mute broadcasts"
-        );
-    }
-
-    /// Test that Active state suppresses.
-    #[test]
-    fn test_listen_active_suppresses() {
-        let state = crate::EngineerListenState::Active("PETKA".into());
-        assert!(
-            state.is_suppressing(),
-            "Active state must suppress mute broadcasts"
+            should_broadcast,
+            "Mute changes must always be broadcast (no suppression in solo-based listen)"
         );
     }
 }
