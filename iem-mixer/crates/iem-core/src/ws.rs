@@ -1,4 +1,5 @@
 //! WebSocket message types for real-time mixer communication
+//! Includes stems group bus control (v1.91.0)
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
