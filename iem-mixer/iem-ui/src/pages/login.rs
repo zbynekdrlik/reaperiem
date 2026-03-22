@@ -7,6 +7,7 @@ use wasm_bindgen_futures::spawn_local;
 
 use crate::api;
 use crate::auth::save_auth;
+use leptos::html;
 
 /// Login page with PIN numpad
 #[component]
@@ -70,45 +71,39 @@ pub fn LoginPage() -> impl IntoView {
         }
     });
 
-    // Keyboard support: listen for digit keys on document
-    {
-        use wasm_bindgen::JsCast;
-        use wasm_bindgen::prelude::*;
+    // Keyboard support: local handler on login container (scoped to this page only)
+    let login_ref = NodeRef::<html::Div>::new();
+    let hd_key = handle_digit.clone();
 
-        let hd_key = handle_digit.clone();
+    let on_keydown = move |e: web_sys::KeyboardEvent| {
+        let key = e.key();
+        match key.as_str() {
+            "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
+                e.prevent_default();
+                hd_key(key.chars().next().unwrap());
+            }
+            "Backspace" => {
+                e.prevent_default();
+                set_error.set(None);
+                set_pin.update(|p| {
+                    p.pop();
+                });
+            }
+            "Escape" | "Delete" => {
+                e.prevent_default();
+                set_error.set(None);
+                set_pin.set(String::new());
+            }
+            _ => {}
+        }
+    };
 
-        let closure =
-            Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
-                let key = e.key();
-                match key.as_str() {
-                    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => {
-                        e.prevent_default();
-                        hd_key(key.chars().next().unwrap());
-                    }
-                    "Backspace" => {
-                        e.prevent_default();
-                        set_error.set(None);
-                        set_pin.update(|p| {
-                            p.pop();
-                        });
-                    }
-                    "Escape" | "Delete" => {
-                        e.prevent_default();
-                        set_error.set(None);
-                        set_pin.set(String::new());
-                    }
-                    _ => {} // ignore all other keys
-                }
-            });
-
-        let document = web_sys::window().unwrap().document().unwrap();
-        let _ =
-            document.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
-
-        // Leak closure to keep listener alive (same pattern as mixer.rs reconnect).
-        // Login page is short-lived — user enters PIN and navigates away.
-        closure.forget();
-    }
+    // Auto-focus the login container so keyboard events are captured immediately
+    Effect::new(move || {
+        if let Some(el) = login_ref.get() {
+            let _ = el.focus();
+        }
+    });
 
     // Create clones for each button
     let hd1 = handle_digit.clone();
@@ -123,7 +118,7 @@ pub fn LoginPage() -> impl IntoView {
     let hd0 = handle_digit.clone();
 
     view! {
-        <div class="app">
+        <div class="app" tabindex="-1" node_ref=login_ref on:keydown=on_keydown>
             <header class="mixer-header">
                 <button class="back-btn" on:click=move |_| { navigate_back("/", Default::default()); }>
                     "\u{2190}"
