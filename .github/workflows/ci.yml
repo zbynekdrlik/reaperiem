@@ -613,8 +613,14 @@ jobs:
             exit 1
           }
 
-          # Install
-          $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
+          # Install — pick the installer matching current version from tauri.conf.json
+          $version = (Get-Content "iem-mixer\src-tauri\tauri.conf.json" | ConvertFrom-Json).version
+          Write-Host "Expected version: $version"
+          $installer = Get-ChildItem -Path "installer" -Filter "*${version}*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Write-Host "No installer for version $version, falling back to newest"
+            $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Sort-Object Name -Descending | Select-Object -First 1
+          }
           if (-not $installer) {
             Write-Host "::error::No installer found in artifact!"
             exit 1
