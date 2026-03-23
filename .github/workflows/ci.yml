@@ -1039,6 +1039,48 @@ jobs:
             exit /b 1
           )
 
+      - name: Fix send modes (apply IEM routing rules)
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          # Check if REAPER is running and HTTP API is available
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running before deploy but is now unreachable!"
+              Write-Host "::error::Deploy likely crashed REAPER. Check iem.lan immediately."
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available (was not running before deploy). Skipping send mode fix."
+              exit 0
+            }
+          }
+
+          # Run fix_send_mode.lua to apply current routing rules (auto mode, no GUI)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/auto_fix_sends/1" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 1
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_FIX_SENDS" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          # Read fix result
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/fix_sends_result" -UseBasicParsing).Content
+          Write-Host "Fix send modes result: $response"
+
+          if ($response -notmatch "OK") {
+            Write-Host "::error::fix_send_mode.lua failed: $response"
+            exit 1
+          }
+
+          Write-Host "Send modes fixed successfully"
+
       - name: Verify send modes (IEM routing rules)
         shell: powershell
         run: |
@@ -1078,8 +1120,7 @@ jobs:
 
           if ($response -match "FAIL") {
             Write-Host "::error::SEND MODE CHECK FAILED: Some sends have wrong mode."
-            Write-Host "::error::Expected: input sends = pre-fader (3), member inear sends = post-fader (0)"
-            Write-Host "::error::Run fix_send_mode.lua to fix: curl http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/auto_fix_sends/1 && curl http://iem.lan:8080/_/_RS_REAPERIEM_FIX_SENDS"
+            Write-Host "::error::Expected: input=pre-fader(3), member inear=post-fader(0), stems bus=post-fader(0)"
             exit 1
           }
 

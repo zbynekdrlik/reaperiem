@@ -3,6 +3,7 @@
 --
 --   Input tracks:        pre-fader post-FX (mode 3) — each member's mix is independent
 --   Member inear tracks: post-fader (mode 0) — engineer hears member's actual volume
+--   Stems bus tracks:    post-fader (mode 0) — stems group fader affects audio to inear
 --
 -- Mode values:
 --   0 = post-fader (post-pan)
@@ -25,6 +26,10 @@ local function is_member_inear(name)
     return name:match(" inear$") and not name:match("^ENGINEER ")
 end
 
+local function is_stems_bus(name)
+    return name:match(" stems$") ~= nil
+end
+
 local function fix_all_sends()
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
@@ -41,7 +46,8 @@ local function fix_all_sends()
         local track = reaper.GetTrack(0, t)
         local _, track_name = reaper.GetTrackName(track)
         local num_sends = reaper.GetTrackNumSends(track, 0)  -- 0 = sends (not receives)
-        local expect_post_fader = is_member_inear(track_name)
+        -- Stems bus tracks need post-fader so the group fader works
+        local expect_post_fader = is_member_inear(track_name) or is_stems_bus(track_name)
         local target_mode = expect_post_fader and 0 or 3
 
         for s = 0, num_sends - 1 do

@@ -158,13 +158,14 @@ for _, inear in ipairs(inear_tracks) do
         local new_track = reaper.GetTrack(0, total)
         reaper.GetSetMediaTrackInfo_String(new_track, "P_NAME", inear.stems_name, true)
 
-        -- Create send from stems bus -> inear at 0 dB (unity gain), pre-fader
+        -- Create send from stems bus -> inear at 0 dB (unity gain), post-fader
+        -- Post-fader so the stems group fader actually controls audio level
         local send_idx = reaper.CreateTrackSend(new_track, inear.track)
         if send_idx >= 0 then
             reaper.SetTrackSendInfo_Value(new_track, 0, send_idx, "D_VOL", 1.0) -- 0 dB
             reaper.SetTrackSendInfo_Value(new_track, 0, send_idx, "D_PAN", 0.0)
             reaper.SetTrackSendInfo_Value(new_track, 0, send_idx, "B_MUTE", 0)
-            reaper.SetTrackSendInfo_Value(new_track, 0, send_idx, "I_SENDMODE", 3) -- pre-fader post-FX
+            reaper.SetTrackSendInfo_Value(new_track, 0, send_idx, "I_SENDMODE", 0) -- post-fader (stems fader works)
         end
 
         stems_tracks[inear.member_name] = { track = new_track, index = total + 1 }
