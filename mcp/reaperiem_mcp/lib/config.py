@@ -28,6 +28,8 @@ class Config:
     # ReaScript action IDs
     action_set_hardware_output: str = ""
     action_rename_track: str = ""
+    action_setup_trim: str = ""
+    action_check_trim: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
@@ -49,6 +51,8 @@ class Config:
             ssh_port=ssh.get("port", 22),
             action_set_hardware_output=actions.get("set_hardware_output", ""),
             action_rename_track=actions.get("rename_track", ""),
+            action_setup_trim=actions.get("setup_trim", ""),
+            action_check_trim=actions.get("check_trim", ""),
         )
 
     @classmethod

@@ -345,6 +345,24 @@ def add_input_track(
 
 
 @mcp.tool
+async def list_track_fx() -> str:
+    """List FX chains and trim state on all mic/guitar input tracks.
+
+    Shows which tracks have TRIM IN (JS:Volume/Pan) at FX position 0
+    and their current gain values. Useful for verifying input trim setup.
+
+    Returns:
+        Trim state for all mic/gtr tracks (e.g., "OK:MAREK mic=-3.0dB|...")
+    """
+    config = get_config()
+    if not config.action_check_trim:
+        return "Error: action_check_trim not configured in reaper_config.yaml"
+
+    client = get_reaper_client()
+    return await tracks.list_track_fx(client, config.action_check_trim)
+
+
+@mcp.tool
 async def set_hardware_output(
     track_index: int, channel_l: int, channel_r: int
 ) -> str:
