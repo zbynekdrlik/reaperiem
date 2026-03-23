@@ -224,7 +224,7 @@ pub async fn start_server(
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
 
-    // Spawn audio listener (captures VBAN UDP packets from REAPER)
+    // Spawn audio listener (receives OIEM Opus packets from VST plugin)
     #[cfg(feature = "audio")]
     audio_stream::spawn_audio_listener(state.audio_tx.clone(), state.audio_diagnostics.clone());
 
@@ -325,7 +325,17 @@ pub async fn start_server(
     let addr = SocketAddr::from(([0, 0, 0, 0], server_config.port));
     tracing::info!("Starting server on http://{}", addr);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    // Set TCP_NODELAY on every accepted connection to reduce audio streaming latency.
+    // Disables Nagle's algorithm so Opus frames are sent immediately without waiting
+    // to coalesce with subsequent data. Critical for real-time audio over WebSocket.
+    use axum::serve::ListenerExt;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await?
+        .tap_io(|tcp_stream| {
+            if let Err(e) = tcp_stream.set_nodelay(true) {
+                tracing::trace!("failed to set TCP_NODELAY: {e:#}");
+            }
+        });
 
     // Signal readiness AFTER successful bind
     if let Some(tx) = ready_tx {

@@ -1208,74 +1208,64 @@ jobs:
             exit 1
           }
 
-      - name: Test audio pipeline (VBAN UDP to WebSocket Opus frames)
+      - name: Test audio pipeline (OIEM UDP to WebSocket Opus frames)
         shell: powershell
         run: |
           # This test PROVES the full audio pipeline works end-to-end:
-          #   1. Send synthetic VBAN UDP to 127.0.0.1:6980
+          #   1. Send synthetic OIEM UDP packets to 127.0.0.1:6980
           #   2. Login as engineer, get JWT
           #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
           #   4. Send ListenStart command
           #   5. Verify binary Opus frames arrive
           #   FAIL if no binary frames within 15 seconds
+          #
+          # OIEM packet format: [4B magic "OIEM"] [2B seq LE] [2B payload_size LE] [payload]
+          # The server relays the payload directly — no resampling or encoding needed.
 
           $ErrorActionPreference = "Stop"
 
           # Verify UDP listener exists on port 6980
           $udpListeners = netstat -an | Select-String "UDP.*:6980"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 6980 - app not listening for VBAN"
+            Write-Host "::error::No UDP listener on port 6980 - app not listening for OIEM"
             exit 1
           }
           Write-Host "UDP 6980 listener found: $udpListeners"
 
-          # Step 1: Start background VBAN UDP sender (keeps sending for 15 seconds)
+          # Step 1: Start background OIEM UDP sender (keeps sending for 15 seconds)
+          # Sends fake Opus-sized payloads (server just relays them)
           $udpJob = Start-Job -ScriptBlock {
-            # VBAN packet format: 28-byte header + interleaved INT16 audio
-            $channels = 2; $sampleRate = 96000; $samplesPerCh = 128
             $udp = New-Object System.Net.Sockets.UdpClient
-            $sent = 0; $offset = 0
+            $sent = 0
             $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
             while ($stopwatch.ElapsedMilliseconds -lt 15000) {
               $pkt = New-Object System.Collections.ArrayList
-              # Magic "VBAN" (LE: 0x56, 0x42, 0x41, 0x4E)
-              foreach ($b in @(0x56,0x42,0x41,0x4E)) { [void]$pkt.Add([byte]$b) }
-              # format_SR: index 4 = 96000 Hz, protocol audio = 0x00
-              [void]$pkt.Add([byte]4)
-              # format_nbs: samples-1 = 127
-              [void]$pkt.Add([byte]($samplesPerCh - 1))
-              # format_nbc: channels-1 = 1
-              [void]$pkt.Add([byte]($channels - 1))
-              # format_bit: INT16 (1) | codec PCM (0x00)
-              [void]$pkt.Add([byte]1)
-              # Stream name "engineer" (16 bytes, null-padded)
-              $name = [System.Text.Encoding]::ASCII.GetBytes("engineer")
-              foreach ($b in $name) { [void]$pkt.Add($b) }
-              for ($i = 0; $i -lt (16 - $name.Length); $i++) { [void]$pkt.Add([byte]0) }
-              # Frame counter (u32 LE)
-              foreach ($b in [BitConverter]::GetBytes([uint32]$sent)) { [void]$pkt.Add($b) }
-              # Audio: interleaved INT16
-              for ($i = 0; $i -lt $samplesPerCh; $i++) {
-                $t = ($offset + $i) / $sampleRate
-                $val = 0.3 * [Math]::Sin(2 * [Math]::PI * 440 * $t)
-                $int16Val = [int16][Math]::Round($val * 32767)
-                $sampleBytes = [BitConverter]::GetBytes($int16Val)
-                for ($ch = 0; $ch -lt $channels; $ch++) {
-                  foreach ($b in $sampleBytes) { [void]$pkt.Add($b) }
-                }
+              # Magic "OIEM"
+              foreach ($b in @(0x4F, 0x49, 0x45, 0x4D)) { [void]$pkt.Add([byte]$b) }
+              # Sequence number (uint16 LE)
+              $seqBytes = [BitConverter]::GetBytes([uint16]($sent % 65536))
+              foreach ($b in $seqBytes) { [void]$pkt.Add($b) }
+              # Payload: synthetic data mimicking an Opus frame (~200 bytes)
+              $payloadSize = 200
+              $payloadSizeBytes = [BitConverter]::GetBytes([uint16]$payloadSize)
+              foreach ($b in $payloadSizeBytes) { [void]$pkt.Add($b) }
+              # Fill with non-zero data (synthetic Opus-like payload)
+              for ($i = 0; $i -lt $payloadSize; $i++) {
+                [void]$pkt.Add([byte](($sent + $i) % 256))
               }
               $data = [byte[]]$pkt.ToArray()
               $udp.Send($data, $data.Length, "127.0.0.1", 6980) | Out-Null
-              $offset += $samplesPerCh; $sent++
-              Start-Sleep -Milliseconds 5
+              $sent++
+              # 20ms per frame = 50 frames/sec (matches real Opus timing)
+              Start-Sleep -Milliseconds 20
             }
             $udp.Close()
-            Write-Output "Sent $sent VBAN UDP packets"
+            Write-Output "Sent $sent OIEM UDP packets"
           }
-          Write-Host "Started background VBAN UDP sender"
+          Write-Host "Started background OIEM UDP sender"
           Start-Sleep -Seconds 2  # Let pipeline initialize
 
-          # Step 3: Get engineer JWT token
+          # Step 2: Get engineer JWT token
           $authBody = '{"member":"engineer","pin":"1177"}'
           $authResp = Invoke-WebRequest -Uri "http://localhost:80/api/auth" -Method POST -Body $authBody -ContentType "application/json" -UseBasicParsing
           $token = ($authResp.Content | ConvertFrom-Json).token
@@ -1285,8 +1275,7 @@ jobs:
           }
           Write-Host "Got engineer JWT token"
 
-          # Step 4: Connect WebSocket and verify Opus frames arrive
-          # Using .NET ClientWebSocket for binary frame detection
+          # Step 3: Connect WebSocket and verify Opus frames arrive
           $ws = New-Object System.Net.WebSockets.ClientWebSocket
           $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
           $ct = New-Object System.Threading.CancellationTokenSource(15000)
@@ -1361,8 +1350,8 @@ jobs:
             Write-Host "::warning::Partial success: got $binaryFrames frames but expected >=5"
             exit 0
           } elseif ($gotNoSource) {
-            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - VBAN UDP packets not reaching audio pipeline"
-            Write-Host "Check: Is VBAN IEM sending to 127.0.0.1:6980? Is the UDP listener bound?"
+            Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - OIEM UDP packets not reaching audio pipeline"
+            Write-Host "Check: Is VBAN IEM VST sending OIEM to 127.0.0.1:6980? Is the UDP listener bound?"
             exit 1
           } else {
             Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
@@ -1372,10 +1361,10 @@ jobs:
       - name: Test REAL audio from REAPER (no synthetic UDP)
         shell: powershell
         run: |
-          # This test verifies REAL VBAN audio from REAPER reaches the app.
+          # This test verifies REAL OIEM audio from REAPER reaches the app.
           # It does NOT send synthetic UDP - it relies on REAPER's VBAN IEM VST3
-          # being active on the engineer track, sending to 127.0.0.1:6980.
-          # FAILS the deploy if REAPER was running and VBAN setup succeeded but no audio arrives.
+          # being active on the engineer track, sending OIEM Opus to 127.0.0.1:6980.
+          # FAILS the deploy if REAPER was running and VST setup succeeded but no audio arrives.
 
           $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
           if ($wasRunning -ne "true") {
@@ -1430,7 +1419,7 @@ jobs:
           try { $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, "", [System.Threading.CancellationToken]::None).Wait() } catch {}
 
           if ($binaryFrames -ge 3) {
-            Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER via VBAN)"
+            Write-Host "REAL AUDIO E2E: PASS ($binaryFrames Opus frames from REAPER via OIEM)"
           } else {
             Write-Host "::error::REAL AUDIO E2E FAIL: Expected 3+ Opus frames, got $binaryFrames"
             Write-Host "::error::REAPER was running and VBAN setup should have succeeded - audio pipeline is broken"
@@ -1455,15 +1444,16 @@ jobs:
             -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing).Content | ConvertFrom-Json
 
           Write-Host "=== AUDIO DIAGNOSTICS ==="
+          Write-Host "receiving_oiem: $($diag.receiving_oiem)"
           Write-Host "receiving_vban: $($diag.receiving_vban)"
           Write-Host "packets/s: $($diag.packets_per_second)"
           Write-Host "opus_frames/s: $($diag.opus_frames_per_second)"
           Write-Host "peak_db: $($diag.peak_db)"
-          Write-Host "sample_rate: $($diag.sample_rate)"
-          Write-Host "channels: $($diag.channels)"
+          Write-Host "last_sequence: $($diag.last_sequence)"
+          Write-Host "sequence_gaps: $($diag.sequence_gaps)"
 
-          if (-not $diag.receiving_vban) {
-            Write-Host "::error::AUDIO DIAGNOSTICS FAIL: Not receiving VBAN packets"
+          if (-not $diag.receiving_vban -and -not $diag.receiving_oiem) {
+            Write-Host "::error::AUDIO DIAGNOSTICS FAIL: Not receiving OIEM packets"
             exit 1
           }
           if ($diag.peak_db -lt -40) {

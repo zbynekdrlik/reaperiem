@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
-#include "vban/VBANSender.h"
+#include "opus/OpusEncoderWrapper.h"
+#include "opus/OpusSender.h"
 
 class VBANIEMProcessor : public juce::AudioProcessor {
 public:
@@ -48,13 +49,24 @@ private:
     // Hardcoded configuration for IEM use case
     static constexpr const char* DEST_IP = "127.0.0.1";
     static constexpr uint16_t PORT = 6980;
-    static constexpr const char* STREAM_NAME = "engineer";
 
-    std::unique_ptr<VBANSender> sender;
+    // Opus encoder (48kHz stereo)
+    OpusEncoderWrapper opusEncoder;
+    // UDP sender thread
+    OpusSender opusSender;
 
-    double currentSampleRate = 48000.0;
+    // JUCE LagrangeInterpolator for zero-delay resampling (one per channel)
+    std::vector<juce::LagrangeInterpolator> interpolators;
+
+    // Resampling buffers
+    std::vector<float> resampledLeft;
+    std::vector<float> resampledRight;
+    std::vector<float> interleavedBuffer;
+
+    double currentSampleRate = 96000.0;
     int currentBlockSize = 512;
     int numChannels = 2;
+    double resampleRatio = 1.0; // inputRate / outputRate (e.g., 96000/48000 = 2.0)
 
     std::atomic<float> inputLevel{0.0f};
     std::atomic<float> outputLevel{0.0f};
