@@ -19,6 +19,9 @@ pub struct PresetData {
     /// Timestamp when preset was last updated (seconds since epoch)
     #[serde(default)]
     pub updated_at: Option<i64>,
+    /// Stems bus volume in dB (None if no stems bus)
+    #[serde(default)]
+    pub stems_level_db: Option<f32>,
 }
 
 /// Channel state in a preset
@@ -45,6 +48,8 @@ struct PresetEntry {
     channels: std::collections::HashMap<usize, ChannelState>,
     created_at: i64,
     updated_at: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stems_level_db: Option<f32>,
 }
 
 /// Request to save a preset
@@ -52,6 +57,8 @@ struct PresetEntry {
 struct SavePresetRequest {
     name: String,
     channels: std::collections::HashMap<usize, ChannelState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stems_level_db: Option<f32>,
 }
 
 /// Format timestamp for display in Slovak format (DD.MM. HH:MM)
@@ -106,6 +113,7 @@ async fn save_preset_api(
     member_id: &str,
     name: &str,
     channels: std::collections::HashMap<usize, ChannelState>,
+    stems_level_db: Option<f32>,
 ) -> Result<(), String> {
     let token = get_token().ok_or("Not authenticated")?;
     let url = format!("/api/presets/{}", member_id);
@@ -113,6 +121,7 @@ async fn save_preset_api(
     let req = SavePresetRequest {
         name: name.to_string(),
         channels,
+        stems_level_db,
     };
 
     let resp = gloo_net::http::Request::post(&url)
@@ -135,6 +144,7 @@ async fn update_preset_api(
     member_id: &str,
     name: &str,
     channels: std::collections::HashMap<usize, ChannelState>,
+    stems_level_db: Option<f32>,
 ) -> Result<(), String> {
     let token = get_token().ok_or("Not authenticated")?;
     let url = format!("/api/presets/{}/{}", member_id, encode_name(name));
@@ -142,6 +152,7 @@ async fn update_preset_api(
     let req = SavePresetRequest {
         name: name.to_string(),
         channels,
+        stems_level_db,
     };
 
     let resp = gloo_net::http::Request::put(&url)
@@ -237,7 +248,7 @@ pub fn PresetModal(
         set_loading.set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
-            match save_preset_api(&member_id, &name, state.channels).await {
+            match save_preset_api(&member_id, &name, state.channels, state.stems_level_db).await {
                 Ok(()) => {
                     // Refresh list
                     if let Ok(list) = fetch_presets(&member_id).await {
@@ -321,6 +332,7 @@ pub fn PresetModal(
                                                                         }).collect(),
                                                                         created_at: Some(entry.created_at),
                                                                         updated_at: Some(entry.updated_at),
+                                                                        stems_level_db: entry.stems_level_db,
                                                                     };
                                                                     on_load.run(data);
                                                                     on_close.run(());
@@ -345,7 +357,7 @@ pub fn PresetModal(
                                                             set_loading.set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
-                                                                match update_preset_api(&member_id, &name, state.channels).await {
+                                                                match update_preset_api(&member_id, &name, state.channels, state.stems_level_db).await {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
                                                                             set_presets.set(list);

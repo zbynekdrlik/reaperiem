@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.90.0 (2026-03-22)
+
+- **Fix**: Preset names now accept digits and backspace works correctly — login page keyboard listener was leaking globally and intercepting keys on all pages (#110)
+
 ### v1.89.0 (2026-03-22)
 
 - **Fix**: Band member Listen now works — mutes other member sends to ENGINEER for true audio isolation (solo-based approach didn't affect send routing)

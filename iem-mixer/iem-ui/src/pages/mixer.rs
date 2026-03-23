@@ -89,6 +89,10 @@ fn connect_websocket(
     soloed: ReadSignal<std::collections::HashSet<usize>>,
     ws_closures: WsClosureStore,
     ws_fail_count: WsFailCounter,
+    set_stems_level: WriteSignal<f32>,
+    set_stems_muted: WriteSignal<bool>,
+    stems_touched: ReadSignal<bool>,
+    set_stems_bus_idx: WriteSignal<Option<usize>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -147,6 +151,9 @@ fn connect_websocket(
                         global_level_db,
                         global_muted,
                         output_track_index,
+                        stems_level_db,
+                        stems_muted,
+                        stems_bus_index,
                     } => {
                         // Successfully received data — reset failure counter
                         fail_count_msg.set(0);
@@ -164,6 +171,15 @@ fn connect_websocket(
                         }
                         if let Some(idx) = output_track_index {
                             set_output_track_idx.set(Some(idx));
+                        }
+                        if let Some(lvl) = stems_level_db {
+                            set_stems_level.set(lvl);
+                        }
+                        if let Some(muted) = stems_muted {
+                            set_stems_muted.set(muted);
+                        }
+                        if let Some(idx) = stems_bus_index {
+                            set_stems_bus_idx.set(Some(idx));
                         }
                         set_connected.set(conn);
                         set_loading.set(false);
@@ -204,6 +220,12 @@ fn connect_websocket(
                         if !global_touched.get_untracked() {
                             set_global_level.set(level_db);
                             set_global_muted.set(muted);
+                        }
+                    }
+                    iem_core::ServerMsg::StemsVolumeUpdate { level_db, muted } => {
+                        if !stems_touched.get_untracked() {
+                            set_stems_level.set(level_db);
+                            set_stems_muted.set(muted);
                         }
                     }
                     iem_core::ServerMsg::ConnectionChanged { connected: conn } => {
@@ -330,6 +352,12 @@ pub fn MixerPage() -> impl IntoView {
     let (global_muted, set_global_muted) = signal(false);
     let (global_touched, set_global_touched) = signal(false);
 
+    // Stems group bus volume state
+    let (stems_level, set_stems_level) = signal(0.0_f32);
+    let (stems_muted, set_stems_muted) = signal(false);
+    let (stems_touched, set_stems_touched) = signal(false);
+    let (stems_bus_idx, set_stems_bus_idx) = signal(Option::<usize>::None);
+
     // Channel customization (pin/hide) — loaded from server via WS
     let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
     let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
@@ -382,6 +410,10 @@ pub fn MixerPage() -> impl IntoView {
             soloed,
             ws_closures_effect.clone(),
             ws_fail_count_effect.clone(),
+            set_stems_level,
+            set_stems_muted,
+            stems_touched,
+            set_stems_bus_idx,
         );
     });
 
@@ -442,6 +474,10 @@ pub fn MixerPage() -> impl IntoView {
                 soloed,
                 ws_closures.clone(),
                 ws_fail_count.clone(),
+                set_stems_level,
+                set_stems_muted,
+                stems_touched,
+                set_stems_bus_idx,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -613,10 +649,16 @@ pub fn MixerPage() -> impl IntoView {
                 },
             );
         }
+        let current_stems_level = if stems_bus_idx.get_untracked().is_some() {
+            Some(stems_level.get_untracked())
+        } else {
+            None
+        };
         PresetData {
             channels: channel_states,
             created_at: None,
             updated_at: None,
+            stems_level_db: current_stems_level,
         }
     });
 
@@ -778,6 +820,33 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 output_track_idx=output_track_idx
+                            />
+                            <StemsVolumeFader
+                                level=stems_level
+                                set_level=set_stems_level
+                                muted=stems_muted
+                                set_muted=set_stems_muted
+                                set_stems_touched=set_stems_touched
+                                connected=connected
+                                ws=ws
+                                meters=meters.into()
+                                stems_bus_idx=stems_bus_idx
+                            />
+                        </Show>
+                        <Show
+                            when=move || active_category.get() == Category::Stems
+                            fallback=|| ()
+                        >
+                            <StemsVolumeFader
+                                level=stems_level
+                                set_level=set_stems_level
+                                muted=stems_muted
+                                set_muted=set_stems_muted
+                                set_stems_touched=set_stems_touched
+                                connected=connected
+                                ws=ws
+                                meters=meters.into()
+                                stems_bus_idx=stems_bus_idx
                             />
                         </Show>
                         <ChannelList
@@ -1043,6 +1112,208 @@ fn GlobalVolumeFader(
                 </button>
             </div>
         </div>
+    }
+}
+
+/// Stems group bus volume fader rendered on Main and Stems tabs
+#[component]
+fn StemsVolumeFader(
+    level: ReadSignal<f32>,
+    set_level: WriteSignal<f32>,
+    muted: ReadSignal<bool>,
+    set_muted: WriteSignal<bool>,
+    set_stems_touched: WriteSignal<bool>,
+    connected: ReadSignal<bool>,
+    ws: ReadSignal<Option<web_sys::WebSocket>>,
+    meters: ReadSignal<HashMap<usize, [f32; 2]>>,
+    stems_bus_idx: ReadSignal<Option<usize>>,
+) -> impl IntoView {
+    let (is_fader_active, set_is_fader_active) = signal(false);
+
+    // Guard timeout for post-release protection
+    let (guard_id, set_guard_id) = signal(Option::<i32>::None);
+
+    // Throttle state
+    let (last_send_time, set_last_send_time) = signal(0.0_f64);
+    let (pending_value, set_pending_value) = signal(Option::<f32>::None);
+    let (pending_timeout, set_pending_timeout) = signal(Option::<i32>::None);
+
+    let cancel_guard = move || {
+        if let Some(id) = guard_id.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_timeout_with_handle(id);
+            }
+            set_guard_id.set(None);
+        }
+    };
+
+    let set_guard = move || {
+        cancel_guard();
+        let cb = Closure::once_into_js(move || {
+            set_guard_id.set(None);
+            set_stems_touched.set(false);
+        });
+        if let Some(w) = web_sys::window() {
+            if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.unchecked_ref(),
+                POST_RELEASE_GUARD_MS,
+            ) {
+                set_guard_id.set(Some(id));
+            }
+        }
+    };
+
+    let cancel_pending = move || {
+        if let Some(id) = pending_timeout.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_timeout_with_handle(id);
+            }
+            set_pending_timeout.set(None);
+        }
+    };
+
+    let on_level_change = Callback::new(move |new_level: f32| {
+        set_level.set(new_level);
+        if !connected.get() {
+            return;
+        }
+
+        let now = js_sys::Date::now();
+        let last = last_send_time.get_untracked();
+
+        if now - last >= THROTTLE_INTERVAL_MS {
+            set_last_send_time.set(now);
+            set_pending_value.set(None);
+            cancel_pending();
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetStemsLevel {
+                    level_db: new_level,
+                },
+            );
+        } else {
+            set_pending_value.set(Some(new_level));
+            cancel_pending();
+            let cb = Closure::once_into_js(move || {
+                let pending = pending_value.get_untracked();
+                if let Some(val) = pending {
+                    set_last_send_time.set(js_sys::Date::now());
+                    set_pending_value.set(None);
+                    set_pending_timeout.set(None);
+                    ws_send(ws, &iem_core::ClientMsg::SetStemsLevel { level_db: val });
+                }
+            });
+            if let Some(w) = web_sys::window() {
+                if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    cb.unchecked_ref(),
+                    THROTTLE_INTERVAL_MS as i32,
+                ) {
+                    set_pending_timeout.set(Some(id));
+                }
+            }
+        }
+    });
+
+    let on_touch_state = Callback::new(move |touching: bool| {
+        if touching {
+            cancel_guard();
+            set_stems_touched.set(true);
+        } else {
+            let pending = pending_value.get_untracked();
+            if let Some(val) = pending {
+                set_last_send_time.set(js_sys::Date::now());
+                set_pending_value.set(None);
+                cancel_pending();
+                ws_send(ws, &iem_core::ClientMsg::SetStemsLevel { level_db: val });
+            }
+            set_guard();
+        }
+    });
+
+    let on_mute_click = move |_| {
+        if !connected.get() {
+            return;
+        }
+        let new_muted = !muted.get();
+        set_muted.set(new_muted);
+        set_stems_touched.set(true);
+        ws_send(ws, &iem_core::ClientMsg::SetStemsMute { muted: new_muted });
+        let cb = Closure::once_into_js(move || {
+            set_stems_touched.set(false);
+        });
+        if let Some(w) = web_sys::window() {
+            let _ = w.set_timeout_with_callback_and_timeout_and_arguments_0(
+                cb.unchecked_ref(),
+                POST_RELEASE_GUARD_MS,
+            );
+        }
+    };
+
+    let level_signal = Signal::derive(move || level.get());
+
+    let meter_l = Signal::derive(move || {
+        stems_bus_idx
+            .get()
+            .and_then(|idx| meters.with(|m| m.get(&idx).map(|v| v[0])))
+            .unwrap_or(0.0)
+    });
+    let meter_r = Signal::derive(move || {
+        stems_bus_idx
+            .get()
+            .and_then(|idx| meters.with(|m| m.get(&idx).map(|v| v[1])))
+            .unwrap_or(0.0)
+    });
+
+    // Only render if stems bus exists
+    let has_stems_bus = Signal::derive(move || stems_bus_idx.get().is_some());
+
+    view! {
+        <Show when=move || has_stems_bus.get() fallback=|| ()>
+            <div
+                class=move || {
+                    let mut classes = vec!["channel", "stems-volume"];
+                    if muted.get() { classes.push("muted"); }
+                    if !connected.get() { classes.push("disconnected"); }
+                    if is_fader_active.get() { classes.push("fader-active"); }
+                    classes.join(" ")
+                }
+                data-testid="stems-volume-fader"
+            >
+                <div class="ch-label">
+                    <div class="ch-name">"STEMS"</div>
+                    <div class="ch-type">"group"</div>
+                </div>
+
+                <div style="grid-area: menu"></div>
+
+                <Meter level_l=meter_l level_r=meter_r />
+
+                <div class="fader-area">
+                    <Fader
+                        value=level_signal
+                        min=-60.0
+                        max=12.0
+                        on_change=on_level_change
+                        on_activate=Callback::new(move |active| set_is_fader_active.set(active))
+                        on_touch_state=on_touch_state
+                    />
+                </div>
+
+                <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
+
+                <div class="pan-container"></div>
+
+                <div class="channel-btns">
+                    <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                    <button
+                        class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
+                        on:click=on_mute_click
+                    >
+                        "M"
+                    </button>
+                </div>
+            </div>
+        </Show>
     }
 }
 

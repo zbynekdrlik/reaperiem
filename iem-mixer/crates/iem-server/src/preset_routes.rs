@@ -38,6 +38,8 @@ impl From<&PresetEntry> for PresetInfo {
 pub struct SavePresetRequest {
     pub name: String,
     pub channels: HashMap<usize, ChannelPreset>,
+    #[serde(default)]
+    pub stems_level_db: Option<f32>,
 }
 
 /// Preset routes
@@ -105,7 +107,7 @@ async fn save_preset(
 
     let entry = state
         .preset_store
-        .save(&member, &name, req.channels)
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db)
         .map_err(|e| {
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
@@ -166,7 +168,7 @@ async fn update_preset(
 
     let entry = state
         .preset_store
-        .save(&member, &name, req.channels)
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db)
         .map_err(|e| {
             tracing::error!("Failed to update preset: {}", e);
             (
@@ -283,6 +285,30 @@ async fn restore_preset(
 
             op_count
         }));
+    }
+
+    // Restore stems bus volume if present in preset
+    if let Some(stems_db) = preset.stems_level_db {
+        let cache = state.mixer_cache.read().await;
+        if let Some(&stems_track) = cache.stems_bus_indices.get(&member) {
+            drop(cache);
+            let vol_linear = if stems_db <= -60.0 {
+                0.0
+            } else {
+                10.0_f32.powf(stems_db / 20.0).clamp(0.0, 4.0)
+            };
+            let url = format!(
+                "{}/_/SET/TRACK/{}/VOL/{:.6}",
+                reaper_url, stems_track, vol_linear
+            );
+            let client = state.http_client.clone();
+            handles.push(tokio::spawn(async move {
+                if let Err(e) = client.get(&url).send().await {
+                    tracing::error!("Restore stems level failed: {}", e);
+                }
+                1
+            }));
+        }
     }
 
     // Wait for all commands to complete

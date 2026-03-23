@@ -118,6 +118,10 @@ pub struct MixerCache {
     pub snapshot_last_date: HashMap<String, String>,
     /// Solo state per member — transient, in-memory only (member_id -> soloed track indices)
     pub solo_states: HashMap<String, Vec<usize>>,
+    /// Stems-bus track indices per member (member_id -> 1-based track index)
+    pub stems_bus_indices: HashMap<String, usize>,
+    /// Last known stems-bus volume per member (member_id -> state)
+    pub stems_volumes: HashMap<String, GlobalVolState>,
 }
 
 impl MixerCache {

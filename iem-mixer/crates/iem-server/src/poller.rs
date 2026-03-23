@@ -259,6 +259,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
     let mut connected = false;
     // Discovered output tracks: member_id -> (track_index, vol_linear, flags)
     let mut output_tracks: HashMap<String, (usize, f32, i32)> = HashMap::new();
+    // Discovered stems-bus tracks: member_id -> (track_index, vol_linear, flags)
+    let mut stems_bus_tracks: HashMap<String, (usize, f32, i32)> = HashMap::new();
 
     // Name→index map for ALL REAPER tracks (for input track index resolution)
     let mut all_track_names: HashMap<String, usize> = HashMap::new();
@@ -328,6 +330,14 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     let vol: f32 = parts[4].parse().unwrap_or(1.0);
                     let flags: i32 = parts[3].parse().unwrap_or(0);
                     output_tracks.insert(member_id.clone(), (track_idx, vol, flags));
+                }
+
+                // Check if this is a stems-bus track (e.g. "PETKA stems")
+                if let Some(member_name) = track_name.strip_suffix(" stems") {
+                    let member_id = member_name.to_lowercase();
+                    let vol: f32 = parts[4].parse().unwrap_or(1.0);
+                    let flags: i32 = parts[3].parse().unwrap_or(0);
+                    stems_bus_tracks.insert(member_id, (track_idx, vol, flags));
                 }
             }
         }
@@ -509,6 +519,41 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .insert(member_id.clone(), GlobalVolState { level_db, muted });
         }
 
+        // Update stems-bus track indices and volumes, broadcast changes
+        for (member_id, (track_idx, vol_linear, flags)) in &stems_bus_tracks {
+            cache
+                .stems_bus_indices
+                .insert(member_id.clone(), *track_idx);
+
+            let level_db = crate::proxy::quantize_02(reaper_vol_to_db(*vol_linear));
+            let muted = (*flags & 8) != 0;
+
+            let changed = match cache.stems_volumes.get(member_id) {
+                Some(sv) => (sv.level_db - level_db).abs() > 0.05 || sv.muted != muted,
+                None => true,
+            };
+
+            if changed {
+                // Echo suppression (offset 200000 to avoid collision with global/send keys)
+                let key = (member_id.clone(), *track_idx + 200000);
+                let recently_commanded = cache
+                    .command_timestamps
+                    .get(&key)
+                    .is_some_and(|ts| now.duration_since(*ts) < echo_suppress_window);
+
+                if !recently_commanded {
+                    let _ = state.event_tx.send((
+                        member_id.clone(),
+                        ServerMsg::StemsVolumeUpdate { level_db, muted },
+                    ));
+                }
+            }
+
+            cache
+                .stems_volumes
+                .insert(member_id.clone(), GlobalVolState { level_db, muted });
+        }
+
         // Resolve input track indices by name from NTRACK response
         if !all_track_names.is_empty() {
             let mut input_indices: HashMap<String, usize> = HashMap::new();
@@ -684,6 +729,12 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 .map(|gv| (Some(gv.level_db), Some(gv.muted)))
                 .unwrap_or((None, None));
             let output_track_index = cache.output_track_indices.get(member_id).copied();
+            let (stems_level_db, stems_muted) = cache
+                .stems_volumes
+                .get(member_id)
+                .map(|sv| (Some(sv.level_db), Some(sv.muted)))
+                .unwrap_or((None, None));
+            let stems_bus_index = cache.stems_bus_indices.get(member_id).copied();
             let _ = state.event_tx.send((
                 member_id.clone(),
                 ServerMsg::State {
@@ -692,6 +743,9 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     global_level_db,
                     global_muted,
                     output_track_index,
+                    stems_level_db,
+                    stems_muted,
+                    stems_bus_index,
                 },
             ));
         }

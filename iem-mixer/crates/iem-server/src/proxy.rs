@@ -1249,6 +1249,11 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         None => (None, None),
     };
     let output_track_index = cache.output_track_indices.get(member_id).copied();
+    let (stems_level_db, stems_muted) = match cache.stems_volumes.get(member_id) {
+        Some(sv) => (Some(sv.level_db), Some(sv.muted)),
+        None => (None, None),
+    };
+    let stems_bus_index = cache.stems_bus_indices.get(member_id).copied();
     drop(cache);
 
     Ok(iem_core::ServerMsg::State {
@@ -1257,6 +1262,9 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         global_level_db,
         global_muted,
         output_track_index,
+        stems_level_db,
+        stems_muted,
+        stems_bus_index,
     })
 }
 
@@ -1345,6 +1353,12 @@ async fn apply_command_to_cache(
             }
         }
         iem_core::ClientMsg::SetGlobalMute { .. } => {}
+        iem_core::ClientMsg::SetStemsLevel { level_db } => {
+            if level_db.is_nan() || level_db.is_infinite() {
+                return Err("level_db must be finite".to_string());
+            }
+        }
+        iem_core::ClientMsg::SetStemsMute { .. } => {}
         iem_core::ClientMsg::UpdateCustomization { .. } => {
             // Handled in WS handler before apply_command_to_cache is called
             return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
@@ -1533,6 +1547,87 @@ async fn apply_command_to_cache(
                 reaper_api::set_track_mute(&reaper_url, output_track, mute_val),
                 output_track,
                 Some(iem_core::ServerMsg::GlobalVolumeUpdate {
+                    level_db: current_db,
+                    muted: *muted,
+                }),
+            )
+        }
+        iem_core::ClientMsg::SetStemsLevel { level_db } => {
+            let vol = db_to_reaper_vol(*level_db);
+            let cached_db = reaper_vol_to_db(vol);
+            let mut cache = state.mixer_cache.write().await;
+            let stems_track = match cache.stems_bus_indices.get(member_id) {
+                Some(&idx) => idx,
+                None => {
+                    drop(cache);
+                    return Err("Stems bus track not yet discovered".to_string());
+                }
+            };
+            let current_muted = cache
+                .stems_volumes
+                .get(member_id)
+                .map(|sv| sv.muted)
+                .unwrap_or(false);
+            if let Some(sv) = cache.stems_volumes.get_mut(member_id) {
+                sv.level_db = cached_db;
+            } else {
+                cache.stems_volumes.insert(
+                    member_id.to_string(),
+                    crate::GlobalVolState {
+                        level_db: cached_db,
+                        muted: false,
+                    },
+                );
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), stems_track + 200000),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_track_vol(&reaper_url, stems_track, vol),
+                stems_track,
+                Some(iem_core::ServerMsg::StemsVolumeUpdate {
+                    level_db: cached_db,
+                    muted: current_muted,
+                }),
+            )
+        }
+        iem_core::ClientMsg::SetStemsMute { muted } => {
+            let mute_val: u8 = if *muted { 1 } else { 0 };
+            let mut cache = state.mixer_cache.write().await;
+            let stems_track = match cache.stems_bus_indices.get(member_id) {
+                Some(&idx) => idx,
+                None => {
+                    drop(cache);
+                    return Err("Stems bus track not yet discovered".to_string());
+                }
+            };
+            let current_db = cache
+                .stems_volumes
+                .get(member_id)
+                .map(|sv| sv.level_db)
+                .unwrap_or(0.0);
+            if let Some(sv) = cache.stems_volumes.get_mut(member_id) {
+                sv.muted = *muted;
+            } else {
+                cache.stems_volumes.insert(
+                    member_id.to_string(),
+                    crate::GlobalVolState {
+                        level_db: 0.0,
+                        muted: *muted,
+                    },
+                );
+            }
+            cache.command_timestamps.insert(
+                (member_id.to_string(), stems_track + 200000),
+                std::time::Instant::now(),
+            );
+            drop(cache);
+            (
+                reaper_api::set_track_mute(&reaper_url, stems_track, mute_val),
+                stems_track,
+                Some(iem_core::ServerMsg::StemsVolumeUpdate {
                     level_db: current_db,
                     muted: *muted,
                 }),

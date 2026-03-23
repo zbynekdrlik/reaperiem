@@ -560,15 +560,28 @@ jobs:
       - name: Stop running IEM Mixer
         shell: powershell
         run: |
-          # GitHub Actions sets ErrorActionPreference=Stop by default,
-          # which makes taskkill's "not found" stderr a terminating error.
+          # Kill iem-mixer-app using multiple methods for reliability.
+          # taskkill /f can fail for cross-session processes, so fall back
+          # to Stop-Process (PowerShell) and wmic (WMI) if needed.
           $ErrorActionPreference = "SilentlyContinue"
           & taskkill /f /im iem-mixer-app.exe 2>&1 | Out-Null
-          Start-Sleep -Seconds 3
+          Start-Sleep -Seconds 2
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "taskkill failed, trying Stop-Process..."
+            Stop-Process -Name "iem-mixer-app" -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+          }
+          $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
+          if ($proc) {
+            Write-Host "Stop-Process failed, trying wmic..."
+            & wmic process where "name='iem-mixer-app.exe'" delete 2>&1 | Out-Null
+            Start-Sleep -Seconds 2
+          }
           $ErrorActionPreference = "Stop"
           $proc = Get-Process -Name "iem-mixer-app" -ErrorAction SilentlyContinue
           if ($proc) {
-            Write-Host "::error::Cannot stop iem-mixer-app (PID $($proc.Id))"
+            Write-Host "::error::Cannot stop iem-mixer-app (PID $($proc.Id)) after all methods"
             exit 1
           }
           Write-Host "Process stopped"
@@ -600,8 +613,14 @@ jobs:
             exit 1
           }
 
-          # Install
-          $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Select-Object -First 1
+          # Install — pick the installer matching current version from tauri.conf.json
+          $version = (Get-Content "iem-mixer\src-tauri\tauri.conf.json" | ConvertFrom-Json).version
+          Write-Host "Expected version: $version"
+          $installer = Get-ChildItem -Path "installer" -Filter "*${version}*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            Write-Host "No installer for version $version, falling back to newest"
+            $installer = Get-ChildItem -Path "installer" -Filter "*.exe" | Sort-Object Name -Descending | Select-Object -First 1
+          }
           if (-not $installer) {
             Write-Host "::error::No installer found in artifact!"
             exit 1
