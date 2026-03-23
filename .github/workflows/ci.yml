@@ -1136,6 +1136,91 @@ jobs:
 
           Write-Host "Send mode check: OK (input=pre-fader, member inear=post-fader)"
 
+      - name: Setup input trim on mic/guitar tracks
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running before deploy but is now unreachable!"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available. Skipping trim setup."
+              exit 0
+            }
+          }
+
+          # Trigger setup_input_trim.lua
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_SETUP_TRIM" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/trim_setup_result" -UseBasicParsing).Content
+          Write-Host "Trim setup result: $response"
+
+          if ($response -match "ERROR") {
+            Write-Host "::error::setup_input_trim.lua failed: $response"
+            exit 1
+          }
+
+          if ($response -match "OK") {
+            Write-Host "Input trim setup complete"
+          } else {
+            Write-Host "::error::Unexpected trim setup result: $response"
+            exit 1
+          }
+
+      - name: Verify input trim on mic/guitar tracks
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER unreachable after trim setup!"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available. Skipping trim check."
+              exit 0
+            }
+          }
+
+          # Trigger check_input_trim.lua
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_TRIM" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/trim_check" -UseBasicParsing).Content
+          Write-Host "Trim check result: $response"
+
+          if ($response -match "^EXTSTATE.*FAIL") {
+            Write-Host "::error::TRIM CHECK FAILED: Some mic/gtr tracks missing TRIM IN FX at position 0"
+            Write-Host "::error::$response"
+            exit 1
+          }
+
+          if ($response -match "ERROR") {
+            Write-Host "::error::check_input_trim.lua failed: $response"
+            exit 1
+          }
+
+          Write-Host "Input trim check: OK (all mic/gtr tracks have TRIM IN)"
+
       - name: Setup and verify VBAN IEM on engineer track
         shell: powershell
         run: |

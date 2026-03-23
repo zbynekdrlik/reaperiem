@@ -96,3 +96,23 @@ async def rename_track(
     result = await client.get_extstate(section, "rename_result")
 
     return result or "Action triggered (no result returned)"
+
+
+async def list_track_fx(
+    client: ReaperHTTPClient,
+    action_id: str,
+) -> str:
+    """List FX chains on all mic/guitar tracks via check_input_trim.lua.
+
+    Returns current trim state and FX info for all mic/gtr tracks.
+    """
+    section = "reaperiem"
+
+    # Trigger the check script
+    await client.trigger_action(action_id)
+
+    # Wait for script to complete
+    await asyncio.sleep(0.3)
+    result = await client.get_extstate(section, "trim_check")
+
+    return result or "No result returned from check_input_trim.lua"
