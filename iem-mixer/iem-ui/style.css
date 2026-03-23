@@ -996,21 +996,21 @@ body {
 }
 
 .stream-stats {
-  font-size: 0.7em;
+  font-size: 0.85em;
   margin-left: 6px;
-  opacity: 0.8;
+  opacity: 0.9;
 }
 
 .stream-stats.good {
-  color: #2d9f4a;
+  color: #d4edda;
 }
 
 .stream-stats.degraded {
-  color: #d4a017;
+  color: #fff3cd;
 }
 
 .stream-stats.poor {
-  color: #c0392b;
+  color: #ff6b6b;
 }
 
 @keyframes listen-pulse {
