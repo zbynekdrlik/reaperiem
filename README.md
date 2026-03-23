@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.100.0 (2026-03-23)
+
+- **Fix**: Stems group fader now controls audio — changed stems bus send mode from pre-fader to post-fader so the group volume fader affects audio reaching inear tracks (#116)
+- **Fix**: CI deploy now runs `fix_send_mode.lua` before verification to apply current routing rules to existing REAPER sends
+
 ### v1.99.0 (2026-03-23)
 
 - **Fix**: Corrupted audio on phones — LagrangeInterpolator buffer overread and return value misuse in VST processBlock caused uninitialized memory fed to Opus encoder
