@@ -134,7 +134,7 @@ impl AppState {
     pub fn new(config: Config, config_dir: &std::path::Path) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         #[cfg(feature = "audio")]
-        let (audio_tx, _) = broadcast::channel(64);
+        let (audio_tx, _) = broadcast::channel(8);
         Self {
             config: Arc::new(RwLock::new(config)),
             http_client: reqwest::Client::builder()

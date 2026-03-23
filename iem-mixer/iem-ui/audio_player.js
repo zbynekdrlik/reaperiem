@@ -9,14 +9,10 @@ let lastAudioLevel = -150;
 let lastError = null;
 let pendingFrames = [];
 
-// Jitter buffer state
+// Buffer constants
 const FRAME_DURATION_MS = 20;
-const MIN_BUFFER_MS = 50;
-const MAX_BUFFER_MS = 500;
-const INITIAL_BUFFER_MS = 150;
-let bufferDepthMs = INITIAL_BUFFER_MS;
-let initialBuffering = true;
-let frameQueue = [];
+const BUFFER_MS = 80; // Fixed scheduling buffer after dropout
+const MAX_LATENCY_S = 0.5; // Cap: skip ahead if drift exceeds 500ms
 let lastFrameArrivalTime = 0;
 
 // Dropout counter state
@@ -52,10 +48,7 @@ export function initAudioPlayer() {
   lastAudioLevel = -150;
   lastError = null;
 
-  // Reset jitter buffer
-  bufferDepthMs = INITIAL_BUFFER_MS;
-  initialBuffering = true;
-  frameQueue = [];
+  // Reset buffer state
   lastFrameArrivalTime = 0;
 
   // Reset dropout counters
@@ -101,8 +94,9 @@ export function initAudioPlayer() {
     audioContext.sampleRate,
     "state:",
     audioContext.state,
-    "jitter buffer:",
-    bufferDepthMs + "ms",
+    "buffer:",
+    BUFFER_MS + "ms, max latency:",
+    MAX_LATENCY_S * 1000 + "ms",
   );
 }
 
@@ -117,24 +111,22 @@ export function feedOpusFrame(opusData) {
   const now = performance.now();
   totalFrames++;
 
-  // Detect dropouts: gap > 60ms between frame arrivals (3x expected 20ms)
+  // Track arrival gaps for dropout counting
   if (lastFrameArrivalTime > 0) {
     const delta = now - lastFrameArrivalTime;
     if (delta > 60) {
       dropoutCount++;
-      // Adapt buffer upward on jitter
-      bufferDepthMs = Math.min(bufferDepthMs + 20, MAX_BUFFER_MS);
-    } else {
-      // Slowly shrink buffer when stable
-      bufferDepthMs = Math.max(bufferDepthMs - 1, MIN_BUFFER_MS);
     }
   }
   lastFrameArrivalTime = now;
 
-  // Diagnostic: log frame info (throttled to every 50th frame to avoid spam)
+  // Diagnostic: log frame info (throttled to every 50th frame)
   if (frameIndex % 50 === 0) {
+    const latencyMs = audioContext
+      ? Math.round((nextStartTime - audioContext.currentTime) * 1000)
+      : 0;
     console.log(
-      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}, buf=${bufferDepthMs}ms, drops=${dropoutCount}/${totalFrames}`,
+      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}, latency=${latencyMs}ms, drops=${playbackDropouts}/${totalFrames}`,
     );
   }
 
@@ -245,13 +237,20 @@ function scheduleAudioData(audioData) {
 
   const now = audioContext.currentTime;
   scheduledFrameCount++;
+
+  // Cap latency: if we've drifted too far ahead, skip to keep it live
+  const gap = nextStartTime - now;
+  if (gap > MAX_LATENCY_S) {
+    nextStartTime = now + BUFFER_MS / 1000;
+  }
+
   if (nextStartTime <= now) {
     // Buffer ran dry — audible dropout (skip counting the very first frame)
     if (scheduledFrameCount > 1) {
       playbackDropouts++;
     }
-    // Schedule ahead by buffer depth to absorb future jitter
-    nextStartTime = now + bufferDepthMs / 1000;
+    // Schedule ahead by fixed buffer depth
+    nextStartTime = now + BUFFER_MS / 1000;
   }
   source.start(nextStartTime);
   nextStartTime += buffer.duration;
@@ -278,9 +277,6 @@ export function stopAudioPlayer() {
   lastAudioLevel = -150;
   lastError = null;
   pendingFrames = [];
-  frameQueue = [];
-  initialBuffering = true;
-  bufferDepthMs = INITIAL_BUFFER_MS;
   lastFrameArrivalTime = 0;
   dropoutCount = 0;
   playbackDropouts = 0;
@@ -362,7 +358,12 @@ export function getStreamStats() {
   return {
     dropouts: playbackDropouts,
     frames: totalFrames,
-    bufferMs: Math.round(bufferDepthMs),
+    bufferMs: audioContext
+      ? Math.max(
+          0,
+          Math.round((nextStartTime - audioContext.currentTime) * 1000),
+        )
+      : 0,
     quality,
   };
 }
