@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
 use crate::components::category_tabs::{Category, CategoryTabs};
+use crate::components::eq_modal::{EQModal, EqBandState};
 use crate::components::fader::Fader;
 use crate::components::meter::Meter;
 use crate::components::pan::PanKnob;
@@ -93,6 +94,8 @@ fn connect_websocket(
     set_stems_muted: WriteSignal<bool>,
     stems_touched: ReadSignal<bool>,
     set_stems_bus_idx: WriteSignal<Option<usize>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -262,6 +265,27 @@ fn connect_websocket(
                     iem_core::ServerMsg::AudioStatus { .. } => {
                         // Audio status handled by ListenButton's own audio WebSocket
                     }
+                    iem_core::ServerMsg::EqParams {
+                        track_index: _,
+                        track_name: _,
+                        bands,
+                    } => {
+                        set_eq_bands.set(
+                            bands
+                                .into_iter()
+                                .map(|b| EqBandState {
+                                    band_type: b.band_type,
+                                    freq_hz: b.freq_hz,
+                                    gain_db: b.gain_db,
+                                    bw: b.bw,
+                                    freq_norm: b.freq_norm,
+                                    gain_norm: b.gain_norm,
+                                    bw_norm: b.bw_norm,
+                                })
+                                .collect(),
+                        );
+                        set_eq_loading.set(false);
+                    }
                 }
             }
         }
@@ -358,6 +382,11 @@ pub fn MixerPage() -> impl IntoView {
     let (stems_touched, set_stems_touched) = signal(false);
     let (stems_bus_idx, set_stems_bus_idx) = signal(Option::<usize>::None);
 
+    // EQ modal state
+    let (eq_open, set_eq_open) = signal(Option::<(usize, String)>::None);
+    let (eq_bands, set_eq_bands) = signal(Vec::<EqBandState>::new());
+    let (eq_loading, set_eq_loading) = signal(false);
+
     // Channel customization (pin/hide) — loaded from server via WS
     let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
     let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
@@ -414,6 +443,8 @@ pub fn MixerPage() -> impl IntoView {
             set_stems_muted,
             stems_touched,
             set_stems_bus_idx,
+            set_eq_bands,
+            set_eq_loading,
         );
     });
 
@@ -478,6 +509,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_stems_muted,
                 stems_touched,
                 set_stems_bus_idx,
+                set_eq_bands,
+                set_eq_loading,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -915,6 +948,36 @@ pub fn MixerPage() -> impl IntoView {
                 member_id=member_id()
                 on_close=Callback::new(move |_: ()| set_snapshot_modal_visible.set(false))
             />
+
+            // EQ Modal (full-screen, shown when eq_open is Some)
+            <Show when=move || eq_open.get().is_some() fallback=|| ()>
+                {move || {
+                    let (track_idx, track_name) = eq_open.get().unwrap();
+                    let ws_for_eq = ws;
+                    view! {
+                        <EQModal
+                            track_index=track_idx
+                            track_name=track_name
+                            bands=eq_bands
+                            loading=eq_loading
+                            on_param_change=Callback::new(move |(band, param, value): (u8, String, f32)| {
+                                if let Some((ti, _)) = eq_open.get_untracked() {
+                                    ws_send(ws_for_eq, &iem_core::ClientMsg::SetEqBand {
+                                        track_index: ti,
+                                        band,
+                                        param,
+                                        value,
+                                    });
+                                }
+                            })
+                            on_close=Callback::new(move |_: ()| {
+                                set_eq_open.set(None);
+                                set_eq_bands.set(Vec::new());
+                            })
+                        />
+                    }
+                }}
+            </Show>
         </div>
     }
 }
@@ -2035,6 +2098,20 @@ fn ChannelList(
                                     >
                                         <span class="menu-icon">{move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}</span>
                                         {move || if is_hidden_tab() { "Unhide" } else { "Hide" }}
+                                    </button>
+                                    <button
+                                        class="ch-menu-item"
+                                        on:click=move |_: web_sys::MouseEvent| {
+                                            set_open_menu.set(None);
+                                            set_eq_bands.set(Vec::new());
+                                            set_eq_loading.set(true);
+                                            set_eq_open.set(Some((track_idx, name.clone())));
+                                            // Request EQ params from REAPER
+                                            ws_send(ws, &iem_core::ClientMsg::GetEqParams { track_index: track_idx });
+                                        }
+                                    >
+                                        <span class="menu-icon">"\u{2261}"</span>
+                                        "EQ"
                                     </button>
                                 </div>
                             </Show>

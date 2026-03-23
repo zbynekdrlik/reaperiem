@@ -1,10 +1,30 @@
 //! WebSocket message types for real-time mixer communication
 //! Includes stems group bus control (v1.91.0)
+//! Includes shared EQ control (v1.102.0)
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::Channel;
+
+/// EQ band data for parametric EQ (ReaEQ)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EqBand {
+    /// Band type name: "band", "lowshelf", "highshelf", "highpass", "lowpass", "notch"
+    pub band_type: String,
+    /// Center/corner frequency in Hz (20-20000)
+    pub freq_hz: f32,
+    /// Gain in dB (-24 to +24, 0 = flat)
+    pub gain_db: f32,
+    /// Bandwidth/Q factor in octaves (0.1-4.0)
+    pub bw: f32,
+    /// Normalized frequency value for ReaEQ (0-1)
+    pub freq_norm: f32,
+    /// Normalized gain value for ReaEQ (0-1, 0.25 = 0dB)
+    pub gain_norm: f32,
+    /// Normalized bandwidth value for ReaEQ (0-1)
+    pub bw_norm: f32,
+}
 
 /// Client → Server commands (sent via WebSocket)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -36,6 +56,15 @@ pub enum ClientMsg {
     ListenStart { member_id: String },
     /// Stop listening to audio stream
     ListenStop,
+    /// Request EQ parameters for a track (loads from REAPER on-demand)
+    GetEqParams { track_index: usize },
+    /// Set a single EQ band parameter (normalized values for ReaEQ)
+    SetEqBand {
+        track_index: usize,
+        band: u8,
+        param: String,
+        value: f32,
+    },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -88,6 +117,12 @@ pub enum ServerMsg {
         status: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         target: Option<String>,
+    },
+    /// EQ parameters for a track (sent on-demand in response to GetEqParams)
+    EqParams {
+        track_index: usize,
+        track_name: String,
+        bands: Vec<EqBand>,
     },
 }
 
@@ -501,6 +536,53 @@ mod tests {
     fn test_server_msg_solo_update_empty() {
         let msg = ServerMsg::SoloUpdate { soloed: vec![] };
         let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_get_eq_params_serialization() {
+        let msg = ClientMsg::GetEqParams { track_index: 3 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"GetEqParams\""));
+        assert!(json.contains("\"track_index\":3"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_set_eq_band_serialization() {
+        let msg = ClientMsg::SetEqBand {
+            track_index: 3,
+            band: 0,
+            param: "gain".to_string(),
+            value: 0.3,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"SetEqBand\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_eq_params_serialization() {
+        let msg = ServerMsg::EqParams {
+            track_index: 3,
+            track_name: "MAREK mic".to_string(),
+            bands: vec![EqBand {
+                band_type: "lowshelf".to_string(),
+                freq_hz: 287.5,
+                gain_db: -2.7,
+                bw: 1.18,
+                freq_norm: 0.283,
+                gain_norm: 0.184,
+                bw_norm: 0.295,
+            }],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"EqParams\""));
+        assert!(json.contains("\"track_name\":\"MAREK mic\""));
+        assert!(json.contains("\"band_type\":\"lowshelf\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

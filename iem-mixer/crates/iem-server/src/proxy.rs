@@ -1057,6 +1057,26 @@ async fn handle_ws(
                                 continue;
                             }
 
+                            // Handle EQ commands (async EXTSTATE + ReaScript flow)
+                            if let ClientMsg::GetEqParams { track_index } = cmd {
+                                let state_clone = state.clone();
+                                let member_clone = member_id.clone();
+                                tokio::spawn(async move {
+                                    if let Some(eq_msg) = handle_get_eq_params(&state_clone, track_index).await {
+                                        let _ = state_clone.event_tx.send((member_clone, eq_msg));
+                                    }
+                                });
+                                continue;
+                            }
+                            if let ClientMsg::SetEqBand { track_index, band, ref param, value } = cmd {
+                                let state_clone = state.clone();
+                                let param_clone = param.clone();
+                                tokio::spawn(async move {
+                                    handle_set_eq_band(&state_clone, track_index, band, &param_clone, value).await;
+                                });
+                                continue;
+                            }
+
                             // Handle solo state updates (no REAPER command — solo is UI-only sync)
                             if let ClientMsg::SetSolo { ref soloed } = cmd {
                                 {
@@ -1371,6 +1391,10 @@ async fn apply_command_to_cache(
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
         }
+        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } => {
+            // EQ commands are handled in WS handler before apply_command_to_cache is called
+            return Err("EQ commands should not reach apply_command_to_cache".to_string());
+        }
     }
 
     let (url, track_index, broadcast) = match cmd {
@@ -1511,6 +1535,9 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
+        }
+        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } => {
+            unreachable!("EQ commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
@@ -1659,6 +1686,205 @@ fn send_to_reaper(
     });
 }
 
+// =============================================================================
+// EQ handlers (EXTSTATE + ReaScript async flow)
+// =============================================================================
+
+/// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
+async fn handle_get_eq_params(
+    state: &AppState,
+    track_index: usize,
+) -> Option<iem_core::ServerMsg> {
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    // 1. Set EXTSTATE with track index
+    let set_url = reaper_api::set_extstate(
+        &reaper_url,
+        "reaperiem",
+        "eq_read_track",
+        &track_index.to_string(),
+    );
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(track_index, "EQ: failed to set eq_read_track EXTSTATE");
+        return None;
+    }
+
+    // 2. Trigger read_eq_params.lua action
+    let action_url =
+        reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_READ_EQ");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::error!(track_index, "EQ: failed to trigger READ_EQ action");
+        return None;
+    }
+
+    // 3. Wait for script execution
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    // 4. Read result from EXTSTATE
+    let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "eq_params");
+    let resp = state.http_client.get(&get_url).send().await.ok()?;
+    let text = resp.text().await.ok()?;
+
+    // Parse EXTSTATE response: "EXTSTATE\tsection\tkey\tvalue"
+    let value = text.split('\t').nth(3)?;
+    if value.is_empty() || value.starts_with("ERROR") {
+        tracing::warn!(track_index, value, "EQ: read failed");
+        return None;
+    }
+
+    // Parse the result
+    parse_eq_params_response(track_index, value)
+}
+
+/// Parse the eq_params EXTSTATE response into a ServerMsg::EqParams
+fn parse_eq_params_response(track_index: usize, value: &str) -> Option<iem_core::ServerMsg> {
+    // Format: "OK:track=N,name=NAME,fx=N,bands=N,gg=X,bypass=X|b0:type,fn=F,ff=F,gn=G,gf=G,bn=B,bf=B|..."
+    // Or: "NO_EQ:TRACKNAME"
+    if value.starts_with("NO_EQ:") {
+        let track_name = value.strip_prefix("NO_EQ:").unwrap_or("").to_string();
+        return Some(iem_core::ServerMsg::EqParams {
+            track_index,
+            track_name,
+            bands: vec![],
+        });
+    }
+
+    if !value.starts_with("OK:") {
+        return None;
+    }
+
+    let parts: Vec<&str> = value.splitn(2, '|').collect();
+    let header = parts[0]; // "OK:track=N,name=NAME,fx=N,bands=N,gg=X,bypass=X"
+    let band_data = if parts.len() > 1 { parts[1] } else { "" };
+
+    // Parse track name from header
+    let track_name = header
+        .split(',')
+        .find(|s| s.starts_with("name="))
+        .and_then(|s| s.strip_prefix("name="))
+        .unwrap_or("")
+        .to_string();
+
+    // Parse bands
+    let mut bands = Vec::new();
+    if !band_data.is_empty() {
+        for band_str in band_data.split('|') {
+            if let Some(band) = parse_eq_band(band_str) {
+                bands.push(band);
+            }
+        }
+    }
+
+    Some(iem_core::ServerMsg::EqParams {
+        track_index,
+        track_name,
+        bands,
+    })
+}
+
+/// Parse a single band string like "b0:lowshelf,fn=0.283,ff=287.5,gn=0.184,gf=-2.7,bn=0.295,bf=1.18"
+fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
+    // Split "b0:lowshelf,fn=0.283,ff=287.5,gn=0.184,gf=-2.7,bn=0.295,bf=1.18"
+    let colon_pos = s.find(':')?;
+    let after_colon = &s[colon_pos + 1..];
+    let fields: Vec<&str> = after_colon.split(',').collect();
+
+    if fields.is_empty() {
+        return None;
+    }
+
+    let band_type = fields[0].to_string();
+
+    let get_field = |prefix: &str| -> Option<f32> {
+        fields
+            .iter()
+            .find(|f| f.starts_with(prefix))
+            .and_then(|f| f.strip_prefix(prefix))
+            .and_then(|v| v.parse::<f32>().ok())
+    };
+
+    let freq_norm = get_field("fn=")?;
+    let freq_hz = get_field("ff=").unwrap_or(0.0);
+    let gain_norm = get_field("gn=")?;
+    let gain_db = get_field("gf=").unwrap_or(0.0);
+    let bw_norm = get_field("bn=")?;
+    let bw = get_field("bf=").unwrap_or(1.0);
+
+    Some(iem_core::EqBand {
+        band_type,
+        freq_hz,
+        gain_db,
+        bw,
+        freq_norm,
+        gain_norm,
+        bw_norm,
+    })
+}
+
+/// Handle SetEqBand: set a single EQ parameter on a track via EXTSTATE + ReaScript
+async fn handle_set_eq_band(
+    state: &AppState,
+    track_index: usize,
+    band: u8,
+    param: &str,
+    value: f32,
+) {
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    // 1. Set EXTSTATE with parameters: "track=N|band=B|param=P|value=V"
+    let eq_set_value = format!(
+        "track={}|band={}|param={}|value={:.6}",
+        track_index, band, param, value
+    );
+    let set_url =
+        reaper_api::set_extstate(&reaper_url, "reaperiem", "eq_set", &eq_set_value);
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(track_index, band, param, "EQ: failed to set eq_set EXTSTATE");
+        return;
+    }
+
+    // 2. Trigger set_eq_param.lua action
+    let action_url =
+        reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_SET_EQ");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::error!(track_index, band, param, "EQ: failed to trigger SET_EQ action");
+        return;
+    }
+
+    // 3. Wait for script execution
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    // 4. Read result (for logging only)
+    let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "eq_set_result");
+    if let Ok(resp) = state.http_client.get(&get_url).send().await {
+        if let Ok(text) = resp.text().await {
+            if let Some(result) = text.split('\t').nth(3) {
+                if result.starts_with("ERROR") {
+                    tracing::error!(
+                        track_index,
+                        band,
+                        param,
+                        result,
+                        "EQ: set_eq_param failed"
+                    );
+                } else {
+                    tracing::debug!(
+                        track_index,
+                        band,
+                        param,
+                        result,
+                        "EQ: param set OK"
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// REAPER HTTP API URL builder
 /// CRITICAL: All REAPER API commands MUST use the `/_/` prefix!
 /// Without this prefix, REAPER returns empty responses.
@@ -1723,6 +1949,14 @@ pub(crate) mod reaper_api {
     /// Build URL for reading EXTSTATE (key-value store in REAPER)
     pub fn get_extstate(base_url: &str, section: &str, key: &str) -> String {
         format!("{}/_/GET/EXTSTATE/{}/{}", base_url, section, key)
+    }
+
+    /// Build URL for setting EXTSTATE (key-value store in REAPER)
+    pub fn set_extstate(base_url: &str, section: &str, key: &str, value: &str) -> String {
+        format!(
+            "{}/_/SET/EXTSTATE/{}/{}/{}",
+            base_url, section, key, value
+        )
     }
 
     /// Build URL for triggering a REAPER action by ID
@@ -2948,5 +3182,85 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert_eq!(channels[0].track_index, 5, "PETKA mic resolved to 5");
         assert_eq!(channels[1].track_index, 2, "STEVO mic falls back to i+1=2");
         assert_eq!(channels[2].track_index, 3, "DRUMS falls back to i+1=3");
+    }
+
+    // ================================================================
+    // EQ parameter parsing tests
+    // ================================================================
+
+    #[test]
+    fn test_parse_eq_band_lowshelf() {
+        let s = "b0:lowshelf,fn=0.283000,ff=287.5,gn=0.184000,gf=-2.7,bn=0.295000,bf=1.18";
+        let band = parse_eq_band(s).unwrap();
+        assert_eq!(band.band_type, "lowshelf");
+        assert!((band.freq_norm - 0.283).abs() < 0.001);
+        assert!((band.freq_hz - 287.5).abs() < 0.1);
+        assert!((band.gain_norm - 0.184).abs() < 0.001);
+        assert!((band.gain_db - (-2.7)).abs() < 0.1);
+        assert!((band.bw_norm - 0.295).abs() < 0.001);
+        assert!((band.bw - 1.18).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_parse_eq_band_regular() {
+        let s = "b1:band,fn=0.500000,ff=1000.0,gn=0.250000,gf=0.0,bn=0.500000,bf=2.00";
+        let band = parse_eq_band(s).unwrap();
+        assert_eq!(band.band_type, "band");
+        assert!((band.freq_hz - 1000.0).abs() < 0.1);
+        assert!((band.gain_db - 0.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn test_parse_eq_params_response_ok() {
+        let value = "OK:track=3,name=MAREK mic,fx=1,bands=2,gg=0.0dB,bypass=0|b0:lowshelf,fn=0.283000,ff=287.5,gn=0.184000,gf=-2.7,bn=0.295000,bf=1.18|b1:band,fn=0.500000,ff=1000.0,gn=0.250000,gf=0.0,bn=0.500000,bf=2.00";
+        let msg = parse_eq_params_response(3, value).unwrap();
+        match msg {
+            iem_core::ServerMsg::EqParams {
+                track_index,
+                track_name,
+                bands,
+            } => {
+                assert_eq!(track_index, 3);
+                assert_eq!(track_name, "MAREK mic");
+                assert_eq!(bands.len(), 2);
+                assert_eq!(bands[0].band_type, "lowshelf");
+                assert_eq!(bands[1].band_type, "band");
+            }
+            _ => panic!("Expected EqParams"),
+        }
+    }
+
+    #[test]
+    fn test_parse_eq_params_response_no_eq() {
+        let value = "NO_EQ:MAREK mic";
+        let msg = parse_eq_params_response(3, value).unwrap();
+        match msg {
+            iem_core::ServerMsg::EqParams {
+                track_index,
+                track_name,
+                bands,
+            } => {
+                assert_eq!(track_index, 3);
+                assert_eq!(track_name, "MAREK mic");
+                assert!(bands.is_empty());
+            }
+            _ => panic!("Expected EqParams"),
+        }
+    }
+
+    #[test]
+    fn test_parse_eq_params_response_error() {
+        let value = "ERROR:track_not_found:99";
+        assert!(parse_eq_params_response(99, value).is_none());
+    }
+
+    #[test]
+    fn test_reaper_url_set_extstate_format() {
+        let url = reaper_api::set_extstate("http://iem.lan:8080", "reaperiem", "eq_read_track", "3");
+        assert_eq!(
+            url,
+            "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/eq_read_track/3"
+        );
+        assert!(url.contains("/_/"), "set_extstate must use /_/ prefix");
     }
 }
