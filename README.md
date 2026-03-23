@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.91.0 (2026-03-23)
+
+- **Feature**: Stems group volume fader — control all stem channels (DRUMS, BASS, INST, CLICK, GUIDE, BGVS, OTHER) together with a single fader while preserving individual relative mix levels (#87)
+- **Feature**: Stems fader visible on both Main and Stems tabs for quick access
+- **Feature**: Stems volume saved/restored with presets (backwards-compatible with old presets)
+- **Fix**: CI deploy now reliably kills app processes across sessions (multi-method fallback)
+- **Fix**: CI deploy picks correct version installer when multiple are present
+
 ### v1.90.0 (2026-03-22)
 
 - **Fix**: Preset names now accept digits and backspace works correctly — login page keyboard listener was leaking globally and intercepting keys on all pages (#110)
