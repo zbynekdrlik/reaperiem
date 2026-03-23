@@ -43,8 +43,8 @@ void VBANIEMProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) {
     }
 
     // Pre-allocate resampling buffers
-    // Max output samples = ceil(blockSize / ratio) + some margin
-    int maxOutputSamples = static_cast<int>(std::ceil(samplesPerBlock / resampleRatio)) + 16;
+    // Output samples = blockSize / ratio, with small margin for rounding
+    int maxOutputSamples = static_cast<int>(samplesPerBlock / resampleRatio) + 4;
     resampledLeft.resize(maxOutputSamples);
     resampledRight.resize(maxOutputSamples);
     interleavedBuffer.resize(maxOutputSamples * numChannels);
@@ -81,33 +81,33 @@ void VBANIEMProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     inputLevel = maxLevel;
 
     // Resample each channel from currentSampleRate to 48kHz
-    // LagrangeInterpolator::process: ratio = inputRate/outputRate
-    // Returns number of output samples actually produced
-    int outputSamples = 0;
+    // LagrangeInterpolator::process returns number of INPUT samples consumed (not output!)
+    // Calculate how many output samples we can safely produce from available input
+    int numOutputSamples = static_cast<int>(numSamples / resampleRatio);
 
-    if (channels >= 1 && numSamples > 0) {
-        int maxOut = static_cast<int>(resampledLeft.size());
-        outputSamples = interpolators[0].process(
+    if (channels >= 1 && numOutputSamples > 0) {
+        interpolators[0].process(
             resampleRatio,
             buffer.getReadPointer(0),
             resampledLeft.data(),
-            maxOut);
+            numOutputSamples,
+            numSamples,
+            0);
     }
 
-    if (channels >= 2 && numSamples > 0) {
-        int maxOut = static_cast<int>(resampledRight.size());
-        int rightOut = interpolators[1].process(
+    if (channels >= 2 && numOutputSamples > 0) {
+        interpolators[1].process(
             resampleRatio,
             buffer.getReadPointer(1),
             resampledRight.data(),
-            maxOut);
-        // Use minimum to stay safe
-        outputSamples = juce::jmin(outputSamples, rightOut);
+            numOutputSamples,
+            numSamples,
+            0);
     }
 
-    if (outputSamples > 0) {
-        // Interleave the resampled channels
-        for (int i = 0; i < outputSamples; ++i) {
+    if (numOutputSamples > 0) {
+        // Interleave using the KNOWN output count (not the return value)
+        for (int i = 0; i < numOutputSamples; ++i) {
             interleavedBuffer[i * channels] = resampledLeft[i];
             if (channels >= 2)
                 interleavedBuffer[i * channels + 1] = resampledRight[i];
@@ -115,7 +115,7 @@ void VBANIEMProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 
         // Encode to Opus and push frames to sender
         std::vector<std::vector<uint8_t>> opusFrames;
-        opusEncoder.encode(interleavedBuffer.data(), outputSamples, opusFrames);
+        opusEncoder.encode(interleavedBuffer.data(), numOutputSamples, opusFrames);
 
         for (const auto& frame : opusFrames) {
             opusSender.pushFrame(frame.data(), static_cast<int>(frame.size()));

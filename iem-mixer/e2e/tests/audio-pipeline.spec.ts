@@ -305,6 +305,91 @@ test.describe("Audio Pipeline (OIEM UDP → WebSocket)", () => {
     });
   });
 
+  test("real REAPER audio produces valid Opus frames on WebSocket", async () => {
+    // This test validates audio QUALITY by checking that frames from the real
+    // VST plugin are valid Opus packets (correct TOC byte, reasonable sizes).
+    // It only runs when REAPER is actively sending audio (not in synthetic CI).
+    const token = await getEngineerToken();
+    const wsUrl = `${BASE_URL.replace("http", "ws")}/ws/audio?token=${token}`;
+    const ws = new WebSocket(wsUrl);
+
+    const opusFrames: Buffer[] = [];
+    let gotListening = false;
+
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        // Not an error — REAPER may not be running in CI
+        resolve();
+      }, 8000);
+
+      ws.on("open", () => {
+        ws.send(JSON.stringify({ cmd: "ListenStart", member_id: "engineer" }));
+      });
+
+      ws.on("message", (data: Buffer, isBinary: boolean) => {
+        if (isBinary) {
+          opusFrames.push(Buffer.from(data));
+          if (opusFrames.length >= 20) {
+            clearTimeout(timeout);
+            resolve();
+          }
+        } else {
+          try {
+            const msg = JSON.parse(data.toString("utf-8"));
+            if (msg?.data?.status === "listening") gotListening = true;
+          } catch {
+            /* not JSON */
+          }
+        }
+      });
+
+      ws.on("error", (err) => {
+        clearTimeout(timeout);
+        reject(new Error(`WebSocket error: ${err.message}`));
+      });
+    });
+
+    ws.close();
+
+    if (opusFrames.length < 5) {
+      console.log(
+        `[ASSUME SKIP] Only ${opusFrames.length} real Opus frames received — REAPER likely not running`,
+      );
+      return;
+    }
+
+    // Validate Opus TOC byte structure on each frame
+    // Opus TOC byte: config(5 bits) | stereo(1 bit) | frame_count_code(2 bits)
+    // For stereo 48kHz, the stereo bit (bit 2) should be set
+    let stereoFrames = 0;
+    let validSizes = 0;
+
+    for (const frame of opusFrames) {
+      expect(frame.length).toBeGreaterThan(2); // Minimum valid Opus frame
+
+      const tocByte = frame[0];
+      const isStereo = (tocByte & 0x04) !== 0;
+      if (isStereo) stereoFrames++;
+
+      // Real Opus frames at 160kbps should be 50-800 bytes
+      // Silence ~10-20 bytes, music ~200-600 bytes
+      if (frame.length >= 10 && frame.length <= 1275) validSizes++;
+    }
+
+    // At least 80% of frames should be stereo (matching our encoder config)
+    const stereoRatio = stereoFrames / opusFrames.length;
+    expect(stereoRatio).toBeGreaterThanOrEqual(0.8);
+
+    // All frames should have valid sizes
+    expect(validSizes).toBe(opusFrames.length);
+
+    console.log(
+      `PASS: ${opusFrames.length} real Opus frames validated, ` +
+        `stereo=${(stereoRatio * 100).toFixed(0)}%, ` +
+        `sizes=${opusFrames.map((f) => f.length).join(",")}`,
+    );
+  });
+
   test("diagnostics API reports signal when OIEM is active", async () => {
     // Start OIEM sender
     const sender = startUdpSender(10000);

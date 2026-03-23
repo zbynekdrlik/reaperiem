@@ -30,7 +30,7 @@ bool OpusEncoderWrapper::configure(int sampleRate, int channels, int bitrate) {
     }
 
     opus_encoder_ctl(encoder, OPUS_SET_BITRATE(bitrate));
-    // Low latency: disable variable bitrate for consistent frame sizes
+    // VBR enabled for better quality at the same bitrate
     opus_encoder_ctl(encoder, OPUS_SET_VBR(1));
     // Signal type: music
     opus_encoder_ctl(encoder, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC));
