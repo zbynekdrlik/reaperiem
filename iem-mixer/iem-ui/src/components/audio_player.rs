@@ -97,14 +97,34 @@ pub fn ListenButton(
         }
     });
 
-    // Poll stream stats every 500ms while listening
+    // Poll stream stats every 500ms while listening.
+    // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
+    // since gloo_timers::Interval contains non-Send closures.
+    let (stats_interval, set_stats_interval) = signal(Option::<i32>::None);
     Effect::new(move || {
         let current_state = state.get();
+
+        // Clear previous interval if any
+        if let Some(id) = stats_interval.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_interval_with_handle(id);
+            }
+            set_stats_interval.set(None);
+        }
+
         if current_state == ListenState::Listening {
-            let handle = gloo_timers::callback::Interval::new(500, move || {
+            let closure = Closure::wrap(Box::new(move || {
                 set_stream_stats.set(poll_stream_stats());
-            });
-            on_cleanup(move || drop(handle));
+            }) as Box<dyn FnMut()>);
+            let id = web_sys::window()
+                .unwrap()
+                .set_interval_with_callback_and_timeout_and_arguments_0(
+                    closure.as_ref().unchecked_ref(),
+                    500,
+                )
+                .unwrap();
+            closure.forget();
+            set_stats_interval.set(Some(id));
         }
     });
 
