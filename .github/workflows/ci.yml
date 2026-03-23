@@ -1173,8 +1173,27 @@ jobs:
             }
           }
 
-          # Trigger setup_input_trim.lua
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_SETUP_TRIM" -UseBasicParsing | Out-Null
+          # First ensure meter_bridge is running (needed for dynamic registration)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -ErrorAction SilentlyContinue | Out-Null
+          Start-Sleep -Seconds 2
+
+          # Register and get dynamic action IDs
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_input_trim.lua" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+          $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
+          Write-Host "Registration result: $regResult"
+
+          # Extract numeric action ID from registration result (format: OK:1:setup_input_trim=12345)
+          if ($regResult -match "setup_input_trim=(\d+)") {
+            $actionId = $matches[1]
+            Write-Host "Using dynamic action ID: $actionId"
+          } else {
+            Write-Host "::error::Failed to register setup_input_trim.lua dynamically: $regResult"
+            exit 1
+          }
+
+          # Trigger setup_input_trim.lua via dynamic action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$actionId" -UseBasicParsing | Out-Null
           Start-Sleep -Seconds 3
 
           $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/trim_setup_result" -UseBasicParsing).Content
@@ -1215,8 +1234,22 @@ jobs:
             }
           }
 
-          # Trigger check_input_trim.lua
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_CHECK_TRIM" -UseBasicParsing | Out-Null
+          # Register and get dynamic action ID for check script
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/check_input_trim.lua" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+          $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
+          Write-Host "Registration result: $regResult"
+
+          if ($regResult -match "check_input_trim=(\d+)") {
+            $actionId = $matches[1]
+            Write-Host "Using dynamic action ID: $actionId"
+          } else {
+            Write-Host "::error::Failed to register check_input_trim.lua dynamically: $regResult"
+            exit 1
+          }
+
+          # Trigger check_input_trim.lua via dynamic action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$actionId" -UseBasicParsing | Out-Null
           Start-Sleep -Seconds 3
 
           $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/trim_check" -UseBasicParsing).Content
