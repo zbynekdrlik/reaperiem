@@ -25,6 +25,9 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "setListenGain")]
     pub fn set_listen_gain(db: f32);
+
+    #[wasm_bindgen(js_name = "getStreamStats")]
+    fn get_stream_stats() -> JsValue;
 }
 
 /// Audio listening states
@@ -34,6 +37,35 @@ enum ListenState {
     Listening,
     NoSource,
     Unsupported,
+}
+
+/// Stream quality stats from JS audio player
+#[derive(Debug, Clone, Default)]
+struct StreamStats {
+    dropouts: u32,
+    buffer_ms: u32,
+    quality: String,
+}
+
+fn poll_stream_stats() -> StreamStats {
+    let val = get_stream_stats();
+    let dropouts = js_sys::Reflect::get(&val, &"dropouts".into())
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as u32;
+    let buffer_ms = js_sys::Reflect::get(&val, &"bufferMs".into())
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as u32;
+    let quality = js_sys::Reflect::get(&val, &"quality".into())
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "good".to_string());
+    StreamStats {
+        dropouts,
+        buffer_ms,
+        quality,
+    }
 }
 
 /// Listen button for engineer audio monitoring
@@ -50,6 +82,7 @@ pub fn ListenButton(
     let (state, set_state) = signal(ListenState::Idle);
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
     let (listen_target, set_listen_target) = signal(String::new());
+    let (stream_stats, set_stream_stats) = signal(StreamStats::default());
 
     // Check browser support on mount
     Effect::new(move || {
@@ -58,8 +91,44 @@ pub fn ListenButton(
         }
     });
 
+    // Poll stream stats every 500ms while listening.
+    // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
+    // since gloo_timers::Interval contains non-Send closures.
+    let (stats_interval, set_stats_interval) = signal(Option::<i32>::None);
+    Effect::new(move || {
+        let current_state = state.get();
+
+        // Clear previous interval if any
+        if let Some(id) = stats_interval.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_interval_with_handle(id);
+            }
+            set_stats_interval.set(None);
+        }
+
+        if current_state == ListenState::Listening {
+            let closure = Closure::wrap(Box::new(move || {
+                set_stream_stats.set(poll_stream_stats());
+            }) as Box<dyn FnMut()>);
+            let id = web_sys::window()
+                .unwrap()
+                .set_interval_with_callback_and_timeout_and_arguments_0(
+                    closure.as_ref().unchecked_ref(),
+                    500,
+                )
+                .unwrap();
+            closure.forget();
+            set_stats_interval.set(Some(id));
+        }
+    });
+
     // Cleanup on unmount
     on_cleanup(move || {
+        if let Some(id) = stats_interval.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_interval_with_handle(id);
+            }
+        }
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
         }
@@ -84,6 +153,7 @@ pub fn ListenButton(
             // Stop listening
             stop_listening(ws, set_state, set_ws);
             set_listen_target.set(String::new());
+            set_stream_stats.set(StreamStats::default());
         }
     };
 
@@ -99,18 +169,28 @@ pub fn ListenButton(
         ListenState::Listening => {
             let target = listen_target.get();
             if target.is_empty() || target == "engineer" {
-                "\u{1F50A} Listening...".to_string()
+                "\u{1F50A}".to_string()
             } else {
                 let mut chars = target.chars();
                 let cap: String = match chars.next() {
                     None => String::new(),
                     Some(c) => c.to_uppercase().chain(chars).collect(),
                 };
-                format!("\u{1F50A} Listening ({})...", cap)
+                format!("\u{1F50A} {}", cap)
             }
         }
         ListenState::NoSource => "\u{1F50A} No Source".to_string(),
         ListenState::Unsupported => "\u{1F507} Unsupported".to_string(),
+    };
+
+    let stats_class = move || {
+        let stats = stream_stats.get();
+        format!("stream-stats {}", stats.quality)
+    };
+
+    let stats_text = move || {
+        let stats = stream_stats.get();
+        format!("{} drops | buf {}ms", stats.dropouts, stats.buffer_ms)
     };
 
     view! {
@@ -120,6 +200,11 @@ pub fn ListenButton(
             disabled=move || state.get() == ListenState::Unsupported
         >
             {btn_text}
+            <Show when=move || state.get() == ListenState::Listening>
+                <span class=stats_class data-testid="stream-stats">
+                    {stats_text}
+                </span>
+            </Show>
         </button>
     }
 }
@@ -181,6 +266,11 @@ fn start_listening(
     // On message: handle text (status) and binary (Opus frames)
     let set_state_msg = set_state;
     let frame_counter = std::cell::Cell::new(0u32);
+    // Track whether we've already set Listening state to avoid re-triggering
+    // the stats polling Effect on every binary frame (~50/sec). Leptos signals
+    // always notify subscribers even when the value hasn't changed, which would
+    // destroy and recreate the 500ms polling interval before it ever fires.
+    let is_listening = std::cell::Cell::new(false);
     let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
         // Binary message = Opus frame
         if let Ok(buf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -201,7 +291,10 @@ fn start_listening(
             }
             frame_counter.set(count + 1);
             feed_opus_frame(&data);
-            set_state_msg.set(ListenState::Listening);
+            if !is_listening.get() {
+                set_state_msg.set(ListenState::Listening);
+                is_listening.set(true);
+            }
             return;
         }
 
@@ -213,9 +306,18 @@ fn start_listening(
                         set_listen_target.set(t);
                     }
                     match status.as_str() {
-                        "listening" => set_state_msg.set(ListenState::Listening),
-                        "no_source" => set_state_msg.set(ListenState::NoSource),
-                        "stopped" => set_state_msg.set(ListenState::Idle),
+                        "listening" => {
+                            set_state_msg.set(ListenState::Listening);
+                            is_listening.set(true);
+                        }
+                        "no_source" => {
+                            set_state_msg.set(ListenState::NoSource);
+                            is_listening.set(false);
+                        }
+                        "stopped" => {
+                            set_state_msg.set(ListenState::Idle);
+                            is_listening.set(false);
+                        }
                         _ => {}
                     }
                 }

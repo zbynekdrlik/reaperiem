@@ -29,8 +29,8 @@ void VBANSender::configure(const juce::String& destIP, uint16_t port_,
     samplesPerPacket = vban::Packet::getMaxSamplesPerPacket(numChannels, vban::DataType::INT16);
     samplesPerPacket = std::min(samplesPerPacket, 256); // Cap at 256 for lower latency
 
-    // Resize ring buffer for ~1 second of audio
-    ringBuffer->setSize(numChannels, sampleRate);
+    // Resize ring buffer for ~50ms of audio (enough for callback jitter)
+    ringBuffer->setSize(numChannels, sampleRate / 20);
 }
 
 void VBANSender::start() {

@@ -7,6 +7,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Add JUCE
 add_subdirectory(JUCE)
 
+# Fetch libopus for Opus encoding
+include(FetchContent)
+FetchContent_Declare(opus
+    GIT_REPOSITORY https://github.com/xiph/opus.git
+    GIT_TAG v1.5.2)
+set(OPUS_INSTALL OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
+set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(opus)
+
 # Define plugin
 juce_add_plugin(VBANiem
     COMPANY_NAME "NewLevel"
@@ -29,18 +39,21 @@ juce_generate_juce_header(VBANiem)
 target_sources(VBANiem PRIVATE
     src/PluginProcessor.cpp
     src/PluginEditor.cpp
-    src/vban/VBANPacket.cpp
-    src/vban/VBANSender.cpp
-    src/audio/AudioRingBuffer.cpp
+    src/opus/OpusEncoderWrapper.cpp
+    src/opus/OpusSender.cpp
     src/ui/MeterComponent.cpp)
 
-# Link JUCE modules
+# Include opus headers
+target_include_directories(VBANiem PRIVATE ${opus_SOURCE_DIR}/include)
+
+# Link JUCE modules + libopus
 target_link_libraries(VBANiem
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_processors
         juce::juce_gui_extra
         juce::juce_core
+        opus
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

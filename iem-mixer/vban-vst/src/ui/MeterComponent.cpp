@@ -42,7 +42,7 @@ void MeterComponent::paint(juce::Graphics& g) {
     g.fillRoundedRectangle(modeArea.toFloat(), 4.0f);
     g.setColour(juce::Colours::white);
     g.setFont(14.0f);
-    g.drawText("VBAN IEM SENDER", modeArea, juce::Justification::centred);
+    g.drawText("IEM OPUS SENDER", modeArea, juce::Justification::centred);
 
     bounds.removeFromTop(8);
 
@@ -57,7 +57,7 @@ void MeterComponent::paint(juce::Graphics& g) {
         statusText = "Stopped";
         statusColor = juce::Colours::darkgrey;
     } else if (isConnected) {
-        statusText = "Sending to 127.0.0.1:6980";
+        statusText = "Opus → 127.0.0.1:6980";
         statusColor = juce::Colours::green;
     } else {
         statusText = "Waiting for audio";

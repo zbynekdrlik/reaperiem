@@ -1792,7 +1792,9 @@ pub async fn ws_audio(
     Ok(ws.on_upgrade(move |socket| handle_audio_ws(socket, state)))
 }
 
-/// Handle the audio WebSocket connection
+/// Handle the audio WebSocket connection.
+/// Uses a bounded frame dropper (mpsc channel, cap=5) between the broadcast receiver
+/// and WebSocket sender to prevent TCP buffer bloat from causing latency accumulation.
 #[cfg(feature = "audio")]
 async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppState) {
     use axum::extract::ws::Message;
@@ -1801,8 +1803,12 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
 
     tracing::info!("Audio WebSocket connected");
 
-    let mut audio_rx: Option<tokio::sync::broadcast::Receiver<bytes::Bytes>> = None;
+    // Frame dropper: bounded channel between broadcast receiver and WebSocket sender.
+    // When TCP backpressure stalls the sender, stale frames are dropped instead of queuing.
+    let (frame_tx, mut frame_rx) = tokio::sync::mpsc::channel::<bytes::Bytes>(5);
+    let mut producer_handle: Option<tokio::task::JoinHandle<()>> = None;
     let mut last_audio_time = Instant::now();
+    let mut is_listening = false;
 
     loop {
         tokio::select! {
@@ -1852,7 +1858,30 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                             crate::ListenTarget::Member(saved_mutes);
                                     }
 
-                                    audio_rx = Some(state.audio_tx.subscribe());
+                                    // Abort any existing producer before starting a new one
+                                    if let Some(handle) = producer_handle.take() {
+                                        handle.abort();
+                                    }
+
+                                    // Spawn frame dropper producer: reads broadcast, drops stale on backpressure
+                                    let mut broadcast_rx = state.audio_tx.subscribe();
+                                    let dropper_tx = frame_tx.clone();
+                                    producer_handle = Some(tokio::spawn(async move {
+                                        loop {
+                                            match broadcast_rx.recv().await {
+                                                Ok(frame) => {
+                                                    // try_send: if channel full (TCP backpressure), drop this frame
+                                                    let _ = dropper_tx.try_send(frame);
+                                                }
+                                                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                                                    tracing::debug!("Audio dropper skipped {} stale frames", n);
+                                                }
+                                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                            }
+                                        }
+                                    }));
+
+                                    is_listening = true;
                                     last_audio_time = Instant::now();
                                     let status = ServerMsg::AudioStatus {
                                         status: "listening".to_string(),
@@ -1865,6 +1894,11 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                 }
                                 ClientMsg::ListenStop => {
                                     tracing::info!("Audio listen stopped");
+
+                                    // Stop the producer
+                                    if let Some(handle) = producer_handle.take() {
+                                        handle.abort();
+                                    }
 
                                     // Restore saved mute states if band member listen was active
                                     let listen_state = state.engineer_listen_target.read().await.clone();
@@ -1880,7 +1914,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                     }
                                     *state.engineer_listen_target.write().await = crate::ListenTarget::Idle;
 
-                                    audio_rx = None;
+                                    is_listening = false;
                                     let status = ServerMsg::AudioStatus {
                                         status: "stopped".to_string(),
                                         target: None,
@@ -1899,35 +1933,27 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                 }
             }
 
-            // Audio frames (binary) — only when listening
-            frame = async {
-                match audio_rx.as_mut() {
-                    Some(rx) => rx.recv().await,
-                    None => {
-                        // Not listening — sleep to avoid busy loop
-                        tokio::time::sleep(Duration::from_secs(60)).await;
-                        Err(tokio::sync::broadcast::error::RecvError::Closed)
-                    }
-                }
-            } => {
+            // Audio frames from dropper channel — only when listening
+            frame = frame_rx.recv(), if is_listening => {
                 match frame {
-                    Ok(data) => {
+                    Some(data) => {
                         last_audio_time = Instant::now();
                         if socket.send(Message::Binary(data.to_vec().into())).await.is_err() {
                             break;
                         }
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                        tracing::debug!("Audio WS lagged {} frames", n);
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    None => {
+                        // Channel closed — producer died
                         break;
                     }
                 }
             }
 
+            // Not listening — just wait
+            _ = tokio::time::sleep(Duration::from_secs(60)), if !is_listening => {}
+
             // No-source timeout: if listening but no audio for 5 seconds
-            _ = tokio::time::sleep(Duration::from_secs(5)), if audio_rx.is_some() => {
+            _ = tokio::time::sleep(Duration::from_secs(5)), if is_listening => {
                 if last_audio_time.elapsed() > Duration::from_secs(5) {
                     let status = ServerMsg::AudioStatus {
                         status: "no_source".to_string(),
@@ -1942,6 +1968,11 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                 }
             }
         }
+    }
+
+    // Cleanup
+    if let Some(handle) = producer_handle {
+        handle.abort();
     }
 
     tracing::info!("Audio WebSocket disconnected");

@@ -17,8 +17,8 @@ private:
     VBANIEMProcessor& processor;
 
     juce::Label titleLabel{"", "VBAN IEM"};
-    juce::Label destLabel{"", "Sending to 127.0.0.1:6980"};
-    juce::Label streamLabel{"", "Stream: engineer"};
+    juce::Label destLabel{"", "Opus → 127.0.0.1:6980"};
+    juce::Label streamLabel{"", "48kHz stereo 160kbps"};
     MeterComponent meterComponent;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VBANIEMEditor)
