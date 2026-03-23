@@ -20,7 +20,8 @@ let frameQueue = [];
 let lastFrameArrivalTime = 0;
 
 // Dropout counter state
-let dropoutCount = 0;
+let dropoutCount = 0; // arrival-gap counter (used for buffer adaptation only)
+let playbackDropouts = 0; // actual audible dropouts (buffer ran dry)
 let totalFrames = 0;
 let lastSourceEndTime = 0; // tracks when no frames arrive for extended periods
 
@@ -58,6 +59,7 @@ export function initAudioPlayer() {
 
   // Reset dropout counters
   dropoutCount = 0;
+  playbackDropouts = 0;
   totalFrames = 0;
   lastSourceEndTime = 0;
 
@@ -241,7 +243,11 @@ function scheduleAudioData(audioData) {
 
   const now = audioContext.currentTime;
   if (nextStartTime <= now) {
-    // First frame or gap — schedule ahead by buffer depth to absorb future jitter
+    // Buffer ran dry — audible dropout (skip counting the very first frame)
+    if (frameIndex > 1) {
+      playbackDropouts++;
+    }
+    // Schedule ahead by buffer depth to absorb future jitter
     nextStartTime = now + bufferDepthMs / 1000;
   }
   source.start(nextStartTime);
@@ -274,6 +280,7 @@ export function stopAudioPlayer() {
   bufferDepthMs = INITIAL_BUFFER_MS;
   lastFrameArrivalTime = 0;
   dropoutCount = 0;
+  playbackDropouts = 0;
   totalFrames = 0;
   lastSourceEndTime = 0;
   console.log("[audio] Player stopped");
@@ -333,7 +340,8 @@ export function getStreamStats() {
     return { dropouts: 0, frames: 0, bufferMs: 0, quality: "good" };
   }
 
-  const dropoutRate = dropoutCount / Math.max(totalFrames, 1);
+  // Use playback dropouts (actual audible gaps) for user-facing stats
+  const dropoutRate = playbackDropouts / Math.max(totalFrames, 1);
   const timeSinceLastFrame = performance.now() - lastFrameArrivalTime;
 
   let quality;
@@ -348,7 +356,7 @@ export function getStreamStats() {
   }
 
   return {
-    dropouts: dropoutCount,
+    dropouts: playbackDropouts,
     frames: totalFrames,
     bufferMs: Math.round(bufferDepthMs),
     quality,

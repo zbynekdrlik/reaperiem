@@ -169,14 +169,14 @@ pub fn ListenButton(
         ListenState::Listening => {
             let target = listen_target.get();
             if target.is_empty() || target == "engineer" {
-                "\u{1F50A} Listening...".to_string()
+                "\u{1F50A}".to_string()
             } else {
                 let mut chars = target.chars();
                 let cap: String = match chars.next() {
                     None => String::new(),
                     Some(c) => c.to_uppercase().chain(chars).collect(),
                 };
-                format!("\u{1F50A} Listening ({})...", cap)
+                format!("\u{1F50A} {}", cap)
             }
         }
         ListenState::NoSource => "\u{1F50A} No Source".to_string(),

@@ -166,21 +166,21 @@ test.describe("Browser Audio Playback", () => {
     // Click Listen button
     await listenBtn.click();
 
-    // The button should NOT immediately show "Listening..." (Bug 1 fix).
-    // It should stay as "Listen" or show "Connecting..." until first frame arrives.
+    // The button should NOT immediately get .listening class (Bug 1 fix).
+    // It should stay as "Listen" until first frame arrives.
     // Wait a brief moment to check it doesn't prematurely transition.
     await page.waitForTimeout(500);
 
     // Now wait for state change (up to 10s for audio frames to start arriving)
     // With no VBAN source, it will go to "No Source" after ~5s
-    // With a VBAN source, it will go to "Listening..." when first frame arrives
+    // With a VBAN source, it will get .listening class when first frame arrives
     try {
       await page.waitForFunction(
         () => {
           const btn = document.querySelector(".toolbar-btn-listen");
           return (
             btn &&
-            (btn.textContent?.includes("Listening") ||
+            (btn.classList.contains("listening") ||
               btn.textContent?.includes("No Source"))
           );
         },
@@ -208,7 +208,10 @@ test.describe("Browser Audio Playback", () => {
       return;
     }
 
-    if (afterClick?.includes("Listening")) {
+    const isListening = await listenBtn.evaluate((el) =>
+      el.classList.contains("listening"),
+    );
+    if (isListening) {
       // Audio is flowing — verify no errors
       await page.waitForTimeout(2000); // Let frames accumulate
 
