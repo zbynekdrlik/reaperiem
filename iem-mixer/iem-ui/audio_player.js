@@ -22,6 +22,7 @@ let lastFrameArrivalTime = 0;
 // Dropout counter state
 let dropoutCount = 0; // arrival-gap counter (used for buffer adaptation only)
 let playbackDropouts = 0; // actual audible dropouts (buffer ran dry)
+let scheduledFrameCount = 0; // counts frames reaching scheduleAudioData (reliable first-frame guard)
 let totalFrames = 0;
 let lastSourceEndTime = 0; // tracks when no frames arrive for extended periods
 
@@ -60,6 +61,7 @@ export function initAudioPlayer() {
   // Reset dropout counters
   dropoutCount = 0;
   playbackDropouts = 0;
+  scheduledFrameCount = 0;
   totalFrames = 0;
   lastSourceEndTime = 0;
 
@@ -242,9 +244,10 @@ function scheduleAudioData(audioData) {
   source.connect(gainNode || audioContext.destination);
 
   const now = audioContext.currentTime;
+  scheduledFrameCount++;
   if (nextStartTime <= now) {
     // Buffer ran dry — audible dropout (skip counting the very first frame)
-    if (frameIndex > 1) {
+    if (scheduledFrameCount > 1) {
       playbackDropouts++;
     }
     // Schedule ahead by buffer depth to absorb future jitter
@@ -281,6 +284,7 @@ export function stopAudioPlayer() {
   lastFrameArrivalTime = 0;
   dropoutCount = 0;
   playbackDropouts = 0;
+  scheduledFrameCount = 0;
   totalFrames = 0;
   lastSourceEndTime = 0;
   console.log("[audio] Player stopped");

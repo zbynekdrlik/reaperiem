@@ -266,6 +266,11 @@ fn start_listening(
     // On message: handle text (status) and binary (Opus frames)
     let set_state_msg = set_state;
     let frame_counter = std::cell::Cell::new(0u32);
+    // Track whether we've already set Listening state to avoid re-triggering
+    // the stats polling Effect on every binary frame (~50/sec). Leptos signals
+    // always notify subscribers even when the value hasn't changed, which would
+    // destroy and recreate the 500ms polling interval before it ever fires.
+    let is_listening = std::cell::Cell::new(false);
     let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
         // Binary message = Opus frame
         if let Ok(buf) = event.data().dyn_into::<js_sys::ArrayBuffer>() {
@@ -286,7 +291,10 @@ fn start_listening(
             }
             frame_counter.set(count + 1);
             feed_opus_frame(&data);
-            set_state_msg.set(ListenState::Listening);
+            if !is_listening.get() {
+                set_state_msg.set(ListenState::Listening);
+                is_listening.set(true);
+            }
             return;
         }
 
@@ -298,9 +306,18 @@ fn start_listening(
                         set_listen_target.set(t);
                     }
                     match status.as_str() {
-                        "listening" => set_state_msg.set(ListenState::Listening),
-                        "no_source" => set_state_msg.set(ListenState::NoSource),
-                        "stopped" => set_state_msg.set(ListenState::Idle),
+                        "listening" => {
+                            set_state_msg.set(ListenState::Listening);
+                            is_listening.set(true);
+                        }
+                        "no_source" => {
+                            set_state_msg.set(ListenState::NoSource);
+                            is_listening.set(false);
+                        }
+                        "stopped" => {
+                            set_state_msg.set(ListenState::Idle);
+                            is_listening.set(false);
+                        }
                         _ => {}
                     }
                 }
