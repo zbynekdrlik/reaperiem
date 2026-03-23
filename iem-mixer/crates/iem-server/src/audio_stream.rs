@@ -164,7 +164,12 @@ pub fn spawn_audio_listener(
                 if sequence != expected {
                     let gap = sequence.wrapping_sub(prev).wrapping_sub(1);
                     sequence_gaps += gap as u64;
-                    tracing::debug!("OIEM sequence gap: expected {}, got {} (gap={})", expected, sequence, gap);
+                    tracing::debug!(
+                        "OIEM sequence gap: expected {}, got {} (gap={})",
+                        expected,
+                        sequence,
+                        gap
+                    );
                 }
             }
             last_sequence = Some(sequence);
@@ -315,11 +320,19 @@ mod tests {
         }
 
         // Should have ~5 frames, all from the later half
-        assert!(received.len() <= 5, "Should have at most 5 frames, got {}", received.len());
+        assert!(
+            received.len() <= 5,
+            "Should have at most 5 frames, got {}",
+            received.len()
+        );
         assert!(!received.is_empty(), "Should have some frames");
         // Latest frames should be from the higher sequence numbers
         for &val in &received {
-            assert!(val >= 10, "Frame {} is too old — dropper should keep recent frames", val);
+            assert!(
+                val >= 10,
+                "Frame {} is too old — dropper should keep recent frames",
+                val
+            );
         }
     }
 
