@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.99.0 (2026-03-23)
+
+- **Fix**: Corrupted audio on phones — LagrangeInterpolator buffer overread and return value misuse in VST processBlock caused uninitialized memory fed to Opus encoder
+- **Fix**: Audio latency display now shows actual scheduling gap instead of fake adaptive jitter value
+- **Fix**: 500ms drift cap prevents buffer from growing to 3-4 seconds (mute response time capped)
+- **Fix**: Broadcast channel reduced 64→8 frames, VBAN ring buffer 1s→50ms for lower burst latency
+- **Fix**: CI deploy schtasks quoting for REAPER paths with spaces, audio engine warmup wait
+
 ### v1.92.0 (2026-03-23)
 
 - **Fix**: Stems fader on Main tab now renders after ME mic channel (was incorrectly before it)
