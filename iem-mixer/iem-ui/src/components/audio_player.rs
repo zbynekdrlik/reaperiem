@@ -43,7 +43,6 @@ enum ListenState {
 #[derive(Debug, Clone, Default)]
 struct StreamStats {
     dropouts: u32,
-    frames: u32,
     buffer_ms: u32,
     quality: String,
 }
@@ -51,10 +50,6 @@ struct StreamStats {
 fn poll_stream_stats() -> StreamStats {
     let val = get_stream_stats();
     let dropouts = js_sys::Reflect::get(&val, &"dropouts".into())
-        .ok()
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.0) as u32;
-    let frames = js_sys::Reflect::get(&val, &"frames".into())
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as u32;
@@ -68,7 +63,6 @@ fn poll_stream_stats() -> StreamStats {
         .unwrap_or_else(|| "good".to_string());
     StreamStats {
         dropouts,
-        frames,
         buffer_ms,
         quality,
     }
