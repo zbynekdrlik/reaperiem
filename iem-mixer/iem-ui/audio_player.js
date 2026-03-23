@@ -9,6 +9,21 @@ let lastAudioLevel = -150;
 let lastError = null;
 let pendingFrames = [];
 
+// Jitter buffer state
+const FRAME_DURATION_MS = 20;
+const MIN_BUFFER_MS = 50;
+const MAX_BUFFER_MS = 500;
+const INITIAL_BUFFER_MS = 150;
+let bufferDepthMs = INITIAL_BUFFER_MS;
+let initialBuffering = true;
+let frameQueue = [];
+let lastFrameArrivalTime = 0;
+
+// Dropout counter state
+let dropoutCount = 0;
+let totalFrames = 0;
+let lastSourceEndTime = 0; // tracks when no frames arrive for extended periods
+
 /**
  * Initialize the audio player. Must be called from a user gesture (click).
  * Creates an AudioContext ready to receive decoded PCM buffers.
@@ -34,6 +49,17 @@ export function initAudioPlayer() {
   frameIndex = 0;
   lastAudioLevel = -150;
   lastError = null;
+
+  // Reset jitter buffer
+  bufferDepthMs = INITIAL_BUFFER_MS;
+  initialBuffering = true;
+  frameQueue = [];
+  lastFrameArrivalTime = 0;
+
+  // Reset dropout counters
+  dropoutCount = 0;
+  totalFrames = 0;
+  lastSourceEndTime = 0;
 
   // CRITICAL: Resume immediately during user gesture (click/tap).
   // On mobile browsers (iOS Safari, Chrome Android), AudioContext starts
@@ -71,6 +97,8 @@ export function initAudioPlayer() {
     audioContext.sampleRate,
     "state:",
     audioContext.state,
+    "jitter buffer:",
+    bufferDepthMs + "ms",
   );
 }
 
@@ -82,10 +110,27 @@ export function initAudioPlayer() {
 export function feedOpusFrame(opusData) {
   if (!audioContext || audioContext.state === "closed") return;
 
+  const now = performance.now();
+  totalFrames++;
+
+  // Detect dropouts: gap > 60ms between frame arrivals (3x expected 20ms)
+  if (lastFrameArrivalTime > 0) {
+    const delta = now - lastFrameArrivalTime;
+    if (delta > 60) {
+      dropoutCount++;
+      // Adapt buffer upward on jitter
+      bufferDepthMs = Math.min(bufferDepthMs + 20, MAX_BUFFER_MS);
+    } else {
+      // Slowly shrink buffer when stable
+      bufferDepthMs = Math.max(bufferDepthMs - 1, MIN_BUFFER_MS);
+    }
+  }
+  lastFrameArrivalTime = now;
+
   // Diagnostic: log frame info (throttled to every 50th frame to avoid spam)
   if (frameIndex % 50 === 0) {
     console.log(
-      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}, pending=${pendingFrames.length}`,
+      `[audio] frame #${frameIndex}: ${opusData.byteLength}B, ctx=${audioContext?.state}, buf=${bufferDepthMs}ms, drops=${dropoutCount}/${totalFrames}`,
     );
   }
 
@@ -189,15 +234,15 @@ function scheduleAudioData(audioData) {
   // Update signal level for diagnostics
   lastAudioLevel = peak > 0.0001 ? 20 * Math.log10(peak) : -150;
 
-  // Schedule playback with seamless timing
+  // Schedule playback with jitter buffer
   const source = audioContext.createBufferSource();
   source.buffer = buffer;
   source.connect(gainNode || audioContext.destination);
 
   const now = audioContext.currentTime;
   if (nextStartTime <= now) {
-    // First frame or gap — start with small buffer
-    nextStartTime = now + 0.02;
+    // First frame or gap — schedule ahead by buffer depth to absorb future jitter
+    nextStartTime = now + bufferDepthMs / 1000;
   }
   source.start(nextStartTime);
   nextStartTime += buffer.duration;
@@ -224,6 +269,13 @@ export function stopAudioPlayer() {
   lastAudioLevel = -150;
   lastError = null;
   pendingFrames = [];
+  frameQueue = [];
+  initialBuffering = true;
+  bufferDepthMs = INITIAL_BUFFER_MS;
+  lastFrameArrivalTime = 0;
+  dropoutCount = 0;
+  totalFrames = 0;
+  lastSourceEndTime = 0;
   console.log("[audio] Player stopped");
 }
 
@@ -272,9 +324,41 @@ export function getListenGain() {
   return linear > 0.00001 ? 20 * Math.log10(linear) : -60;
 }
 
+/**
+ * Get stream quality statistics.
+ * @returns {{ dropouts: number, frames: number, bufferMs: number, quality: string }}
+ */
+export function getStreamStats() {
+  if (!audioContext || totalFrames === 0) {
+    return { dropouts: 0, frames: 0, bufferMs: 0, quality: "good" };
+  }
+
+  const dropoutRate = dropoutCount / Math.max(totalFrames, 1);
+  const timeSinceLastFrame = performance.now() - lastFrameArrivalTime;
+
+  let quality;
+  if (timeSinceLastFrame > 2000) {
+    quality = "poor";
+  } else if (dropoutRate > 0.05) {
+    quality = "poor";
+  } else if (dropoutRate > 0.01) {
+    quality = "degraded";
+  } else {
+    quality = "good";
+  }
+
+  return {
+    dropouts: dropoutCount,
+    frames: totalFrames,
+    bufferMs: Math.round(bufferDepthMs),
+    quality,
+  };
+}
+
 // Expose for E2E testing (Playwright can access via page.evaluate)
 if (typeof window !== "undefined") {
   window.__iem_audio_level = getAudioLevel;
   window.__iem_audio_error = getAudioError;
   window.__iem_audio_gain = getListenGain;
+  window.__iem_stream_stats = getStreamStats;
 }

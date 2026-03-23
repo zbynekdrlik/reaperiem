@@ -256,9 +256,9 @@ impl AudioPipeline {
         let mut encoder = opus::Encoder::new(48000, opus_channels, opus::Application::Audio)
             .map_err(|e| format!("opus encoder init failed: {}", e))?;
 
-        // Set bitrate to 64kbps
+        // Set bitrate to 160kbps for near-transparent music monitoring
         encoder
-            .set_bitrate(opus::Bitrate::Bits(64000))
+            .set_bitrate(opus::Bitrate::Bits(160000))
             .map_err(|e| format!("opus set bitrate failed: {}", e))?;
 
         let channel_buffers = vec![Vec::new(); ch];
@@ -693,7 +693,7 @@ mod tests {
         // Create encoder
         let mut encoder =
             opus::Encoder::new(48000, opus::Channels::Stereo, opus::Application::Audio).unwrap();
-        encoder.set_bitrate(opus::Bitrate::Bits(64000)).unwrap();
+        encoder.set_bitrate(opus::Bitrate::Bits(160000)).unwrap();
 
         // Create decoder
         let mut decoder = opus::Decoder::new(48000, opus::Channels::Stereo).unwrap();

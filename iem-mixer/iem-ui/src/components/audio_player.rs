@@ -25,6 +25,9 @@ extern "C" {
 
     #[wasm_bindgen(js_name = "setListenGain")]
     pub fn set_listen_gain(db: f32);
+
+    #[wasm_bindgen(js_name = "getStreamStats")]
+    fn get_stream_stats() -> JsValue;
 }
 
 /// Audio listening states
@@ -34,6 +37,41 @@ enum ListenState {
     Listening,
     NoSource,
     Unsupported,
+}
+
+/// Stream quality stats from JS audio player
+#[derive(Debug, Clone, Default)]
+struct StreamStats {
+    dropouts: u32,
+    frames: u32,
+    buffer_ms: u32,
+    quality: String,
+}
+
+fn poll_stream_stats() -> StreamStats {
+    let val = get_stream_stats();
+    let dropouts = js_sys::Reflect::get(&val, &"dropouts".into())
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as u32;
+    let frames = js_sys::Reflect::get(&val, &"frames".into())
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as u32;
+    let buffer_ms = js_sys::Reflect::get(&val, &"bufferMs".into())
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as u32;
+    let quality = js_sys::Reflect::get(&val, &"quality".into())
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "good".to_string());
+    StreamStats {
+        dropouts,
+        frames,
+        buffer_ms,
+        quality,
+    }
 }
 
 /// Listen button for engineer audio monitoring
@@ -50,11 +88,23 @@ pub fn ListenButton(
     let (state, set_state) = signal(ListenState::Idle);
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
     let (listen_target, set_listen_target) = signal(String::new());
+    let (stream_stats, set_stream_stats) = signal(StreamStats::default());
 
     // Check browser support on mount
     Effect::new(move || {
         if !is_audio_supported() {
             set_state.set(ListenState::Unsupported);
+        }
+    });
+
+    // Poll stream stats every 500ms while listening
+    Effect::new(move || {
+        let current_state = state.get();
+        if current_state == ListenState::Listening {
+            let handle = gloo_timers::callback::Interval::new(500, move || {
+                set_stream_stats.set(poll_stream_stats());
+            });
+            on_cleanup(move || drop(handle));
         }
     });
 
@@ -84,6 +134,7 @@ pub fn ListenButton(
             // Stop listening
             stop_listening(ws, set_state, set_ws);
             set_listen_target.set(String::new());
+            set_stream_stats.set(StreamStats::default());
         }
     };
 
@@ -113,6 +164,16 @@ pub fn ListenButton(
         ListenState::Unsupported => "\u{1F507} Unsupported".to_string(),
     };
 
+    let stats_class = move || {
+        let stats = stream_stats.get();
+        format!("stream-stats {}", stats.quality)
+    };
+
+    let stats_text = move || {
+        let stats = stream_stats.get();
+        format!("{} drops | buf {}ms", stats.dropouts, stats.buffer_ms)
+    };
+
     view! {
         <button
             class=btn_class
@@ -120,6 +181,11 @@ pub fn ListenButton(
             disabled=move || state.get() == ListenState::Unsupported
         >
             {btn_text}
+            <Show when=move || state.get() == ListenState::Listening>
+                <span class=stats_class data-testid="stream-stats">
+                    {stats_text}
+                </span>
+            </Show>
         </button>
     }
 }

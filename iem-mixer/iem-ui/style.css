@@ -995,6 +995,24 @@ body {
   cursor: not-allowed;
 }
 
+.stream-stats {
+  font-size: 0.7em;
+  margin-left: 6px;
+  opacity: 0.8;
+}
+
+.stream-stats.good {
+  color: #2d9f4a;
+}
+
+.stream-stats.degraded {
+  color: #d4a017;
+}
+
+.stream-stats.poor {
+  color: #c0392b;
+}
+
 @keyframes listen-pulse {
   0%,
   100% {
