@@ -4,6 +4,7 @@
 --   Input tracks:        all sends must be pre-fader post-FX (mode 3)
 --   Member inear tracks: sends to ENGINEER must be post-fader (mode 0)
 --                        so the engineer hears each member's actual volume
+--   Stems bus tracks:    post-fader (mode 0) — stems group fader affects audio to inear
 --
 -- Writes result to EXTSTATE: reaperiem/send_mode_check
 --   "OK" = all sends have correct mode
@@ -16,6 +17,10 @@ local function is_member_inear(name)
     return name:match(" inear$") and not name:match("^ENGINEER ")
 end
 
+local function is_stems_bus(name)
+    return name:match(" stems$") ~= nil
+end
+
 local function check_all_sends()
     local num_tracks = reaper.CountTracks(0)
     local bad_sends = 0
@@ -24,7 +29,8 @@ local function check_all_sends()
         local track = reaper.GetTrack(0, t)
         local _, track_name = reaper.GetTrackName(track)
         local num_sends = reaper.GetTrackNumSends(track, 0)  -- 0 = sends (not receives)
-        local expect_post_fader = is_member_inear(track_name)
+        -- Stems bus tracks need post-fader so the group fader works
+        local expect_post_fader = is_member_inear(track_name) or is_stems_bus(track_name)
 
         for s = 0, num_sends - 1 do
             local current_mode = reaper.GetTrackSendInfo_Value(track, 0, s, "I_SENDMODE")
