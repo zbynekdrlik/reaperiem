@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.101.0 (2026-03-23)
+
+- **Feature**: Auto-insert "TRIM IN" (JS:Volume/Pan) as first FX on all mic/guitar tracks for input level normalization (#9)
+- **Feature**: MCP tool `list_track_fx` to query trim state on mic/gtr tracks
+- **Fix**: CI deploy now uses dynamic action IDs for ReaScript execution (no REAPER restart needed)
+- **Closed**: #113 (audio stability — solved in v1.93-v1.99)
+
 ### v1.100.0 (2026-03-23)
 
 - **Fix**: Stems group fader now controls audio — changed stems bus send mode from pre-fader to post-fader so the group volume fader affects audio reaching inear tracks (#116)
