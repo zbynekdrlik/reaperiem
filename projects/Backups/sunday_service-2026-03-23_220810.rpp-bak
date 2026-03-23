@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1774222081 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1774300090 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -126,10 +126,17 @@
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
-      WNDRECT 24 52 716 290
-      SHOW 1
+      WNDRECT 293 289 716 202
+      SHOW 0
       LASTSEL 0
       DOCKED 0
+      BYPASS 0 0 0
+      <JS utility/volume_pan "TRIM IN"
+        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS 0 0 0 0
+      FXID {2CFCF2DF-5FF9-4DCD-BEDF-9BFF1C92349E}
+      WAK 0 0
       BYPASS 0 0 0
       <JS synthesis/tonegenerator ""
         -12 -6 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -259,7 +266,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 0
+    SEL 1
     REC 1 6 1 2 0 0 0 0
     VU 64
     TRACKHEIGHT 64 0 0 0 0 0 0
@@ -270,6 +277,11 @@
     PERF 0
     MIDIOUT -1
     MAINSEND 1 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+    >
   >
   <TRACK {703C5BD4-8AA1-41D8-AD56-AC7FC283BEB7}
     NAME "TINA mic"
@@ -824,7 +836,7 @@
     FX 1
     TRACKID {6561EBEC-611D-461D-9855-C99AF01DA123}
     PERF 0
-    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 1 -1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.58884364 -0.79999995 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.58884364 0.76 0 0 0 0 0 -1:U 0 -1 ''
@@ -839,7 +851,7 @@
     AUXRECV 19 3 0.707946 0.020000458 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.707946 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 33 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 33 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 2 0 1 0 0 0 0 -1:U -1
@@ -889,7 +901,7 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 34 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 34 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 4 0 1 0 0 0 0 -1:U -1
@@ -938,7 +950,7 @@
     AUXRECV 19 3 0.26909956 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 35 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 35 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 6 0 1 0 0 0 0 -1:U -1
@@ -987,7 +999,7 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 36 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 36 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 8 0 1 0 0 0 0 -1:U -1
@@ -1031,7 +1043,7 @@
     AUXRECV 19 3 0.05370318 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.19054608 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11220185 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 37 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 37 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 10 0 1 0 0 0 0 -1:U -1
@@ -1075,7 +1087,7 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.15848932 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 38 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 38 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 12 0 1 0 0 0 0 -1:U -1
@@ -1119,7 +1131,7 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 39 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 39 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 14 0 1 0 0 0 0 -1:U -1
@@ -1148,7 +1160,7 @@
     FX 1
     TRACKID {67F6FBF1-BC04-4153-BEDC-584248F3F48E}
     PERF 0
-    AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1163,7 +1175,7 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 40 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 40 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 16 0 1 0 0 0 0 -1:U -1
@@ -1207,7 +1219,7 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 41 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 41 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 18 0 1 0 0 0 0 -1:U -1
@@ -1261,7 +1273,7 @@
     AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 42 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 42 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 32 0 1 0 0 0 0 -1:U -1
@@ -1555,7 +1567,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 1 0 -1 -1 1
+    VOLPAN 0.031622775 0 -1 -1 1
     MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
@@ -1573,13 +1585,13 @@
     FX 1
     TRACKID {7FF25999-B78A-489B-B055-62F3B46AFB08}
     PERF 0
-    AUXRECV 10 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 11 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 12 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 13 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 14 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 16 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 10 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 11 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 12 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 13 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 14 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 16 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
   >
@@ -1598,7 +1610,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 1
+    SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
     TRACKHEIGHT 0 0 0 0 0 0 0
