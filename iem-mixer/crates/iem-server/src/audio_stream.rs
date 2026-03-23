@@ -111,7 +111,8 @@ pub fn parse_oiem_packet(data: &[u8]) -> Result<(u16, Bytes), &'static str> {
         return Err("truncated payload");
     }
 
-    let opus_frame = Bytes::copy_from_slice(&data[OIEM_HEADER_SIZE..OIEM_HEADER_SIZE + payload_size]);
+    let opus_frame =
+        Bytes::copy_from_slice(&data[OIEM_HEADER_SIZE..OIEM_HEADER_SIZE + payload_size]);
     Ok((sequence, opus_frame))
 }
 
