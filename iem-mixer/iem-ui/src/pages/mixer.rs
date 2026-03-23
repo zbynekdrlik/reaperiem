@@ -821,17 +821,6 @@ pub fn MixerPage() -> impl IntoView {
                                 meters=meters.into()
                                 output_track_idx=output_track_idx
                             />
-                            <StemsVolumeFader
-                                level=stems_level
-                                set_level=set_stems_level
-                                muted=stems_muted
-                                set_muted=set_stems_muted
-                                set_stems_touched=set_stems_touched
-                                connected=connected
-                                ws=ws
-                                meters=meters.into()
-                                stems_bus_idx=stems_bus_idx
-                            />
                         </Show>
                         <Show
                             when=move || active_category.get() == Category::Stems
@@ -868,6 +857,22 @@ pub fn MixerPage() -> impl IntoView {
                             set_hidden_channels=set_hidden_channels
                             active_category=active_category
                         />
+                        <Show
+                            when=move || active_category.get() == Category::Main
+                            fallback=|| ()
+                        >
+                            <StemsVolumeFader
+                                level=stems_level
+                                set_level=set_stems_level
+                                muted=stems_muted
+                                set_muted=set_stems_muted
+                                set_stems_touched=set_stems_touched
+                                connected=connected
+                                ws=ws
+                                meters=meters.into()
+                                stems_bus_idx=stems_bus_idx
+                            />
+                        </Show>
                     </div>
                 </div>
             </Show>
