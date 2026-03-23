@@ -1691,10 +1691,7 @@ fn send_to_reaper(
 // =============================================================================
 
 /// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
-async fn handle_get_eq_params(
-    state: &AppState,
-    track_index: usize,
-) -> Option<iem_core::ServerMsg> {
+async fn handle_get_eq_params(state: &AppState, track_index: usize) -> Option<iem_core::ServerMsg> {
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     drop(config);
@@ -1712,8 +1709,7 @@ async fn handle_get_eq_params(
     }
 
     // 2. Trigger read_eq_params.lua action
-    let action_url =
-        reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_READ_EQ");
+    let action_url = reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_READ_EQ");
     if state.http_client.get(&action_url).send().await.is_err() {
         tracing::error!(track_index, "EQ: failed to trigger READ_EQ action");
         return None;
@@ -1840,18 +1836,26 @@ async fn handle_set_eq_band(
         "track={}|band={}|param={}|value={:.6}",
         track_index, band, param, value
     );
-    let set_url =
-        reaper_api::set_extstate(&reaper_url, "reaperiem", "eq_set", &eq_set_value);
+    let set_url = reaper_api::set_extstate(&reaper_url, "reaperiem", "eq_set", &eq_set_value);
     if state.http_client.get(&set_url).send().await.is_err() {
-        tracing::error!(track_index, band, param, "EQ: failed to set eq_set EXTSTATE");
+        tracing::error!(
+            track_index,
+            band,
+            param,
+            "EQ: failed to set eq_set EXTSTATE"
+        );
         return;
     }
 
     // 2. Trigger set_eq_param.lua action
-    let action_url =
-        reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_SET_EQ");
+    let action_url = reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_SET_EQ");
     if state.http_client.get(&action_url).send().await.is_err() {
-        tracing::error!(track_index, band, param, "EQ: failed to trigger SET_EQ action");
+        tracing::error!(
+            track_index,
+            band,
+            param,
+            "EQ: failed to trigger SET_EQ action"
+        );
         return;
     }
 
@@ -1864,21 +1868,9 @@ async fn handle_set_eq_band(
         if let Ok(text) = resp.text().await {
             if let Some(result) = text.split('\t').nth(3) {
                 if result.starts_with("ERROR") {
-                    tracing::error!(
-                        track_index,
-                        band,
-                        param,
-                        result,
-                        "EQ: set_eq_param failed"
-                    );
+                    tracing::error!(track_index, band, param, result, "EQ: set_eq_param failed");
                 } else {
-                    tracing::debug!(
-                        track_index,
-                        band,
-                        param,
-                        result,
-                        "EQ: param set OK"
-                    );
+                    tracing::debug!(track_index, band, param, result, "EQ: param set OK");
                 }
             }
         }
@@ -1953,10 +1945,7 @@ pub(crate) mod reaper_api {
 
     /// Build URL for setting EXTSTATE (key-value store in REAPER)
     pub fn set_extstate(base_url: &str, section: &str, key: &str, value: &str) -> String {
-        format!(
-            "{}/_/SET/EXTSTATE/{}/{}/{}",
-            base_url, section, key, value
-        )
+        format!("{}/_/SET/EXTSTATE/{}/{}/{}", base_url, section, key, value)
     }
 
     /// Build URL for triggering a REAPER action by ID
@@ -3256,7 +3245,8 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
 
     #[test]
     fn test_reaper_url_set_extstate_format() {
-        let url = reaper_api::set_extstate("http://iem.lan:8080", "reaperiem", "eq_read_track", "3");
+        let url =
+            reaper_api::set_extstate("http://iem.lan:8080", "reaperiem", "eq_read_track", "3");
         assert_eq!(
             url,
             "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/eq_read_track/3"
