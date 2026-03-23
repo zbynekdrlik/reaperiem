@@ -366,7 +366,7 @@ mod tests {
         sender.connect(listener_addr).await.unwrap();
 
         for i in 0..10u16 {
-            let payload: Vec<u8> = (0..100).map(|j| ((i as u8).wrapping_add(j))).collect();
+            let payload: Vec<u8> = (0..100).map(|j| (i as u8).wrapping_add(j)).collect();
             let packet = build_oiem_packet(i, &payload);
             sender.send(&packet).await.unwrap();
         }
