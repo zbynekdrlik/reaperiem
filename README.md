@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.92.0 (2026-03-23)
+
+- **Fix**: Stems fader on Main tab now renders after ME mic channel (was incorrectly before it)
+
 ### v1.91.0 (2026-03-23)
 
 - **Feature**: Stems group volume fader — control all stem channels (DRUMS, BASS, INST, CLICK, GUIDE, BGVS, OTHER) together with a single fader while preserving individual relative mix levels (#87)
