@@ -1383,6 +1383,27 @@ jobs:
             exit 1
           }
 
+          # Wait for REAPER audio engine to warm up after restart
+          # The VST needs time to initialize its UDP sender after REAPER loads
+          $warmupDeadline = [DateTime]::UtcNow.AddSeconds(30)
+          $audioReady = $false
+          while ([DateTime]::UtcNow -lt $warmupDeadline) {
+            try {
+              $diagResp = Invoke-WebRequest -Uri "http://localhost:80/api/audio/diagnostics" `
+                -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing -TimeoutSec 5
+              $diag = $diagResp.Content | ConvertFrom-Json
+              if ($diag.receiving_oiem -eq $true -and $diag.packets_per_second -gt 10) {
+                Write-Host "Audio engine ready: $($diag.packets_per_second) pps"
+                $audioReady = $true
+                break
+              }
+            } catch {}
+            Start-Sleep -Seconds 2
+          }
+          if (-not $audioReady) {
+            Write-Host "::warning::Audio engine not producing frames after 30s warmup"
+          }
+
           # Connect WebSocket - no synthetic UDP, only real REAPER audio
           $ws = New-Object System.Net.WebSockets.ClientWebSocket
           $uri = [Uri]"ws://localhost:80/ws/audio?token=$token"
