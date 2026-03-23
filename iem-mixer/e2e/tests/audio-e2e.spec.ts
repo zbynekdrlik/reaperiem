@@ -46,17 +46,18 @@ test.describe("Audio Pipeline Diagnostics", () => {
     expect(response.status()).toBe(200);
 
     const diag = await response.json();
-    expect(diag).toHaveProperty("receiving_vban");
+    expect(diag).toHaveProperty("receiving_oiem");
+    expect(diag).toHaveProperty("receiving_vban"); // backwards compat
     expect(diag).toHaveProperty("packets_per_second");
     expect(diag).toHaveProperty("opus_frames_per_second");
     expect(diag).toHaveProperty("peak_db");
-    expect(diag).toHaveProperty("sample_rate");
-    expect(diag).toHaveProperty("channels");
-    expect(typeof diag.receiving_vban).toBe("boolean");
+    expect(diag).toHaveProperty("last_sequence");
+    expect(diag).toHaveProperty("sequence_gaps");
+    expect(typeof diag.receiving_oiem).toBe("boolean");
     expect(typeof diag.peak_db).toBe("number");
   });
 
-  test("when VBAN is active, audio signal is not silence", async ({
+  test("when OIEM is active, audio signal is not silence", async ({
     request,
   }) => {
     const token = await getEngineerToken(request);
@@ -70,22 +71,20 @@ test.describe("Audio Pipeline Diagnostics", () => {
     });
     const diag = await response.json();
 
-    if (!diag.receiving_vban) {
+    if (!diag.receiving_oiem) {
       console.log(
-        "[SKIP] No VBAN packets — REAPER not running or VBAN VST not active",
+        "[SKIP] No OIEM packets — REAPER not running or VST not active",
       );
       return;
     }
 
-    // If VBAN is receiving, the pipeline must be producing real audio
+    // If OIEM is receiving, the pipeline must be producing real audio
     expect(diag.packets_per_second).toBeGreaterThan(10);
     expect(diag.opus_frames_per_second).toBeGreaterThan(10);
 
     // With a tone generator or real signal, peak should be above -40 dB
     // Silence is -150 dB; noise floor is around -80 dB
     expect(diag.peak_db).toBeGreaterThan(-40);
-    expect(diag.sample_rate).toBeGreaterThan(0);
-    expect(diag.channels).toBeGreaterThan(0);
   });
 
   test("diagnostics requires engineer auth", async ({ request }) => {

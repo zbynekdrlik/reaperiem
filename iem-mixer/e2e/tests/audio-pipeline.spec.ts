@@ -2,16 +2,20 @@
  * Audio Pipeline E2E Test
  *
  * Tests the full server-side audio pipeline:
- *   Synthetic VBAN UDP → parse → resample → Opus encode → WebSocket binary frames
+ *   Synthetic OIEM UDP → relay → WebSocket binary frames
  *
  * This test does NOT require REAPER or a browser audio player.
- * It sends synthetic VBAN UDP packets and verifies Opus frames arrive on the WebSocket.
+ * It sends synthetic OIEM UDP packets (pre-encoded Opus payloads) and verifies
+ * they arrive on the WebSocket.
  *
- * IMPORTANT: These tests verify REAL Opus audio quality, not just "did bytes arrive":
- *   - Opus TOC byte structure (stereo, correct mode)
- *   - Frame sizes match expected encoding parameters
- *   - Frame rate matches expected 50fps (20ms Opus frames)
- *   - Consistent codec configuration across all frames
+ * The server is a pure relay — it validates the OIEM header and forwards the
+ * Opus payload directly. No resampling or encoding happens server-side.
+ *
+ * OIEM packet format:
+ *   Bytes 0-3: Magic "OIEM" (0x4F49454D)
+ *   Bytes 4-5: Sequence number (uint16 LE, wrapping)
+ *   Bytes 6-7: Payload size in bytes (uint16 LE)
+ *   Bytes 8+:  Raw Opus frame
  */
 
 import { test, expect } from "@playwright/test";
@@ -19,89 +23,51 @@ import * as dgram from "dgram";
 import WebSocket from "ws";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8080";
-const VBAN_PORT = 6980;
+const OIEM_PORT = 6980;
 
-// VBAN protocol constants
-const VBAN_MAGIC = Buffer.from([0x56, 0x42, 0x41, 0x4e]); // "VBAN" in LE (0x4E414256)
-const VBAN_HEADER_SIZE = 28;
+// OIEM protocol constants
+const OIEM_MAGIC = Buffer.from([0x4f, 0x49, 0x45, 0x4d]); // "OIEM"
+const OIEM_HEADER_SIZE = 8;
 
-// VBAN sample rate table (index 4 = 96000 Hz)
-const VBAN_SR_INDEX_96000 = 4;
-
-/** Build a valid VBAN UDP packet with a 440Hz sine tone (INT16 format) */
-function buildVBANPacket(
-  sampleOffset: number,
-  channels = 2,
-  sampleRate = 96000,
-  samplesPerCh = 256,
-): Buffer {
-  const audioBytes = samplesPerCh * channels * 2; // INT16 = 2 bytes per sample
-  const buf = Buffer.alloc(VBAN_HEADER_SIZE + audioBytes);
+/** Build a valid OIEM UDP packet with synthetic payload */
+function buildOIEMPacket(sequenceNumber: number, payloadSize = 200): Buffer {
+  const buf = Buffer.alloc(OIEM_HEADER_SIZE + payloadSize);
   let offset = 0;
 
-  // Magic "VBAN" (LE)
-  VBAN_MAGIC.copy(buf, offset);
+  // Magic "OIEM"
+  OIEM_MAGIC.copy(buf, offset);
   offset += 4;
 
-  // format_SR: sample rate index | protocol audio (0x00)
-  const srIndex =
-    sampleRate === 96000
-      ? VBAN_SR_INDEX_96000
-      : sampleRate === 48000
-        ? 3
-        : VBAN_SR_INDEX_96000;
-  buf.writeUInt8(srIndex, offset);
-  offset += 1;
+  // Sequence number (uint16 LE)
+  buf.writeUInt16LE(sequenceNumber & 0xffff, offset);
+  offset += 2;
 
-  // format_nbs: samples per frame - 1
-  buf.writeUInt8(samplesPerCh - 1, offset);
-  offset += 1;
+  // Payload size (uint16 LE)
+  buf.writeUInt16LE(payloadSize, offset);
+  offset += 2;
 
-  // format_nbc: channels - 1
-  buf.writeUInt8(channels - 1, offset);
-  offset += 1;
-
-  // format_bit: INT16 (1) | codec PCM (0x00)
-  buf.writeUInt8(1, offset);
-  offset += 1;
-
-  // Stream name: "engineer" null-padded to 16 bytes
-  buf.write("engineer", offset, "ascii");
-  offset += 16; // rest is zero-filled by Buffer.alloc
-
-  // Frame counter (u32 LE)
-  buf.writeUInt32LE(Math.floor(sampleOffset / samplesPerCh), offset);
-  offset += 4;
-
-  // Audio: interleaved INT16 sine wave (440Hz)
-  for (let i = 0; i < samplesPerCh; i++) {
-    const t = (sampleOffset + i) / sampleRate;
-    const val = 0.3 * Math.sin(2 * Math.PI * 440 * t);
-    const int16Val = Math.round(val * 32767);
-    for (let ch = 0; ch < channels; ch++) {
-      buf.writeInt16LE(int16Val, offset);
-      offset += 2;
-    }
+  // Synthetic payload (non-zero data mimicking Opus frame)
+  for (let i = 0; i < payloadSize; i++) {
+    buf.writeUInt8((sequenceNumber + i) % 256, offset);
+    offset += 1;
   }
 
   return buf;
 }
 
-/** Send VBAN UDP packets for a given duration */
+/** Send OIEM UDP packets for a given duration */
 function startUdpSender(durationMs: number): {
   stop: () => void;
   packetsSent: () => number;
 } {
   const socket = dgram.createSocket("udp4");
   let sent = 0;
-  let sampleOffset = 0;
-  const samplesPerPacket = 256;
-  const intervalMs = (samplesPerPacket / 96000) * 1000; // ~2.67ms
+  // Send at 50 packets/sec (matching real 20ms Opus frame rate)
+  const intervalMs = 20;
 
   const interval = setInterval(() => {
-    const packet = buildVBANPacket(sampleOffset);
-    socket.send(packet, VBAN_PORT, "127.0.0.1");
-    sampleOffset += samplesPerPacket;
+    const packet = buildOIEMPacket(sent);
+    socket.send(packet, OIEM_PORT, "127.0.0.1");
     sent++;
   }, intervalMs);
 
@@ -138,56 +104,12 @@ async function getEngineerToken(): Promise<string> {
   return data.token;
 }
 
-/**
- * Parse Opus TOC byte to extract codec configuration.
- * TOC byte format: config (5 bits) | stereo (1 bit) | code (2 bits)
- */
-function parseOpusTOC(toc: number): {
-  config: number;
-  stereo: boolean;
-  frameCode: number;
-  bandwidth: string;
-  frameSize: string;
-} {
-  const config = (toc >> 3) & 0x1f;
-  const stereo = ((toc >> 2) & 1) === 1;
-  const frameCode = toc & 0x03;
-
-  // Bandwidth from config number
-  let bandwidth: string;
-  if (config <= 3) bandwidth = "NB (4kHz)";
-  else if (config <= 7) bandwidth = "MB (6kHz)";
-  else if (config <= 11) bandwidth = "WB (8kHz)";
-  else if (config <= 15) bandwidth = "SWB (12kHz)";
-  else if (config <= 19) bandwidth = "FB (20kHz)";
-  else if (config <= 23) bandwidth = "WB CELT";
-  else if (config <= 27) bandwidth = "SWB CELT";
-  else bandwidth = "FB CELT";
-
-  // Frame size
-  const frameSizes: Record<number, string> = {
-    0: "10ms",
-    1: "20ms",
-    2: "40ms",
-    3: "60ms",
-  };
-  const frameSize =
-    config <= 11
-      ? frameSizes[config % 4] || "unknown"
-      : config <= 15
-        ? ["10ms", "20ms"][config % 2] || "unknown"
-        : ["2.5ms", "5ms", "10ms", "20ms"][config % 4] || "unknown";
-
-  return { config, stereo, frameCode, bandwidth, frameSize };
-}
-
-test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
-  test("synthetic VBAN UDP packets produce valid Opus frames on WebSocket", async () => {
-    // Step 1: Start sending UDP packets BEFORE connecting WebSocket
-    // The pipeline needs data to initialize (resampler + Opus encoder)
+test.describe("Audio Pipeline (OIEM UDP → WebSocket)", () => {
+  test("synthetic OIEM UDP packets produce binary frames on WebSocket", async () => {
+    // Step 1: Start sending OIEM packets BEFORE connecting WebSocket
     const sender = startUdpSender(15000);
 
-    // Give the pipeline time to initialize from first packets
+    // Give the relay time to start receiving
     await new Promise((r) => setTimeout(r, 2000));
 
     // Step 2: Get engineer JWT token
@@ -202,8 +124,6 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     let gotListening = false;
     let gotNoSource = false;
     const frameSizes: number[] = [];
-    const tocBytes: number[] = [];
-    const collectedFrames: Buffer[] = [];
 
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -225,10 +145,6 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
         if (isBinary) {
           binaryFrames++;
           frameSizes.push(data.length);
-          if (data.length > 0) {
-            tocBytes.push(data[0]);
-          }
-          collectedFrames.push(Buffer.from(data));
           messages.push({ type: "binary", data: `${data.length} bytes` });
           if (binaryFrames >= 10) {
             clearTimeout(timeout);
@@ -273,39 +189,15 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     expect(gotListening).toBe(true);
     expect(gotNoSource).toBe(false);
 
-    // === Opus frame structure validation ===
+    // === Frame size validation ===
+    // Server relays the Opus payload directly — should match our synthetic 200 bytes
     for (const size of frameSizes) {
-      // Opus frames for 20ms stereo @ 64kbps are typically 80-200 bytes
-      // Minimum valid Opus packet is 1 byte (silence), max ~1275 bytes
-      expect(size).toBeGreaterThan(0);
-      expect(size).toBeLessThan(1300);
+      expect(size).toBe(200);
     }
 
-    // === Opus TOC byte deep validation ===
-    const tocParsed = tocBytes.map(parseOpusTOC);
-    for (const toc of tocParsed) {
-      // Must be stereo
-      expect(toc.stereo).toBe(true);
-
-      // Frame code must be 0 (single frame per packet) — our encoder sends one frame per packet
-      expect(toc.frameCode).toBeLessThanOrEqual(1);
-    }
-
-    // === All frames should have consistent codec configuration ===
-    const uniqueConfigs = new Set(tocBytes);
-    // A healthy encoder produces consistent TOC bytes (same config for all frames)
-    expect(uniqueConfigs.size).toBeLessThanOrEqual(2); // Allow minor variation
-
-    // === Frame sizes should be non-trivial (not silence packets) ===
-    // Silence packets are 1-3 bytes. Real audio with a 440Hz tone should produce
-    // frames of at least 10 bytes, typically 80-200 bytes for stereo 20ms @ 64kbps
     const avgSize = frameSizes.reduce((a, b) => a + b, 0) / frameSizes.length;
-    expect(avgSize).toBeGreaterThan(10); // Real audio, not silence
-
     console.log(
-      `PASS: ${binaryFrames} Opus frames, avg=${avgSize.toFixed(0)}B, ` +
-        `configs=${Array.from(uniqueConfigs).join(",")}, ` +
-        `TOC: ${tocParsed[0]?.bandwidth} ${tocParsed[0]?.frameSize} stereo=${tocParsed[0]?.stereo}`,
+      `PASS: ${binaryFrames} frames relayed, avg=${avgSize.toFixed(0)}B`,
     );
   });
 
@@ -413,8 +305,8 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     });
   });
 
-  test("diagnostics API reports signal when VBAN is active", async () => {
-    // Start VBAN sender
+  test("diagnostics API reports signal when OIEM is active", async () => {
+    // Start OIEM sender
     const sender = startUdpSender(10000);
     await new Promise((r) => setTimeout(r, 3000)); // Let pipeline accumulate data
 
@@ -428,21 +320,20 @@ test.describe("Audio Pipeline (VBAN UDP → Opus → WebSocket)", () => {
     sender.stop();
 
     console.log(
-      `Diagnostics: receiving=${diag.receiving_vban}, peak=${diag.peak_db}dB, opus=${diag.opus_frames_per_second}/s`,
+      `Diagnostics: receiving=${diag.receiving_oiem}, peak=${diag.peak_db}dB, opus=${diag.opus_frames_per_second}/s`,
     );
 
-    // Must be receiving VBAN
-    expect(diag.receiving_vban).toBe(true);
+    // Must be receiving OIEM
+    expect(diag.receiving_oiem).toBe(true);
 
-    // Must have real signal (not silence)
-    // Synthetic tone at 0.3 amplitude = -10.5 dB → peak_db should be > -20
+    // Peak dB is estimated from Opus frame size — synthetic 200-byte frames
+    // map to roughly -13 dB with the server's estimation formula
     expect(diag.peak_db).toBeGreaterThan(-30);
 
-    // Must be encoding Opus frames (50fps for 20ms frames)
+    // Must be relaying Opus frames (50fps for 20ms frames)
     expect(diag.opus_frames_per_second).toBeGreaterThan(10);
 
-    // Verify structure completeness
-    expect(diag.sample_rate).toBeGreaterThan(0);
-    expect(diag.channels).toBeGreaterThan(0);
+    // No sequence gaps expected on localhost
+    expect(diag.sequence_gaps).toBe(0);
   });
 });
