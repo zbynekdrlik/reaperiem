@@ -124,6 +124,11 @@ pub fn ListenButton(
 
     // Cleanup on unmount
     on_cleanup(move || {
+        if let Some(id) = stats_interval.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_interval_with_handle(id);
+            }
+        }
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
         }
