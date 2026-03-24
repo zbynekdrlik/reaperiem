@@ -1010,14 +1010,19 @@ pub fn MixerPage() -> impl IntoView {
                                 }
                             })
                             on_close=Callback::new(move |_: ()| {
-                                // Defer to next microtask — setting eq_open=None destroys the
-                                // EQ modal DOM. If called synchronously from a click handler
-                                // inside the modal, the handler's closure gets dropped while
-                                // still on the call stack → WASM panic.
-                                wasm_bindgen_futures::spawn_local(async move {
+                                // Defer to next macrotask via setTimeout(0) — setting eq_open=None
+                                // destroys the EQ modal DOM. This must happen AFTER the current
+                                // event handler stack fully unwinds (including microtasks), or
+                                // Leptos reactive graph teardown hits dropped closures.
+                                let cb = Closure::once(move || {
                                     set_eq_open.set(None);
                                     set_eq_bands.set(Vec::new());
                                 });
+                                web_sys::window()
+                                    .unwrap()
+                                    .set_timeout_with_callback(cb.as_ref().unchecked_ref())
+                                    .unwrap();
+                                cb.forget(); // prevent drop before timer fires
                             })
                         />
                     }
