@@ -1053,7 +1053,8 @@ jobs:
 
           $projectPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
           $reaperExe = "C:\Program Files\REAPER (x64)\reaper.exe"
-          schtasks /create /tn ReaperKbRestart /tr "`"$reaperExe`" `"$projectPath`"" /sc once /st 00:00 /f /rl highest 2>&1 | Out-Null
+          $taskCmd = """$reaperExe"" ""$projectPath"""
+          schtasks /create /tn ReaperKbRestart /tr $taskCmd /sc once /st 00:00 /f /rl highest 2>&1 | Out-Null
           schtasks /run /tn ReaperKbRestart 2>&1 | Out-Null
 
           # Wait for REAPER to come back
