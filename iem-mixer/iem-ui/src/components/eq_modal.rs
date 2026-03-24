@@ -260,12 +260,12 @@ pub fn EQModal(
                 local_state_created.set(true);
             });
         } else if !any_dragging.get_untracked() {
-            // Subsequent: sync values silently, then trigger display update
+            // Subsequent: sync values then trigger display update
             let locals = stored_locals.get_value();
             for (local, parent_band) in locals.iter().zip(parent.iter()) {
-                local.freq_norm.set_untracked(parent_band.freq_norm);
-                local.gain_norm.set_untracked(parent_band.gain_norm);
-                local.bw_norm.set_untracked(parent_band.bw_norm);
+                local.freq_norm.set(parent_band.freq_norm);
+                local.gain_norm.set(parent_band.gain_norm);
+                local.bw_norm.set(parent_band.bw_norm);
             }
             curve_trigger.update(|n| *n += 1);
         }
@@ -457,7 +457,7 @@ pub fn EQModal(
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
-                                                    freq_sig.set_untracked(v);
+                                                    freq_sig.set(v);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -485,7 +485,7 @@ pub fn EQModal(
                                                         last_send_gain.set(now);
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
-                                                    gain_sig.set_untracked(v);
+                                                    gain_sig.set(v);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -517,7 +517,7 @@ pub fn EQModal(
                                                         last_send_bw.set(now);
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
-                                                    bw_sig.set_untracked(v);
+                                                    bw_sig.set(v);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
