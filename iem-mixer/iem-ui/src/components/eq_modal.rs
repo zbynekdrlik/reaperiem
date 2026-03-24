@@ -165,6 +165,7 @@ fn format_freq(hz: f32) -> String {
 
 /// Per-band local state signals that survive parent re-renders.
 /// These are created once per band when the modal opens and persist until close.
+#[derive(Clone, Copy)]
 struct BandLocalState {
     freq_norm: RwSignal<f32>,
     gain_norm: RwSignal<f32>,
