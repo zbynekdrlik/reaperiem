@@ -227,6 +227,11 @@ pub fn EQModal(
     // Track whether any slider is currently being dragged (guards against server echo)
     let any_dragging = RwSignal::new(false);
 
+    // Explicit trigger for curve + display updates. Incremented AFTER signal writes complete.
+    // The Memo and display closures subscribe to THIS (not to individual band signals),
+    // preventing recursive closure invocation that causes WASM panics.
+    let curve_trigger = RwSignal::new(0u32);
+
     // Sync from parent bands signal into local signals.
     // First arrival: populate stored_locals and flip the gate.
     // Subsequent: update existing RwSignals (no DOM destruction).
@@ -262,6 +267,8 @@ pub fn EQModal(
                 local.gain_norm.set(parent_band.gain_norm);
                 local.bw_norm.set(parent_band.bw_norm);
             }
+            // Trigger curve + display update AFTER all signal writes complete
+            curve_trigger.update(|n| *n += 1);
         }
     });
 
@@ -337,14 +344,17 @@ pub fn EQModal(
                                 stroke="rgba(255,255,255,0.25)" stroke-width="1.5"
                             />
 
-                            // Frequency response curve — uses Memo to avoid recursive signal reads
+                            // Frequency response curve — triggered ONLY by curve_trigger (not band signals)
+                            // Uses get_untracked() to read band values without subscribing,
+                            // preventing recursive closure invocation that kills the Memo.
                             {
                                 let curve_memo = Memo::new(move |_| {
+                                    curve_trigger.get(); // ONLY subscription
                                     let locals = stored_locals.get_value();
                                     let states: Vec<EqBandState> = locals.iter().map(|l| {
-                                        let fn_ = l.freq_norm.get();
-                                        let gn_ = l.gain_norm.get();
-                                        let bn_ = l.bw_norm.get();
+                                        let fn_ = l.freq_norm.get_untracked();
+                                        let gn_ = l.gain_norm.get_untracked();
+                                        let bn_ = l.bw_norm.get_untracked();
                                         EqBandState {
                                             band_type: l.band_type.clone(),
                                             freq_hz: norm_to_freq_hz(fn_),
@@ -382,16 +392,16 @@ pub fn EQModal(
                                     let gain_sig = local.gain_norm;
                                     view! {
                                         <circle
-                                            cx=move || freq_to_x(norm_to_freq_hz(freq_sig.get()), svg_width)
-                                            cy=move || gain_to_y(norm_to_gain_db(gain_sig.get()), svg_height)
+                                            cx=move || { curve_trigger.get(); freq_to_x(norm_to_freq_hz(freq_sig.get_untracked()), svg_width) }
+                                            cy=move || { curve_trigger.get(); gain_to_y(norm_to_gain_db(gain_sig.get_untracked()), svg_height) }
                                             r="8"
                                             fill=color.clone()
                                             stroke="white" stroke-width="2"
                                             opacity="0.9"
                                         />
                                         <text
-                                            x=move || freq_to_x(norm_to_freq_hz(freq_sig.get()), svg_width)
-                                            y=move || gain_to_y(norm_to_gain_db(gain_sig.get()), svg_height) - 12.0
+                                            x=move || { curve_trigger.get(); freq_to_x(norm_to_freq_hz(freq_sig.get_untracked()), svg_width) }
+                                            y=move || { curve_trigger.get(); gain_to_y(norm_to_gain_db(gain_sig.get_untracked()), svg_height) - 12.0 }
                                             fill="white" font-size="11" text-anchor="middle"
                                             font-weight="bold"
                                         >
@@ -448,9 +458,9 @@ pub fn EQModal(
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
-                                                    // Defer to microtask to avoid Memo recursive panic
                                                     wasm_bindgen_futures::spawn_local(async move {
                                                         freq_sig.set(v);
+                                                        curve_trigger.update(|n| *n += 1);
                                                     });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -462,7 +472,7 @@ pub fn EQModal(
                                                 css_class="eq-slider-freq"
                                             />
                                             <span class="eq-param-value">
-                                                {move || format_freq(norm_to_freq_hz(freq_sig.get()))}
+                                                {move || { curve_trigger.get(); format_freq(norm_to_freq_hz(freq_sig.get_untracked())) }}
                                             </span>
                                         </div>
 
@@ -480,6 +490,7 @@ pub fn EQModal(
                                                     }
                                                     wasm_bindgen_futures::spawn_local(async move {
                                                         gain_sig.set(v);
+                                                        curve_trigger.update(|n| *n += 1);
                                                     });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -492,7 +503,8 @@ pub fn EQModal(
                                             />
                                             <span class="eq-param-value">
                                                 {move || {
-                                                    let db = norm_to_gain_db(gain_sig.get());
+                                                    curve_trigger.get();
+                                                    let db = norm_to_gain_db(gain_sig.get_untracked());
                                                     if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
                                                 }}
                                             </span>
@@ -512,6 +524,7 @@ pub fn EQModal(
                                                     }
                                                     wasm_bindgen_futures::spawn_local(async move {
                                                         bw_sig.set(v);
+                                                        curve_trigger.update(|n| *n += 1);
                                                     });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -523,7 +536,7 @@ pub fn EQModal(
                                                 css_class=""
                                             />
                                             <span class="eq-param-value">
-                                                {move || format!("{:.2} oct", norm_to_bw(bw_sig.get()))}
+                                                {move || { curve_trigger.get(); format!("{:.2} oct", norm_to_bw(bw_sig.get_untracked())) }}
                                             </span>
                                         </div>
                                     </div>
