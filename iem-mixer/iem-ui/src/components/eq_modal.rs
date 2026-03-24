@@ -507,7 +507,7 @@ pub fn EQModal(
 #[component]
 fn EqSlider(
     /// Current normalized value (0-1) from parent signal
-    value: ReadSignal<f32>,
+    value: Signal<f32>,
     /// Called when value changes during drag
     on_change: Callback<f32>,
     /// Called when drag gesture starts (activation delay passed)
