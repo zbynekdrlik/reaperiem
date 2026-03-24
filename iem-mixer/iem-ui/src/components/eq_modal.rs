@@ -9,6 +9,9 @@
 //!
 //! v1.107.0: Display values from REAPER (fh/gd/bo), double-tap to default,
 //! per-band on/off toggle and reset buttons.
+//!
+//! v1.108.0: Band ordering (HPF first), ±12dB gain range fix, HPF toggle via
+//! frequency, professional biquad curve rendering (Audio EQ Cookbook).
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -20,6 +23,9 @@ const ACTIVATION_DELAY_MS: u32 = 150;
 
 /// Maximum time between taps for double-tap detection (ms)
 const DOUBLE_TAP_MS: f64 = 300.0;
+
+/// Sample rate for biquad filter calculations (Dante network rate)
+const SAMPLE_RATE: f32 = 96000.0;
 
 /// EQ band data (mirrors iem_core::EqBand for frontend use)
 #[derive(Debug, Clone, PartialEq)]
@@ -51,17 +57,11 @@ fn norm_to_freq_hz(norm: f32) -> f32 {
 }
 
 /// Approximate normalized gain (0-1) to dB for drag feedback only.
-/// Server provides accurate REAPER-formatted values; this is used during drag
-/// when server values are not yet available. Uses cubic curve fitted to verified
-/// data points: norm=0.183911 -> -2.7 dB, norm=0.25 -> 0 dB, norm=0.288511 -> +1.2 dB.
+/// ReaEQ gain range: 0.0 → min dB, 0.25 → 0 dB, 0.5 → max dB.
+/// Verified data points: 0.183911→-2.7, 0.225681→-0.9, 0.25→0.0, 0.288511→+1.2
+/// Using linear approximation ±12dB for the practical 0.0-0.5 range.
 fn norm_to_gain_db(norm: f32) -> f32 {
-    let x = norm - 0.25;
-    // Cubic approximation: asymmetric curve matching verified REAPER data
-    if x >= 0.0 {
-        x * 32.0 + x * x * 40.0
-    } else {
-        x * 32.0 - x * x * 40.0
-    }
+    (norm - 0.25) * 48.0
 }
 
 /// Convert normalized bandwidth (0-1) to octaves
@@ -77,15 +77,188 @@ fn freq_to_x(freq_hz: f32, width: f32) -> f32 {
     ((log_freq - log_min) / (log_max - log_min)) * width
 }
 
-/// Convert gain in dB to SVG y position (-24 to +24 dB)
+/// Convert gain in dB to SVG y position (±12 dB range)
 fn gain_to_y(gain_db: f32, height: f32) -> f32 {
-    let clamped = gain_db.clamp(-24.0, 24.0);
-    // +24 at top (y=0), -24 at bottom (y=height)
-    ((24.0 - clamped) / 48.0) * height
+    let clamped = gain_db.clamp(-12.0, 12.0);
+    // +12 at top (y=0), -12 at bottom (y=height)
+    ((12.0 - clamped) / 24.0) * height
+}
+
+/// Display order for band types (professional EQ convention: filters first)
+fn display_order(band_type: &str) -> u8 {
+    match band_type {
+        "highpass" => 0,
+        "lowshelf" => 1,
+        "highshelf" => 4,
+        "lowpass" => 5,
+        _ => 2, // "band", "notch", "bandpass" in the middle
+    }
+}
+
+// ─── Biquad filter coefficient functions (Audio EQ Cookbook) ───
+
+/// Convert bandwidth in octaves to Q factor for biquad filters
+fn bw_to_q(bw_oct: f32, w0: f32) -> f32 {
+    let sinh_val = (2.0_f32.ln() / 2.0 * bw_oct * w0 / w0.sin()).sinh();
+    if sinh_val > 0.0 {
+        1.0 / (2.0 * sinh_val)
+    } else {
+        0.707 // fallback to Butterworth Q
+    }
+}
+
+/// Biquad coefficients: (b0, b1, b2, a0, a1, a2)
+type BiquadCoeffs = (f32, f32, f32, f32, f32, f32);
+
+fn biquad_peaking(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
+    let a = 10.0_f32.powf(gain_db / 40.0);
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+
+    let b0 = 1.0 + alpha * a;
+    let b1 = -2.0 * cos_w0;
+    let b2 = 1.0 - alpha * a;
+    let a0 = 1.0 + alpha / a;
+    let a1 = -2.0 * cos_w0;
+    let a2 = 1.0 - alpha / a;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+fn biquad_low_shelf(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
+    let a = 10.0_f32.powf(gain_db / 40.0);
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+    let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
+
+    let b0 = a * ((a + 1.0) - (a - 1.0) * cos_w0 + two_sqrt_a_alpha);
+    let b1 = 2.0 * a * ((a - 1.0) - (a + 1.0) * cos_w0);
+    let b2 = a * ((a + 1.0) - (a - 1.0) * cos_w0 - two_sqrt_a_alpha);
+    let a0 = (a + 1.0) + (a - 1.0) * cos_w0 + two_sqrt_a_alpha;
+    let a1 = -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0);
+    let a2 = (a + 1.0) + (a - 1.0) * cos_w0 - two_sqrt_a_alpha;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+fn biquad_high_shelf(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
+    let a = 10.0_f32.powf(gain_db / 40.0);
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+    let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
+
+    let b0 = a * ((a + 1.0) + (a - 1.0) * cos_w0 + two_sqrt_a_alpha);
+    let b1 = -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0);
+    let b2 = a * ((a + 1.0) + (a - 1.0) * cos_w0 - two_sqrt_a_alpha);
+    let a0 = (a + 1.0) - (a - 1.0) * cos_w0 + two_sqrt_a_alpha;
+    let a1 = 2.0 * ((a - 1.0) - (a + 1.0) * cos_w0);
+    let a2 = (a + 1.0) - (a - 1.0) * cos_w0 - two_sqrt_a_alpha;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+fn biquad_hpf(w0: f32, bw_oct: f32) -> BiquadCoeffs {
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+
+    let b0 = (1.0 + cos_w0) / 2.0;
+    let b1 = -(1.0 + cos_w0);
+    let b2 = (1.0 + cos_w0) / 2.0;
+    let a0 = 1.0 + alpha;
+    let a1 = -2.0 * cos_w0;
+    let a2 = 1.0 - alpha;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+fn biquad_lpf(w0: f32, bw_oct: f32) -> BiquadCoeffs {
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+
+    let b0 = (1.0 - cos_w0) / 2.0;
+    let b1 = 1.0 - cos_w0;
+    let b2 = (1.0 - cos_w0) / 2.0;
+    let a0 = 1.0 + alpha;
+    let a1 = -2.0 * cos_w0;
+    let a2 = 1.0 - alpha;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+fn biquad_notch(w0: f32, bw_oct: f32) -> BiquadCoeffs {
+    let q = bw_to_q(bw_oct, w0);
+    let alpha = w0.sin() / (2.0 * q);
+    let cos_w0 = w0.cos();
+
+    let b0 = 1.0;
+    let b1 = -2.0 * cos_w0;
+    let b2 = 1.0;
+    let a0 = 1.0 + alpha;
+    let a1 = -2.0 * cos_w0;
+    let a2 = 1.0 - alpha;
+    (b0, b1, b2, a0, a1, a2)
+}
+
+/// Evaluate biquad frequency response magnitude in dB at a given frequency.
+/// Uses H(e^jω) = (b0 + b1·e^-jω + b2·e^-2jω) / (a0 + a1·e^-jω + a2·e^-2jω)
+fn eval_biquad_db(freq: f32, coeffs: BiquadCoeffs) -> f32 {
+    let (b0, b1, b2, a0, a1, a2) = coeffs;
+    let w = 2.0 * std::f32::consts::PI * freq / SAMPLE_RATE;
+    let cos_w = w.cos();
+    let cos_2w = (2.0 * w).cos();
+    let sin_w = w.sin();
+    let sin_2w = (2.0 * w).sin();
+
+    let num_re = b0 + b1 * cos_w + b2 * cos_2w;
+    let num_im = -(b1 * sin_w + b2 * sin_2w);
+    let den_re = a0 + a1 * cos_w + a2 * cos_2w;
+    let den_im = -(a1 * sin_w + a2 * sin_2w);
+
+    let num_mag_sq = num_re * num_re + num_im * num_im;
+    let den_mag_sq = den_re * den_re + den_im * den_im;
+
+    if den_mag_sq < 1e-20 {
+        return 0.0;
+    }
+    10.0 * (num_mag_sq / den_mag_sq).max(1e-10).log10()
+}
+
+/// Compute the gain contribution of a single band at a given frequency
+/// using proper biquad transfer function evaluation.
+fn compute_band_gain(freq: f32, band: &EqBandState) -> f32 {
+    let w0 = 2.0 * std::f32::consts::PI * band.freq_hz.max(20.0) / SAMPLE_RATE;
+    let bw = band.bw.max(0.01);
+
+    let coeffs = match band.band_type.as_str() {
+        "band" => {
+            if band.gain_db.abs() < 0.01 {
+                return 0.0;
+            }
+            biquad_peaking(w0, band.gain_db, bw)
+        }
+        "lowshelf" => {
+            if band.gain_db.abs() < 0.01 {
+                return 0.0;
+            }
+            biquad_low_shelf(w0, band.gain_db, bw)
+        }
+        "highshelf" => {
+            if band.gain_db.abs() < 0.01 {
+                return 0.0;
+            }
+            biquad_high_shelf(w0, band.gain_db, bw)
+        }
+        "highpass" => biquad_hpf(w0, bw),
+        "lowpass" => biquad_lpf(w0, bw),
+        "notch" => biquad_notch(w0, bw),
+        _ => return 0.0,
+    };
+
+    eval_biquad_db(freq, coeffs)
 }
 
 /// Generate the frequency response curve path as SVG "d" attribute.
-/// Uses a simplified approximation: each band contributes gain in a bell/shelf shape.
+/// Sums biquad transfer function responses from all active bands.
 fn generate_curve_path(bands: &[EqBandState], width: f32, height: f32) -> String {
     let num_points = 200;
     let log_min = 20.0_f32.ln();
@@ -100,11 +273,7 @@ fn generate_curve_path(bands: &[EqBandState], width: f32, height: f32) -> String
         // Sum contributions from all bands
         let mut total_gain = 0.0_f32;
         for band in bands {
-            if band.gain_db.abs() < 0.01 && band.band_type == "band" {
-                continue; // Skip flat bands
-            }
-            let band_contribution = compute_band_gain(freq, band);
-            total_gain += band_contribution;
+            total_gain += compute_band_gain(freq, band);
         }
 
         let y = gain_to_y(total_gain, height);
@@ -116,57 +285,6 @@ fn generate_curve_path(bands: &[EqBandState], width: f32, height: f32) -> String
         }
     }
     path
-}
-
-/// Compute the gain contribution of a single band at a given frequency.
-/// Simplified model using octave-based bandwidth.
-fn compute_band_gain(freq: f32, band: &EqBandState) -> f32 {
-    let log_ratio = (freq / band.freq_hz).ln() / 2.0_f32.ln(); // In octaves
-
-    match band.band_type.as_str() {
-        "highpass" => {
-            // High-pass: sharp roll-off below cutoff
-            if freq < band.freq_hz {
-                let octaves_below = (band.freq_hz / freq).ln() / 2.0_f32.ln();
-                -octaves_below * 12.0 // -12dB/oct
-            } else {
-                0.0
-            }
-        }
-        "lowpass" => {
-            if freq > band.freq_hz {
-                let octaves_above = (freq / band.freq_hz).ln() / 2.0_f32.ln();
-                -octaves_above * 12.0
-            } else {
-                0.0
-            }
-        }
-        "lowshelf" => {
-            // Low shelf: full gain below freq, rolls off above
-            let transition = (-log_ratio / band.bw.max(0.1)).exp();
-            band.gain_db * transition / (1.0 + transition)
-                + band.gain_db / (1.0 + (1.0 / transition))
-                - band.gain_db
-        }
-        "highshelf" => {
-            let transition = (log_ratio / band.bw.max(0.1)).exp();
-            band.gain_db * transition / (1.0 + transition)
-                + band.gain_db / (1.0 + (1.0 / transition))
-                - band.gain_db
-        }
-        "notch" => {
-            // Narrow dip
-            let q = 1.0 / band.bw.max(0.1);
-            let x = log_ratio * q;
-            -6.0 * (-x * x).exp() // Fixed -6dB notch
-        }
-        _ => {
-            // Parametric bell (band)
-            let q = 1.0 / band.bw.max(0.1);
-            let x = log_ratio * q;
-            band.gain_db * (-x * x).exp()
-        }
-    }
 }
 
 /// Format frequency for display
@@ -182,6 +300,8 @@ fn format_freq(hz: f32) -> String {
 /// These are created once per band when the modal opens and persist until close.
 #[derive(Clone)]
 struct BandLocalState {
+    /// Original REAPER band index (0-4) — used for API calls
+    reaper_band_idx: u8,
     band_type: String,
     freq_norm: RwSignal<f32>,
     gain_norm: RwSignal<f32>,
@@ -190,12 +310,16 @@ struct BandLocalState {
     freq_hz: RwSignal<f32>,
     gain_db: RwSignal<f32>,
     bw_oct: RwSignal<f32>,
-    /// Whether this band is enabled (gain != 0 dB)
+    /// Whether this band is enabled
     enabled: RwSignal<bool>,
-    /// Saved gain_norm before disable (for re-enable toggle)
+    /// Saved gain_norm before disable (for re-enable toggle on parametric/shelf)
     saved_gain_norm: RwSignal<f32>,
     /// Saved gain_db before disable
     saved_gain_db: RwSignal<f32>,
+    /// Saved freq_norm before disable (for HPF/LPF toggle)
+    saved_freq_norm: RwSignal<f32>,
+    /// Saved freq_hz before disable (for HPF/LPF toggle)
+    saved_freq_hz: RwSignal<f32>,
     /// Initial freq_hz loaded from server (for reset)
     initial_freq_hz: f32,
     /// Initial freq_norm loaded from server (for reset)
@@ -236,12 +360,11 @@ pub fn EQModal(
     .map(|&f| (freq_to_x(f, svg_width), format_freq(f)))
     .collect();
 
-    // Grid lines for gain axis
-    let gain_grid_lines: Vec<(f32, String)> =
-        [-24.0, -18.0, -12.0, -6.0, 0.0, 6.0, 12.0, 18.0, 24.0]
-            .iter()
-            .map(|&g| (gain_to_y(g, svg_height), format!("{:+.0}", g)))
-            .collect();
+    // Grid lines for gain axis (±12 dB range)
+    let gain_grid_lines: Vec<(f32, String)> = [-12.0, -6.0, 0.0, 6.0, 12.0]
+        .iter()
+        .map(|&g| (gain_to_y(g, svg_height), format!("{:+.0}", g)))
+        .collect();
 
     // Per-band local signals stored ONCE — never replaced, so DOM stays stable.
     // StoredValue is NOT reactive: reading it does not subscribe, so the band card
@@ -271,12 +394,30 @@ pub fn EQModal(
         }
 
         if !local_state_created.get_untracked() {
-            // First time: create local signals and store them
-            let locals: Vec<BandLocalState> = parent
+            // First time: create local signals, sorted by display order
+            // Build (reaper_index, band) pairs then sort for display
+            let mut indexed: Vec<(usize, &EqBandState)> =
+                parent.iter().enumerate().collect();
+            indexed.sort_by(|a, b| {
+                let ord_a = display_order(&a.1.band_type);
+                let ord_b = display_order(&b.1.band_type);
+                ord_a.cmp(&ord_b).then_with(|| {
+                    a.1.freq_hz.partial_cmp(&b.1.freq_hz).unwrap_or(std::cmp::Ordering::Equal)
+                })
+            });
+
+            let locals: Vec<BandLocalState> = indexed
                 .iter()
-                .map(|b| {
-                    let is_enabled = b.gain_db.abs() > 0.05;
+                .map(|(reaper_idx, b)| {
+                    let is_filter =
+                        b.band_type == "highpass" || b.band_type == "lowpass";
+                    let is_enabled = if is_filter {
+                        b.freq_hz > 25.0
+                    } else {
+                        b.gain_db.abs() > 0.05
+                    };
                     BandLocalState {
+                        reaper_band_idx: *reaper_idx as u8,
                         band_type: b.band_type.clone(),
                         freq_norm: RwSignal::new(b.freq_norm),
                         gain_norm: RwSignal::new(b.gain_norm),
@@ -287,6 +428,8 @@ pub fn EQModal(
                         enabled: RwSignal::new(is_enabled),
                         saved_gain_norm: RwSignal::new(b.gain_norm),
                         saved_gain_db: RwSignal::new(b.gain_db),
+                        saved_freq_norm: RwSignal::new(b.freq_norm),
+                        saved_freq_hz: RwSignal::new(b.freq_hz),
                         initial_freq_hz: b.freq_hz,
                         initial_freq_norm: b.freq_norm,
                     }
@@ -301,16 +444,17 @@ pub fn EQModal(
             });
         } else if !any_dragging.get_untracked() {
             // Subsequent: sync values then trigger display update
-            // Defer to microtask — updating curve_trigger inside this Effect
-            // would cause recursive notification (Effect → set → trigger → Memo)
             let locals = stored_locals.get_value();
-            for (local, parent_band) in locals.iter().zip(parent.iter()) {
-                local.freq_norm.set(parent_band.freq_norm);
-                local.gain_norm.set(parent_band.gain_norm);
-                local.bw_norm.set(parent_band.bw_norm);
-                local.freq_hz.set(parent_band.freq_hz);
-                local.gain_db.set(parent_band.gain_db);
-                local.bw_oct.set(parent_band.bw);
+            for local in locals.iter() {
+                let ri = local.reaper_band_idx as usize;
+                if let Some(parent_band) = parent.get(ri) {
+                    local.freq_norm.set(parent_band.freq_norm);
+                    local.gain_norm.set(parent_band.gain_norm);
+                    local.bw_norm.set(parent_band.bw_norm);
+                    local.freq_hz.set(parent_band.freq_hz);
+                    local.gain_db.set(parent_band.gain_db);
+                    local.bw_oct.set(parent_band.bw);
+                }
             }
             curve_trigger.update(|n| *n += 1);
         }
@@ -458,17 +602,16 @@ pub fn EQModal(
                     </div>
 
                     // Band controls — rendered ONCE from stored_locals (non-reactive).
-                    // NO {move || ...} wrapper means this DOM is created once and never
-                    // torn down. Individual RwSignal<f32> values update display text
-                    // reactively without destroying the EqSlider components or their
-                    // event handler closures.
                     <div class="eq-band-controls">
                         {
                             let locals = stored_locals.get_value();
                             locals.iter().enumerate().map(|(i, local)| {
-                                let band_idx = i as u8;
+                                let band_idx = local.reaper_band_idx;
                                 let band_type = local.band_type.clone();
+                                let band_type_toggle = band_type.clone();
+                                let band_type_reset = band_type.clone();
                                 let color = band_color(&band_type).to_string();
+                                let is_filter = band_type == "highpass" || band_type == "lowpass";
 
                                 // Get the stable local signals for this band
                                 let freq_sig = local.freq_norm;
@@ -480,11 +623,12 @@ pub fn EQModal(
                                 let enabled_sig = local.enabled;
                                 let saved_gain_norm_sig = local.saved_gain_norm;
                                 let saved_gain_db_sig = local.saved_gain_db;
+                                let saved_freq_norm_sig = local.saved_freq_norm;
+                                let saved_freq_hz_sig = local.saved_freq_hz;
                                 let initial_freq_norm = local.initial_freq_norm;
                                 let initial_freq_hz = local.initial_freq_hz;
 
                                 // Throttle WebSocket sends to 50ms intervals per band.
-                                // Use RwSignal (Send+Sync) instead of Rc<Cell> for Callback compatibility.
                                 let last_send_freq = RwSignal::new(0.0_f64);
                                 let last_send_gain = RwSignal::new(0.0_f64);
                                 let last_send_bw = RwSignal::new(0.0_f64);
@@ -502,22 +646,44 @@ pub fn EQModal(
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
                                                 }
                                                 on:click=move |_| {
-                                                    if enabled_sig.get_untracked() {
-                                                        // Disable: save current gain, set to 0 dB
-                                                        saved_gain_norm_sig.set(gain_sig.get_untracked());
-                                                        saved_gain_db_sig.set(gain_db_sig.get_untracked());
-                                                        gain_sig.set(0.25);
-                                                        gain_db_sig.set(0.0);
-                                                        enabled_sig.set(false);
-                                                        on_param_change.run((band_idx, "gain".to_string(), 0.25));
+                                                    if is_filter {
+                                                        // HPF/LPF: toggle via frequency
+                                                        if enabled_sig.get_untracked() {
+                                                            // Disable: save freq, set to bypass frequency
+                                                            saved_freq_norm_sig.set(freq_sig.get_untracked());
+                                                            saved_freq_hz_sig.set(freq_hz_sig.get_untracked());
+                                                            let bypass_freq = if band_type_toggle == "highpass" { 0.0 } else { 1.0 };
+                                                            let bypass_hz = if band_type_toggle == "highpass" { 20.0 } else { 20000.0 };
+                                                            freq_sig.set(bypass_freq);
+                                                            freq_hz_sig.set(bypass_hz);
+                                                            enabled_sig.set(false);
+                                                            on_param_change.run((band_idx, "freq".to_string(), bypass_freq));
+                                                        } else {
+                                                            // Re-enable: restore saved frequency
+                                                            let saved_norm = saved_freq_norm_sig.get_untracked();
+                                                            let saved_hz = saved_freq_hz_sig.get_untracked();
+                                                            freq_sig.set(saved_norm);
+                                                            freq_hz_sig.set(saved_hz);
+                                                            enabled_sig.set(true);
+                                                            on_param_change.run((band_idx, "freq".to_string(), saved_norm));
+                                                        }
                                                     } else {
-                                                        // Re-enable: restore saved gain
-                                                        let saved_norm = saved_gain_norm_sig.get_untracked();
-                                                        let saved_db = saved_gain_db_sig.get_untracked();
-                                                        gain_sig.set(saved_norm);
-                                                        gain_db_sig.set(saved_db);
-                                                        enabled_sig.set(true);
-                                                        on_param_change.run((band_idx, "gain".to_string(), saved_norm));
+                                                        // Parametric/shelf: toggle via gain
+                                                        if enabled_sig.get_untracked() {
+                                                            saved_gain_norm_sig.set(gain_sig.get_untracked());
+                                                            saved_gain_db_sig.set(gain_db_sig.get_untracked());
+                                                            gain_sig.set(0.25);
+                                                            gain_db_sig.set(0.0);
+                                                            enabled_sig.set(false);
+                                                            on_param_change.run((band_idx, "gain".to_string(), 0.25));
+                                                        } else {
+                                                            let saved_norm = saved_gain_norm_sig.get_untracked();
+                                                            let saved_db = saved_gain_db_sig.get_untracked();
+                                                            gain_sig.set(saved_norm);
+                                                            gain_db_sig.set(saved_db);
+                                                            enabled_sig.set(true);
+                                                            on_param_change.run((band_idx, "gain".to_string(), saved_norm));
+                                                        }
                                                     }
                                                     curve_trigger.update(|n| *n += 1);
                                                 }
@@ -539,6 +705,16 @@ pub fn EQModal(
                                                     freq_sig.set(initial_freq_norm);
                                                     freq_hz_sig.set(initial_freq_hz);
                                                     on_param_change.run((band_idx, "freq".to_string(), initial_freq_norm));
+                                                    // For HPF/LPF: set bypass frequency to disable
+                                                    if band_type_reset == "highpass" {
+                                                        freq_sig.set(0.0);
+                                                        freq_hz_sig.set(20.0);
+                                                        on_param_change.run((band_idx, "freq".to_string(), 0.0));
+                                                    } else if band_type_reset == "lowpass" {
+                                                        freq_sig.set(1.0);
+                                                        freq_hz_sig.set(20000.0);
+                                                        on_param_change.run((band_idx, "freq".to_string(), 1.0));
+                                                    }
                                                     // Update enabled state
                                                     enabled_sig.set(false);
                                                     saved_gain_norm_sig.set(0.25);
@@ -556,14 +732,12 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=freq_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
                                                     freq_sig.set(v);
-                                                    // Approximate display during drag (server corrects on next open)
                                                     freq_hz_sig.set(norm_to_freq_hz(v));
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
@@ -586,16 +760,13 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=gain_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
                                                     gain_sig.set(v);
-                                                    // Approximate display during drag
                                                     gain_db_sig.set(norm_to_gain_db(v));
-                                                    // Update enabled state
                                                     enabled_sig.set(v != 0.25);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
@@ -623,14 +794,12 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=bw_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         last_send_bw.set(now);
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
                                                     bw_sig.set(v);
-                                                    // Approximate display during drag
                                                     bw_oct_sig.set(norm_to_bw(v));
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
@@ -755,7 +924,8 @@ fn EqSlider(
         // Double-tap detection: if within DOUBLE_TAP_MS and default_value is set
         if let Some(def) = default_value {
             let prev_time = last_tap_ts.get();
-            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked() {
+            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked()
+            {
                 // Double-tap detected — reset to default
                 ev.prevent_default();
                 last_tap_ts.set(0.0);
@@ -978,5 +1148,140 @@ fn EqSlider(
             <div class="eq-slider-fill" style=move || format!("width:{}%", pct()) />
             <div class="eq-slider-thumb" style=move || format!("left:{}%", pct()) />
         </div>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_order() {
+        assert_eq!(display_order("highpass"), 0);
+        assert_eq!(display_order("lowshelf"), 1);
+        assert_eq!(display_order("band"), 2);
+        assert_eq!(display_order("highshelf"), 4);
+        assert_eq!(display_order("lowpass"), 5);
+    }
+
+    #[test]
+    fn test_norm_to_gain_db_center() {
+        assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_norm_to_gain_db_range() {
+        // At norm=0.0: should be -12 dB
+        assert!((norm_to_gain_db(0.0) - (-12.0)).abs() < 0.01);
+        // At norm=0.5: should be +12 dB
+        assert!((norm_to_gain_db(0.5) - 12.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gain_to_y_center() {
+        let height = 300.0;
+        let y = gain_to_y(0.0, height);
+        assert!((y - height / 2.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_gain_to_y_extremes() {
+        let height = 300.0;
+        assert!((gain_to_y(12.0, height) - 0.0).abs() < 0.01);
+        assert!((gain_to_y(-12.0, height) - height).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_biquad_peaking_at_center() {
+        let band = EqBandState {
+            band_type: "band".to_string(),
+            freq_hz: 1000.0,
+            gain_db: 6.0,
+            bw: 1.0,
+            freq_norm: 0.5,
+            gain_norm: 0.3,
+            bw_norm: 0.25,
+        };
+        let gain_at_center = compute_band_gain(1000.0, &band);
+        // At center frequency, gain should approximately equal band gain_db
+        assert!(
+            (gain_at_center - 6.0).abs() < 0.5,
+            "Expected ~6dB at center, got {}",
+            gain_at_center
+        );
+    }
+
+    #[test]
+    fn test_biquad_peaking_far_from_center() {
+        let band = EqBandState {
+            band_type: "band".to_string(),
+            freq_hz: 1000.0,
+            gain_db: 12.0,
+            bw: 1.0,
+            freq_norm: 0.5,
+            gain_norm: 0.3,
+            bw_norm: 0.25,
+        };
+        // At 10x the center frequency, gain should be near 0 dB
+        let gain_far = compute_band_gain(10000.0, &band);
+        assert!(
+            gain_far.abs() < 1.0,
+            "Expected ~0dB far from center, got {}",
+            gain_far
+        );
+    }
+
+    #[test]
+    fn test_biquad_hpf_rolloff() {
+        let band = EqBandState {
+            band_type: "highpass".to_string(),
+            freq_hz: 100.0,
+            gain_db: 0.0,
+            bw: 2.0,
+            freq_norm: 0.14,
+            gain_norm: 0.25,
+            bw_norm: 0.5,
+        };
+        // Well above cutoff: should be ~0 dB
+        let gain_above = compute_band_gain(1000.0, &band);
+        assert!(
+            gain_above.abs() < 0.5,
+            "Expected ~0dB above HPF cutoff, got {}",
+            gain_above
+        );
+        // Well below cutoff: should be significantly negative
+        let gain_below = compute_band_gain(10.0, &band);
+        assert!(
+            gain_below < -6.0,
+            "Expected strong rolloff below HPF cutoff, got {}",
+            gain_below
+        );
+    }
+
+    #[test]
+    fn test_biquad_low_shelf() {
+        let band = EqBandState {
+            band_type: "lowshelf".to_string(),
+            freq_hz: 200.0,
+            gain_db: 6.0,
+            bw: 0.8,
+            freq_norm: 0.2,
+            gain_norm: 0.3,
+            bw_norm: 0.2,
+        };
+        // Well below shelf: should be near shelf gain
+        let gain_low = compute_band_gain(20.0, &band);
+        assert!(
+            (gain_low - 6.0).abs() < 1.5,
+            "Expected ~6dB below low shelf, got {}",
+            gain_low
+        );
+        // Well above shelf: should be near 0 dB
+        let gain_high = compute_band_gain(5000.0, &band);
+        assert!(
+            gain_high.abs() < 0.5,
+            "Expected ~0dB above low shelf, got {}",
+            gain_high
+        );
     }
 }

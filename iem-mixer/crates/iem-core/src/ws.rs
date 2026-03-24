@@ -65,6 +65,8 @@ pub enum ClientMsg {
         param: String,
         value: f32,
     },
+    /// Request EQ parameters for multiple tracks (used during preset save)
+    GetEqParamsMulti { track_indices: Vec<usize> },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -124,6 +126,8 @@ pub enum ServerMsg {
         track_name: String,
         bands: Vec<EqBand>,
     },
+    /// EQ parameters for multiple tracks (response to GetEqParamsMulti)
+    EqParamsMulti { bands: HashMap<usize, Vec<EqBand>> },
 }
 
 #[cfg(test)]
@@ -583,6 +587,42 @@ mod tests {
         assert!(json.contains("\"event\":\"EqParams\""));
         assert!(json.contains("\"track_name\":\"MAREK mic\""));
         assert!(json.contains("\"band_type\":\"lowshelf\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_get_eq_params_multi_serialization() {
+        let msg = ClientMsg::GetEqParamsMulti {
+            track_indices: vec![1, 3, 5],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"GetEqParamsMulti\""));
+        assert!(json.contains("\"track_indices\":[1,3,5]"));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_eq_params_multi_serialization() {
+        let mut bands = HashMap::new();
+        bands.insert(
+            1,
+            vec![EqBand {
+                band_type: "band".to_string(),
+                freq_hz: 1000.0,
+                gain_db: 3.0,
+                bw: 1.5,
+                freq_norm: 0.5,
+                gain_norm: 0.3,
+                bw_norm: 0.4,
+            }],
+        );
+        bands.insert(3, vec![]);
+        let msg = ServerMsg::EqParamsMulti { bands };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"EqParamsMulti\""));
+        assert!(json.contains("\"band_type\":\"band\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

@@ -1068,6 +1068,24 @@ async fn handle_ws(
                                 });
                                 continue;
                             }
+                            if let ClientMsg::GetEqParamsMulti { ref track_indices } = cmd {
+                                let state_clone = state.clone();
+                                let member_clone = member_id.clone();
+                                let indices = track_indices.clone();
+                                tokio::spawn(async move {
+                                    let mut bands_map = std::collections::HashMap::new();
+                                    for ti in indices {
+                                        if let Some(iem_core::ServerMsg::EqParams { track_index, bands, .. }) =
+                                            handle_get_eq_params(&state_clone, ti).await
+                                        {
+                                            bands_map.insert(track_index, bands);
+                                        }
+                                    }
+                                    let msg = iem_core::ServerMsg::EqParamsMulti { bands: bands_map };
+                                    let _ = state_clone.event_tx.send((member_clone, msg));
+                                });
+                                continue;
+                            }
                             if let ClientMsg::SetEqBand { track_index, band, ref param, value } = cmd {
                                 let state_clone = state.clone();
                                 let param_clone = param.clone();
@@ -1395,7 +1413,7 @@ async fn apply_command_to_cache(
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
         }
-        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } => {
+        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
             // EQ commands are handled in WS handler before apply_command_to_cache is called
             return Err("EQ commands should not reach apply_command_to_cache".to_string());
         }
@@ -1540,7 +1558,7 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
         }
-        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } => {
+        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
             unreachable!("EQ commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {

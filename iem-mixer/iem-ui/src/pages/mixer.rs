@@ -892,6 +892,8 @@ pub fn MixerPage() -> impl IntoView {
                             set_eq_open=set_eq_open
                             set_eq_bands=set_eq_bands
                             set_eq_loading=set_eq_loading
+                            member_id=member_id()
+                            is_engineer=is_engineer
                         />
                         <Show
                             when=move || active_category.get() == Category::Main
@@ -1411,6 +1413,12 @@ fn ChannelList(
     set_eq_open: WriteSignal<Option<(usize, String)>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
+    /// Member ID for EQ access control (e.g., "petka")
+    #[prop(into)]
+    member_id: String,
+    /// Whether the current user is an engineer (engineers can access all EQ)
+    #[prop(default = false)]
+    is_engineer: bool,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
@@ -1423,6 +1431,10 @@ fn ChannelList(
 
     // Shared signal: which channel's kebab menu is open (None = all closed)
     let (open_menu, set_open_menu) = signal(Option::<usize>::None);
+
+    // EQ access control: store member_id as StoredValue for use in closures
+    let eq_member_id = StoredValue::new(member_id.to_uppercase());
+    let eq_is_engineer = is_engineer;
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
@@ -1440,6 +1452,12 @@ fn ChannelList(
                     let partner_idx = ch.partner_index;
                     let name = ch.display_name.clone();
                     let eq_name = StoredValue::new(name.clone()); // For EQ button closure (Copy)
+                    // EQ access: engineer can EQ any track; members only their own
+                    let show_eq = eq_is_engineer || {
+                        let mid = eq_member_id.get_value();
+                        let upper_name = name.to_uppercase();
+                        upper_name.starts_with(&mid)
+                    };
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
                     let ch_is_pinned =
@@ -2106,20 +2124,22 @@ fn ChannelList(
                                         <span class="menu-icon">{move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}</span>
                                         {move || if is_hidden_tab() { "Unhide" } else { "Hide" }}
                                     </button>
-                                    <button
-                                        class="ch-menu-item"
-                                        on:click=move |_: web_sys::MouseEvent| {
-                                            set_open_menu.set(None);
-                                            set_eq_bands.set(Vec::new());
-                                            set_eq_loading.set(true);
-                                            set_eq_open.set(Some((track_idx, eq_name.get_value())));
-                                            // Request EQ params from REAPER
-                                            ws_send(ws, &iem_core::ClientMsg::GetEqParams { track_index: track_idx });
-                                        }
-                                    >
-                                        <span class="menu-icon">"\u{2261}"</span>
-                                        "EQ"
-                                    </button>
+                                    {if show_eq { Some(view! {
+                                        <button
+                                            class="ch-menu-item"
+                                            on:click=move |_: web_sys::MouseEvent| {
+                                                set_open_menu.set(None);
+                                                set_eq_bands.set(Vec::new());
+                                                set_eq_loading.set(true);
+                                                set_eq_open.set(Some((track_idx, eq_name.get_value())));
+                                                // Request EQ params from REAPER
+                                                ws_send(ws, &iem_core::ClientMsg::GetEqParams { track_index: track_idx });
+                                            }
+                                        >
+                                            <span class="menu-icon">"\u{2261}"</span>
+                                            "EQ"
+                                        </button>
+                                    }) } else { None }}
                                 </div>
                             </Show>
                         </div>

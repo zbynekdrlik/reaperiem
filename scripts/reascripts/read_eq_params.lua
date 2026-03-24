@@ -87,6 +87,14 @@ local function read_eq()
         ))
     end
 
+    -- Get gain parameter range from first band
+    local gain_range_str = ""
+    if num_bands > 0 then
+        local gain_idx_0 = 1 -- band 0, param offset 1 = gain
+        local _, gmin, gmax, _ = reaper.TrackFX_GetParamEx(track, eq_idx, gain_idx_0)
+        gain_range_str = string.format(",gmin=%.6f,gmax=%.6f", gmin, gmax)
+    end
+
     -- Read global params
     local global_gain_fmt = ""
     local bypass_fmt = ""
@@ -97,8 +105,8 @@ local function read_eq()
         _, bypass_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, 16)
     end
 
-    local result = string.format("OK:track=%d,name=%s,fx=%d,bands=%d,gg=%s,bypass=%s|%s",
-        track_idx, tname, eq_idx, num_bands, global_gain_fmt, bypass_fmt,
+    local result = string.format("OK:track=%d,name=%s,fx=%d,bands=%d,gg=%s,bypass=%s%s|%s",
+        track_idx, tname, eq_idx, num_bands, global_gain_fmt, bypass_fmt, gain_range_str,
         table.concat(bands, "|"))
 
     reaper.SetExtState(section, "eq_params", result, false)

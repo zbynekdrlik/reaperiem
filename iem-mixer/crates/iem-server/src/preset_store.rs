@@ -4,7 +4,7 @@
 //! Each member has their own JSON file in the presets/ directory.
 
 use crate::atomic_write;
-use iem_core::{ChannelPreset, MAX_PRESETS, PresetEntry};
+use iem_core::{ChannelPreset, PresetEntry, MAX_PRESETS};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -89,13 +89,14 @@ impl PresetStore {
 
         let now = chrono::Utc::now().timestamp();
         let entry = if let Some(existing) = presets.get(name) {
-            // Update: preserve created_at
+            // Update: preserve created_at and existing eq_bands if not overwritten
             PresetEntry {
                 name: name.to_string(),
                 channels,
                 created_at: existing.created_at,
                 updated_at: now,
                 stems_level_db,
+                eq_bands: None,
             }
         } else {
             // New preset
@@ -105,11 +106,26 @@ impl PresetStore {
                 created_at: now,
                 updated_at: now,
                 stems_level_db,
+                eq_bands: None,
             }
         };
 
         let result = entry.clone();
         presets.insert(name.to_string(), entry);
+        self.save_all(member_id, &presets)
+            .map_err(PresetError::Io)?;
+        Ok(result)
+    }
+
+    /// Save a complete PresetEntry as-is (used to persist EQ bands after save_with_stems)
+    pub fn save_raw(
+        &self,
+        member_id: &str,
+        entry: PresetEntry,
+    ) -> Result<PresetEntry, PresetError> {
+        let mut presets = self.load_all(member_id);
+        let result = entry.clone();
+        presets.insert(entry.name.clone(), entry);
         self.save_all(member_id, &presets)
             .map_err(PresetError::Io)?;
         Ok(result)

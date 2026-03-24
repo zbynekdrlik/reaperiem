@@ -40,6 +40,8 @@ pub struct SavePresetRequest {
     pub channels: HashMap<usize, ChannelPreset>,
     #[serde(default)]
     pub stems_level_db: Option<f32>,
+    #[serde(default)]
+    pub eq_bands: Option<HashMap<usize, Vec<iem_core::EqBand>>>,
 }
 
 /// Preset routes
@@ -125,6 +127,15 @@ async fn save_preset(
             (code, Json(err))
         })?;
 
+    // If EQ bands provided, update the saved entry with EQ data
+    if req.eq_bands.is_some() {
+        let mut entry_with_eq = entry.clone();
+        entry_with_eq.eq_bands = req.eq_bands;
+        if let Err(e) = state.preset_store.save_raw(&member, entry_with_eq) {
+            tracing::error!("Failed to save preset EQ bands: {}", e);
+        }
+    }
+
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({
@@ -176,6 +187,15 @@ async fn update_preset(
                 Json(ApiError::new("IO_ERROR", "Failed to update preset")),
             )
         })?;
+
+    // If EQ bands provided, update the saved entry with EQ data
+    if req.eq_bands.is_some() {
+        let mut entry_with_eq = entry.clone();
+        entry_with_eq.eq_bands = req.eq_bands;
+        if let Err(e) = state.preset_store.save_raw(&member, entry_with_eq) {
+            tracing::error!("Failed to update preset EQ bands: {}", e);
+        }
+    }
 
     Ok(Json(entry))
 }
@@ -311,11 +331,44 @@ async fn restore_preset(
         }
     }
 
-    // Wait for all commands to complete
+    // Wait for all volume/pan/mute commands to complete
     let mut total_ops = 0;
     for handle in handles {
         if let Ok(count) = handle.await {
             total_ops += count;
+        }
+    }
+
+    // Restore EQ bands if present in preset (sequential — EXTSTATE is a shared resource)
+    if let Some(ref eq_bands_map) = preset.eq_bands {
+        for (track_index, bands) in eq_bands_map {
+            for (band_idx, band) in bands.iter().enumerate() {
+                for (param_name, value) in [
+                    ("freq", band.freq_norm),
+                    ("gain", band.gain_norm),
+                    ("bw", band.bw_norm),
+                ] {
+                    let input = format!(
+                        "track={}|band={}|param={}|value={:.6}",
+                        track_index, band_idx, param_name, value
+                    );
+                    let _ = state
+                        .http_client
+                        .get(&format!(
+                            "{}/_/SET/EXTSTATE/reaperiem/eq_set/{}",
+                            reaper_url, input
+                        ))
+                        .send()
+                        .await;
+                    let _ = state
+                        .http_client
+                        .get(&format!("{}/_/_RS_REAPERIEM_SET_EQ", reaper_url))
+                        .send()
+                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    total_ops += 1;
+                }
+            }
         }
     }
 

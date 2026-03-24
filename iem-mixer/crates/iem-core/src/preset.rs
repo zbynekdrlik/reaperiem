@@ -34,6 +34,9 @@ pub struct PresetEntry {
     /// Stems bus volume in dB (None for presets saved before stems-bus feature)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stems_level_db: Option<f32>,
+    /// EQ band data per track (None for presets saved before EQ feature)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eq_bands: Option<HashMap<usize, Vec<crate::EqBand>>>,
 }
 
 impl PresetEntry {
@@ -46,6 +49,7 @@ impl PresetEntry {
             created_at: now,
             updated_at: now,
             stems_level_db: None,
+            eq_bands: None,
         }
     }
 }
@@ -93,6 +97,7 @@ mod tests {
             created_at: 1709582400,
             updated_at: 1709582500,
             stems_level_db: None,
+            eq_bands: None,
         };
 
         let json = serde_json::to_string(&preset).unwrap();
@@ -141,6 +146,7 @@ mod tests {
             created_at: 100,
             updated_at: 200,
             stems_level_db: Some(-3.0),
+            eq_bands: None,
         };
         let json = serde_json::to_string(&preset).unwrap();
         assert!(json.contains("\"stems_level_db\":-3.0"));
@@ -151,5 +157,44 @@ mod tests {
     #[test]
     fn test_max_presets_constant() {
         assert_eq!(MAX_PRESETS, 20);
+    }
+
+    #[test]
+    fn test_preset_entry_backwards_compat_without_eq_bands() {
+        // Old presets without eq_bands should still deserialize
+        let json = r#"{"name":"old","channels":{},"created_at":100,"updated_at":200}"#;
+        let parsed: PresetEntry = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.eq_bands, None);
+    }
+
+    #[test]
+    fn test_preset_entry_with_eq_bands() {
+        use crate::EqBand;
+        let mut eq = HashMap::new();
+        eq.insert(
+            1,
+            vec![EqBand {
+                band_type: "band".to_string(),
+                freq_hz: 1000.0,
+                gain_db: 3.0,
+                bw: 1.5,
+                freq_norm: 0.5,
+                gain_norm: 0.3,
+                bw_norm: 0.4,
+            }],
+        );
+        let preset = PresetEntry {
+            name: "with_eq".to_string(),
+            channels: HashMap::new(),
+            created_at: 100,
+            updated_at: 200,
+            stems_level_db: None,
+            eq_bands: Some(eq),
+        };
+        let json = serde_json::to_string(&preset).unwrap();
+        assert!(json.contains("eq_bands"));
+        let parsed: PresetEntry = serde_json::from_str(&json).unwrap();
+        assert!(parsed.eq_bands.is_some());
+        assert_eq!(parsed.eq_bands.unwrap()[&1].len(), 1);
     }
 }
