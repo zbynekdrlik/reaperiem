@@ -56,7 +56,9 @@ async function openKebabMenu(page: Page): Promise<boolean> {
 // Returns true if clicked, false if skipped.
 async function clickEqOption(page: Page): Promise<boolean> {
   const eqOption = await page
-    .waitForSelector("text=EQ >> visible=true", { timeout: 3000 })
+    .waitForSelector(".ch-menu-popup >> text=EQ >> visible=true", {
+      timeout: 3000,
+    })
     .catch(() => null);
   if (!assume(eqOption, "EQ menu option must be visible")) return false;
   await eqOption!.click();
