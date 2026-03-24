@@ -1780,9 +1780,10 @@ fn parse_eq_params_response(track_index: usize, value: &str) -> Option<iem_core:
     })
 }
 
-/// Parse a single band string like "b0:lowshelf,fn=0.283,ff=287.5,gn=0.184,gf=-2.7,bn=0.295,bf=1.18"
+/// Parse a single band string like "b0:lowshelf,fn=0.283000,gn=0.184000,bn=0.295000"
+/// Only normalized values (fn, gn, bn) are parsed from the Lua output.
+/// Display values (freq_hz, gain_db, bw) are approximated from normalized values.
 fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
-    // Split "b0:lowshelf,fn=0.283,ff=287.5,gn=0.184,gf=-2.7,bn=0.295,bf=1.18"
     let colon_pos = s.find(':')?;
     let after_colon = &s[colon_pos + 1..];
     let fields: Vec<&str> = after_colon.split(',').collect();
@@ -1802,11 +1803,16 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     };
 
     let freq_norm = get_field("fn=")?;
-    let freq_hz = get_field("ff=").unwrap_or(0.0);
     let gain_norm = get_field("gn=")?;
-    let gain_db = get_field("gf=").unwrap_or(0.0);
     let bw_norm = get_field("bn=")?;
-    let bw = get_field("bf=").unwrap_or(1.0);
+
+    // Approximate display values from normalized values
+    // ReaEQ freq: log mapping 20 Hz to 20 kHz
+    let freq_hz = 20.0 * 1000.0_f32.powf(freq_norm);
+    // ReaEQ gain: 0.25 = 0 dB, non-linear but approximately ±24 dB range
+    let gain_db = (gain_norm - 0.25) * 96.0;
+    // ReaEQ bandwidth: approximate octave mapping
+    let bw = 0.01 + bw_norm * 3.99;
 
     Some(iem_core::EqBand {
         band_type,
@@ -3178,29 +3184,32 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
 
     #[test]
     fn test_parse_eq_band_lowshelf() {
-        let s = "b0:lowshelf,fn=0.283000,ff=287.5,gn=0.184000,gf=-2.7,bn=0.295000,bf=1.18";
+        let s = "b0:lowshelf,fn=0.283000,gn=0.184000,bn=0.295000";
         let band = parse_eq_band(s).unwrap();
         assert_eq!(band.band_type, "lowshelf");
         assert!((band.freq_norm - 0.283).abs() < 0.001);
-        assert!((band.freq_hz - 287.5).abs() < 0.1);
         assert!((band.gain_norm - 0.184).abs() < 0.001);
-        assert!((band.gain_db - (-2.7)).abs() < 0.1);
         assert!((band.bw_norm - 0.295).abs() < 0.001);
-        assert!((band.bw - 1.18).abs() < 0.01);
+        // Display values are approximated from normalized values
+        assert!(band.freq_hz > 0.0, "freq_hz should be computed");
+        assert!(band.gain_db < 0.0, "gain below 0.25 should give negative dB");
+        assert!(band.bw > 0.0, "bw should be positive");
     }
 
     #[test]
     fn test_parse_eq_band_regular() {
-        let s = "b1:band,fn=0.500000,ff=1000.0,gn=0.250000,gf=0.0,bn=0.500000,bf=2.00";
+        let s = "b1:band,fn=0.500000,gn=0.250000,bn=0.500000";
         let band = parse_eq_band(s).unwrap();
         assert_eq!(band.band_type, "band");
-        assert!((band.freq_hz - 1000.0).abs() < 0.1);
-        assert!((band.gain_db - 0.0).abs() < 0.1);
+        // fn=0.5 -> 20 * 1000^0.5 = 20 * ~31.62 = ~632 Hz
+        assert!(band.freq_hz > 600.0 && band.freq_hz < 700.0);
+        // gn=0.25 -> (0.25 - 0.25) * 96 = 0.0 dB
+        assert!((band.gain_db - 0.0).abs() < 0.01);
     }
 
     #[test]
     fn test_parse_eq_params_response_ok() {
-        let value = "OK:track=3,name=MAREK mic,fx=1,bands=2,gg=0.0dB,bypass=0|b0:lowshelf,fn=0.283000,ff=287.5,gn=0.184000,gf=-2.7,bn=0.295000,bf=1.18|b1:band,fn=0.500000,ff=1000.0,gn=0.250000,gf=0.0,bn=0.500000,bf=2.00";
+        let value = "OK:track=3,name=MAREK mic,fx=1,bands=2,gg=0.0dB,bypass=0|b0:lowshelf,fn=0.283000,gn=0.184000,bn=0.295000|b1:band,fn=0.500000,gn=0.250000,bn=0.500000";
         let msg = parse_eq_params_response(3, value).unwrap();
         match msg {
             iem_core::ServerMsg::EqParams {

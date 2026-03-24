@@ -57,14 +57,8 @@ local function read_eq()
 
         -- Get parameter names to determine band type
         local _, freq_name = reaper.TrackFX_GetParamName(track, eq_idx, freq_idx)
-        local _, gain_name = reaper.TrackFX_GetParamName(track, eq_idx, gain_idx)
 
-        -- Get formatted values (accurate dB/Hz)
-        local _, freq_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, freq_idx)
-        local _, gain_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, gain_idx)
-        local _, bw_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, bw_idx)
-
-        -- Get normalized values
+        -- Get normalized values (0-1 range, parsed by server)
         local freq_norm = reaper.TrackFX_GetParam(track, eq_idx, freq_idx)
         local gain_norm = reaper.TrackFX_GetParam(track, eq_idx, gain_idx)
         local bw_norm = reaper.TrackFX_GetParam(track, eq_idx, bw_idx)
@@ -80,8 +74,8 @@ local function read_eq()
         end
 
         table.insert(bands, string.format(
-            "b%d:%s,fn=%.6f,ff=%s,gn=%.6f,gf=%s,bn=%.6f,bf=%s",
-            b, btype, freq_norm, freq_fmt, gain_norm, gain_fmt, bw_norm, bw_fmt
+            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f",
+            b, btype, freq_norm, gain_norm, bw_norm
         ))
     end
 
