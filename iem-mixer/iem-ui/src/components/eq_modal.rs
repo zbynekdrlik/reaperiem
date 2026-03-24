@@ -265,30 +265,6 @@ pub fn EQModal(
         }
     });
 
-    // Derived signal: build EqBandState vec from local signals for SVG curve rendering.
-    // Reads from stored_locals (non-reactive container) — the RwSignal .get() calls
-    // inside each band provide reactivity for the SVG path without re-rendering DOM.
-    let local_band_states = move || -> Vec<EqBandState> {
-        let locals = stored_locals.get_value();
-        locals
-            .iter()
-            .map(|l| {
-                let fn_ = l.freq_norm.get();
-                let gn_ = l.gain_norm.get();
-                let bn_ = l.bw_norm.get();
-                EqBandState {
-                    band_type: l.band_type.clone(),
-                    freq_hz: norm_to_freq_hz(fn_),
-                    gain_db: norm_to_gain_db(gn_),
-                    bw: norm_to_bw(bn_),
-                    freq_norm: fn_,
-                    gain_norm: gn_,
-                    bw_norm: bn_,
-                }
-            })
-            .collect()
-    };
-
     view! {
         <div class="eq-overlay" on:click=move |_| on_close.run(())>
             <div class="eq-modal" on:click=move |e: web_sys::MouseEvent| e.stop_propagation()>
@@ -361,22 +337,40 @@ pub fn EQModal(
                                 stroke="rgba(255,255,255,0.25)" stroke-width="1.5"
                             />
 
-                            // Frequency response curve (reads from local signals)
-                            <path
-                                d=move || generate_curve_path(&local_band_states(), svg_width, svg_height)
-                                fill="none"
-                                stroke="var(--accent)"
-                                stroke-width="2.5"
-                            />
-
-                            // Filled area under curve
-                            <path
-                                d=move || {
-                                    let curve = generate_curve_path(&local_band_states(), svg_width, svg_height);
-                                    format!("{} L{:.1},{:.1} L0,{:.1} Z", curve, svg_width, zero_db_y, zero_db_y)
+                            // Frequency response curve — uses Memo to avoid recursive signal reads
+                            {
+                                let curve_memo = Memo::new(move |_| {
+                                    let locals = stored_locals.get_value();
+                                    let states: Vec<EqBandState> = locals.iter().map(|l| {
+                                        let fn_ = l.freq_norm.get();
+                                        let gn_ = l.gain_norm.get();
+                                        let bn_ = l.bw_norm.get();
+                                        EqBandState {
+                                            band_type: l.band_type.clone(),
+                                            freq_hz: norm_to_freq_hz(fn_),
+                                            gain_db: norm_to_gain_db(gn_),
+                                            bw: norm_to_bw(bn_),
+                                            freq_norm: fn_, gain_norm: gn_, bw_norm: bn_,
+                                        }
+                                    }).collect();
+                                    generate_curve_path(&states, svg_width, svg_height)
+                                });
+                                view! {
+                                    <path
+                                        d=move || curve_memo.get()
+                                        fill="none"
+                                        stroke="var(--accent)"
+                                        stroke-width="2.5"
+                                    />
+                                    <path
+                                        d=move || {
+                                            let curve = curve_memo.get();
+                                            format!("{} L{:.1},{:.1} L0,{:.1} Z", curve, svg_width, zero_db_y, zero_db_y)
+                                        }
+                                        fill="rgba(78, 205, 196, 0.08)"
+                                    />
                                 }
-                                fill="rgba(78, 205, 196, 0.08)"
-                            />
+                            }
 
                             // Band points — stable SVG elements with reactive attributes.
                             // NOT wrapped in {move || ...} to avoid re-creating DOM.
