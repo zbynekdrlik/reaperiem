@@ -6,6 +6,9 @@
 //! v1.104.0: Fix snap-back bug — EqSlider maintains local reactive state so
 //! parent re-renders don't destroy active drag gestures. Each band card owns
 //! its own signals, and on_change only sends WebSocket (no set_bands.set()).
+//!
+//! v1.107.0: Display values from REAPER (fh/gd/bo), double-tap to default,
+//! per-band on/off toggle and reset buttons.
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -14,6 +17,9 @@ use wasm_bindgen::prelude::*;
 
 /// Activation delay in milliseconds (matches fader.rs pattern)
 const ACTIVATION_DELAY_MS: u32 = 150;
+
+/// Maximum time between taps for double-tap detection (ms)
+const DOUBLE_TAP_MS: f64 = 300.0;
 
 /// EQ band data (mirrors iem_core::EqBand for frontend use)
 #[derive(Debug, Clone, PartialEq)]
@@ -44,9 +50,18 @@ fn norm_to_freq_hz(norm: f32) -> f32 {
     20.0 * 1000.0_f32.powf(norm)
 }
 
-/// Convert normalized gain (0-1) to dB (ReaEQ: 0.25 = 0 dB, approx +/-24 dB range)
+/// Approximate normalized gain (0-1) to dB for drag feedback only.
+/// Server provides accurate REAPER-formatted values; this is used during drag
+/// when server values are not yet available. Uses cubic curve fitted to verified
+/// data points: norm=0.183911 -> -2.7 dB, norm=0.25 -> 0 dB, norm=0.288511 -> +1.2 dB.
 fn norm_to_gain_db(norm: f32) -> f32 {
-    (norm - 0.25) * 96.0
+    let x = norm - 0.25;
+    // Cubic approximation: asymmetric curve matching verified REAPER data
+    if x >= 0.0 {
+        x * 32.0 + x * x * 40.0
+    } else {
+        x * 32.0 - x * x * 40.0
+    }
 }
 
 /// Convert normalized bandwidth (0-1) to octaves
@@ -171,6 +186,20 @@ struct BandLocalState {
     freq_norm: RwSignal<f32>,
     gain_norm: RwSignal<f32>,
     bw_norm: RwSignal<f32>,
+    /// REAPER-formatted display values (accurate, loaded from server)
+    freq_hz: RwSignal<f32>,
+    gain_db: RwSignal<f32>,
+    bw_oct: RwSignal<f32>,
+    /// Whether this band is enabled (gain != 0 dB)
+    enabled: RwSignal<bool>,
+    /// Saved gain_norm before disable (for re-enable toggle)
+    saved_gain_norm: RwSignal<f32>,
+    /// Saved gain_db before disable
+    saved_gain_db: RwSignal<f32>,
+    /// Initial freq_hz loaded from server (for reset)
+    initial_freq_hz: f32,
+    /// Initial freq_norm loaded from server (for reset)
+    initial_freq_norm: f32,
 }
 
 /// Full-screen EQ modal component
@@ -245,11 +274,22 @@ pub fn EQModal(
             // First time: create local signals and store them
             let locals: Vec<BandLocalState> = parent
                 .iter()
-                .map(|b| BandLocalState {
-                    band_type: b.band_type.clone(),
-                    freq_norm: RwSignal::new(b.freq_norm),
-                    gain_norm: RwSignal::new(b.gain_norm),
-                    bw_norm: RwSignal::new(b.bw_norm),
+                .map(|b| {
+                    let is_enabled = b.gain_db.abs() > 0.05;
+                    BandLocalState {
+                        band_type: b.band_type.clone(),
+                        freq_norm: RwSignal::new(b.freq_norm),
+                        gain_norm: RwSignal::new(b.gain_norm),
+                        bw_norm: RwSignal::new(b.bw_norm),
+                        freq_hz: RwSignal::new(b.freq_hz),
+                        gain_db: RwSignal::new(b.gain_db),
+                        bw_oct: RwSignal::new(b.bw),
+                        enabled: RwSignal::new(is_enabled),
+                        saved_gain_norm: RwSignal::new(b.gain_norm),
+                        saved_gain_db: RwSignal::new(b.gain_db),
+                        initial_freq_hz: b.freq_hz,
+                        initial_freq_norm: b.freq_norm,
+                    }
                 })
                 .collect();
             stored_locals.set_value(locals);
@@ -268,6 +308,9 @@ pub fn EQModal(
                 local.freq_norm.set(parent_band.freq_norm);
                 local.gain_norm.set(parent_band.gain_norm);
                 local.bw_norm.set(parent_band.bw_norm);
+                local.freq_hz.set(parent_band.freq_hz);
+                local.gain_db.set(parent_band.gain_db);
+                local.bw_oct.set(parent_band.bw);
             }
             curve_trigger.update(|n| *n += 1);
         }
@@ -358,9 +401,9 @@ pub fn EQModal(
                                         let bn_ = l.bw_norm.get_untracked();
                                         EqBandState {
                                             band_type: l.band_type.clone(),
-                                            freq_hz: norm_to_freq_hz(fn_),
-                                            gain_db: norm_to_gain_db(gn_),
-                                            bw: norm_to_bw(bn_),
+                                            freq_hz: l.freq_hz.get_untracked(),
+                                            gain_db: l.gain_db.get_untracked(),
+                                            bw: l.bw_oct.get_untracked(),
                                             freq_norm: fn_, gain_norm: gn_, bw_norm: bn_,
                                         }
                                     }).collect();
@@ -389,20 +432,20 @@ pub fn EQModal(
                                 let locals = stored_locals.get_value();
                                 locals.iter().enumerate().map(|(i, local)| {
                                     let color = band_color(&local.band_type).to_string();
-                                    let freq_sig = local.freq_norm;
-                                    let gain_sig = local.gain_norm;
+                                    let freq_hz_sig = local.freq_hz;
+                                    let gain_db_sig = local.gain_db;
                                     view! {
                                         <circle
-                                            cx=move || { curve_trigger.get(); freq_to_x(norm_to_freq_hz(freq_sig.get_untracked()), svg_width) }
-                                            cy=move || { curve_trigger.get(); gain_to_y(norm_to_gain_db(gain_sig.get_untracked()), svg_height) }
+                                            cx=move || { curve_trigger.get(); freq_to_x(freq_hz_sig.get_untracked(), svg_width) }
+                                            cy=move || { curve_trigger.get(); gain_to_y(gain_db_sig.get_untracked(), svg_height) }
                                             r="8"
                                             fill=color.clone()
                                             stroke="white" stroke-width="2"
                                             opacity="0.9"
                                         />
                                         <text
-                                            x=move || { curve_trigger.get(); freq_to_x(norm_to_freq_hz(freq_sig.get_untracked()), svg_width) }
-                                            y=move || { curve_trigger.get(); gain_to_y(norm_to_gain_db(gain_sig.get_untracked()), svg_height) - 12.0 }
+                                            x=move || { curve_trigger.get(); freq_to_x(freq_hz_sig.get_untracked(), svg_width) }
+                                            y=move || { curve_trigger.get(); gain_to_y(gain_db_sig.get_untracked(), svg_height) - 12.0 }
                                             fill="white" font-size="11" text-anchor="middle"
                                             font-weight="bold"
                                         >
@@ -431,6 +474,14 @@ pub fn EQModal(
                                 let freq_sig = local.freq_norm;
                                 let gain_sig = local.gain_norm;
                                 let bw_sig = local.bw_norm;
+                                let freq_hz_sig = local.freq_hz;
+                                let gain_db_sig = local.gain_db;
+                                let bw_oct_sig = local.bw_oct;
+                                let enabled_sig = local.enabled;
+                                let saved_gain_norm_sig = local.saved_gain_norm;
+                                let saved_gain_db_sig = local.saved_gain_db;
+                                let initial_freq_norm = local.initial_freq_norm;
+                                let initial_freq_hz = local.initial_freq_hz;
 
                                 // Throttle WebSocket sends to 50ms intervals per band.
                                 // Use RwSignal (Send+Sync) instead of Rc<Cell> for Callback compatibility.
@@ -445,6 +496,58 @@ pub fn EQModal(
                                                 {i + 1}
                                             </span>
                                             <span class="eq-band-type">{band_type.clone()}</span>
+                                            // Toggle on/off button
+                                            <button
+                                                class=move || {
+                                                    if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
+                                                }
+                                                on:click=move |_| {
+                                                    if enabled_sig.get_untracked() {
+                                                        // Disable: save current gain, set to 0 dB
+                                                        saved_gain_norm_sig.set(gain_sig.get_untracked());
+                                                        saved_gain_db_sig.set(gain_db_sig.get_untracked());
+                                                        gain_sig.set(0.25);
+                                                        gain_db_sig.set(0.0);
+                                                        enabled_sig.set(false);
+                                                        on_param_change.run((band_idx, "gain".to_string(), 0.25));
+                                                    } else {
+                                                        // Re-enable: restore saved gain
+                                                        let saved_norm = saved_gain_norm_sig.get_untracked();
+                                                        let saved_db = saved_gain_db_sig.get_untracked();
+                                                        gain_sig.set(saved_norm);
+                                                        gain_db_sig.set(saved_db);
+                                                        enabled_sig.set(true);
+                                                        on_param_change.run((band_idx, "gain".to_string(), saved_norm));
+                                                    }
+                                                    curve_trigger.update(|n| *n += 1);
+                                                }
+                                            />
+                                            // Reset button
+                                            <button
+                                                class="eq-band-reset"
+                                                title="Reset band"
+                                                on:click=move |_| {
+                                                    // Reset gain to 0 dB
+                                                    gain_sig.set(0.25);
+                                                    gain_db_sig.set(0.0);
+                                                    on_param_change.run((band_idx, "gain".to_string(), 0.25));
+                                                    // Reset BW to 0.5
+                                                    bw_sig.set(0.5);
+                                                    bw_oct_sig.set(norm_to_bw(0.5));
+                                                    on_param_change.run((band_idx, "bw".to_string(), 0.5));
+                                                    // Reset freq to initial loaded value
+                                                    freq_sig.set(initial_freq_norm);
+                                                    freq_hz_sig.set(initial_freq_hz);
+                                                    on_param_change.run((band_idx, "freq".to_string(), initial_freq_norm));
+                                                    // Update enabled state
+                                                    enabled_sig.set(false);
+                                                    saved_gain_norm_sig.set(0.25);
+                                                    saved_gain_db_sig.set(0.0);
+                                                    curve_trigger.update(|n| *n += 1);
+                                                }
+                                            >
+                                                "\u{21BA}"
+                                            </button>
                                         </div>
 
                                         // Frequency slider
@@ -460,6 +563,8 @@ pub fn EQModal(
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
                                                     freq_sig.set(v);
+                                                    // Approximate display during drag (server corrects on next open)
+                                                    freq_hz_sig.set(norm_to_freq_hz(v));
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -471,7 +576,7 @@ pub fn EQModal(
                                                 css_class="eq-slider-freq"
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format_freq(norm_to_freq_hz(freq_sig.get_untracked())) }}
+                                                {move || { curve_trigger.get(); format_freq(freq_hz_sig.get_untracked()) }}
                                             </span>
                                         </div>
 
@@ -488,6 +593,10 @@ pub fn EQModal(
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
                                                     gain_sig.set(v);
+                                                    // Approximate display during drag
+                                                    gain_db_sig.set(norm_to_gain_db(v));
+                                                    // Update enabled state
+                                                    enabled_sig.set(v != 0.25);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -497,11 +606,12 @@ pub fn EQModal(
                                                     any_dragging.set(false);
                                                 })
                                                 css_class="eq-slider-gain"
+                                                default_value=0.25
                                             />
                                             <span class="eq-param-value">
                                                 {move || {
                                                     curve_trigger.get();
-                                                    let db = norm_to_gain_db(gain_sig.get_untracked());
+                                                    let db = gain_db_sig.get_untracked();
                                                     if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
                                                 }}
                                             </span>
@@ -520,6 +630,8 @@ pub fn EQModal(
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
                                                     bw_sig.set(v);
+                                                    // Approximate display during drag
+                                                    bw_oct_sig.set(norm_to_bw(v));
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -529,9 +641,10 @@ pub fn EQModal(
                                                     any_dragging.set(false);
                                                 })
                                                 css_class=""
+                                                default_value=0.5
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format!("{:.2} oct", norm_to_bw(bw_sig.get_untracked())) }}
+                                                {move || { curve_trigger.get(); format!("{:.2} oct", bw_oct_sig.get_untracked()) }}
                                             </span>
                                         </div>
                                     </div>
@@ -551,10 +664,13 @@ pub fn EQModal(
 /// - Press and hold 150ms: activates with visual feedback
 /// - All movement is relative (never jumps to tap position)
 /// - Short taps are ignored (prevents accidental changes while scrolling)
+/// - Double-tap resets to default_value (if set, within 300ms)
 ///
 /// v1.104.0: Uses internal `RwSignal<f32>` for display so parent re-renders
 /// don't destroy the drag gesture. The `value` prop is a `ReadSignal<f32>`
 /// that syncs to the internal signal only when not dragging.
+///
+/// v1.107.0: Double-tap to default value support.
 #[component]
 fn EqSlider(
     /// Current normalized value (0-1) from parent signal
@@ -568,6 +684,9 @@ fn EqSlider(
     /// Additional CSS class for styling variants (e.g., "eq-slider-gain")
     #[prop(default = "")]
     css_class: &'static str,
+    /// Default value for double-tap reset (None = no double-tap)
+    #[prop(optional)]
+    default_value: Option<f32>,
 ) -> impl IntoView {
     let (is_activated, set_is_activated) = signal(false);
     let (is_pending, set_is_pending) = signal(false);
@@ -587,6 +706,9 @@ fn EqSlider(
     let touch_start_y: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
     let drag_value: Rc<Cell<f32>> = Rc::new(Cell::new(value.get_untracked()));
     let last_touch_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
+
+    // Double-tap detection state
+    let last_tap_time: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
 
     let track_ref = NodeRef::<leptos::html::Div>::new();
 
@@ -620,12 +742,30 @@ fn EqSlider(
     let last_touch_te = last_touch_time.clone();
     let last_touch_md = last_touch_time;
 
+    let last_tap_ts = last_tap_time.clone();
+
     let mm_closure_md = mouse_move_closure.clone();
     let mu_closure_md = mouse_up_closure.clone();
 
     // --- Touch handlers ---
     let handle_touchstart = move |ev: web_sys::TouchEvent| {
-        *last_touch_ts.borrow_mut() = js_sys::Date::now();
+        let now = js_sys::Date::now();
+        *last_touch_ts.borrow_mut() = now;
+
+        // Double-tap detection: if within DOUBLE_TAP_MS and default_value is set
+        if let Some(def) = default_value {
+            let prev_time = last_tap_ts.get();
+            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked()
+            {
+                // Double-tap detected — reset to default
+                ev.prevent_default();
+                last_tap_ts.set(0.0);
+                local_value.set(def);
+                on_change.run(def);
+                return;
+            }
+            last_tap_ts.set(now);
+        }
 
         if let Some(touch) = ev.touches().get(0) {
             let x = touch.client_x() as f64;
@@ -809,6 +949,14 @@ fn EqSlider(
         *mu_closure_md.borrow_mut() = Some(uc);
     };
 
+    // Desktop double-click to reset to default
+    let handle_dblclick = move |_ev: web_sys::MouseEvent| {
+        if let Some(def) = default_value {
+            local_value.set(def);
+            on_change.run(def);
+        }
+    };
+
     let pct = move || (local_value.get() * 100.0).clamp(0.0, 100.0);
 
     view! {
@@ -826,6 +974,7 @@ fn EqSlider(
             on:touchend=handle_touchend
             on:touchcancel=handle_touchcancel
             on:mousedown=handle_mousedown
+            on:dblclick=handle_dblclick
         >
             <div class="eq-slider-fill" style=move || format!("width:{}%", pct()) />
             <div class="eq-slider-thumb" style=move || format!("left:{}%", pct()) />

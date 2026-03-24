@@ -63,6 +63,14 @@ local function read_eq()
         local gain_norm = reaper.TrackFX_GetParam(track, eq_idx, gain_idx)
         local bw_norm = reaper.TrackFX_GetParam(track, eq_idx, bw_idx)
 
+        -- Get REAPER-formatted display values (accurate, non-linear mapping)
+        local _, freq_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, freq_idx)
+        local freq_num = freq_fmt:match("([%d%.%-]+)") or "0"
+        local _, gain_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, gain_idx)
+        local gain_num = gain_fmt:match("([%d%.%-]+)") or "0"
+        local _, bw_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, bw_idx)
+        local bw_num = bw_fmt:match("([%d%.%-]+)") or "0"
+
         -- Determine type from param name
         local btype = "band"
         if freq_name:match("Low Shelf") then btype = "lowshelf"
@@ -74,8 +82,8 @@ local function read_eq()
         end
 
         table.insert(bands, string.format(
-            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f",
-            b, btype, freq_norm, gain_norm, bw_norm
+            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s",
+            b, btype, freq_norm, gain_norm, bw_norm, freq_num, gain_num, bw_num
         ))
     end
 

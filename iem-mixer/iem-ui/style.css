@@ -2049,6 +2049,49 @@ body {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex: 1;
+}
+
+.eq-band-toggle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.eq-band-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.eq-band-toggle.off {
+  background: transparent;
+  border-color: var(--text-muted);
+}
+
+.eq-band-reset {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--text-muted);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 0.85em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.eq-band-reset:active {
+  background: var(--bg-primary);
 }
 
 .eq-param-row {
