@@ -573,13 +573,10 @@ fn EqSlider(
     // Internal local value signal — source of truth for display during drag
     let local_value = RwSignal::new(value.get_untracked());
 
-    // Sync from parent signal when NOT dragging
-    Effect::new(move |_| {
-        let v = value.get();
-        if !is_activated.get_untracked() && !is_pending.get_untracked() {
-            local_value.set(v);
-        }
-    });
+    // No sync Effect — EqSlider initializes from value.get_untracked() above.
+    // Parent signal changes don't sync during the modal's lifetime because
+    // any signal.set() would trigger reactive_graph recursion detection.
+    // On modal close+reopen, the component recreates with fresh values.
 
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
         Rc::new(RefCell::new(None));
