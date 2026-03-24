@@ -654,7 +654,20 @@ test.describe("EQ Feature", () => {
 
   test("EQ access control: member only sees EQ on own tracks", async ({
     page,
+    request,
   }) => {
+    // This test requires REAPER to be running for real channel data
+    const reaperCheck = await request
+      .get("http://iem.lan:8080/_/NTRACK")
+      .catch(() => null);
+    if (
+      !assume(
+        reaperCheck?.ok(),
+        "REAPER must be reachable at iem.lan:8080 for access control test",
+      )
+    )
+      return;
+
     if (!(await waitForMixer(page))) return;
 
     // Navigate to Mics tab to see multiple members' tracks
@@ -665,7 +678,7 @@ test.describe("EQ Feature", () => {
     if (!assume(micsTab, "Mics tab must be visible")) return;
     await page.getByRole("button", { name: "Mics" }).click();
 
-    // Wait for channels to render (requires REAPER connection for track data)
+    // Wait for channels to render
     const channelCard = await page
       .waitForSelector(".ch-menu-btn", { timeout: 5000 })
       .catch(() => null);
