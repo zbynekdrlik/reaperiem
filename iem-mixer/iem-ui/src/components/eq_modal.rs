@@ -448,7 +448,10 @@ pub fn EQModal(
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
-                                                    freq_sig.set(v);
+                                                    // Defer to microtask to avoid Memo recursive panic
+                                                    wasm_bindgen_futures::spawn_local(async move {
+                                                        freq_sig.set(v);
+                                                    });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -475,7 +478,9 @@ pub fn EQModal(
                                                         last_send_gain.set(now);
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
-                                                    gain_sig.set(v);
+                                                    wasm_bindgen_futures::spawn_local(async move {
+                                                        gain_sig.set(v);
+                                                    });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -505,7 +510,9 @@ pub fn EQModal(
                                                         last_send_bw.set(now);
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
-                                                    bw_sig.set(v);
+                                                    wasm_bindgen_futures::spawn_local(async move {
+                                                        bw_sig.set(v);
+                                                    });
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
