@@ -354,7 +354,7 @@ async fn restore_preset(
                     );
                     let _ = state
                         .http_client
-                        .get(&format!(
+                        .get(format!(
                             "{}/_/SET/EXTSTATE/reaperiem/eq_set/{}",
                             reaper_url, input
                         ))
@@ -362,7 +362,7 @@ async fn restore_preset(
                         .await;
                     let _ = state
                         .http_client
-                        .get(&format!("{}/_/_RS_REAPERIEM_SET_EQ", reaper_url))
+                        .get(format!("{}/_/_RS_REAPERIEM_SET_EQ", reaper_url))
                         .send()
                         .await;
                     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
