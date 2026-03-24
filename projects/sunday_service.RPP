@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1774344975 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1774347002 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -148,7 +148,7 @@
       FLOATPOS 0 0 0 0
       FXID {022765C9-61BA-4BA7-A8AE-53037FDC02DC}
       WAK 0 0
-      BYPASS 0 0 0
+      BYPASS 1 0 0
       <JS synthesis/tonegenerator ""
         -12 -6 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
@@ -274,7 +274,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 1
+    SEL 0
     REC 1 5 1 2 0 0 0 0
     VU 64
     TRACKHEIGHT 64 0 0 0 0 0 0
@@ -1032,7 +1032,7 @@
     <FXCHAIN
       WNDRECT 24 52 736 461
       SHOW 0
-      LASTSEL 2
+      LASTSEL 1
       DOCKED 0
       BYPASS 0 0 0
       <JS utility/volume_pan "TRIM IN"
