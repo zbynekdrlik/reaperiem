@@ -1864,15 +1864,14 @@ async fn handle_set_eq_band(
 
     // 4. Read result (for logging only)
     let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "eq_set_result");
-    if let Ok(resp) = state.http_client.get(&get_url).send().await {
-        if let Ok(text) = resp.text().await {
-            if let Some(result) = text.split('\t').nth(3) {
-                if result.starts_with("ERROR") {
-                    tracing::error!(track_index, band, param, result, "EQ: set_eq_param failed");
-                } else {
-                    tracing::debug!(track_index, band, param, result, "EQ: param set OK");
-                }
-            }
+    if let Ok(resp) = state.http_client.get(&get_url).send().await
+        && let Ok(text) = resp.text().await
+        && let Some(result) = text.split('\t').nth(3)
+    {
+        if result.starts_with("ERROR") {
+            tracing::error!(track_index, band, param, result, "EQ: set_eq_param failed");
+        } else {
+            tracing::debug!(track_index, band, param, result, "EQ: param set OK");
         }
     }
 }
