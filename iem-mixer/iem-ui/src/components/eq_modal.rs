@@ -248,7 +248,12 @@ pub fn EQModal(
                 })
                 .collect();
             stored_locals.set_value(locals);
-            local_state_created.set(true); // Triggers <Show> — renders band cards ONCE
+            // Defer gate flip to next microtask — Effect must complete before
+            // <Show> renders its body (which reads the RwSignals we just created).
+            // Without deferral, Leptos detects recursive closure invocation → WASM panic.
+            wasm_bindgen_futures::spawn_local(async move {
+                local_state_created.set(true);
+            });
         } else if !any_dragging.get_untracked() {
             // Subsequent: sync values into existing signals without recreating
             let locals = stored_locals.get_value();
@@ -373,27 +378,34 @@ pub fn EQModal(
                                 fill="rgba(78, 205, 196, 0.08)"
                             />
 
-                            // Band points (reads from local signals)
-                            {move || local_band_states().iter().enumerate().map(|(i, band)| {
-                                let cx = freq_to_x(band.freq_hz, svg_width);
-                                let cy = gain_to_y(band.gain_db, svg_height);
-                                let color = band_color(&band.band_type);
-                                view! {
-                                    <circle
-                                        cx=cx cy=cy r="8"
-                                        fill=color
-                                        stroke="white" stroke-width="2"
-                                        opacity="0.9"
-                                    />
-                                    <text
-                                        x=cx y=cy - 12.0
-                                        fill="white" font-size="11" text-anchor="middle"
-                                        font-weight="bold"
-                                    >
-                                        {format!("{}", i + 1)}
-                                    </text>
-                                }
-                            }).collect::<Vec<_>>()}
+                            // Band points — stable SVG elements with reactive attributes.
+                            // NOT wrapped in {move || ...} to avoid re-creating DOM.
+                            {
+                                let locals = stored_locals.get_value();
+                                locals.iter().enumerate().map(|(i, local)| {
+                                    let color = band_color(&local.band_type).to_string();
+                                    let freq_sig = local.freq_norm;
+                                    let gain_sig = local.gain_norm;
+                                    view! {
+                                        <circle
+                                            cx=move || freq_to_x(norm_to_freq_hz(freq_sig.get()), svg_width)
+                                            cy=move || gain_to_y(norm_to_gain_db(gain_sig.get()), svg_height)
+                                            r="8"
+                                            fill=color.clone()
+                                            stroke="white" stroke-width="2"
+                                            opacity="0.9"
+                                        />
+                                        <text
+                                            x=move || freq_to_x(norm_to_freq_hz(freq_sig.get()), svg_width)
+                                            y=move || gain_to_y(norm_to_gain_db(gain_sig.get()), svg_height) - 12.0
+                                            fill="white" font-size="11" text-anchor="middle"
+                                            font-weight="bold"
+                                        >
+                                            {format!("{}", i + 1)}
+                                        </text>
+                                    }
+                                }).collect::<Vec<_>>()
+                            }
                         </svg>
                     </div>
 
