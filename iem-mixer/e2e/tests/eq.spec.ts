@@ -142,6 +142,124 @@ test.describe("EQ Feature", () => {
     await expect(overlay).not.toBeVisible({ timeout: 3000 });
   });
 
+  test("EQ slider interaction sends SetEqBand and updates display", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Set up WebSocket message tracking before opening EQ
+    await page.evaluate(() => {
+      const origSend = WebSocket.prototype.send;
+      (window as any).__eqSetMessages = [];
+      WebSocket.prototype.send = function (data: string | ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(data as string);
+          if (parsed.cmd === "SetEqBand") {
+            (window as any).__eqSetMessages.push(parsed);
+          }
+        } catch {
+          // ignore non-JSON messages
+        }
+        return origSend.call(this, data);
+      };
+    });
+
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    // Wait for band controls to load (requires REAPER to return EQ data)
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Record the initial gain display text
+    const gainValue = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-param-row")
+      .nth(1)
+      .locator(".eq-param-value");
+    const initialGainText = await gainValue.textContent();
+
+    // Find the gain slider (second eq-slider-track in the first band card)
+    const gainSlider = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-slider-track")
+      .nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    // Simulate a touch-and-hold interaction on the gain slider:
+    // 1. Touch down on the slider
+    // 2. Wait for activation (150ms + margin)
+    // 3. Move touch horizontally to change value
+    // 4. Release touch
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Gain slider must have bounding box")) return;
+
+    const startX = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height / 2;
+
+    // Perform a drag interaction (mouse hold + move)
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(200); // Wait for 150ms activation
+    // Move 40px to the right (should increase gain)
+    await page.mouse.move(startX + 40, startY, { steps: 5 });
+    await page.mouse.up();
+
+    // Wait for UI update
+    await page.waitForTimeout(300);
+
+    // Verify the gain display text changed (optimistic update)
+    const newGainText = await gainValue.textContent();
+    if (initialGainText !== null && newGainText !== null) {
+      // The text should have changed after dragging
+      expect(newGainText).not.toBe(initialGainText);
+    }
+
+    // Verify SetEqBand WebSocket message was sent
+    const messages = await page.evaluate(
+      () => (window as any).__eqSetMessages || [],
+    );
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages[0].cmd).toBe("SetEqBand");
+    expect(messages[0].param).toBe("gain");
+  });
+
+  test("EQ sliders use safe touch activation (no jump-to-tap)", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Verify that native <input type="range"> elements are NOT used for EQ sliders
+    // (they jump to tap position which is dangerous for IEM monitoring)
+    const nativeSliders = await page
+      .locator('.eq-band-card input[type="range"]')
+      .count();
+    expect(nativeSliders).toBe(0);
+
+    // Verify custom slider elements exist instead
+    const customSliders = await page.locator(".eq-slider-track").count();
+    expect(customSliders).toBeGreaterThan(0);
+  });
+
   test("EQ sends GetEqParams WebSocket message on open", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 

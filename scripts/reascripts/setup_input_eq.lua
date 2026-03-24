@@ -12,15 +12,39 @@ local function is_mic_or_gtr(name)
     return lower:match("mic") or lower:match("gtr")
 end
 
+local function is_reaeq(fx_name)
+    return fx_name:match("ReaEQ") or fx_name:match("^EQ$") or fx_name:match("^EQ ")
+end
+
 local function has_reaeq(track)
     local fx_count = reaper.TrackFX_GetCount(track)
     for i = 0, fx_count - 1 do
         local _, fx_name = reaper.TrackFX_GetFXName(track, i)
-        if fx_name:match("ReaEQ") then
+        if is_reaeq(fx_name) then
             return true, i
         end
     end
     return false, -1
+end
+
+-- Remove duplicate ReaEQ instances (keep the first, remove later ones)
+local function remove_duplicate_reaeq(track)
+    local fx_count = reaper.TrackFX_GetCount(track)
+    local found_first = false
+    local removed = 0
+    -- Iterate in reverse so removal indices stay valid
+    for i = fx_count - 1, 0, -1 do
+        local _, fx_name = reaper.TrackFX_GetFXName(track, i)
+        if is_reaeq(fx_name) then
+            if found_first then
+                reaper.TrackFX_Delete(track, i)
+                removed = removed + 1
+            else
+                found_first = true
+            end
+        end
+    end
+    return removed
 end
 
 local function setup_eq()
@@ -39,6 +63,9 @@ local function setup_eq()
         local _, name = reaper.GetTrackName(track)
 
         if is_mic_or_gtr(name) then
+            -- Clean up any duplicate ReaEQ instances first
+            remove_duplicate_reaeq(track)
+
             local has, eq_idx = has_reaeq(track)
             if has then
                 skipped = skipped + 1
