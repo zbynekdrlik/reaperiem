@@ -214,24 +214,31 @@ pub fn EQModal(
             .map(|&g| (gain_to_y(g, svg_height), format!("{:+.0}", g)))
             .collect();
 
-    // Per-band local signals — created once when bands first load, then kept stable.
-    // This prevents parent re-renders from destroying slider drag state.
-    let local_bands: RwSignal<Vec<BandLocalState>> = RwSignal::new(Vec::new());
+    // Per-band local signals stored ONCE — never replaced, so DOM stays stable.
+    // StoredValue is NOT reactive: reading it does not subscribe, so the band card
+    // DOM created from it is rendered exactly once and never torn down.
+    let stored_locals: StoredValue<Vec<BandLocalState>> = StoredValue::new(Vec::new());
+
+    // Gate signal: flips to true ONCE when bands data first arrives.
+    // The <Show> component renders band cards when this becomes true, but
+    // since stored_locals is non-reactive, the cards are created once and persist.
+    let local_state_created = RwSignal::new(false);
 
     // Track whether any slider is currently being dragged (guards against server echo)
     let any_dragging = RwSignal::new(false);
 
     // Sync from parent bands signal into local signals.
-    // Only syncs when NOT dragging (prevents server echo from overwriting active drag).
+    // First arrival: populate stored_locals and flip the gate.
+    // Subsequent: update existing RwSignals (no DOM destruction).
     Effect::new(move |_| {
         let parent = bands.get();
-        if any_dragging.get_untracked() {
-            return; // Don't overwrite local state during active drag
+        if parent.is_empty() {
+            return;
         }
-        let locals = local_bands.get_untracked();
-        if locals.len() != parent.len() {
-            // Band count changed — recreate local signals
-            let new_locals: Vec<BandLocalState> = parent
+
+        if !local_state_created.get_untracked() {
+            // First time: create local signals and store them
+            let locals: Vec<BandLocalState> = parent
                 .iter()
                 .map(|b| BandLocalState {
                     band_type: b.band_type.clone(),
@@ -240,9 +247,11 @@ pub fn EQModal(
                     bw_norm: RwSignal::new(b.bw_norm),
                 })
                 .collect();
-            local_bands.set(new_locals);
-        } else {
-            // Same count — update existing signals without recreating
+            stored_locals.set_value(locals);
+            local_state_created.set(true); // Triggers <Show> — renders band cards ONCE
+        } else if !any_dragging.get_untracked() {
+            // Subsequent: sync values into existing signals without recreating
+            let locals = stored_locals.get_value();
             for (local, parent_band) in locals.iter().zip(parent.iter()) {
                 local.freq_norm.set(parent_band.freq_norm);
                 local.gain_norm.set(parent_band.gain_norm);
@@ -252,10 +261,10 @@ pub fn EQModal(
     });
 
     // Derived signal: build EqBandState vec from local signals for SVG curve rendering.
-    // This reads ONLY local signals so SVG updates instantly on drag without
-    // subscribing to `bands` (which would trigger re-renders that destroy sliders).
+    // Reads from stored_locals (non-reactive container) — the RwSignal .get() calls
+    // inside each band provide reactivity for the SVG path without re-rendering DOM.
     let local_band_states = move || -> Vec<EqBandState> {
-        let locals = local_bands.get();
+        let locals = stored_locals.get_value();
         locals
             .iter()
             .map(|l| {
@@ -292,12 +301,14 @@ pub fn EQModal(
                 </Show>
 
                 // No EQ message
-                <Show when=move || !loading.get() && local_bands.get().is_empty() fallback=|| ()>
+                <Show when=move || !loading.get() && !local_state_created.get() fallback=|| ()>
                     <div class="eq-no-eq">"No ReaEQ found on this track"</div>
                 </Show>
 
-                // SVG Curve display
-                <Show when=move || !local_bands.get().is_empty() fallback=|| ()>
+                // SVG Curve display + band controls
+                // This <Show> flips ONCE when bands data arrives. The content inside
+                // is rendered once and never torn down (stored_locals is non-reactive).
+                <Show when=move || local_state_created.get() fallback=|| ()>
                     <div class="eq-curve-container">
                         <svg
                             viewBox=format!("0 0 {} {}", svg_width, svg_height)
@@ -386,11 +397,14 @@ pub fn EQModal(
                         </svg>
                     </div>
 
-                    // Band controls — reads ONLY local_bands (never bands) to avoid
-                    // server-signal re-renders that destroy EqSlider mid-drag.
+                    // Band controls — rendered ONCE from stored_locals (non-reactive).
+                    // NO {move || ...} wrapper means this DOM is created once and never
+                    // torn down. Individual RwSignal<f32> values update display text
+                    // reactively without destroying the EqSlider components or their
+                    // event handler closures.
                     <div class="eq-band-controls">
-                        {move || {
-                            let locals = local_bands.get();
+                        {
+                            let locals = stored_locals.get_value();
                             locals.iter().enumerate().map(|(i, local)| {
                                 let band_idx = i as u8;
                                 let band_type = local.band_type.clone();
@@ -499,7 +513,7 @@ pub fn EQModal(
                                     </div>
                                 }
                             }).collect::<Vec<_>>()
-                        }}
+                        }
                     </div>
                 </Show>
             </div>

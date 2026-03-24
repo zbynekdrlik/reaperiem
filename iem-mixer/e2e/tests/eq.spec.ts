@@ -438,6 +438,86 @@ test.describe("EQ Feature", () => {
     });
   });
 
+  test("EQ slider interaction produces zero console errors (no WASM panic)", async ({
+    page,
+  }) => {
+    // Collect all console errors during the test
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    // Also catch page errors (uncaught exceptions / WASM panics)
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => {
+      pageErrors.push(err.message);
+    });
+
+    if (!(await waitForMixer(page))) return;
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Get the gain slider (second slider in first band card)
+    const gainSlider = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-slider-track")
+      .nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Gain slider must have bounding box")) return;
+
+    const startX = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height / 2;
+
+    // Perform TWO sequential drag operations — the bug manifests on the second
+    // drag because the first drag triggers a server echo that re-renders the
+    // band cards, destroying closures. The second drag then hits dead closures.
+    for (let drag = 0; drag < 2; drag++) {
+      await page.mouse.move(startX, startY);
+      await page.mouse.down();
+      await page.waitForTimeout(200); // Wait for 150ms activation
+      const direction = drag % 2 === 0 ? 30 : -30;
+      await page.mouse.move(startX + direction, startY, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(500); // Wait for server echo to arrive
+    }
+
+    // Verify zero WASM panics — the bug produced:
+    // "closure invoked recursively or after being dropped"
+    const panicErrors = pageErrors.filter(
+      (e) =>
+        e.includes("closure") || e.includes("dropped") || e.includes("panic"),
+    );
+    expect(panicErrors).toEqual([]);
+
+    // Verify zero console errors related to closures
+    const closureErrors = consoleErrors.filter(
+      (e) => e.includes("closure") || e.includes("dropped"),
+    );
+    expect(closureErrors).toEqual([]);
+
+    // Verify sliders are still functional (not dead) — the slider should still
+    // respond to interaction after two drags
+    const isStuck = await gainSlider.evaluate((el: HTMLElement) =>
+      el.classList.contains("active"),
+    );
+    expect(isStuck).toBe(false);
+  });
+
   test("EQ sends GetEqParams WebSocket message on open", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 
