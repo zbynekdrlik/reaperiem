@@ -790,9 +790,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         if let Some(channel_map) = snapshot_channels {
             let mut eq_bands_map = std::collections::HashMap::new();
             for track_idx in &snapshot_track_indices {
-                if let Some(msg) =
-                    crate::proxy::handle_get_eq_params(&state, *track_idx).await
-                {
+                if let Some(msg) = crate::proxy::handle_get_eq_params(&state, *track_idx).await {
                     if let iem_core::ServerMsg::EqParams { bands, .. } = msg {
                         if !bands.is_empty() {
                             eq_bands_map.insert(*track_idx, bands);
