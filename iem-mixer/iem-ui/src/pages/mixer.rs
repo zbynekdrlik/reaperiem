@@ -1439,7 +1439,7 @@ fn ChannelList(
                     let track_idx = ch.track_index;
                     let partner_idx = ch.partner_index;
                     let name = ch.display_name.clone();
-                    let eq_name = name.clone(); // Clone for EQ button closure
+                    let eq_name = StoredValue::new(name.clone()); // For EQ button closure (Copy)
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
                     let ch_is_pinned =
@@ -2112,7 +2112,7 @@ fn ChannelList(
                                             set_open_menu.set(None);
                                             set_eq_bands.set(Vec::new());
                                             set_eq_loading.set(true);
-                                            set_eq_open.set(Some((track_idx, eq_name.clone())));
+                                            set_eq_open.set(Some((track_idx, eq_name.get_value())));
                                             // Request EQ params from REAPER
                                             ws_send(ws, &iem_core::ClientMsg::GetEqParams { track_index: track_idx });
                                         }
