@@ -3201,10 +3201,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             (band.gain_db - -2.7).abs() < 0.1,
             "gain_db should use gd= value"
         );
-        assert!(
-            (band.bw - 1.18).abs() < 0.01,
-            "bw should use bo= value"
-        );
+        assert!((band.bw - 1.18).abs() < 0.01, "bw should use bo= value");
     }
 
     #[test]
