@@ -1811,9 +1811,9 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let bw_norm = get_field("bn=")?;
 
     // Use REAPER-formatted values if available, otherwise approximate
-    let freq_hz = get_field("fh=").unwrap_or_else(|| 20.0 * 1000.0_f32.powf(freq_norm));
-    let gain_db = get_field("gd=").unwrap_or_else(|| (gain_norm - 0.25) * 96.0);
-    let bw = get_field("bo=").unwrap_or_else(|| 0.01 + bw_norm * 3.99);
+    let freq_hz = get_field("fh=").unwrap_or(20.0 * 1000.0_f32.powf(freq_norm));
+    let gain_db = get_field("gd=").unwrap_or((gain_norm - 0.25) * 96.0);
+    let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
 
     Some(iem_core::EqBand {
         band_type,
