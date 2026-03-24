@@ -3193,9 +3193,18 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert!((band.gain_norm - 0.183911).abs() < 0.001);
         assert!((band.bw_norm - 0.295).abs() < 0.001);
         // Display values come from REAPER-formatted fields (accurate)
-        assert!((band.freq_hz - 250.0).abs() < 0.1, "freq_hz should use fh= value");
-        assert!((band.gain_db - -2.7).abs() < 0.1, "gain_db should use gd= value");
-        assert!((band.bw - 1.18).abs() < 0.01, "bw should use bo= value");
+        assert!(
+            (band.freq_hz - 250.0).abs() < 0.1,
+            "freq_hz should use fh= value"
+        );
+        assert!(
+            (band.gain_db - -2.7).abs() < 0.1,
+            "gain_db should use gd= value"
+        );
+        assert!(
+            (band.bw - 1.18).abs() < 0.01,
+            "bw should use bo= value"
+        );
     }
 
     #[test]
@@ -3204,8 +3213,14 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         let s = "b0:lowshelf,fn=0.283000,gn=0.184000,bn=0.295000";
         let band = parse_eq_band(s).unwrap();
         assert_eq!(band.band_type, "lowshelf");
-        assert!(band.freq_hz > 0.0, "freq_hz should be computed from fallback");
-        assert!(band.gain_db < 0.0, "gain below 0.25 should give negative dB");
+        assert!(
+            band.freq_hz > 0.0,
+            "freq_hz should be computed from fallback"
+        );
+        assert!(
+            band.gain_db < 0.0,
+            "gain below 0.25 should give negative dB"
+        );
         assert!(band.bw > 0.0, "bw should be positive");
     }
 

@@ -755,8 +755,7 @@ fn EqSlider(
         // Double-tap detection: if within DOUBLE_TAP_MS and default_value is set
         if let Some(def) = default_value {
             let prev_time = last_tap_ts.get();
-            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked()
-            {
+            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked() {
                 // Double-tap detected — reset to default
                 ev.prevent_default();
                 last_tap_ts.set(0.0);
