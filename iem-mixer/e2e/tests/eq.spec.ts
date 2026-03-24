@@ -40,6 +40,28 @@ async function waitForMixer(
   return assume(mixerLoaded, message);
 }
 
+// Helper to open the kebab menu for the first channel.
+// Returns true if the menu was opened, false if skipped (no channels in CI).
+async function openKebabMenu(page: Page): Promise<boolean> {
+  const menuBtn = await page
+    .waitForSelector(".ch-menu-btn", { timeout: 5000 })
+    .catch(() => null);
+  if (!assume(menuBtn, "Channel menu button must be visible")) return false;
+  await menuBtn!.click();
+  return true;
+}
+
+// Helper to click the EQ option in an already-open kebab menu.
+// Returns true if clicked, false if skipped.
+async function clickEqOption(page: Page): Promise<boolean> {
+  const eqOption = await page
+    .waitForSelector("text=EQ >> visible=true", { timeout: 3000 })
+    .catch(() => null);
+  if (!assume(eqOption, "EQ menu option must be visible")) return false;
+  await eqOption!.click();
+  return true;
+}
+
 test.describe("EQ Feature", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
@@ -49,12 +71,7 @@ test.describe("EQ Feature", () => {
 
   test("kebab menu has EQ option", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
-
-    // Find first channel's kebab menu button and click it
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
+    if (!(await openKebabMenu(page))) return;
 
     // Verify EQ option exists in the menu
     const eqOption = page.getByText("EQ", { exact: true });
@@ -63,17 +80,8 @@ test.describe("EQ Feature", () => {
 
   test("EQ modal opens and shows track name", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
-
-    // Open kebab menu and click EQ
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
-
-    const eqOption = page.getByText("EQ", { exact: true });
-    if (!assume(await eqOption.isVisible(), "EQ menu option must be visible"))
-      return;
-    await eqOption.click();
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
 
     // Verify EQ overlay appears
     const overlay = page.locator(".eq-overlay");
@@ -86,16 +94,8 @@ test.describe("EQ Feature", () => {
 
   test("EQ modal has SVG curve", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
-
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
-
-    const eqOption = page.getByText("EQ", { exact: true });
-    if (!assume(await eqOption.isVisible(), "EQ menu option must be visible"))
-      return;
-    await eqOption.click();
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
@@ -106,16 +106,8 @@ test.describe("EQ Feature", () => {
 
   test("EQ modal has band controls", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
-
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
-
-    const eqOption = page.getByText("EQ", { exact: true });
-    if (!assume(await eqOption.isVisible(), "EQ menu option must be visible"))
-      return;
-    await eqOption.click();
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
@@ -126,16 +118,8 @@ test.describe("EQ Feature", () => {
 
   test("EQ modal closes on close button", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
-
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
-
-    const eqOption = page.getByText("EQ", { exact: true });
-    if (!assume(await eqOption.isVisible(), "EQ menu option must be visible"))
-      return;
-    await eqOption.click();
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
 
     const overlay = page.locator(".eq-overlay");
     await expect(overlay).toBeVisible({ timeout: 5000 });
@@ -168,15 +152,8 @@ test.describe("EQ Feature", () => {
       };
     });
 
-    const menuBtn = page.locator(".ch-menu-btn").first();
-    if (!assume(await menuBtn.count(), "Channel menu button must exist"))
-      return;
-    await menuBtn.click();
-
-    const eqOption = page.getByText("EQ", { exact: true });
-    if (!assume(await eqOption.isVisible(), "EQ menu option must be visible"))
-      return;
-    await eqOption.click();
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
