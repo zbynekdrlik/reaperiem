@@ -269,9 +269,7 @@ pub fn EQModal(
                 local.gain_norm.set(parent_band.gain_norm);
                 local.bw_norm.set(parent_band.bw_norm);
             }
-            wasm_bindgen_futures::spawn_local(async move {
-                curve_trigger.update(|n| *n += 1);
-            });
+            curve_trigger.update(|n| *n += 1);
         }
     });
 

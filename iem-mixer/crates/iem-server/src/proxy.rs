@@ -1071,13 +1071,12 @@ async fn handle_ws(
                             if let ClientMsg::SetEqBand { track_index, band, ref param, value } = cmd {
                                 let state_clone = state.clone();
                                 let param_clone = param.clone();
-                                let member_clone_eq = member_id.clone();
                                 tokio::spawn(async move {
                                     handle_set_eq_band(&state_clone, track_index, band, &param_clone, value).await;
-                                    // Read back and broadcast updated EQ state to all clients
-                                    if let Some(eq_msg) = handle_get_eq_params(&state_clone, track_index).await {
-                                        let _ = state_clone.event_tx.send((member_clone_eq, eq_msg));
-                                    }
+                                    // Don't broadcast EqParams after SetEqBand — the client
+                                    // already has optimistic local state from the drag.
+                                    // Broadcasting causes server echo → reactive_graph recursive
+                                    // closure panic in the frontend's sync Effect.
                                 });
                                 continue;
                             }
