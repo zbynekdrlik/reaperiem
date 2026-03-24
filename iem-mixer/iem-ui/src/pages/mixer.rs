@@ -889,6 +889,9 @@ pub fn MixerPage() -> impl IntoView {
                             hidden_channels=hidden_channels
                             set_hidden_channels=set_hidden_channels
                             active_category=active_category
+                            set_eq_open=set_eq_open
+                            set_eq_bands=set_eq_bands
+                            set_eq_loading=set_eq_loading
                         />
                         <Show
                             when=move || active_category.get() == Category::Main
@@ -1405,6 +1408,9 @@ fn ChannelList(
     hidden_channels: ReadSignal<Vec<usize>>,
     set_hidden_channels: WriteSignal<Vec<usize>>,
     active_category: ReadSignal<Category>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
