@@ -1009,21 +1009,21 @@ jobs:
             Write-Host "check_input_trim.lua already registered"
           }
           # Register setup_input_eq.lua
-          if ($content -notmatch "SETUP_EQ") {
+          if ($content -notmatch "RS_REAPERIEM_SETUP_EQ") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_EQ "Custom: Setup input EQ on mic/gtr tracks" reaperiem\setup_input_eq.lua'
             Write-Host "Registered setup_input_eq.lua"
           } else {
             Write-Host "setup_input_eq.lua already registered"
           }
           # Register read_eq_params.lua
-          if ($content -notmatch "READ_EQ") {
+          if ($content -notmatch "RS_REAPERIEM_READ_EQ") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_READ_EQ "Custom: Read EQ params from track" reaperiem\read_eq_params.lua'
             Write-Host "Registered read_eq_params.lua"
           } else {
             Write-Host "read_eq_params.lua already registered"
           }
           # Register set_eq_param.lua
-          if ($content -notmatch "SET_EQ") {
+          if ($content -notmatch "RS_REAPERIEM_SET_EQ") {
             Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SET_EQ "Custom: Set EQ param on track" reaperiem\set_eq_param.lua'
             Write-Host "Registered set_eq_param.lua"
           } else {
