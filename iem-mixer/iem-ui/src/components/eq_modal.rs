@@ -401,11 +401,11 @@ pub fn EQModal(
                                 let gain_sig = local.gain_norm;
                                 let bw_sig = local.bw_norm;
 
-                                // Throttle WebSocket sends to 50ms intervals per band
-                                let last_send = Rc::new(Cell::new(0.0_f64));
-                                let last_send_freq = last_send.clone();
-                                let last_send_gain = last_send.clone();
-                                let last_send_bw = last_send;
+                                // Throttle WebSocket sends to 50ms intervals per band.
+                                // Use RwSignal (Send+Sync) instead of Rc<Cell> for Callback compatibility.
+                                let last_send_freq = RwSignal::new(0.0_f64);
+                                let last_send_gain = RwSignal::new(0.0_f64);
+                                let last_send_bw = RwSignal::new(0.0_f64);
 
                                 view! {
                                     <div class="eq-band-card" style=format!("border-color: {}", color)>
@@ -424,7 +424,7 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     freq_sig.set(v);
                                                     let now = js_sys::Date::now();
-                                                    if now - last_send_freq.get() > 50.0 {
+                                                    if now - last_send_freq.get_untracked() > 50.0 {
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
@@ -450,7 +450,7 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     gain_sig.set(v);
                                                     let now = js_sys::Date::now();
-                                                    if now - last_send_gain.get() > 50.0 {
+                                                    if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
@@ -479,7 +479,7 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     bw_sig.set(v);
                                                     let now = js_sys::Date::now();
-                                                    if now - last_send_bw.get() > 50.0 {
+                                                    if now - last_send_bw.get_untracked() > 50.0 {
                                                         last_send_bw.set(now);
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
