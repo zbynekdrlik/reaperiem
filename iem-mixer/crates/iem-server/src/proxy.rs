@@ -3192,7 +3192,10 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert!((band.bw_norm - 0.295).abs() < 0.001);
         // Display values are approximated from normalized values
         assert!(band.freq_hz > 0.0, "freq_hz should be computed");
-        assert!(band.gain_db < 0.0, "gain below 0.25 should give negative dB");
+        assert!(
+            band.gain_db < 0.0,
+            "gain below 0.25 should give negative dB"
+        );
         assert!(band.bw > 0.0, "bw should be positive");
     }
 
