@@ -1030,49 +1030,6 @@ jobs:
             Write-Host "set_eq_param.lua already registered"
           }
 
-      - name: Restart REAPER to load new kb.ini entries
-        shell: powershell
-        run: |
-          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
-          if ($wasRunning -ne "true") {
-            Write-Host "REAPER was not running, skipping restart"
-            exit 0
-          }
-
-          # Save project before restart
-          try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
-            Start-Sleep -Seconds 2
-          } catch {
-            Write-Host "::warning::Could not save project before kb.ini restart"
-          }
-
-          # Kill and restart REAPER
-          taskkill /f /im reaper.exe 2>&1 | Out-Null
-          Start-Sleep -Seconds 3
-
-          $projectPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
-          $reaperExe = "C:\Program Files\REAPER (x64)\reaper.exe"
-          $taskCmd = """$reaperExe"" ""$projectPath"""
-          schtasks /create /tn ReaperKbRestart /tr $taskCmd /sc once /st 00:00 /f /rl highest 2>&1 | Out-Null
-          schtasks /run /tn ReaperKbRestart 2>&1 | Out-Null
-
-          # Wait for REAPER to come back
-          $waited = 0
-          while ($waited -lt 30) {
-            Start-Sleep -Seconds 2
-            $waited += 2
-            try {
-              $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 3
-              if ($resp.StatusCode -eq 200) {
-                Write-Host "REAPER restarted with new kb.ini entries (waited ${waited}s)"
-                exit 0
-              }
-            } catch {}
-          }
-          Write-Host "::error::REAPER did not come back after kb.ini restart"
-          exit 1
-
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
         run: |
