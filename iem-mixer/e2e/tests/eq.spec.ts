@@ -47,7 +47,8 @@ async function openKebabMenu(page: Page): Promise<boolean> {
     .waitForSelector(".ch-menu-btn", { timeout: 5000 })
     .catch(() => null);
   if (!assume(menuBtn, "Channel menu button must be visible")) return false;
-  await menuBtn!.click();
+  // Use force:true because channels-grid may intercept pointer events
+  await page.locator(".ch-menu-btn").first().click({ force: true });
   return true;
 }
 
