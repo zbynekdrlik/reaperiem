@@ -269,7 +269,15 @@ pub fn PresetModal(
         set_loading.set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
-            match save_preset_api(&member_id, &name, state.channels, state.stems_level_db, state.eq_bands).await {
+            match save_preset_api(
+                &member_id,
+                &name,
+                state.channels,
+                state.stems_level_db,
+                state.eq_bands,
+            )
+            .await
+            {
                 Ok(()) => {
                     // Refresh list
                     if let Ok(list) = fetch_presets(&member_id).await {
@@ -378,7 +386,15 @@ pub fn PresetModal(
                                                             set_loading.set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
-                                                                match update_preset_api(&member_id, &name, state.channels, state.stems_level_db, state.eq_bands).await {
+                                                                match update_preset_api(
+                                                                    &member_id,
+                                                                    &name,
+                                                                    state.channels,
+                                                                    state.stems_level_db,
+                                                                    state.eq_bands,
+                                                                )
+                                                                .await
+                                                                {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
                                                                             set_presets.set(list);
