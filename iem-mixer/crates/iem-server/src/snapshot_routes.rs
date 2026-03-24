@@ -136,11 +136,11 @@ async fn create_snapshot(
     let track_indices: Vec<usize> = channels.iter().map(|ch| ch.track_index).collect();
     let mut eq_bands_map = std::collections::HashMap::new();
     for track_idx in &track_indices {
-        if let Some(msg) = crate::proxy::handle_get_eq_params(&state, *track_idx).await {
-            if let iem_core::ServerMsg::EqParams { bands, .. } = msg {
-                if !bands.is_empty() {
-                    eq_bands_map.insert(*track_idx, bands);
-                }
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            crate::proxy::handle_get_eq_params(&state, *track_idx).await
+        {
+            if !bands.is_empty() {
+                eq_bands_map.insert(*track_idx, bands);
             }
         }
     }
