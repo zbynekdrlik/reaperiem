@@ -261,13 +261,17 @@ pub fn EQModal(
             });
         } else if !any_dragging.get_untracked() {
             // Subsequent: sync values then trigger display update
+            // Defer to microtask — updating curve_trigger inside this Effect
+            // would cause recursive notification (Effect → set → trigger → Memo)
             let locals = stored_locals.get_value();
             for (local, parent_band) in locals.iter().zip(parent.iter()) {
                 local.freq_norm.set(parent_band.freq_norm);
                 local.gain_norm.set(parent_band.gain_norm);
                 local.bw_norm.set(parent_band.bw_norm);
             }
-            curve_trigger.update(|n| *n += 1);
+            wasm_bindgen_futures::spawn_local(async move {
+                curve_trigger.update(|n| *n += 1);
+            });
         }
     });
 
