@@ -940,6 +940,24 @@ body {
   box-shadow: 0 2px 10px rgba(244, 211, 94, 0.35);
 }
 
+/* Small EQ button for IEM VOL / STEMS faders */
+.eq-btn-small {
+  grid-area: solo;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.7em;
+  cursor: pointer;
+  background: rgba(100, 149, 237, 0.15);
+  color: #6495ed;
+  transition: background 0.15s;
+}
+.eq-btn-small:active {
+  background: rgba(100, 149, 237, 0.35);
+}
+
 /* Channel buttons container - children participate directly in grid */
 .channel-btns {
   display: contents;

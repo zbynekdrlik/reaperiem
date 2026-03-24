@@ -887,6 +887,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 output_track_idx=output_track_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                         <Show
@@ -903,6 +906,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 stems_bus_idx=stems_bus_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                         <ChannelList
@@ -943,6 +949,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 stems_bus_idx=stems_bus_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                     </div>
@@ -1044,6 +1053,9 @@ fn GlobalVolumeFader(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     meters: ReadSignal<HashMap<usize, [f32; 2]>>,
     output_track_idx: ReadSignal<Option<usize>>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -1221,7 +1233,22 @@ fn GlobalVolumeFader(
             <div class="pan-container"></div>
 
             <div class="channel-btns">
-                <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                <button
+                    class="eq-btn-small"
+                    on:click=move |_| {
+                        if let Some(idx) = output_track_idx.get() {
+                            set_eq_bands.set(Vec::new());
+                            set_eq_loading.set(true);
+                            set_eq_open.set(Some((idx, "IEM VOL".to_string())));
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::GetEqParams { track_index: idx },
+                            );
+                        }
+                    }
+                >
+                    "EQ"
+                </button>
                 <button
                     class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                     on:click=on_mute_click
@@ -1245,6 +1272,9 @@ fn StemsVolumeFader(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     meters: ReadSignal<HashMap<usize, [f32; 2]>>,
     stems_bus_idx: ReadSignal<Option<usize>>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -1422,7 +1452,22 @@ fn StemsVolumeFader(
                 <div class="pan-container"></div>
 
                 <div class="channel-btns">
-                    <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                    <button
+                        class="eq-btn-small"
+                        on:click=move |_| {
+                            if let Some(idx) = stems_bus_idx.get() {
+                                set_eq_bands.set(Vec::new());
+                                set_eq_loading.set(true);
+                                set_eq_open.set(Some((idx, "STEMS".to_string())));
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::GetEqParams { track_index: idx },
+                                );
+                            }
+                        }
+                    >
+                        "EQ"
+                    </button>
                     <button
                         class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                         on:click=on_mute_click

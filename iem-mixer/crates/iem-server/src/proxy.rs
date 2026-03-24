@@ -1717,7 +1717,7 @@ fn send_to_reaper(
 // =============================================================================
 
 /// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
-async fn handle_get_eq_params(state: &AppState, track_index: usize) -> Option<iem_core::ServerMsg> {
+pub async fn handle_get_eq_params(state: &AppState, track_index: usize) -> Option<iem_core::ServerMsg> {
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     drop(config);
