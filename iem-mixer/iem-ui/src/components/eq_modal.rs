@@ -442,12 +442,13 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=freq_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    freq_sig.set(v);
+                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         last_send_freq.set(now);
                                                         on_param_change.run((band_idx, "freq".to_string(), v));
                                                     }
+                                                    freq_sig.set(v);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -468,12 +469,13 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=gain_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    gain_sig.set(v);
+                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
                                                         on_param_change.run((band_idx, "gain".to_string(), v));
                                                     }
+                                                    gain_sig.set(v);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -497,12 +499,13 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=bw_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
-                                                    bw_sig.set(v);
+                                                    // Send WebSocket FIRST (before signal.set which may trigger Memo panic)
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         last_send_bw.set(now);
                                                         on_param_change.run((band_idx, "bw".to_string(), v));
                                                     }
+                                                    bw_sig.set(v);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
