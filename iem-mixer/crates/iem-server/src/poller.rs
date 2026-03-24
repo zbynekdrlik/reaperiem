@@ -792,10 +792,9 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             for track_idx in &snapshot_track_indices {
                 if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
                     crate::proxy::handle_get_eq_params(state, *track_idx).await
+                    && !bands.is_empty()
                 {
-                    if !bands.is_empty() {
-                        eq_bands_map.insert(*track_idx, bands);
-                    }
+                    eq_bands_map.insert(*track_idx, bands);
                 }
             }
             let eq_bands = if eq_bands_map.is_empty() {
