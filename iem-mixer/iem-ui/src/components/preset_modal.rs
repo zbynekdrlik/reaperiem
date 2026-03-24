@@ -362,6 +362,7 @@ pub fn PresetModal(
                                                                         created_at: Some(entry.created_at),
                                                                         updated_at: Some(entry.updated_at),
                                                                         stems_level_db: entry.stems_level_db,
+                                                                        eq_bands: None,
                                                                     };
                                                                     on_load.run(data);
                                                                     on_close.run(());
