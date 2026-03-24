@@ -554,4 +554,151 @@ test.describe("EQ Feature", () => {
     expect(messages[0].cmd).toBe("GetEqParams");
     expect(messages[0].track_index).toBeDefined();
   });
+
+  test("HPF band type appears first in EQ band list", async ({ page }) => {
+    if (!(await waitForMixer(page))) return;
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // First band card should have band type "highpass"
+    const firstBandType = await page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-band-type")
+      .textContent();
+    expect(firstBandType).toBe("highpass");
+  });
+
+  test("EQ gain grid shows ±12dB range (not ±24dB)", async ({ page }) => {
+    if (!(await waitForMixer(page))) return;
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    // Wait for SVG to render
+    const svg = page.locator(".eq-curve-svg");
+    await expect(svg).toBeVisible({ timeout: 3000 });
+
+    // Get all text elements in the SVG (gain grid labels)
+    const svgTexts = await svg.locator("text").allTextContents();
+
+    // Should contain ±12 range labels
+    expect(svgTexts).toContain("-12");
+    expect(svgTexts).toContain("+12");
+
+    // Should NOT contain ±24 range labels (old incorrect range)
+    expect(svgTexts).not.toContain("-24");
+    expect(svgTexts).not.toContain("+24");
+  });
+
+  test("HPF toggle sends SetEqBand with param 'freq' (not 'gain')", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Track WebSocket messages
+    await page.evaluate(() => {
+      const origSend = WebSocket.prototype.send;
+      (window as any).__hpfToggleMessages = [];
+      WebSocket.prototype.send = function (data: string | ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(data as string);
+          if (parsed.cmd === "SetEqBand") {
+            (window as any).__hpfToggleMessages.push(parsed);
+          }
+        } catch {
+          // ignore
+        }
+        return origSend.call(this, data);
+      };
+    });
+
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // First band should be HPF — click its toggle button
+    const toggleBtn = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-band-toggle");
+    const toggleVisible = await toggleBtn.isVisible().catch(() => false);
+    if (!assume(toggleVisible, "HPF toggle button must be visible")) return;
+
+    await toggleBtn.click();
+    await page.waitForTimeout(200);
+
+    // Verify SetEqBand was sent with param: "freq" (not "gain")
+    const messages = await page.evaluate(
+      () => (window as any).__hpfToggleMessages || [],
+    );
+    expect(messages.length).toBeGreaterThan(0);
+    expect(messages[0].param).toBe("freq");
+  });
+
+  test("EQ access control: member only sees EQ on own tracks", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Navigate to Mics tab to see multiple members' tracks
+    const micsTab = page.getByRole("button", { name: "Mics" });
+    const micsVisible = await micsTab.isVisible().catch(() => false);
+    if (!assume(micsVisible, "Mics tab must be visible")) return;
+    await micsTab.click();
+    await page.waitForTimeout(500);
+
+    // Get all kebab menu buttons
+    const kebabButtons = page.locator(".ch-menu-btn");
+    const count = await kebabButtons.count();
+    if (!assume(count >= 2, "Need at least 2 channels to test access control"))
+      return;
+
+    // Open kebab menu on PETRONELA mic (first channel, since logged in as petronela)
+    await kebabButtons.first().click({ force: true });
+    await page.waitForTimeout(300);
+
+    const ownEqVisible = await page
+      .locator(".ch-menu-popup")
+      .getByText("EQ", { exact: true })
+      .isVisible()
+      .catch(() => false);
+
+    // Close this menu
+    await page
+      .locator(".ch-menu-backdrop")
+      .click()
+      .catch(() => {});
+    await page.waitForTimeout(300);
+
+    // Open kebab menu on second channel (should be another member's track)
+    await kebabButtons.nth(1).click({ force: true });
+    await page.waitForTimeout(300);
+
+    const otherEqVisible = await page
+      .locator(".ch-menu-popup")
+      .getByText("EQ", { exact: true })
+      .isVisible()
+      .catch(() => false);
+
+    // Own track should have EQ, other track should not
+    expect(ownEqVisible).toBe(true);
+    expect(otherEqVisible).toBe(false);
+  });
 });

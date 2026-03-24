@@ -690,11 +690,42 @@ pub fn MixerPage() -> impl IntoView {
         } else {
             None
         };
+        // Include cached EQ data if the user has loaded EQ for a track
+        let eq_data = {
+            let bands = eq_bands.get_untracked();
+            let open = eq_open.get_untracked();
+            if !bands.is_empty() {
+                if let Some((track_idx, _)) = open {
+                    let mut eq_map = HashMap::new();
+                    eq_map.insert(
+                        track_idx,
+                        bands
+                            .iter()
+                            .map(|b| crate::components::preset_modal::EqBandPreset {
+                                band_type: b.band_type.clone(),
+                                freq_hz: b.freq_hz,
+                                gain_db: b.gain_db,
+                                bw: b.bw,
+                                freq_norm: b.freq_norm,
+                                gain_norm: b.gain_norm,
+                                bw_norm: b.bw_norm,
+                            })
+                            .collect(),
+                    );
+                    Some(eq_map)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
         PresetData {
             channels: channel_states,
             created_at: None,
             updated_at: None,
             stems_level_db: current_stems_level,
+            eq_bands: eq_data,
         }
     });
 
@@ -979,8 +1010,14 @@ pub fn MixerPage() -> impl IntoView {
                                 }
                             })
                             on_close=Callback::new(move |_: ()| {
-                                set_eq_open.set(None);
-                                set_eq_bands.set(Vec::new());
+                                // Defer to next microtask — setting eq_open=None destroys the
+                                // EQ modal DOM. If called synchronously from a click handler
+                                // inside the modal, the handler's closure gets dropped while
+                                // still on the call stack → WASM panic.
+                                wasm_bindgen_futures::spawn_local(async move {
+                                    set_eq_open.set(None);
+                                    set_eq_bands.set(Vec::new());
+                                });
                             })
                         />
                     }
@@ -2115,14 +2152,14 @@ fn ChannelList(
                                 <div class="ch-menu-popup" on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()>
                                     <button
                                         class=move || if ch_is_pinned() { "ch-menu-item pinned" } else { "ch-menu-item" }
-                                        on:click=move |ev: web_sys::MouseEvent| { on_pin_click(ev); set_open_menu.set(None); }
+                                        on:click=move |ev: web_sys::MouseEvent| { ev.stop_propagation(); on_pin_click(ev); set_open_menu.set(None); }
                                     >
                                         <span class="menu-icon">{move || if ch_is_pinned() { "\u{2605}" } else { "\u{2606}" }}</span>
                                         {move || if ch_is_pinned() { "Unpin" } else { "Pin to Main" }}
                                     </button>
                                     <button
                                         class="ch-menu-item"
-                                        on:click=move |ev: web_sys::MouseEvent| { on_hide_click(ev); set_open_menu.set(None); }
+                                        on:click=move |ev: web_sys::MouseEvent| { ev.stop_propagation(); on_hide_click(ev); set_open_menu.set(None); }
                                     >
                                         <span class="menu-icon">{move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}</span>
                                         {move || if is_hidden_tab() { "Unhide" } else { "Hide" }}
@@ -2130,7 +2167,8 @@ fn ChannelList(
                                     {if show_eq { Some(view! {
                                         <button
                                             class="ch-menu-item"
-                                            on:click=move |_: web_sys::MouseEvent| {
+                                            on:click=move |ev: web_sys::MouseEvent| {
+                                                ev.stop_propagation();
                                                 set_open_menu.set(None);
                                                 set_eq_bands.set(Vec::new());
                                                 set_eq_loading.set(true);
