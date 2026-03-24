@@ -286,6 +286,9 @@ fn connect_websocket(
                         );
                         set_eq_loading.set(false);
                     }
+                    iem_core::ServerMsg::EqParamsMulti { .. } => {
+                        // Handled by preset modal (future integration)
+                    }
                 }
             }
         }
