@@ -165,8 +165,9 @@ fn format_freq(hz: f32) -> String {
 
 /// Per-band local state signals that survive parent re-renders.
 /// These are created once per band when the modal opens and persist until close.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct BandLocalState {
+    band_type: String,
     freq_norm: RwSignal<f32>,
     gain_norm: RwSignal<f32>,
     bw_norm: RwSignal<f32>,
@@ -233,6 +234,7 @@ pub fn EQModal(
             let new_locals: Vec<BandLocalState> = parent
                 .iter()
                 .map(|b| BandLocalState {
+                    band_type: b.band_type.clone(),
                     freq_norm: RwSignal::new(b.freq_norm),
                     gain_norm: RwSignal::new(b.gain_norm),
                     bw_norm: RwSignal::new(b.bw_norm),
@@ -250,22 +252,18 @@ pub fn EQModal(
     });
 
     // Derived signal: build EqBandState vec from local signals for SVG curve rendering.
-    // This reads local signals so SVG updates instantly on drag without re-rendering band cards.
+    // This reads ONLY local signals so SVG updates instantly on drag without
+    // subscribing to `bands` (which would trigger re-renders that destroy sliders).
     let local_band_states = move || -> Vec<EqBandState> {
-        let parent = bands.get();
         let locals = local_bands.get();
-        if locals.len() != parent.len() {
-            return parent; // Fallback before local signals are initialized
-        }
-        parent
+        locals
             .iter()
-            .zip(locals.iter())
-            .map(|(p, l)| {
+            .map(|l| {
                 let fn_ = l.freq_norm.get();
                 let gn_ = l.gain_norm.get();
                 let bn_ = l.bw_norm.get();
                 EqBandState {
-                    band_type: p.band_type.clone(),
+                    band_type: l.band_type.clone(),
                     freq_hz: norm_to_freq_hz(fn_),
                     gain_db: norm_to_gain_db(gn_),
                     bw: norm_to_bw(bn_),
@@ -294,12 +292,12 @@ pub fn EQModal(
                 </Show>
 
                 // No EQ message
-                <Show when=move || !loading.get() && bands.get().is_empty() fallback=|| ()>
+                <Show when=move || !loading.get() && local_bands.get().is_empty() fallback=|| ()>
                     <div class="eq-no-eq">"No ReaEQ found on this track"</div>
                 </Show>
 
                 // SVG Curve display
-                <Show when=move || !bands.get().is_empty() fallback=|| ()>
+                <Show when=move || !local_bands.get().is_empty() fallback=|| ()>
                     <div class="eq-curve-container">
                         <svg
                             viewBox=format!("0 0 {} {}", svg_width, svg_height)
@@ -388,23 +386,26 @@ pub fn EQModal(
                         </svg>
                     </div>
 
-                    // Band controls — uses stable per-band signals to avoid re-render on drag
+                    // Band controls — reads ONLY local_bands (never bands) to avoid
+                    // server-signal re-renders that destroy EqSlider mid-drag.
                     <div class="eq-band-controls">
                         {move || {
-                            let parent = bands.get();
                             let locals = local_bands.get();
-                            if locals.len() != parent.len() {
-                                return Vec::new();
-                            }
-                            parent.iter().enumerate().map(|(i, band)| {
+                            locals.iter().enumerate().map(|(i, local)| {
                                 let band_idx = i as u8;
-                                let color = band_color(&band.band_type).to_string();
-                                let band_type = band.band_type.clone();
+                                let band_type = local.band_type.clone();
+                                let color = band_color(&band_type).to_string();
 
                                 // Get the stable local signals for this band
-                                let freq_sig = locals[i].freq_norm;
-                                let gain_sig = locals[i].gain_norm;
-                                let bw_sig = locals[i].bw_norm;
+                                let freq_sig = local.freq_norm;
+                                let gain_sig = local.gain_norm;
+                                let bw_sig = local.bw_norm;
+
+                                // Throttle WebSocket sends to 50ms intervals per band
+                                let last_send = Rc::new(Cell::new(0.0_f64));
+                                let last_send_freq = last_send.clone();
+                                let last_send_gain = last_send.clone();
+                                let last_send_bw = last_send;
 
                                 view! {
                                     <div class="eq-band-card" style=format!("border-color: {}", color)>
@@ -422,7 +423,11 @@ pub fn EQModal(
                                                 value=freq_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
                                                     freq_sig.set(v);
-                                                    on_param_change.run((band_idx, "freq".to_string(), v));
+                                                    let now = js_sys::Date::now();
+                                                    if now - last_send_freq.get() > 50.0 {
+                                                        last_send_freq.set(now);
+                                                        on_param_change.run((band_idx, "freq".to_string(), v));
+                                                    }
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -444,7 +449,11 @@ pub fn EQModal(
                                                 value=gain_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
                                                     gain_sig.set(v);
-                                                    on_param_change.run((band_idx, "gain".to_string(), v));
+                                                    let now = js_sys::Date::now();
+                                                    if now - last_send_gain.get() > 50.0 {
+                                                        last_send_gain.set(now);
+                                                        on_param_change.run((band_idx, "gain".to_string(), v));
+                                                    }
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);
@@ -469,7 +478,11 @@ pub fn EQModal(
                                                 value=bw_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
                                                     bw_sig.set(v);
-                                                    on_param_change.run((band_idx, "bw".to_string(), v));
+                                                    let now = js_sys::Date::now();
+                                                    if now - last_send_bw.get() > 50.0 {
+                                                        last_send_bw.set(now);
+                                                        on_param_change.run((band_idx, "bw".to_string(), v));
+                                                    }
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
                                                     any_dragging.set(true);

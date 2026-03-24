@@ -354,6 +354,90 @@ test.describe("EQ Feature", () => {
     expect(messages.length).toBeGreaterThan(0);
   });
 
+  test("EQ sliders remain responsive after multiple drags (no stuck state)", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Track WebSocket sends to count commands across multiple drags
+    await page.evaluate(() => {
+      const origSend = WebSocket.prototype.send;
+      (window as any).__eqMultiDragMessages = [];
+      WebSocket.prototype.send = function (data: string | ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(data as string);
+          if (parsed.cmd === "SetEqBand") {
+            (window as any).__eqMultiDragMessages.push(parsed);
+          }
+        } catch {
+          // ignore non-JSON
+        }
+        return origSend.call(this, data);
+      };
+    });
+
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Get the gain slider (second slider in first band card)
+    const gainSlider = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-slider-track")
+      .nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Gain slider must have bounding box")) return;
+
+    const centerX = box!.x + box!.width / 2;
+    const centerY = box!.y + box!.height / 2;
+
+    // Perform THREE sequential drag operations on the same slider.
+    // Before the fix, drag #2 and #3 would fail because any_dragging got stuck.
+    for (let drag = 0; drag < 3; drag++) {
+      await page.mouse.move(centerX, centerY);
+      await page.mouse.down();
+      await page.waitForTimeout(200); // Wait for 150ms activation
+      // Alternate direction each drag
+      const direction = drag % 2 === 0 ? 30 : -30;
+      await page.mouse.move(centerX + direction, centerY, { steps: 5 });
+      await page.mouse.up();
+      await page.waitForTimeout(200); // Brief pause between drags
+    }
+
+    // Verify that ALL drags generated SetEqBand messages (not just the first)
+    const messages = await page.evaluate(
+      () => (window as any).__eqMultiDragMessages || [],
+    );
+    // Each drag should have sent at least one message
+    expect(messages.length).toBeGreaterThanOrEqual(3);
+
+    // Verify the slider still has the "active" class cycle working (not stuck)
+    // by checking the slider is in resting state after all drags complete
+    const isStuck = await gainSlider.evaluate((el: HTMLElement) =>
+      el.classList.contains("active"),
+    );
+    expect(isStuck).toBe(false);
+
+    // Verify close button still works (the modal is not in a broken state)
+    const closeBtn = page.locator(".eq-close-btn");
+    await closeBtn.click();
+    await expect(page.locator(".eq-overlay")).not.toBeVisible({
+      timeout: 3000,
+    });
+  });
+
   test("EQ sends GetEqParams WebSocket message on open", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 
