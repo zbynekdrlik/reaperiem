@@ -658,11 +658,24 @@ test.describe("EQ Feature", () => {
     if (!(await waitForMixer(page))) return;
 
     // Navigate to Mics tab to see multiple members' tracks
-    const micsTab = page.getByRole("button", { name: "Mics" });
-    const micsVisible = await micsTab.isVisible().catch(() => false);
-    if (!assume(micsVisible, "Mics tab must be visible")) return;
-    await micsTab.click();
-    await page.waitForTimeout(500);
+    const micsTab = await page
+      .getByRole("button", { name: "Mics" })
+      .isVisible()
+      .catch(() => false);
+    if (!assume(micsTab, "Mics tab must be visible")) return;
+    await page.getByRole("button", { name: "Mics" }).click();
+
+    // Wait for channels to render (requires REAPER connection for track data)
+    const channelCard = await page
+      .waitForSelector(".ch-menu-btn", { timeout: 5000 })
+      .catch(() => null);
+    if (
+      !assume(
+        channelCard,
+        "Channel menu buttons must be visible (requires REAPER data)",
+      )
+    )
+      return;
 
     // Get all kebab menu buttons
     const kebabButtons = page.locator(".ch-menu-btn");
