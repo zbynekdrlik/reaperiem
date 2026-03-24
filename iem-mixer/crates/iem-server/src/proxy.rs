@@ -1413,7 +1413,9 @@ async fn apply_command_to_cache(
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
         }
-        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
+        iem_core::ClientMsg::GetEqParams { .. }
+        | iem_core::ClientMsg::SetEqBand { .. }
+        | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
             // EQ commands are handled in WS handler before apply_command_to_cache is called
             return Err("EQ commands should not reach apply_command_to_cache".to_string());
         }
@@ -1558,7 +1560,9 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
         }
-        iem_core::ClientMsg::GetEqParams { .. } | iem_core::ClientMsg::SetEqBand { .. } | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
+        iem_core::ClientMsg::GetEqParams { .. }
+        | iem_core::ClientMsg::SetEqBand { .. }
+        | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
             unreachable!("EQ commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {

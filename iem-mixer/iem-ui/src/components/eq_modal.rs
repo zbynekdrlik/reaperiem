@@ -396,21 +396,21 @@ pub fn EQModal(
         if !local_state_created.get_untracked() {
             // First time: create local signals, sorted by display order
             // Build (reaper_index, band) pairs then sort for display
-            let mut indexed: Vec<(usize, &EqBandState)> =
-                parent.iter().enumerate().collect();
+            let mut indexed: Vec<(usize, &EqBandState)> = parent.iter().enumerate().collect();
             indexed.sort_by(|a, b| {
                 let ord_a = display_order(&a.1.band_type);
                 let ord_b = display_order(&b.1.band_type);
                 ord_a.cmp(&ord_b).then_with(|| {
-                    a.1.freq_hz.partial_cmp(&b.1.freq_hz).unwrap_or(std::cmp::Ordering::Equal)
+                    a.1.freq_hz
+                        .partial_cmp(&b.1.freq_hz)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 })
             });
 
             let locals: Vec<BandLocalState> = indexed
                 .iter()
                 .map(|(reaper_idx, b)| {
-                    let is_filter =
-                        b.band_type == "highpass" || b.band_type == "lowpass";
+                    let is_filter = b.band_type == "highpass" || b.band_type == "lowpass";
                     let is_enabled = if is_filter {
                         b.freq_hz > 25.0
                     } else {
@@ -924,8 +924,7 @@ fn EqSlider(
         // Double-tap detection: if within DOUBLE_TAP_MS and default_value is set
         if let Some(def) = default_value {
             let prev_time = last_tap_ts.get();
-            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked()
-            {
+            if now - prev_time < DOUBLE_TAP_MS && prev_time > 0.0 && !is_activated.get_untracked() {
                 // Double-tap detected — reset to default
                 ev.prevent_default();
                 last_tap_ts.set(0.0);
