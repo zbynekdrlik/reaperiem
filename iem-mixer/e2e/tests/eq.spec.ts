@@ -42,6 +42,7 @@ async function waitForMixer(
 
 test.describe("EQ Feature", () => {
   test.beforeEach(async ({ page }) => {
+    await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
   });
