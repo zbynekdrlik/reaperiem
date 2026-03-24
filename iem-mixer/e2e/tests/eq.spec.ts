@@ -260,6 +260,100 @@ test.describe("EQ Feature", () => {
     expect(customSliders).toBeGreaterThan(0);
   });
 
+  test("EQ slider does not snap back during drag (no re-render destruction)", async ({
+    page,
+  }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Track WebSocket sends to verify commands fire
+    await page.evaluate(() => {
+      const origSend = WebSocket.prototype.send;
+      (window as any).__eqDragMessages = [];
+      WebSocket.prototype.send = function (data: string | ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(data as string);
+          if (parsed.cmd === "SetEqBand") {
+            (window as any).__eqDragMessages.push(parsed);
+          }
+        } catch {
+          // ignore non-JSON
+        }
+        return origSend.call(this, data);
+      };
+    });
+
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Get the gain slider (second slider in first band card)
+    const gainSlider = page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-slider-track")
+      .nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    // Read initial fill width
+    const initialFill = await gainSlider
+      .locator(".eq-slider-fill")
+      .evaluate((el: HTMLElement) => el.style.width);
+
+    // Perform a sustained drag: mousedown, wait for activation, move, then
+    // sample the fill width MID-DRAG (before mouseup) to catch snap-back
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Gain slider must have bounding box")) return;
+
+    const startX = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(200); // Wait for 150ms activation delay
+
+    // Move in small steps to simulate real drag
+    for (let step = 1; step <= 8; step++) {
+      await page.mouse.move(startX + step * 5, startY, { steps: 1 });
+      await page.waitForTimeout(30);
+    }
+
+    // Sample fill width MID-DRAG (slider should reflect the dragged position)
+    const midDragFill = await gainSlider
+      .locator(".eq-slider-fill")
+      .evaluate((el: HTMLElement) => el.style.width);
+
+    // Release
+    await page.mouse.up();
+    await page.waitForTimeout(100);
+
+    // Read final fill width after release
+    const finalFill = await gainSlider
+      .locator(".eq-slider-fill")
+      .evaluate((el: HTMLElement) => el.style.width);
+
+    // The mid-drag and final values should differ from initial (slider moved)
+    // and mid-drag should equal final (no snap-back on release)
+    if (initialFill !== null && midDragFill !== null && finalFill !== null) {
+      expect(midDragFill).not.toBe(initialFill);
+      expect(finalFill).toBe(midDragFill);
+    }
+
+    // Verify SetEqBand commands were sent during drag
+    const messages = await page.evaluate(
+      () => (window as any).__eqDragMessages || [],
+    );
+    expect(messages.length).toBeGreaterThan(0);
+  });
+
   test("EQ sends GetEqParams WebSocket message on open", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 

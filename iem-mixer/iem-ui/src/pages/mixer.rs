@@ -962,7 +962,6 @@ pub fn MixerPage() -> impl IntoView {
                             track_index=track_idx
                             track_name=track_name
                             bands=eq_bands
-                            set_bands=set_eq_bands
                             loading=eq_loading
                             on_param_change=Callback::new(move |(band, param, value): (u8, String, f32)| {
                                 if let Some((ti, _)) = eq_open.get_untracked() {

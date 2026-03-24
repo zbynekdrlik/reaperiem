@@ -3,8 +3,9 @@
 //! Loads EQ state on-demand from REAPER via GetEqParams, displays draggable
 //! band points on a log-frequency curve, and sends SetEqBand on slider changes.
 //!
-//! v1.103.0: Touch-safe sliders with 150ms activation delay (no jump-to-tap),
-//! optimistic local updates so display values and SVG curve react immediately.
+//! v1.104.0: Fix snap-back bug — EqSlider maintains local reactive state so
+//! parent re-renders don't destroy active drag gestures. Each band card owns
+//! its own signals, and on_change only sends WebSocket (no set_bands.set()).
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -162,6 +163,14 @@ fn format_freq(hz: f32) -> String {
     }
 }
 
+/// Per-band local state signals that survive parent re-renders.
+/// These are created once per band when the modal opens and persist until close.
+struct BandLocalState {
+    freq_norm: RwSignal<f32>,
+    gain_norm: RwSignal<f32>,
+    bw_norm: RwSignal<f32>,
+}
+
 /// Full-screen EQ modal component
 #[component]
 pub fn EQModal(
@@ -169,10 +178,8 @@ pub fn EQModal(
     track_index: usize,
     /// Track name for the header
     track_name: String,
-    /// EQ bands data — writable for optimistic local updates
+    /// EQ bands data from server (synced to local signals when not dragging)
     bands: ReadSignal<Vec<EqBandState>>,
-    /// Write signal for optimistic local band updates
-    set_bands: WriteSignal<Vec<EqBandState>>,
     /// Whether EQ data is loading
     loading: ReadSignal<bool>,
     /// Callback when a band parameter changes (band_index, param_name, normalized_value)
@@ -204,6 +211,70 @@ pub fn EQModal(
             .iter()
             .map(|&g| (gain_to_y(g, svg_height), format!("{:+.0}", g)))
             .collect();
+
+    // Per-band local signals — created once when bands first load, then kept stable.
+    // This prevents parent re-renders from destroying slider drag state.
+    let local_bands: RwSignal<Vec<BandLocalState>> = RwSignal::new(Vec::new());
+
+    // Track whether any slider is currently being dragged (guards against server echo)
+    let any_dragging = RwSignal::new(false);
+
+    // Sync from parent bands signal into local signals.
+    // Only syncs when NOT dragging (prevents server echo from overwriting active drag).
+    Effect::new(move |_| {
+        let parent = bands.get();
+        if any_dragging.get_untracked() {
+            return; // Don't overwrite local state during active drag
+        }
+        let locals = local_bands.get_untracked();
+        if locals.len() != parent.len() {
+            // Band count changed — recreate local signals
+            let new_locals: Vec<BandLocalState> = parent
+                .iter()
+                .map(|b| BandLocalState {
+                    freq_norm: RwSignal::new(b.freq_norm),
+                    gain_norm: RwSignal::new(b.gain_norm),
+                    bw_norm: RwSignal::new(b.bw_norm),
+                })
+                .collect();
+            local_bands.set(new_locals);
+        } else {
+            // Same count — update existing signals without recreating
+            for (local, parent_band) in locals.iter().zip(parent.iter()) {
+                local.freq_norm.set(parent_band.freq_norm);
+                local.gain_norm.set(parent_band.gain_norm);
+                local.bw_norm.set(parent_band.bw_norm);
+            }
+        }
+    });
+
+    // Derived signal: build EqBandState vec from local signals for SVG curve rendering.
+    // This reads local signals so SVG updates instantly on drag without re-rendering band cards.
+    let local_band_states = move || -> Vec<EqBandState> {
+        let parent = bands.get();
+        let locals = local_bands.get();
+        if locals.len() != parent.len() {
+            return parent; // Fallback before local signals are initialized
+        }
+        parent
+            .iter()
+            .zip(locals.iter())
+            .map(|(p, l)| {
+                let fn_ = l.freq_norm.get();
+                let gn_ = l.gain_norm.get();
+                let bn_ = l.bw_norm.get();
+                EqBandState {
+                    band_type: p.band_type.clone(),
+                    freq_hz: norm_to_freq_hz(fn_),
+                    gain_db: norm_to_gain_db(gn_),
+                    bw: norm_to_bw(bn_),
+                    freq_norm: fn_,
+                    gain_norm: gn_,
+                    bw_norm: bn_,
+                }
+            })
+            .collect()
+    };
 
     view! {
         <div class="eq-overlay" on:click=move |_| on_close.run(())>
@@ -275,9 +346,9 @@ pub fn EQModal(
                                 stroke="rgba(255,255,255,0.25)" stroke-width="1.5"
                             />
 
-                            // Frequency response curve
+                            // Frequency response curve (reads from local signals)
                             <path
-                                d=move || generate_curve_path(&bands.get(), svg_width, svg_height)
+                                d=move || generate_curve_path(&local_band_states(), svg_width, svg_height)
                                 fill="none"
                                 stroke="var(--accent)"
                                 stroke-width="2.5"
@@ -286,14 +357,14 @@ pub fn EQModal(
                             // Filled area under curve
                             <path
                                 d=move || {
-                                    let curve = generate_curve_path(&bands.get(), svg_width, svg_height);
+                                    let curve = generate_curve_path(&local_band_states(), svg_width, svg_height);
                                     format!("{} L{:.1},{:.1} L0,{:.1} Z", curve, svg_width, zero_db_y, zero_db_y)
                                 }
                                 fill="rgba(78, 205, 196, 0.08)"
                             />
 
-                            // Band points
-                            {move || bands.get().iter().enumerate().map(|(i, band)| {
+                            // Band points (reads from local signals)
+                            {move || local_band_states().iter().enumerate().map(|(i, band)| {
                                 let cx = freq_to_x(band.freq_hz, svg_width);
                                 let cy = gain_to_y(band.gain_db, svg_height);
                                 let color = band_color(&band.band_type);
@@ -316,90 +387,105 @@ pub fn EQModal(
                         </svg>
                     </div>
 
-                    // Band controls
+                    // Band controls — uses stable per-band signals to avoid re-render on drag
                     <div class="eq-band-controls">
-                        {move || bands.get().iter().enumerate().map(|(i, band)| {
-                            let band_idx = i as u8;
-                            let color = band_color(&band.band_type).to_string();
-                            let band_type = band.band_type.clone();
-                            let freq_hz = band.freq_hz;
-                            let gain_db = band.gain_db;
-                            let bw = band.bw;
-                            let freq_norm = band.freq_norm;
-                            let gain_norm = band.gain_norm;
-                            let bw_norm = band.bw_norm;
-
-                            view! {
-                                <div class="eq-band-card" style=format!("border-color: {}", color)>
-                                    <div class="eq-band-header">
-                                        <span class="eq-band-num" style=format!("background: {}", color)>
-                                            {i + 1}
-                                        </span>
-                                        <span class="eq-band-type">{band_type.clone()}</span>
-                                    </div>
-
-                                    // Frequency slider
-                                    <div class="eq-param-row">
-                                        <label class="eq-param-label">"Freq"</label>
-                                        <EqSlider
-                                            value=freq_norm
-                                            on_change=Callback::new(move |v: f32| {
-                                                let mut current = bands.get_untracked();
-                                                if let Some(b) = current.get_mut(i) {
-                                                    b.freq_norm = v;
-                                                    b.freq_hz = norm_to_freq_hz(v);
-                                                }
-                                                set_bands.set(current);
-                                                on_param_change.run((band_idx, "freq".to_string(), v));
-                                            })
-                                            css_class="eq-slider-freq"
-                                        />
-                                        <span class="eq-param-value">{format_freq(freq_hz)}</span>
-                                    </div>
-
-                                    // Gain slider
-                                    <div class="eq-param-row">
-                                        <label class="eq-param-label">"Gain"</label>
-                                        <EqSlider
-                                            value=gain_norm
-                                            on_change=Callback::new(move |v: f32| {
-                                                let mut current = bands.get_untracked();
-                                                if let Some(b) = current.get_mut(i) {
-                                                    b.gain_norm = v;
-                                                    b.gain_db = norm_to_gain_db(v);
-                                                }
-                                                set_bands.set(current);
-                                                on_param_change.run((band_idx, "gain".to_string(), v));
-                                            })
-                                            css_class="eq-slider-gain"
-                                        />
-                                        <span class="eq-param-value">
-                                            {if gain_db >= 0.0 { format!("+{:.1}", gain_db) } else { format!("{:.1}", gain_db) }}
-                                            " dB"
-                                        </span>
-                                    </div>
-
-                                    // Bandwidth/Q slider
-                                    <div class="eq-param-row">
-                                        <label class="eq-param-label">"BW"</label>
-                                        <EqSlider
-                                            value=bw_norm
-                                            on_change=Callback::new(move |v: f32| {
-                                                let mut current = bands.get_untracked();
-                                                if let Some(b) = current.get_mut(i) {
-                                                    b.bw_norm = v;
-                                                    b.bw = norm_to_bw(v);
-                                                }
-                                                set_bands.set(current);
-                                                on_param_change.run((band_idx, "bw".to_string(), v));
-                                            })
-                                            css_class=""
-                                        />
-                                        <span class="eq-param-value">{format!("{:.2}", bw)} " oct"</span>
-                                    </div>
-                                </div>
+                        {move || {
+                            let parent = bands.get();
+                            let locals = local_bands.get();
+                            if locals.len() != parent.len() {
+                                return Vec::new();
                             }
-                        }).collect::<Vec<_>>()}
+                            parent.iter().enumerate().map(|(i, band)| {
+                                let band_idx = i as u8;
+                                let color = band_color(&band.band_type).to_string();
+                                let band_type = band.band_type.clone();
+
+                                // Get the stable local signals for this band
+                                let freq_sig = locals[i].freq_norm;
+                                let gain_sig = locals[i].gain_norm;
+                                let bw_sig = locals[i].bw_norm;
+
+                                view! {
+                                    <div class="eq-band-card" style=format!("border-color: {}", color)>
+                                        <div class="eq-band-header">
+                                            <span class="eq-band-num" style=format!("background: {}", color)>
+                                                {i + 1}
+                                            </span>
+                                            <span class="eq-band-type">{band_type.clone()}</span>
+                                        </div>
+
+                                        // Frequency slider
+                                        <div class="eq-param-row">
+                                            <label class="eq-param-label">"Freq"</label>
+                                            <EqSlider
+                                                value=freq_sig.into()
+                                                on_change=Callback::new(move |v: f32| {
+                                                    freq_sig.set(v);
+                                                    on_param_change.run((band_idx, "freq".to_string(), v));
+                                                })
+                                                on_drag_start=Callback::new(move |_: ()| {
+                                                    any_dragging.set(true);
+                                                })
+                                                on_drag_end=Callback::new(move |_: ()| {
+                                                    any_dragging.set(false);
+                                                })
+                                                css_class="eq-slider-freq"
+                                            />
+                                            <span class="eq-param-value">
+                                                {move || format_freq(norm_to_freq_hz(freq_sig.get()))}
+                                            </span>
+                                        </div>
+
+                                        // Gain slider
+                                        <div class="eq-param-row">
+                                            <label class="eq-param-label">"Gain"</label>
+                                            <EqSlider
+                                                value=gain_sig.into()
+                                                on_change=Callback::new(move |v: f32| {
+                                                    gain_sig.set(v);
+                                                    on_param_change.run((band_idx, "gain".to_string(), v));
+                                                })
+                                                on_drag_start=Callback::new(move |_: ()| {
+                                                    any_dragging.set(true);
+                                                })
+                                                on_drag_end=Callback::new(move |_: ()| {
+                                                    any_dragging.set(false);
+                                                })
+                                                css_class="eq-slider-gain"
+                                            />
+                                            <span class="eq-param-value">
+                                                {move || {
+                                                    let db = norm_to_gain_db(gain_sig.get());
+                                                    if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
+                                                }}
+                                            </span>
+                                        </div>
+
+                                        // Bandwidth/Q slider
+                                        <div class="eq-param-row">
+                                            <label class="eq-param-label">"BW"</label>
+                                            <EqSlider
+                                                value=bw_sig.into()
+                                                on_change=Callback::new(move |v: f32| {
+                                                    bw_sig.set(v);
+                                                    on_param_change.run((band_idx, "bw".to_string(), v));
+                                                })
+                                                on_drag_start=Callback::new(move |_: ()| {
+                                                    any_dragging.set(true);
+                                                })
+                                                on_drag_end=Callback::new(move |_: ()| {
+                                                    any_dragging.set(false);
+                                                })
+                                                css_class=""
+                                            />
+                                            <span class="eq-param-value">
+                                                {move || format!("{:.2} oct", norm_to_bw(bw_sig.get()))}
+                                            </span>
+                                        </div>
+                                    </div>
+                                }
+                            }).collect::<Vec<_>>()
+                        }}
                     </div>
                 </Show>
             </div>
@@ -413,12 +499,20 @@ pub fn EQModal(
 /// - Press and hold 150ms: activates with visual feedback
 /// - All movement is relative (never jumps to tap position)
 /// - Short taps are ignored (prevents accidental changes while scrolling)
+///
+/// v1.104.0: Uses internal `RwSignal<f32>` for display so parent re-renders
+/// don't destroy the drag gesture. The `value` prop is a `ReadSignal<f32>`
+/// that syncs to the internal signal only when not dragging.
 #[component]
 fn EqSlider(
-    /// Current normalized value (0-1)
-    value: f32,
+    /// Current normalized value (0-1) from parent signal
+    value: ReadSignal<f32>,
     /// Called when value changes during drag
     on_change: Callback<f32>,
+    /// Called when drag gesture starts (activation delay passed)
+    on_drag_start: Callback<()>,
+    /// Called when drag gesture ends (touch/mouse up)
+    on_drag_end: Callback<()>,
     /// Additional CSS class for styling variants (e.g., "eq-slider-gain")
     #[prop(default = "")]
     css_class: &'static str,
@@ -426,12 +520,23 @@ fn EqSlider(
     let (is_activated, set_is_activated) = signal(false);
     let (is_pending, set_is_pending) = signal(false);
 
+    // Internal local value signal — source of truth for display during drag
+    let local_value = RwSignal::new(value.get_untracked());
+
+    // Sync from parent signal when NOT dragging
+    Effect::new(move |_| {
+        let v = value.get();
+        if !is_activated.get_untracked() && !is_pending.get_untracked() {
+            local_value.set(v);
+        }
+    });
+
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
         Rc::new(RefCell::new(None));
     let move_base_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
     let touch_start_x: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
     let touch_start_y: Rc<RefCell<Option<f64>>> = Rc::new(RefCell::new(None));
-    let drag_value: Rc<Cell<f32>> = Rc::new(Cell::new(value));
+    let drag_value: Rc<Cell<f32>> = Rc::new(Cell::new(value.get_untracked()));
     let last_touch_time: Rc<RefCell<f64>> = Rc::new(RefCell::new(0.0));
 
     let track_ref = NodeRef::<leptos::html::Div>::new();
@@ -480,12 +585,13 @@ fn EqSlider(
             *base_x_ts.borrow_mut() = Some(x);
         }
 
-        drag_ts.set(value);
+        drag_ts.set(local_value.get_untracked());
         set_is_pending.set(true);
 
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
             set_is_activated.set(true);
             set_is_pending.set(false);
+            on_drag_start.run(());
             // Haptic feedback
             if let Some(window) = web_sys::window() {
                 let navigator = window.navigator();
@@ -528,6 +634,7 @@ fn EqSlider(
                     let new_val = (raw + delta_ratio as f32).clamp(0.0, 1.0);
                     drag_tm.set(new_val);
                     let quantized = (new_val * 200.0).round() / 200.0; // 0.005 steps
+                    local_value.set(quantized);
                     on_change.run(quantized);
                     *base_x_tm.borrow_mut() = Some(current_x);
                 }
@@ -538,14 +645,22 @@ fn EqSlider(
     let handle_touchend = move |_ev: web_sys::TouchEvent| {
         *last_touch_te.borrow_mut() = js_sys::Date::now();
         *timeout_te.borrow_mut() = None;
+        let was_active = is_activated.get_untracked();
         set_is_pending.set(false);
         set_is_activated.set(false);
         *base_x_te.borrow_mut() = None;
+        if was_active {
+            on_drag_end.run(());
+        }
     };
 
     let handle_touchcancel = move |_ev: web_sys::TouchEvent| {
+        let was_active = is_activated.get_untracked();
         set_is_pending.set(false);
         set_is_activated.set(false);
+        if was_active {
+            on_drag_end.run(());
+        }
     };
 
     // --- Mouse handler ---
@@ -574,13 +689,14 @@ fn EqSlider(
                 .remove_event_listener_with_callback("mouseup", old_uc.as_ref().unchecked_ref());
         }
 
-        drag_md.set(value);
+        drag_md.set(local_value.get_untracked());
         *base_x_md.borrow_mut() = Some(ev.client_x() as f64);
         set_is_pending.set(true);
 
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
             set_is_activated.set(true);
             set_is_pending.set(false);
+            on_drag_start.run(());
         });
         *timeout_md.borrow_mut() = Some(timeout);
 
@@ -611,6 +727,7 @@ fn EqSlider(
                     let new_val = (raw + delta_ratio as f32).clamp(0.0, 1.0);
                     drag_mm.set(new_val);
                     let quantized = (new_val * 200.0).round() / 200.0;
+                    local_value.set(quantized);
                     on_change.run(quantized);
                     *base_x_mm.borrow_mut() = Some(current_x);
                 }
@@ -623,6 +740,7 @@ fn EqSlider(
 
         let uc = Closure::wrap(Box::new(move |_ev: web_sys::MouseEvent| {
             *timeout_mu.borrow_mut() = None;
+            let was_active = is_activated.get();
             set_is_pending.set(false);
             set_is_activated.set(false);
             *base_x_mu.borrow_mut() = None;
@@ -632,13 +750,17 @@ fn EqSlider(
                     .remove_event_listener_with_callback("mousemove", mc.as_ref().unchecked_ref());
             }
             mu_cleanup.borrow_mut().take();
+
+            if was_active {
+                on_drag_end.run(());
+            }
         }) as Box<dyn FnMut(web_sys::MouseEvent)>);
 
         let _ = doc_target.add_event_listener_with_callback("mouseup", uc.as_ref().unchecked_ref());
         *mu_closure_md.borrow_mut() = Some(uc);
     };
 
-    let pct = move || (value * 100.0).clamp(0.0, 100.0);
+    let pct = move || (local_value.get() * 100.0).clamp(0.0, 100.0);
 
     view! {
         <div
