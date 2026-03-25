@@ -281,6 +281,7 @@ fn connect_websocket(
                                     freq_norm: b.freq_norm,
                                     gain_norm: b.gain_norm,
                                     bw_norm: b.bw_norm,
+                                    enabled: true,
                                 })
                                 .collect(),
                         );

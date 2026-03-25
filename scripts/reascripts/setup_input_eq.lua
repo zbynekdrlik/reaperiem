@@ -1,5 +1,5 @@
--- Setup Input EQ
--- Inserts ReaEQ as second FX (after TRIM IN) on all mic/guitar input tracks.
+-- Setup EQ
+-- Inserts ReaEQ on mic/guitar input tracks and inear/stems output tracks.
 -- Idempotent: skips tracks that already have ReaEQ.
 --
 -- Action ID: _RS_REAPERIEM_SETUP_EQ
@@ -7,9 +7,10 @@
 
 local section = "reaperiem"
 
-local function is_mic_or_gtr(name)
+local function needs_eq(name)
     local lower = name:lower()
     return lower:match("mic") or lower:match("gtr")
+        or lower:match("inear") or lower:match("stems")
 end
 
 local function is_reaeq(fx_name)
@@ -62,7 +63,7 @@ local function setup_eq()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if is_mic_or_gtr(name) then
+        if needs_eq(name) then
             -- Clean up any duplicate ReaEQ instances first
             remove_duplicate_reaeq(track)
 

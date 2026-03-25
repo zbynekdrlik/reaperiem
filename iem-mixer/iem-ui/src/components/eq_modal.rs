@@ -37,6 +37,8 @@ pub struct EqBandState {
     pub freq_norm: f32,
     pub gain_norm: f32,
     pub bw_norm: f32,
+    /// Whether this band is enabled (disabled bands should not affect the curve)
+    pub enabled: bool,
 }
 
 /// Band type colors for visual distinction on the curve
@@ -270,9 +272,12 @@ fn generate_curve_path(bands: &[EqBandState], width: f32, height: f32) -> String
         let log_freq = log_min + (i as f32 / num_points as f32) * (log_max - log_min);
         let freq = log_freq.exp();
 
-        // Sum contributions from all bands
+        // Sum contributions from enabled bands only
         let mut total_gain = 0.0_f32;
         for band in bands {
+            if !band.enabled {
+                continue;
+            }
             total_gain += compute_band_gain(freq, band);
         }
 
@@ -548,7 +553,10 @@ pub fn EQModal(
                                             freq_hz: l.freq_hz.get_untracked(),
                                             gain_db: l.gain_db.get_untracked(),
                                             bw: l.bw_oct.get_untracked(),
-                                            freq_norm: fn_, gain_norm: gn_, bw_norm: bn_,
+                                            freq_norm: fn_,
+                                            gain_norm: gn_,
+                                            bw_norm: bn_,
+                                            enabled: l.enabled.get_untracked(),
                                         }
                                     }).collect();
                                     generate_curve_path(&states, svg_width, svg_height)
@@ -1200,6 +1208,7 @@ mod tests {
             freq_norm: 0.5,
             gain_norm: 0.3,
             bw_norm: 0.25,
+            enabled: true,
         };
         let gain_at_center = compute_band_gain(1000.0, &band);
         // At center frequency, gain should approximately equal band gain_db
@@ -1220,6 +1229,7 @@ mod tests {
             freq_norm: 0.5,
             gain_norm: 0.3,
             bw_norm: 0.25,
+            enabled: true,
         };
         // At 10x the center frequency, gain should be near 0 dB
         let gain_far = compute_band_gain(10000.0, &band);
@@ -1240,6 +1250,7 @@ mod tests {
             freq_norm: 0.14,
             gain_norm: 0.25,
             bw_norm: 0.5,
+            enabled: true,
         };
         // Well above cutoff: should be ~0 dB
         let gain_above = compute_band_gain(1000.0, &band);
@@ -1267,6 +1278,7 @@ mod tests {
             freq_norm: 0.2,
             gain_norm: 0.3,
             bw_norm: 0.2,
+            enabled: true,
         };
         // Well below shelf: should be near shelf gain
         let gain_low = compute_band_gain(20.0, &band);
@@ -1281,6 +1293,50 @@ mod tests {
             gain_high.abs() < 0.5,
             "Expected ~0dB above low shelf, got {}",
             gain_high
+        );
+    }
+
+    #[test]
+    fn test_disabled_band_does_not_affect_curve() {
+        let disabled_hpf = EqBandState {
+            band_type: "highpass".to_string(),
+            freq_hz: 100.0,
+            gain_db: 0.0,
+            bw: 2.0,
+            freq_norm: 0.14,
+            gain_norm: 0.25,
+            bw_norm: 0.5,
+            enabled: false,
+        };
+        let bands = vec![disabled_hpf];
+        let path = generate_curve_path(&bands, 400.0, 300.0);
+
+        // A flat curve at 0dB should be a horizontal line at height/2
+        let flat_path = generate_curve_path(&[], 400.0, 300.0);
+        assert_eq!(
+            path, flat_path,
+            "Disabled HPF should produce flat curve identical to no bands"
+        );
+    }
+
+    #[test]
+    fn test_enabled_band_affects_curve() {
+        let enabled_hpf = EqBandState {
+            band_type: "highpass".to_string(),
+            freq_hz: 100.0,
+            gain_db: 0.0,
+            bw: 2.0,
+            freq_norm: 0.14,
+            gain_norm: 0.25,
+            bw_norm: 0.5,
+            enabled: true,
+        };
+        let bands = vec![enabled_hpf];
+        let path = generate_curve_path(&bands, 400.0, 300.0);
+        let flat_path = generate_curve_path(&[], 400.0, 300.0);
+        assert_ne!(
+            path, flat_path,
+            "Enabled HPF should produce a different curve than flat"
         );
     }
 }
