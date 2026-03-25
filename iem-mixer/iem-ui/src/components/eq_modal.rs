@@ -642,10 +642,8 @@ pub fn EQModal(
                             locals.iter().enumerate().map(|(i, local)| {
                                 let band_idx = local.reaper_band_idx;
                                 let band_type = local.band_type.clone();
-                                let band_type_toggle = band_type.clone();
                                 let band_type_reset = band_type.clone();
                                 let color = band_color(&band_type).to_string();
-                                let is_filter = band_type == "highpass" || band_type == "lowpass";
 
                                 // Get the stable local signals for this band
                                 let freq_sig = local.freq_norm;
@@ -657,8 +655,6 @@ pub fn EQModal(
                                 let enabled_sig = local.enabled;
                                 let saved_gain_norm_sig = local.saved_gain_norm;
                                 let saved_gain_db_sig = local.saved_gain_db;
-                                let saved_freq_norm_sig = local.saved_freq_norm;
-                                let saved_freq_hz_sig = local.saved_freq_hz;
                                 let initial_freq_norm = local.initial_freq_norm;
                                 let initial_freq_hz = local.initial_freq_hz;
 
