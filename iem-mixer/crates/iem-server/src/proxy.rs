@@ -1838,7 +1838,7 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
 
     // Use REAPER-formatted values if available, otherwise approximate
     let freq_hz = get_field("fh=").unwrap_or(20.0 * 1000.0_f32.powf(freq_norm));
-    let gain_db = get_field("gd=").unwrap_or((gain_norm - 0.25) * 96.0);
+    let gain_db = get_field("gd=").unwrap_or((gain_norm.min(0.5) - 0.25) * 48.0);
     let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
 
     // Parse enabled state (en=0/1), default to true for backward compat
@@ -3275,7 +3275,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert_eq!(band.band_type, "band");
         // fn=0.5 -> 20 * 1000^0.5 = 20 * ~31.62 = ~632 Hz
         assert!(band.freq_hz > 600.0 && band.freq_hz < 700.0);
-        // gn=0.25 -> (0.25 - 0.25) * 96 = 0.0 dB
+        // gn=0.25 -> (0.25 - 0.25) * 48 = 0.0 dB
         assert!((band.gain_db - 0.0).abs() < 0.01);
         // No en= field -> defaults to enabled
         assert!(band.enabled);
@@ -3290,6 +3290,20 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         let s = "b4:highpass,fn=0.240000,gn=0.250000,bn=0.500000,fh=212.7,gd=0.0,bo=2.00,en=0";
         let band = parse_eq_band(s).unwrap();
         assert!(!band.enabled);
+    }
+
+    #[test]
+    fn test_parse_eq_band_gain_fallback_clamped() {
+        // Gain norm beyond 0.5 should be clamped to 0.5 in fallback formula
+        let s = "b4:highpass,fn=0.500000,gn=1.000000,bn=0.500000";
+        let band = parse_eq_band(s).unwrap();
+        // Without clamp: (1.0 - 0.25) * 48 = 36.0 dB (WRONG)
+        // With clamp: (0.5 - 0.25) * 48 = 12.0 dB (correct max for ReaEQ)
+        assert!(
+            (band.gain_db - 12.0).abs() < 0.01,
+            "gain_db fallback for norm=1.0 should be clamped to +12dB, got {}",
+            band.gain_db
+        );
     }
 
     #[test]

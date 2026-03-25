@@ -602,9 +602,7 @@ test.describe("EQ Feature", () => {
     expect(svgTexts).not.toContain("+24");
   });
 
-  test("HPF toggle sends SetEqBand with param 'freq' (not 'gain')", async ({
-    page,
-  }) => {
+  test("HPF toggle sends SetEqBand with param 'enabled'", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 
     // Track WebSocket messages
@@ -646,12 +644,12 @@ test.describe("EQ Feature", () => {
     await toggleBtn.click();
     await page.waitForTimeout(200);
 
-    // Verify SetEqBand was sent with param: "freq" (not "gain")
+    // Verify SetEqBand was sent with param: "enabled" (v1.114.0+ uses BANDENABLED)
     const messages = await page.evaluate(
       () => (window as any).__hpfToggleMessages || [],
     );
     expect(messages.length).toBeGreaterThan(0);
-    expect(messages[0].param).toBe("freq");
+    expect(messages[0].param).toBe("enabled");
   });
 
   test("EQ access control: member only sees EQ on own tracks", async ({
@@ -730,18 +728,20 @@ test.describe("EQ Feature", () => {
     expect(otherEqVisible).toBe(false);
   });
 
-  test("HPF toggle on/off changes frequency in REAPER", async ({ page }) => {
+  test("Each band toggle sends correct REAPER band index (not all band=0)", async ({
+    page,
+  }) => {
     if (!(await waitForMixer(page))) return;
 
-    // Track WebSocket messages to verify what's sent
+    // Track ALL SetEqBand WebSocket messages
     await page.evaluate(() => {
       const origSend = WebSocket.prototype.send;
-      (window as any).__hpfToggleFreqMessages = [];
+      (window as any).__bandToggleMessages = [];
       WebSocket.prototype.send = function (data: string | ArrayBuffer) {
         try {
           const parsed = JSON.parse(data as string);
           if (parsed.cmd === "SetEqBand") {
-            (window as any).__hpfToggleFreqMessages.push(parsed);
+            (window as any).__bandToggleMessages.push(parsed);
           }
         } catch {
           // ignore
@@ -761,95 +761,46 @@ test.describe("EQ Feature", () => {
     if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
       return;
 
-    // First band should be HPF (sorted by display_order)
-    const firstBandType = await page
-      .locator(".eq-band-card")
-      .first()
-      .locator(".eq-band-type")
-      .textContent();
-    if (!assume(firstBandType === "highpass", "First band must be HPF")) return;
+    const bandCards = page.locator(".eq-band-card");
+    const bandCount = await bandCards.count();
+    if (!assume(bandCount >= 3, "Need at least 3 bands to test toggle")) return;
 
-    // Read the initial freq display value
-    const hpfCard = page.locator(".eq-band-card").first();
-    const freqValue = hpfCard
-      .locator(".eq-param-row")
-      .first()
-      .locator(".eq-param-value");
-    const initialFreqText = await freqValue.textContent();
+    // Click toggle on each band card (up to 5) and collect the band indices sent
+    const toggleCount = Math.min(bandCount, 5);
+    for (let i = 0; i < toggleCount; i++) {
+      const toggleBtn = bandCards.nth(i).locator(".eq-band-toggle");
+      const visible = await toggleBtn.isVisible().catch(() => false);
+      if (!visible) continue;
 
-    // Get the toggle button
-    const toggleBtn = hpfCard.locator(".eq-band-toggle");
-    const toggleVisible = await toggleBtn.isVisible().catch(() => false);
-    if (!assume(toggleVisible, "HPF toggle button must be visible")) return;
-
-    // Check initial toggle state
-    const initialClass = await toggleBtn.getAttribute("class");
-    const startsEnabled = initialClass?.includes("on") ?? false;
-
-    if (!startsEnabled) {
-      // HPF starts disabled (at 20Hz) — toggle ON should change to ~100Hz
+      // Click toggle (enable or disable — we just want the WS message band index)
       await toggleBtn.click();
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(300);
+    }
 
-      // Verify WebSocket message was sent with freq > 0
-      const messages = await page.evaluate(
-        () => (window as any).__hpfToggleFreqMessages || [],
-      );
-      expect(messages.length).toBeGreaterThan(0);
-      const freqMsg = messages.find(
-        (m: any) => m.param === "freq" && m.value > 0.05,
-      );
-      expect(freqMsg).toBeDefined();
+    // Verify each toggle sent a DIFFERENT band index
+    const messages: any[] = await page.evaluate(
+      () => (window as any).__bandToggleMessages || [],
+    );
 
-      // Verify freq display changed from initial
-      const newFreqText = await freqValue.textContent();
-      expect(newFreqText).not.toBe(initialFreqText);
+    // Filter only "enabled" param messages (toggle clicks)
+    const enabledMsgs = messages.filter((m: any) => m.param === "enabled");
+    expect(enabledMsgs.length).toBeGreaterThanOrEqual(toggleCount);
 
-      // Close and re-open to verify REAPER state
-      await page.locator(".eq-close-btn").click();
-      await expect(page.locator(".eq-overlay")).not.toBeVisible({
-        timeout: 3000,
-      });
-      await page.waitForTimeout(500);
+    // Collect unique band indices — should have as many unique values as toggles clicked
+    const bandIndices = enabledMsgs.map((m: any) => m.band);
+    const uniqueIndices = new Set(bandIndices);
 
-      if (!(await openKebabMenu(page))) return;
-      if (!(await clickEqOption(page))) return;
-      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-      const reload = await page
-        .waitForSelector(".eq-band-card", { timeout: 5000 })
-        .catch(() => null);
-      if (!assume(reload, "EQ bands must reload")) return;
-      await page.waitForTimeout(1000);
+    // CRITICAL: If all toggles send band=0, this fails (proving the bug)
+    expect(uniqueIndices.size).toBeGreaterThanOrEqual(toggleCount);
 
-      // After re-open, HPF should show as enabled (freq > 25Hz from REAPER)
-      const reloadedToggle = page
-        .locator(".eq-band-card")
-        .first()
-        .locator(".eq-band-toggle");
-      const reloadedClass = await reloadedToggle.getAttribute("class");
-      expect(reloadedClass).toContain("on");
-
-      // Toggle it back OFF for cleanup
-      await reloadedToggle.click();
-      await page.waitForTimeout(500);
-    } else {
-      // HPF starts enabled — toggle OFF should set freq to 20Hz
-      await toggleBtn.click();
-      await page.waitForTimeout(500);
-
-      const messages = await page.evaluate(
-        () => (window as any).__hpfToggleFreqMessages || [],
-      );
-      expect(messages.length).toBeGreaterThan(0);
-      // Should send freq close to 0 (bypass)
-      const freqMsg = messages.find(
-        (m: any) => m.param === "freq" && m.value < 0.01,
-      );
-      expect(freqMsg).toBeDefined();
-
-      // Toggle back ON for cleanup
-      await toggleBtn.click();
-      await page.waitForTimeout(500);
+    // Cleanup: toggle all bands back to their original state
+    for (let i = 0; i < toggleCount; i++) {
+      const toggleBtn = bandCards.nth(i).locator(".eq-band-toggle");
+      const visible = await toggleBtn.isVisible().catch(() => false);
+      if (visible) {
+        await toggleBtn.click();
+        await page.waitForTimeout(200);
+      }
     }
 
     // Close modal

@@ -14,7 +14,7 @@ pub struct EqBand {
     pub band_type: String,
     /// Center/corner frequency in Hz (20-20000)
     pub freq_hz: f32,
-    /// Gain in dB (-24 to +24, 0 = flat)
+    /// Gain in dB (ReaEQ range: -inf to +12, 0 = flat, norm 0.25 = 0dB)
     pub gain_db: f32,
     /// Bandwidth/Q factor in octaves (0.1-4.0)
     pub bw: f32,

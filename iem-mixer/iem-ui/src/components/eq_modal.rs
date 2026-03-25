@@ -17,6 +17,7 @@ use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 /// Activation delay in milliseconds (matches fader.rs pattern)
 const ACTIVATION_DELAY_MS: u32 = 150;
@@ -602,6 +603,9 @@ pub fn EQModal(
                             let locals = stored_locals.get_value();
                             locals.iter().enumerate().map(|(i, local)| {
                                 let band_idx = local.reaper_band_idx;
+                                // Store band_idx in Leptos StoredValue for robust access from
+                                // slider callbacks (where DOM data-attribute approach isn't possible).
+                                let band_idx_sv = StoredValue::new(band_idx);
                                 let band_type = local.band_type.clone();
                                 let band_type_reset = band_type.clone();
                                 let color = band_color(&band_type).to_string();
@@ -632,20 +636,29 @@ pub fn EQModal(
                                             </span>
                                             <span class="eq-band-type">{band_type.clone()}</span>
                                             // Toggle on/off button
+                                            // NOTE: band_idx is encoded as data-band-idx attribute and read
+                                            // back in the click handler to avoid a closure capture bug where
+                                            // all toggle closures in the .map() captured band_idx=0.
                                             <button
                                                 class=move || {
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
                                                 }
-                                                on:click=move |_| {
+                                                attr:data-band-idx={band_idx.to_string()}
+                                                on:click=move |ev| {
+                                                    // Read band index from DOM attribute (robust against closure capture issues)
+                                                    let idx = ev.current_target()
+                                                        .and_then(|t| t.unchecked_into::<web_sys::HtmlElement>().get_attribute("data-band-idx"))
+                                                        .and_then(|v| v.parse::<u8>().ok())
+                                                        .unwrap_or(band_idx);
                                                     // Toggle band enabled/disabled via BANDENABLED
                                                     if enabled_sig.get_untracked() {
                                                         // Disable band
                                                         enabled_sig.set(false);
-                                                        on_param_change.run((band_idx, "enabled".to_string(), 0.0));
+                                                        on_param_change.run((idx, "enabled".to_string(), 0.0));
                                                     } else {
                                                         // Enable band
                                                         enabled_sig.set(true);
-                                                        on_param_change.run((band_idx, "enabled".to_string(), 1.0));
+                                                        on_param_change.run((idx, "enabled".to_string(), 1.0));
                                                     }
                                                     curve_trigger.update(|n| *n += 1);
                                                 }
@@ -654,28 +667,33 @@ pub fn EQModal(
                                             <button
                                                 class="eq-band-reset"
                                                 title="Reset band"
-                                                on:click=move |_| {
+                                                attr:data-band-idx={band_idx.to_string()}
+                                                on:click=move |ev| {
+                                                    let idx = ev.current_target()
+                                                        .and_then(|t| t.unchecked_into::<web_sys::HtmlElement>().get_attribute("data-band-idx"))
+                                                        .and_then(|v| v.parse::<u8>().ok())
+                                                        .unwrap_or(band_idx);
                                                     // Reset gain to 0 dB
                                                     gain_sig.set(0.25);
                                                     gain_db_sig.set(0.0);
-                                                    on_param_change.run((band_idx, "gain".to_string(), 0.25));
+                                                    on_param_change.run((idx, "gain".to_string(), 0.25));
                                                     // Reset BW to 0.5
                                                     bw_sig.set(0.5);
                                                     bw_oct_sig.set(norm_to_bw(0.5));
-                                                    on_param_change.run((band_idx, "bw".to_string(), 0.5));
+                                                    on_param_change.run((idx, "bw".to_string(), 0.5));
                                                     // Reset freq to initial loaded value
                                                     freq_sig.set(initial_freq_norm);
                                                     freq_hz_sig.set(initial_freq_hz);
-                                                    on_param_change.run((band_idx, "freq".to_string(), initial_freq_norm));
+                                                    on_param_change.run((idx, "freq".to_string(), initial_freq_norm));
                                                     // For HPF/LPF: set bypass frequency to disable
                                                     if band_type_reset == "highpass" {
                                                         freq_sig.set(0.0);
                                                         freq_hz_sig.set(20.0);
-                                                        on_param_change.run((band_idx, "freq".to_string(), 0.0));
+                                                        on_param_change.run((idx, "freq".to_string(), 0.0));
                                                     } else if band_type_reset == "lowpass" {
                                                         freq_sig.set(1.0);
                                                         freq_hz_sig.set(20000.0);
-                                                        on_param_change.run((band_idx, "freq".to_string(), 1.0));
+                                                        on_param_change.run((idx, "freq".to_string(), 1.0));
                                                     }
                                                     // Update enabled state
                                                     enabled_sig.set(false);
@@ -697,7 +715,7 @@ pub fn EQModal(
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         last_send_freq.set(now);
-                                                        on_param_change.run((band_idx, "freq".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "freq".to_string(), v));
                                                     }
                                                     freq_sig.set(v);
                                                     freq_hz_sig.set(norm_to_freq_hz(v));
@@ -722,10 +740,12 @@ pub fn EQModal(
                                             <EqSlider
                                                 value=gain_sig.into()
                                                 on_change=Callback::new(move |v: f32| {
+                                                    // Clamp gain to 0.0-0.5 norm range (ReaEQ: -inf to +12dB)
+                                                    let v = v.clamp(0.0, 0.5);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
-                                                        on_param_change.run((band_idx, "gain".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "gain".to_string(), v));
                                                     }
                                                     gain_sig.set(v);
                                                     gain_db_sig.set(norm_to_gain_db(v));
@@ -759,7 +779,7 @@ pub fn EQModal(
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         last_send_bw.set(now);
-                                                        on_param_change.run((band_idx, "bw".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "bw".to_string(), v));
                                                     }
                                                     bw_sig.set(v);
                                                     bw_oct_sig.set(norm_to_bw(v));

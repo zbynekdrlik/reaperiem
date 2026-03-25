@@ -87,6 +87,25 @@ local function setup_eq()
                 if fx_idx >= 0 then
                     -- Rename for clarity
                     reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "renamed_name", "EQ")
+
+                    -- Set band types to professional order: HPF, LowShelf, Band, Band, HighShelf
+                    local band_types = { "3", "1", "0", "0", "2" } -- HPF, LS, Band, Band, HS
+                    -- Sensible defaults: freq_norm, gain_norm(0.25=0dB), bw_norm
+                    local defaults = {
+                        { 0.12, 0.25, 0.50 },  -- HPF ~80Hz
+                        { 0.17, 0.25, 0.50 },  -- Low Shelf ~200Hz
+                        { 0.39, 0.25, 0.25 },  -- Band ~800Hz
+                        { 0.57, 0.25, 0.25 },  -- Band ~3kHz
+                        { 0.69, 0.25, 0.50 },  -- High Shelf ~8kHz
+                    }
+                    for b = 0, 4 do
+                        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDTYPE:" .. b, band_types[b + 1])
+                        reaper.TrackFX_SetParam(track, fx_idx, b * 3, defaults[b + 1][1])
+                        reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 1, defaults[b + 1][2])
+                        reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 2, defaults[b + 1][3])
+                        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDENABLED:" .. b, "0")
+                    end
+
                     inserted = inserted + 1
                     table.insert(inserted_names, name)
                 else
