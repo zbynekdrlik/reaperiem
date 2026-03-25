@@ -321,9 +321,7 @@ struct BandLocalState {
     saved_gain_norm: RwSignal<f32>,
     /// Saved gain_db before disable
     saved_gain_db: RwSignal<f32>,
-    /// Initial freq_hz loaded from server (for reset)
-    initial_freq_hz: f32,
-    /// Initial freq_norm loaded from server (for reset)
+    /// Initial freq_norm loaded from server (for toggle restore)
     initial_freq_norm: f32,
 }
 
@@ -422,7 +420,6 @@ pub fn EQModal(
                     enabled: RwSignal::new(b.enabled),
                     saved_gain_norm: RwSignal::new(b.gain_norm),
                     saved_gain_db: RwSignal::new(b.gain_db),
-                    initial_freq_hz: b.freq_hz,
                     initial_freq_norm: b.freq_norm,
                 })
                 .collect();
