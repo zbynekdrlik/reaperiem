@@ -730,6 +730,132 @@ test.describe("EQ Feature", () => {
     expect(otherEqVisible).toBe(false);
   });
 
+  test("HPF toggle on/off changes frequency in REAPER", async ({ page }) => {
+    if (!(await waitForMixer(page))) return;
+
+    // Track WebSocket messages to verify what's sent
+    await page.evaluate(() => {
+      const origSend = WebSocket.prototype.send;
+      (window as any).__hpfToggleFreqMessages = [];
+      WebSocket.prototype.send = function (data: string | ArrayBuffer) {
+        try {
+          const parsed = JSON.parse(data as string);
+          if (parsed.cmd === "SetEqBand") {
+            (window as any).__hpfToggleFreqMessages.push(parsed);
+          }
+        } catch {
+          // ignore
+        }
+        return origSend.call(this, data);
+      };
+    });
+
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // First band should be HPF (sorted by display_order)
+    const firstBandType = await page
+      .locator(".eq-band-card")
+      .first()
+      .locator(".eq-band-type")
+      .textContent();
+    if (!assume(firstBandType === "highpass", "First band must be HPF")) return;
+
+    // Read the initial freq display value
+    const hpfCard = page.locator(".eq-band-card").first();
+    const freqValue = hpfCard
+      .locator(".eq-param-row")
+      .first()
+      .locator(".eq-param-value");
+    const initialFreqText = await freqValue.textContent();
+
+    // Get the toggle button
+    const toggleBtn = hpfCard.locator(".eq-band-toggle");
+    const toggleVisible = await toggleBtn.isVisible().catch(() => false);
+    if (!assume(toggleVisible, "HPF toggle button must be visible")) return;
+
+    // Check initial toggle state
+    const initialClass = await toggleBtn.getAttribute("class");
+    const startsEnabled = initialClass?.includes("on") ?? false;
+
+    if (!startsEnabled) {
+      // HPF starts disabled (at 20Hz) — toggle ON should change to ~100Hz
+      await toggleBtn.click();
+      await page.waitForTimeout(500);
+
+      // Verify WebSocket message was sent with freq > 0
+      const messages = await page.evaluate(
+        () => (window as any).__hpfToggleFreqMessages || [],
+      );
+      expect(messages.length).toBeGreaterThan(0);
+      const freqMsg = messages.find(
+        (m: any) => m.param === "freq" && m.value > 0.05,
+      );
+      expect(freqMsg).toBeDefined();
+
+      // Verify freq display changed from initial
+      const newFreqText = await freqValue.textContent();
+      expect(newFreqText).not.toBe(initialFreqText);
+
+      // Close and re-open to verify REAPER state
+      await page.locator(".eq-close-btn").click();
+      await expect(page.locator(".eq-overlay")).not.toBeVisible({
+        timeout: 3000,
+      });
+      await page.waitForTimeout(500);
+
+      if (!(await openKebabMenu(page))) return;
+      if (!(await clickEqOption(page))) return;
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      const reload = await page
+        .waitForSelector(".eq-band-card", { timeout: 5000 })
+        .catch(() => null);
+      if (!assume(reload, "EQ bands must reload")) return;
+      await page.waitForTimeout(1000);
+
+      // After re-open, HPF should show as enabled (freq > 25Hz from REAPER)
+      const reloadedToggle = page
+        .locator(".eq-band-card")
+        .first()
+        .locator(".eq-band-toggle");
+      const reloadedClass = await reloadedToggle.getAttribute("class");
+      expect(reloadedClass).toContain("on");
+
+      // Toggle it back OFF for cleanup
+      await reloadedToggle.click();
+      await page.waitForTimeout(500);
+    } else {
+      // HPF starts enabled — toggle OFF should set freq to 20Hz
+      await toggleBtn.click();
+      await page.waitForTimeout(500);
+
+      const messages = await page.evaluate(
+        () => (window as any).__hpfToggleFreqMessages || [],
+      );
+      expect(messages.length).toBeGreaterThan(0);
+      // Should send freq close to 0 (bypass)
+      const freqMsg = messages.find(
+        (m: any) => m.param === "freq" && m.value < 0.01,
+      );
+      expect(freqMsg).toBeDefined();
+
+      // Toggle back ON for cleanup
+      await toggleBtn.click();
+      await page.waitForTimeout(500);
+    }
+
+    // Close modal
+    await page.locator(".eq-close-btn").click();
+  });
+
   test("EQ gain change persists in REAPER on read-back", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
     if (!(await openKebabMenu(page))) return;

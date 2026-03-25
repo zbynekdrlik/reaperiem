@@ -97,6 +97,23 @@ fn display_order(band_type: &str) -> u8 {
     }
 }
 
+/// Default saved frequency for a filter band that starts disabled.
+/// When HPF is at 20Hz (norm=0.0) and user toggles ON, we want a sensible
+/// starting frequency rather than restoring 20Hz (which is still "disabled").
+fn default_saved_freq(band_type: &str) -> (f32, f32) {
+    match band_type {
+        "highpass" => (0.24, 100.0),  // 100 Hz
+        "lowpass" => (0.90, 10000.0), // 10 kHz
+        _ => (0.5, 1000.0),          // fallback
+    }
+}
+
+/// Default saved gain for a non-filter band that starts at 0dB (disabled).
+/// Returns (gain_norm, gain_db) — a mild boost so the toggle produces an audible change.
+fn default_saved_gain() -> (f32, f32) {
+    (0.31, 2.88) // ~+2.9dB: (0.31-0.25)*48 = 2.88
+}
+
 // ─── Biquad filter coefficient functions (Audio EQ Cookbook) ───
 
 /// Convert bandwidth in octaves to Q factor for biquad filters
@@ -421,6 +438,19 @@ pub fn EQModal(
                     } else {
                         b.gain_db.abs() > 0.05
                     };
+                    // When band starts disabled, use sensible defaults for
+                    // saved values so toggle ON produces a real change
+                    let (sv_freq_norm, sv_freq_hz) = if !is_enabled && is_filter {
+                        default_saved_freq(&b.band_type)
+                    } else {
+                        (b.freq_norm, b.freq_hz)
+                    };
+                    let (sv_gain_norm, sv_gain_db) = if !is_enabled && !is_filter {
+                        default_saved_gain()
+                    } else {
+                        (b.gain_norm, b.gain_db)
+                    };
+
                     BandLocalState {
                         reaper_band_idx: *reaper_idx as u8,
                         band_type: b.band_type.clone(),
@@ -431,10 +461,10 @@ pub fn EQModal(
                         gain_db: RwSignal::new(b.gain_db),
                         bw_oct: RwSignal::new(b.bw),
                         enabled: RwSignal::new(is_enabled),
-                        saved_gain_norm: RwSignal::new(b.gain_norm),
-                        saved_gain_db: RwSignal::new(b.gain_db),
-                        saved_freq_norm: RwSignal::new(b.freq_norm),
-                        saved_freq_hz: RwSignal::new(b.freq_hz),
+                        saved_gain_norm: RwSignal::new(sv_gain_norm),
+                        saved_gain_db: RwSignal::new(sv_gain_db),
+                        saved_freq_norm: RwSignal::new(sv_freq_norm),
+                        saved_freq_hz: RwSignal::new(sv_freq_hz),
                         initial_freq_hz: b.freq_hz,
                         initial_freq_norm: b.freq_norm,
                     }
@@ -1294,6 +1324,35 @@ mod tests {
             "Expected ~0dB above low shelf, got {}",
             gain_high
         );
+    }
+
+    #[test]
+    fn test_hpf_default_saved_freq_is_audible() {
+        let (norm, hz) = default_saved_freq("highpass");
+        // Must NOT be at bypass position (0.0 / 20Hz)
+        assert!(norm > 0.1, "HPF default saved norm {} should be > 0.1", norm);
+        assert!(hz > 50.0, "HPF default saved Hz {} should be > 50Hz", hz);
+        // Must be a reasonable HPF frequency
+        assert!(hz < 500.0, "HPF default saved Hz {} should be < 500Hz", hz);
+    }
+
+    #[test]
+    fn test_lpf_default_saved_freq_is_audible() {
+        let (norm, hz) = default_saved_freq("lowpass");
+        // Must NOT be at bypass position (1.0 / 20kHz)
+        assert!(norm < 0.95, "LPF default saved norm {} should be < 0.95", norm);
+        assert!(hz < 15000.0, "LPF default saved Hz {} should be < 15kHz", hz);
+        assert!(hz > 2000.0, "LPF default saved Hz {} should be > 2kHz", hz);
+    }
+
+    #[test]
+    fn test_parametric_default_saved_gain_is_nonzero() {
+        let (norm, db) = default_saved_gain();
+        // Must NOT be at flat position (0.25 / 0dB)
+        assert!((norm - 0.25).abs() > 0.02, "Default saved gain norm {} should differ from 0.25", norm);
+        assert!(db.abs() > 1.0, "Default saved gain {} dB should be audible (> 1dB)", db);
+        // Must not be too aggressive
+        assert!(db < 6.0, "Default saved gain {} dB should be moderate (< 6dB)", db);
     }
 
     #[test]
