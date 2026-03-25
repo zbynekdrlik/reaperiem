@@ -71,14 +71,29 @@ local function read_eq()
         local _, bw_fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, bw_idx)
         local bw_num = bw_fmt:match("([%d%.%-]+)") or "0"
 
-        -- Determine type from param name
+        -- Determine type from BANDTYPE config param (preferred, supports reordered bands)
+        -- Falls back to param name detection for older REAPER or unreordered EQ
         local btype = "band"
-        if freq_name:match("Low Shelf") then btype = "lowshelf"
-        elseif freq_name:match("High Shelf") then btype = "highshelf"
-        elseif freq_name:match("High Pass") then btype = "highpass"
-        elseif freq_name:match("Low Pass") then btype = "lowpass"
-        elseif freq_name:match("Notch") then btype = "notch"
-        elseif freq_name:match("Band Pass") then btype = "bandpass"
+        local bt_ok, bt_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDTYPE:" .. b)
+        if bt_ok then
+            -- BANDTYPE values: 0=Band, 1=LowShelf, 2=HighShelf, 3=HighPass, 4=LowPass, 5=Notch, 6=BandPass, 7=AllPass
+            if bt_val == "1" then btype = "lowshelf"
+            elseif bt_val == "2" then btype = "highshelf"
+            elseif bt_val == "3" then btype = "highpass"
+            elseif bt_val == "4" then btype = "lowpass"
+            elseif bt_val == "5" then btype = "notch"
+            elseif bt_val == "6" then btype = "bandpass"
+            -- bt_val == "0" or default: btype stays "band"
+            end
+        else
+            -- Fallback: detect from parameter name
+            if freq_name:match("Low Shelf") then btype = "lowshelf"
+            elseif freq_name:match("High Shelf") then btype = "highshelf"
+            elseif freq_name:match("High Pass") then btype = "highpass"
+            elseif freq_name:match("Low Pass") then btype = "lowpass"
+            elseif freq_name:match("Notch") then btype = "notch"
+            elseif freq_name:match("Band Pass") then btype = "bandpass"
+            end
         end
 
         -- Read per-band enabled state (REAPER v7+ named config param)
