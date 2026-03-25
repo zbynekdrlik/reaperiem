@@ -238,3 +238,4 @@ local ok, err = pcall(reorder_eq)
 if not ok then
     reaper.SetExtState(section, "eq_reorder_result", "ERROR:" .. tostring(err), false)
 end
+
