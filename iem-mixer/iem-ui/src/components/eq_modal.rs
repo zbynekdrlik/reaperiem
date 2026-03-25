@@ -445,6 +445,7 @@ pub fn EQModal(
                     local.freq_hz.set(parent_band.freq_hz);
                     local.gain_db.set(parent_band.gain_db);
                     local.bw_oct.set(parent_band.bw);
+                    local.enabled.set(parent_band.enabled);
                 }
             }
             curve_trigger.update(|n| *n += 1);
