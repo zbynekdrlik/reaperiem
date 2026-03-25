@@ -729,4 +729,106 @@ test.describe("EQ Feature", () => {
     expect(ownEqVisible).toBe(true);
     expect(otherEqVisible).toBe(false);
   });
+
+  test("EQ gain change persists in REAPER on read-back", async ({ page }) => {
+    if (!(await waitForMixer(page))) return;
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load (requires REAPER EQ data)"))
+      return;
+
+    // Get the gain slider of the SECOND band card (a parametric band, not HPF)
+    const bandCards = page.locator(".eq-band-card");
+    const secondBand = bandCards.nth(1);
+    const gainSlider = secondBand.locator(".eq-slider-track").nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    // Read initial gain display value
+    const gainValue = secondBand
+      .locator(".eq-param-row")
+      .nth(1)
+      .locator(".eq-param-value");
+    const initialGainText = await gainValue.textContent();
+
+    // Drag the gain slider to change the value
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Gain slider must have bounding box")) return;
+
+    const startX = box!.x + box!.width / 2;
+    const startY = box!.y + box!.height / 2;
+
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(200); // Wait for activation
+    await page.mouse.move(startX + 50, startY, { steps: 5 }); // Drag right to increase gain
+    await page.mouse.up();
+
+    // Wait for the server to process all queued EQ writes
+    await page.waitForTimeout(1000);
+
+    // Read the new gain value AFTER the drag
+    const newGainText = await gainValue.textContent();
+    if (
+      !assume(
+        newGainText !== initialGainText,
+        "Gain must have changed after drag",
+      )
+    )
+      return;
+
+    // Close EQ modal
+    await page.locator(".eq-close-btn").click();
+    await expect(page.locator(".eq-overlay")).not.toBeVisible({
+      timeout: 3000,
+    });
+
+    // Wait for server to finish processing
+    await page.waitForTimeout(500);
+
+    // Re-open EQ (this triggers a fresh GetEqParams read from REAPER)
+    if (!(await openKebabMenu(page))) return;
+    if (!(await clickEqOption(page))) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const bandCardReload = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCardReload, "EQ bands must reload after re-open")) return;
+
+    // Wait for bands to populate with REAPER data
+    await page.waitForTimeout(1000);
+
+    // Read the gain value from the re-opened modal (should match what we set)
+    const reloadedGainValue = page
+      .locator(".eq-band-card")
+      .nth(1)
+      .locator(".eq-param-row")
+      .nth(1)
+      .locator(".eq-param-value");
+    const reloadedGainText = await reloadedGainValue.textContent();
+
+    // The reloaded value should NOT be the initial value (change persisted in REAPER)
+    expect(reloadedGainText).not.toBe(initialGainText);
+
+    // Reset: drag gain back to center (0dB) for cleanup
+    const resetBand = page.locator(".eq-band-card").nth(1);
+    const resetBtn = resetBand.locator(".eq-reset-btn");
+    const resetVisible = await resetBtn.isVisible().catch(() => false);
+    if (resetVisible) {
+      await resetBtn.click();
+      await page.waitForTimeout(500);
+    }
+
+    // Close modal
+    await page.locator(".eq-close-btn").click();
+  });
 });

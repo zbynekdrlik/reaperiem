@@ -1851,7 +1851,11 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     })
 }
 
-/// Handle SetEqBand: set a single EQ parameter on a track via EXTSTATE + ReaScript
+/// Handle SetEqBand: set a single EQ parameter on a track via EXTSTATE + ReaScript.
+///
+/// Serialized via `eq_write_lock` — the EXTSTATE key `reaperiem/eq_set` is a single-slot
+/// channel. Without serialization, concurrent tasks overwrite each other's data before
+/// the Lua script reads it.
 async fn handle_set_eq_band(
     state: &AppState,
     track_index: usize,
@@ -1859,6 +1863,9 @@ async fn handle_set_eq_band(
     param: &str,
     value: f32,
 ) {
+    // Serialize all EQ writes — only one EXTSTATE write + action trigger at a time
+    let _lock = state.eq_write_lock.lock().await;
+
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     drop(config);
@@ -1891,8 +1898,8 @@ async fn handle_set_eq_band(
         return;
     }
 
-    // 3. Wait for script execution
-    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    // 3. Wait for script execution (50ms matches snapshot/preset restore pattern)
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
     // 4. Read result (for logging only)
     let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "eq_set_result");

@@ -339,7 +339,7 @@ async fn restore_preset(
         }
     }
 
-    // Restore EQ bands if present in preset (sequential — EXTSTATE is a shared resource)
+    // Restore EQ bands if present in preset (serialized via eq_write_lock)
     if let Some(ref eq_bands_map) = preset.eq_bands {
         for (track_index, bands) in eq_bands_map {
             for (band_idx, band) in bands.iter().enumerate() {
@@ -348,6 +348,7 @@ async fn restore_preset(
                     ("gain", band.gain_norm),
                     ("bw", band.bw_norm),
                 ] {
+                    let _lock = state.eq_write_lock.lock().await;
                     let input = format!(
                         "track={}|band={}|param={}|value={:.6}",
                         track_index, band_idx, param_name, value
