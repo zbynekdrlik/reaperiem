@@ -695,19 +695,16 @@ pub fn EQModal(
                                                 title="Reset band"
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
-                                                    // Reset gain to 0 dB
+                                                    // Reset gain to 0dB (neutral — no boost/cut)
                                                     gain_sig.set(0.25);
                                                     gain_db_sig.set(0.0);
                                                     on_param_change.run((idx, "gain".to_string(), 0.25));
-                                                    // Reset BW to 0.5
+                                                    // Reset BW to default
                                                     bw_sig.set(0.5);
                                                     bw_oct_sig.set(norm_to_bw(0.5));
                                                     on_param_change.run((idx, "bw".to_string(), 0.5));
-                                                    // Reset freq to initial loaded value
-                                                    freq_sig.set(initial_freq_norm);
-                                                    freq_hz_sig.set(initial_freq_hz);
-                                                    on_param_change.run((idx, "freq".to_string(), initial_freq_norm));
-                                                    // For HPF/LPF: set bypass frequency to disable
+                                                    // HPF/LPF: reset freq to boundary (disabled)
+                                                    // Shelf/Band: keep freq position (just zero gain)
                                                     if band_type_reset == "highpass" {
                                                         freq_sig.set(0.0);
                                                         freq_hz_sig.set(20.0);
@@ -717,7 +714,7 @@ pub fn EQModal(
                                                         freq_hz_sig.set(20000.0);
                                                         on_param_change.run((idx, "freq".to_string(), 1.0));
                                                     }
-                                                    // Update enabled state
+                                                    // Mark disabled (0dB = no effect)
                                                     enabled_sig.set(false);
                                                     saved_gain_norm_sig.set(0.25);
                                                     saved_gain_db_sig.set(0.0);
@@ -756,14 +753,15 @@ pub fn EQModal(
                                             </span>
                                         </div>
 
-                                        // Gain slider
+                                        // Gain slider — maps full slider range (0-1) to ReaEQ norm (0-0.5)
+                                        // This gives -12dB to +12dB across the entire slider width.
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Gain"</label>
                                             <EqSlider
-                                                value=gain_sig.into()
+                                                value=Signal::derive(move || gain_sig.get() * 2.0)
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Clamp gain to 0.0-0.5 norm range (ReaEQ: -inf to +12dB)
-                                                    let v = v.clamp(0.0, 0.5);
+                                                    // Convert slider 0-1 → gain norm 0-0.5
+                                                    let v = (v * 0.5).clamp(0.0, 0.5);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
@@ -781,7 +779,7 @@ pub fn EQModal(
                                                     any_dragging.set(false);
                                                 })
                                                 css_class="eq-slider-gain"
-                                                default_value=0.25
+                                                default_value=0.5
                                             />
                                             <span class="eq-param-value">
                                                 {move || {
