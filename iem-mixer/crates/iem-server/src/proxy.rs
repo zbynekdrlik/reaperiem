@@ -1813,6 +1813,7 @@ fn parse_eq_params_response(track_index: usize, value: &str) -> Option<iem_core:
 /// Uses REAPER-formatted display values (fh, gd, bo) when available for accurate display.
 /// Falls back to approximations from normalized values (fn, gn, bn) for backward compatibility.
 fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
+    let s = s.trim(); // Strip trailing whitespace/newlines from EXTSTATE
     let colon_pos = s.find(':')?;
     let after_colon = &s[colon_pos + 1..];
     let fields: Vec<&str> = after_colon.split(',').collect();
