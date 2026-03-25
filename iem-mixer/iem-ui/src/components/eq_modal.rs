@@ -16,7 +16,6 @@
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 
 /// Activation delay in milliseconds (matches fader.rs pattern)
@@ -636,27 +635,17 @@ pub fn EQModal(
                                             </span>
                                             <span class="eq-band-type">{band_type.clone()}</span>
                                             // Toggle on/off button
-                                            // NOTE: band_idx is encoded as data-band-idx attribute and read
-                                            // back in the click handler to avoid a closure capture bug where
-                                            // all toggle closures in the .map() captured band_idx=0.
                                             <button
                                                 class=move || {
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
                                                 }
-                                                attr:data-band-idx={band_idx.to_string()}
-                                                on:click=move |ev| {
-                                                    // Read band index from DOM attribute (robust against closure capture issues)
-                                                    let idx = ev.current_target()
-                                                        .and_then(|t| t.unchecked_into::<web_sys::HtmlElement>().get_attribute("data-band-idx"))
-                                                        .and_then(|v| v.parse::<u8>().ok())
-                                                        .unwrap_or(band_idx);
+                                                on:click=move |_| {
+                                                    let idx = band_idx_sv.get_value();
                                                     // Toggle band enabled/disabled via BANDENABLED
                                                     if enabled_sig.get_untracked() {
-                                                        // Disable band
                                                         enabled_sig.set(false);
                                                         on_param_change.run((idx, "enabled".to_string(), 0.0));
                                                     } else {
-                                                        // Enable band
                                                         enabled_sig.set(true);
                                                         on_param_change.run((idx, "enabled".to_string(), 1.0));
                                                     }
@@ -667,12 +656,8 @@ pub fn EQModal(
                                             <button
                                                 class="eq-band-reset"
                                                 title="Reset band"
-                                                attr:data-band-idx={band_idx.to_string()}
-                                                on:click=move |ev| {
-                                                    let idx = ev.current_target()
-                                                        .and_then(|t| t.unchecked_into::<web_sys::HtmlElement>().get_attribute("data-band-idx"))
-                                                        .and_then(|v| v.parse::<u8>().ok())
-                                                        .unwrap_or(band_idx);
+                                                on:click=move |_| {
+                                                    let idx = band_idx_sv.get_value();
                                                     // Reset gain to 0 dB
                                                     gain_sig.set(0.25);
                                                     gain_db_sig.set(0.0);
