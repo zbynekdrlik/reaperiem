@@ -1841,7 +1841,7 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
 
     // Parse enabled state (en=0/1), default to true for backward compat
-    let enabled = get_field("en=").map_or(true, |v| v >= 0.5);
+    let enabled = get_field("en=").is_none_or(|v| v >= 0.5);
 
     Some(iem_core::EqBand {
         band_type,
