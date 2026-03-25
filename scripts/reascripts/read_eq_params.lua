@@ -81,9 +81,13 @@ local function read_eq()
         elseif freq_name:match("Band Pass") then btype = "bandpass"
         end
 
+        -- Read per-band enabled state (REAPER v7+ named config param)
+        local en_ok, en_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. b)
+        local band_enabled = (not en_ok or en_val == "1") and "1" or "0"
+
         table.insert(bands, string.format(
-            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s",
-            b, btype, freq_norm, gain_norm, bw_norm, freq_num, gain_num, bw_num
+            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s,en=%s",
+            b, btype, freq_norm, gain_norm, bw_norm, freq_num, gain_num, bw_num, band_enabled
         ))
     end
 

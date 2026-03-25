@@ -181,6 +181,7 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3,
                 bw_norm: 0.4,
+                enabled: true,
             }],
         );
         let preset = PresetEntry {

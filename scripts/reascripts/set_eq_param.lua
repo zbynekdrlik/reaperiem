@@ -53,6 +53,16 @@ local function set_eq()
         return
     end
 
+    -- Handle "enabled" param via BANDENABLED named config (not a regular parameter)
+    if param_name == "enabled" then
+        local en = (value >= 0.5) and "1" or "0"
+        reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. band, en)
+        reaper.SetExtState(section, "eq_set_result",
+            string.format("OK:track=%d,band=%d,param=enabled,value=%.6f,formatted=%s",
+                track_idx, band, value, en == "1" and "enabled" or "disabled"), false)
+        return
+    end
+
     -- Calculate parameter index
     -- Each band has 3 params: freq (0), gain (1), bw (2)
     local param_offset = 0

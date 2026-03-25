@@ -433,11 +433,7 @@ pub fn EQModal(
                 .iter()
                 .map(|(reaper_idx, b)| {
                     let is_filter = b.band_type == "highpass" || b.band_type == "lowpass";
-                    let is_enabled = if is_filter {
-                        b.freq_hz > 25.0
-                    } else {
-                        b.gain_db.abs() > 0.05
-                    };
+                    let is_enabled = b.enabled;
                     // When band starts disabled, use sensible defaults for
                     // saved values so toggle ON produces a real change
                     let (sv_freq_norm, sv_freq_hz) = if !is_enabled && is_filter {
@@ -684,44 +680,15 @@ pub fn EQModal(
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
                                                 }
                                                 on:click=move |_| {
-                                                    if is_filter {
-                                                        // HPF/LPF: toggle via frequency
-                                                        if enabled_sig.get_untracked() {
-                                                            // Disable: save freq, set to bypass frequency
-                                                            saved_freq_norm_sig.set(freq_sig.get_untracked());
-                                                            saved_freq_hz_sig.set(freq_hz_sig.get_untracked());
-                                                            let bypass_freq = if band_type_toggle == "highpass" { 0.0 } else { 1.0 };
-                                                            let bypass_hz = if band_type_toggle == "highpass" { 20.0 } else { 20000.0 };
-                                                            freq_sig.set(bypass_freq);
-                                                            freq_hz_sig.set(bypass_hz);
-                                                            enabled_sig.set(false);
-                                                            on_param_change.run((band_idx, "freq".to_string(), bypass_freq));
-                                                        } else {
-                                                            // Re-enable: restore saved frequency
-                                                            let saved_norm = saved_freq_norm_sig.get_untracked();
-                                                            let saved_hz = saved_freq_hz_sig.get_untracked();
-                                                            freq_sig.set(saved_norm);
-                                                            freq_hz_sig.set(saved_hz);
-                                                            enabled_sig.set(true);
-                                                            on_param_change.run((band_idx, "freq".to_string(), saved_norm));
-                                                        }
+                                                    // Toggle band enabled/disabled via BANDENABLED
+                                                    if enabled_sig.get_untracked() {
+                                                        // Disable band
+                                                        enabled_sig.set(false);
+                                                        on_param_change.run((band_idx, "enabled".to_string(), 0.0));
                                                     } else {
-                                                        // Parametric/shelf: toggle via gain
-                                                        if enabled_sig.get_untracked() {
-                                                            saved_gain_norm_sig.set(gain_sig.get_untracked());
-                                                            saved_gain_db_sig.set(gain_db_sig.get_untracked());
-                                                            gain_sig.set(0.25);
-                                                            gain_db_sig.set(0.0);
-                                                            enabled_sig.set(false);
-                                                            on_param_change.run((band_idx, "gain".to_string(), 0.25));
-                                                        } else {
-                                                            let saved_norm = saved_gain_norm_sig.get_untracked();
-                                                            let saved_db = saved_gain_db_sig.get_untracked();
-                                                            gain_sig.set(saved_norm);
-                                                            gain_db_sig.set(saved_db);
-                                                            enabled_sig.set(true);
-                                                            on_param_change.run((band_idx, "gain".to_string(), saved_norm));
-                                                        }
+                                                        // Enable band
+                                                        enabled_sig.set(true);
+                                                        on_param_change.run((band_idx, "enabled".to_string(), 1.0));
                                                     }
                                                     curve_trigger.update(|n| *n += 1);
                                                 }

@@ -197,6 +197,7 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3125,
                 bw_norm: 0.5,
+                enabled: true,
             }],
         );
 

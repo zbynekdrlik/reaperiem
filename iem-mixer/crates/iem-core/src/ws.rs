@@ -24,6 +24,13 @@ pub struct EqBand {
     pub gain_norm: f32,
     /// Normalized bandwidth value for ReaEQ (0-1)
     pub bw_norm: f32,
+    /// Whether this band is enabled in ReaEQ (BANDENABLED config param)
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool {
+    true
 }
 
 /// Client → Server commands (sent via WebSocket)
@@ -581,6 +588,7 @@ mod tests {
                 freq_norm: 0.283,
                 gain_norm: 0.184,
                 bw_norm: 0.295,
+                enabled: true,
             }],
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -616,6 +624,7 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3,
                 bw_norm: 0.4,
+                enabled: true,
             }],
         );
         bands.insert(3, vec![]);
