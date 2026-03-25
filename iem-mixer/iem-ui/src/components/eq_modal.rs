@@ -410,12 +410,7 @@ pub fn EQModal(
 
             let locals: Vec<BandLocalState> = indexed
                 .iter()
-                .map(|(reaper_idx, b)| {
-                    web_sys::console::log_1(
-                        &format!("EQ INIT: reaper_idx={} type={} enabled={}",
-                            reaper_idx, b.band_type, b.enabled).into()
-                    );
-                    BandLocalState {
+                .map(|(reaper_idx, b)| BandLocalState {
                     reaper_band_idx: *reaper_idx as u8,
                     band_type: b.band_type.clone(),
                     freq_norm: RwSignal::new(b.freq_norm),
@@ -611,6 +606,7 @@ pub fn EQModal(
                                 // slider callbacks (where DOM data-attribute approach isn't possible).
                                 let band_idx_sv = StoredValue::new(band_idx);
                                 let band_type = local.band_type.clone();
+                                let band_type_toggle = band_type.clone();
                                 let band_type_reset = band_type.clone();
                                 let color = band_color(&band_type).to_string();
 
@@ -639,25 +635,56 @@ pub fn EQModal(
                                                 {i + 1}
                                             </span>
                                             <span class="eq-band-type">{band_type.clone()}</span>
-                                            // Toggle on/off button
+                                            // Toggle on/off: for HPF/LPF toggle freq, for others toggle gain
                                             <button
                                                 class=move || {
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
                                                 }
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
-                                                    let captured = band_idx;
-                                                    web_sys::console::log_1(
-                                                        &format!("EQ TOGGLE: sv={} captured={} enabled={}",
-                                                            idx, captured, enabled_sig.get_untracked()).into()
-                                                    );
-                                                    // Toggle band enabled/disabled via BANDENABLED
+                                                    let is_filter = band_type_toggle == "highpass" || band_type_toggle == "lowpass";
                                                     if enabled_sig.get_untracked() {
+                                                        // Disable band
                                                         enabled_sig.set(false);
-                                                        on_param_change.run((idx, "enabled".to_string(), 0.0));
+                                                        if is_filter {
+                                                            // Save current freq, set to boundary
+                                                            // (HPF→20Hz, LPF→20kHz)
+                                                            if band_type_toggle == "highpass" {
+                                                                on_param_change.run((idx, "freq".to_string(), 0.0));
+                                                                freq_sig.set(0.0);
+                                                                freq_hz_sig.set(20.0);
+                                                            } else {
+                                                                on_param_change.run((idx, "freq".to_string(), 1.0));
+                                                                freq_sig.set(1.0);
+                                                                freq_hz_sig.set(20000.0);
+                                                            }
+                                                        } else {
+                                                            // Save current gain, set to 0dB
+                                                            saved_gain_norm_sig.set(gain_sig.get_untracked());
+                                                            saved_gain_db_sig.set(gain_db_sig.get_untracked());
+                                                            on_param_change.run((idx, "gain".to_string(), 0.25));
+                                                            gain_sig.set(0.25);
+                                                            gain_db_sig.set(0.0);
+                                                        }
                                                     } else {
+                                                        // Enable band
                                                         enabled_sig.set(true);
-                                                        on_param_change.run((idx, "enabled".to_string(), 1.0));
+                                                        if is_filter {
+                                                            // Restore saved freq or use default
+                                                            let restore = if initial_freq_norm > 0.01 && initial_freq_norm < 0.99 {
+                                                                initial_freq_norm
+                                                            } else if band_type_toggle == "highpass" { 0.12 } else { 0.95 };
+                                                            on_param_change.run((idx, "freq".to_string(), restore));
+                                                            freq_sig.set(restore);
+                                                            freq_hz_sig.set(norm_to_freq_hz(restore));
+                                                        } else {
+                                                            // Restore saved gain
+                                                            let sg = saved_gain_norm_sig.get_untracked();
+                                                            let restore = if (sg - 0.25).abs() > 0.005 { sg } else { 0.30 };
+                                                            on_param_change.run((idx, "gain".to_string(), restore));
+                                                            gain_sig.set(restore);
+                                                            gain_db_sig.set(norm_to_gain_db(restore));
+                                                        }
                                                     }
                                                     curve_trigger.update(|n| *n += 1);
                                                 }

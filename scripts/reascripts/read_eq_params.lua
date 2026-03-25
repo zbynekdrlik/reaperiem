@@ -81,9 +81,17 @@ local function read_eq()
         elseif freq_name:match("Band Pass") then btype = "bandpass"
         end
 
-        -- Read per-band enabled state (REAPER v7+ named config param)
-        local en_ok, en_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. b)
-        local band_enabled = (not en_ok or en_val == "1") and "1" or "0"
+        -- Derive per-band enabled state from parameter values.
+        -- BANDENABLED:N is a GLOBAL toggle (affects ALL bands) — cannot use for per-band control.
+        -- Convention: HPF/LPF disabled at boundary freq, others disabled at 0dB gain.
+        local band_enabled = "1"
+        if btype == "highpass" and freq_norm < 0.01 then
+            band_enabled = "0"  -- HPF at 20Hz = effectively off
+        elseif btype == "lowpass" and freq_norm > 0.99 then
+            band_enabled = "0"  -- LPF at 20kHz = effectively off
+        elseif btype ~= "highpass" and btype ~= "lowpass" and math.abs(gain_norm - 0.25) < 0.005 then
+            band_enabled = "0"  -- gain at 0dB = no effect
+        end
 
         table.insert(bands, string.format(
             "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s,en=%s",

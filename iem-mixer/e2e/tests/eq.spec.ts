@@ -602,7 +602,9 @@ test.describe("EQ Feature", () => {
     expect(svgTexts).not.toContain("+24");
   });
 
-  test("HPF toggle sends SetEqBand with param 'enabled'", async ({ page }) => {
+  test("HPF toggle sends SetEqBand with param 'freq' (frequency-based toggle)", async ({
+    page,
+  }) => {
     if (!(await waitForMixer(page))) return;
 
     // Track WebSocket messages
@@ -644,12 +646,12 @@ test.describe("EQ Feature", () => {
     await toggleBtn.click();
     await page.waitForTimeout(200);
 
-    // Verify SetEqBand was sent with param: "enabled" (v1.114.0+ uses BANDENABLED)
+    // Verify SetEqBand was sent with param: "freq" (HPF toggled via frequency)
     const messages = await page.evaluate(
       () => (window as any).__hpfToggleMessages || [],
     );
     expect(messages.length).toBeGreaterThan(0);
-    expect(messages[0].param).toBe("enabled");
+    expect(messages[0].param).toBe("freq");
   });
 
   test("EQ access control: member only sees EQ on own tracks", async ({
@@ -782,12 +784,15 @@ test.describe("EQ Feature", () => {
       () => (window as any).__bandToggleMessages || [],
     );
 
-    // Filter only "enabled" param messages (toggle clicks)
-    const enabledMsgs = messages.filter((m: any) => m.param === "enabled");
-    expect(enabledMsgs.length).toBeGreaterThanOrEqual(toggleCount);
+    // Filter toggle messages: HPF sends "freq", others send "gain"
+    // Each toggle click should produce exactly one message
+    const toggleMsgs = messages.filter(
+      (m: any) => m.param === "freq" || m.param === "gain",
+    );
+    expect(toggleMsgs.length).toBeGreaterThanOrEqual(toggleCount);
 
     // Collect unique band indices — should have as many unique values as toggles clicked
-    const bandIndices = enabledMsgs.map((m: any) => m.band);
+    const bandIndices = toggleMsgs.map((m: any) => m.band);
     const uniqueIndices = new Set(bandIndices);
 
     // CRITICAL: If all toggles send band=0, this fails (proving the bug)
