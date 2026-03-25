@@ -410,7 +410,12 @@ pub fn EQModal(
 
             let locals: Vec<BandLocalState> = indexed
                 .iter()
-                .map(|(reaper_idx, b)| BandLocalState {
+                .map(|(reaper_idx, b)| {
+                    web_sys::console::log_1(
+                        &format!("EQ INIT: reaper_idx={} type={} enabled={}",
+                            reaper_idx, b.band_type, b.enabled).into()
+                    );
+                    BandLocalState {
                     reaper_band_idx: *reaper_idx as u8,
                     band_type: b.band_type.clone(),
                     freq_norm: RwSignal::new(b.freq_norm),
@@ -641,6 +646,11 @@ pub fn EQModal(
                                                 }
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
+                                                    let captured = band_idx;
+                                                    web_sys::console::log_1(
+                                                        &format!("EQ TOGGLE: sv={} captured={} enabled={}",
+                                                            idx, captured, enabled_sig.get_untracked()).into()
+                                                    );
                                                     // Toggle band enabled/disabled via BANDENABLED
                                                     if enabled_sig.get_untracked() {
                                                         enabled_sig.set(false);
