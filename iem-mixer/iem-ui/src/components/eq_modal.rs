@@ -410,22 +410,20 @@ pub fn EQModal(
 
             let locals: Vec<BandLocalState> = indexed
                 .iter()
-                .map(|(reaper_idx, b)| {
-                    BandLocalState {
-                        reaper_band_idx: *reaper_idx as u8,
-                        band_type: b.band_type.clone(),
-                        freq_norm: RwSignal::new(b.freq_norm),
-                        gain_norm: RwSignal::new(b.gain_norm),
-                        bw_norm: RwSignal::new(b.bw_norm),
-                        freq_hz: RwSignal::new(b.freq_hz),
-                        gain_db: RwSignal::new(b.gain_db),
-                        bw_oct: RwSignal::new(b.bw),
-                        enabled: RwSignal::new(b.enabled),
-                        saved_gain_norm: RwSignal::new(b.gain_norm),
-                        saved_gain_db: RwSignal::new(b.gain_db),
-                        initial_freq_hz: b.freq_hz,
-                        initial_freq_norm: b.freq_norm,
-                    }
+                .map(|(reaper_idx, b)| BandLocalState {
+                    reaper_band_idx: *reaper_idx as u8,
+                    band_type: b.band_type.clone(),
+                    freq_norm: RwSignal::new(b.freq_norm),
+                    gain_norm: RwSignal::new(b.gain_norm),
+                    bw_norm: RwSignal::new(b.bw_norm),
+                    freq_hz: RwSignal::new(b.freq_hz),
+                    gain_db: RwSignal::new(b.gain_db),
+                    bw_oct: RwSignal::new(b.bw),
+                    enabled: RwSignal::new(b.enabled),
+                    saved_gain_norm: RwSignal::new(b.gain_norm),
+                    saved_gain_db: RwSignal::new(b.gain_db),
+                    initial_freq_hz: b.freq_hz,
+                    initial_freq_norm: b.freq_norm,
                 })
                 .collect();
             stored_locals.set_value(locals);
