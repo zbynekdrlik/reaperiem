@@ -621,7 +621,6 @@ pub fn EQModal(
                                 let saved_gain_norm_sig = local.saved_gain_norm;
                                 let saved_gain_db_sig = local.saved_gain_db;
                                 let initial_freq_norm = local.initial_freq_norm;
-                                let initial_freq_hz = local.initial_freq_hz;
 
                                 // Throttle WebSocket sends to 50ms intervals per band.
                                 let last_send_freq = RwSignal::new(0.0_f64);
