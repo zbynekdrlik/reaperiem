@@ -104,7 +104,7 @@ fn default_saved_freq(band_type: &str) -> (f32, f32) {
     match band_type {
         "highpass" => (0.24, 100.0),  // 100 Hz
         "lowpass" => (0.90, 10000.0), // 10 kHz
-        _ => (0.5, 1000.0),          // fallback
+        _ => (0.5, 1000.0),           // fallback
     }
 }
 
@@ -1330,29 +1330,65 @@ mod tests {
     fn test_hpf_default_saved_freq_is_audible() {
         let (norm, hz) = default_saved_freq("highpass");
         // Must NOT be at bypass position (0.0 / 20Hz)
-        assert!(norm > 0.1, "HPF default saved norm {} should be > 0.1", norm);
-        assert!(hz > 50.0, "HPF default saved Hz {} should be > 50Hz", hz);
+        assert!(
+            norm > 0.1,
+            "HPF default saved norm {} should be > 0.1",
+            norm
+        );
+        assert!(
+            hz > 50.0,
+            "HPF default saved Hz {} should be > 50Hz",
+            hz
+        );
         // Must be a reasonable HPF frequency
-        assert!(hz < 500.0, "HPF default saved Hz {} should be < 500Hz", hz);
+        assert!(
+            hz < 500.0,
+            "HPF default saved Hz {} should be < 500Hz",
+            hz
+        );
     }
 
     #[test]
     fn test_lpf_default_saved_freq_is_audible() {
         let (norm, hz) = default_saved_freq("lowpass");
         // Must NOT be at bypass position (1.0 / 20kHz)
-        assert!(norm < 0.95, "LPF default saved norm {} should be < 0.95", norm);
-        assert!(hz < 15000.0, "LPF default saved Hz {} should be < 15kHz", hz);
-        assert!(hz > 2000.0, "LPF default saved Hz {} should be > 2kHz", hz);
+        assert!(
+            norm < 0.95,
+            "LPF default saved norm {} should be < 0.95",
+            norm
+        );
+        assert!(
+            hz < 15000.0,
+            "LPF default saved Hz {} should be < 15kHz",
+            hz
+        );
+        assert!(
+            hz > 2000.0,
+            "LPF default saved Hz {} should be > 2kHz",
+            hz
+        );
     }
 
     #[test]
     fn test_parametric_default_saved_gain_is_nonzero() {
         let (norm, db) = default_saved_gain();
         // Must NOT be at flat position (0.25 / 0dB)
-        assert!((norm - 0.25).abs() > 0.02, "Default saved gain norm {} should differ from 0.25", norm);
-        assert!(db.abs() > 1.0, "Default saved gain {} dB should be audible (> 1dB)", db);
+        assert!(
+            (norm - 0.25).abs() > 0.02,
+            "Default saved gain norm {} should differ from 0.25",
+            norm
+        );
+        assert!(
+            db.abs() > 1.0,
+            "Default saved gain {} dB should be audible (> 1dB)",
+            db
+        );
         // Must not be too aggressive
-        assert!(db < 6.0, "Default saved gain {} dB should be moderate (< 6dB)", db);
+        assert!(
+            db < 6.0,
+            "Default saved gain {} dB should be moderate (< 6dB)",
+            db
+        );
     }
 
     #[test]
