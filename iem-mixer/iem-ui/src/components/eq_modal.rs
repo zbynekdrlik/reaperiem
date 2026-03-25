@@ -1335,17 +1335,9 @@ mod tests {
             "HPF default saved norm {} should be > 0.1",
             norm
         );
-        assert!(
-            hz > 50.0,
-            "HPF default saved Hz {} should be > 50Hz",
-            hz
-        );
+        assert!(hz > 50.0, "HPF default saved Hz {} should be > 50Hz", hz);
         // Must be a reasonable HPF frequency
-        assert!(
-            hz < 500.0,
-            "HPF default saved Hz {} should be < 500Hz",
-            hz
-        );
+        assert!(hz < 500.0, "HPF default saved Hz {} should be < 500Hz", hz);
     }
 
     #[test]
@@ -1362,11 +1354,7 @@ mod tests {
             "LPF default saved Hz {} should be < 15kHz",
             hz
         );
-        assert!(
-            hz > 2000.0,
-            "LPF default saved Hz {} should be > 2kHz",
-            hz
-        );
+        assert!(hz > 2000.0, "LPF default saved Hz {} should be > 2kHz", hz);
     }
 
     #[test]
