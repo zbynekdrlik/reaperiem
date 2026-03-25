@@ -16,8 +16,8 @@
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 
 /// Activation delay in milliseconds (matches fader.rs pattern)
 const ACTIVATION_DELAY_MS: u32 = 150;
