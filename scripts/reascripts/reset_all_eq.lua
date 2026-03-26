@@ -25,8 +25,8 @@ local function find_reaeq(track)
     return -1
 end
 
--- Band types: HPF=3, LowShelf=1, Band=0, Band=0, HighShelf=2
-local band_types = { "3", "1", "0", "0", "2" }
+-- Band types for BANDTYPE (no colon): HPF=4, LowShelf=0, Band=8, HighShelf=1
+local band_types = { "4", "0", "8", "8", "1" }
 
 -- Default parameters: { freq_norm, gain_norm(0.25=0dB), bw_norm }
 local defaults = {
@@ -45,13 +45,10 @@ local function insert_clean_eq(track, position)
     -- Rename to "EQ"
     reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "renamed_name", "EQ")
 
-    -- Set band types FIRST (on fresh insert, this determines parameter names)
+    -- Set band types and parameters together per band
+    -- Setting type + params in same loop ensures REAPER processes each band fully
     for b = 0, 4 do
-        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDTYPE:" .. b, band_types[b + 1])
-    end
-
-    -- Then set parameters
-    for b = 0, 4 do
+        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDTYPE" .. b, band_types[b + 1])
         reaper.TrackFX_SetParam(track, fx_idx, b * 3, defaults[b + 1][1])
         reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 1, defaults[b + 1][2])
         reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 2, defaults[b + 1][3])

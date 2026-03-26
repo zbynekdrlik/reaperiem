@@ -21,11 +21,12 @@
 
 local section = "reaperiem"
 
--- BANDTYPE values for ReaEQ
-local TYPE_BAND = "0"
-local TYPE_LOWSHELF = "1"
-local TYPE_HIGHSHELF = "2"
-local TYPE_HIGHPASS = "3"
+-- BANDTYPE values for ReaEQ (BANDTYPE without colon)
+-- 0=LowShelf, 1=HighShelf, 4=HighPass, 8=Band(peaking)
+local TYPE_BAND = "8"
+local TYPE_LOWSHELF = "0"
+local TYPE_HIGHSHELF = "1"
+local TYPE_HIGHPASS = "4"
 
 -- Target band types (new order)
 local TARGET_TYPES = { TYPE_HIGHPASS, TYPE_LOWSHELF, TYPE_BAND, TYPE_BAND, TYPE_HIGHSHELF }
@@ -53,7 +54,7 @@ end
 
 -- Read current band type for a band
 local function get_band_type(track, eq_idx, band)
-    local ok, val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDTYPE:" .. band)
+    local ok, val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDTYPE" .. band)
     if ok then return val end
     -- Fallback: detect from param name
     local _, name = reaper.TrackFX_GetParamName(track, eq_idx, band * 3)
@@ -94,7 +95,7 @@ end
 
 -- Write all parameters for a band
 local function write_band(track, eq_idx, band, data)
-    reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDTYPE:" .. band, data.btype)
+    reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDTYPE" .. band, data.btype)
     reaper.TrackFX_SetParam(track, eq_idx, band * 3, data.freq)
     reaper.TrackFX_SetParam(track, eq_idx, band * 3 + 1, data.gain)
     reaper.TrackFX_SetParam(track, eq_idx, band * 3 + 2, data.bw)
