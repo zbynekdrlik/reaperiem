@@ -109,7 +109,13 @@ async fn save_preset(
 
     let entry = state
         .preset_store
-        .save_with_stems(&member, &name, req.channels, req.stems_level_db, req.eq_bands)
+        .save_with_stems(
+            &member,
+            &name,
+            req.channels,
+            req.stems_level_db,
+            req.eq_bands,
+        )
         .map_err(|e| {
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
@@ -170,7 +176,13 @@ async fn update_preset(
 
     let entry = state
         .preset_store
-        .save_with_stems(&member, &name, req.channels, req.stems_level_db, req.eq_bands)
+        .save_with_stems(
+            &member,
+            &name,
+            req.channels,
+            req.stems_level_db,
+            req.eq_bands,
+        )
         .map_err(|e| {
             tracing::error!("Failed to update preset: {}", e);
             (
