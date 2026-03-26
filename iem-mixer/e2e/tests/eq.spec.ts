@@ -1015,9 +1015,15 @@ test.describe("EQ value sync - ENGINEER track", () => {
   });
 
   test.afterEach(async () => {
-    // Filter out known third-party noise
+    // Filter out known CI environment noise:
+    // - Chromium SRI integrity warnings (crbug.com/981419)
+    // - WebSocket auth failures (no real token in CI)
     const real = consoleMessages.filter(
-      (m) => !m.includes("[vite]") && !m.includes("favicon"),
+      (m) =>
+        !m.includes("[vite]") &&
+        !m.includes("favicon") &&
+        !m.includes("integrity") &&
+        !m.includes("WebSocket connection"),
     );
     expect(real).toEqual([]);
   });
