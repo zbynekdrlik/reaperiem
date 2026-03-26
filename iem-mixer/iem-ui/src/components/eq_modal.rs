@@ -377,7 +377,6 @@ pub fn EQModal(
     /// Callback to close the modal
     on_close: Callback<()>,
 ) -> impl IntoView {
-    let _track_index = track_index; // Used for future SVG interaction
     let track_name = StoredValue::new(track_name);
 
     // SVG dimensions
@@ -690,10 +689,6 @@ pub fn EQModal(
                                                     gain_sig.set(0.25);
                                                     gain_db_sig.set(0.0);
                                                     on_param_change.run((idx, "gain".to_string(), 0.25));
-                                                    // Reset BW to default
-                                                    bw_sig.set(0.5);
-                                                    bw_oct_sig.set(norm_to_bw(0.5));
-                                                    on_param_change.run((idx, "bw".to_string(), 0.5));
                                                     // Reset freq to per-band default
                                                     // Norm values verified empirically against REAPER
                                                     let default_freq_norm: f32 = match band_type_reset.as_str() {

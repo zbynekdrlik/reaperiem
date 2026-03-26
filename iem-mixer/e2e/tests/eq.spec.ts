@@ -782,11 +782,8 @@ test.describe("EQ Feature", () => {
       () => (window as any).__bandToggleMessages || [],
     );
 
-    // Filter toggle messages: HPF sends "freq", others send "gain"
-    // Each toggle click should produce exactly one message
-    const toggleMsgs = messages.filter(
-      (m: any) => m.param === "freq" || m.param === "gain",
-    );
+    // Filter toggle messages: all toggles send "enabled"
+    const toggleMsgs = messages.filter((m: any) => m.param === "enabled");
     expect(toggleMsgs.length).toBeGreaterThanOrEqual(toggleCount);
 
     // Collect unique band indices — should have as many unique values as toggles clicked

@@ -116,20 +116,6 @@ impl PresetStore {
         Ok(result)
     }
 
-    /// Save a complete PresetEntry as-is (used to persist EQ bands after save_with_stems)
-    pub fn save_raw(
-        &self,
-        member_id: &str,
-        entry: PresetEntry,
-    ) -> Result<PresetEntry, PresetError> {
-        let mut presets = self.load_all(member_id);
-        let result = entry.clone();
-        presets.insert(entry.name.clone(), entry);
-        self.save_all(member_id, &presets)
-            .map_err(PresetError::Io)?;
-        Ok(result)
-    }
-
     /// Get a specific preset by name
     pub fn get(&self, member_id: &str, name: &str) -> Option<PresetEntry> {
         self.load_all(member_id).remove(name)
