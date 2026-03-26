@@ -657,16 +657,17 @@ pub fn EQModal(
                                                     bw_sig.set(0.5);
                                                     bw_oct_sig.set(norm_to_bw(0.5));
                                                     on_param_change.run((idx, "bw".to_string(), 0.5));
-                                                    // Reset freq to per-band default (all types get a reset)
-                                                    let default_freq_norm = match band_type_reset.as_str() {
-                                                        "highpass" => 0.12_f32,  // ~80Hz
-                                                        "lowshelf" => 0.17,      // ~200Hz
-                                                        "highshelf" => 0.69,     // ~8kHz
-                                                        "lowpass" => 0.82,       // ~12kHz
+                                                    // Reset freq to per-band default
+                                                    // Norm values verified empirically against REAPER
+                                                    let default_freq_norm: f32 = match band_type_reset.as_str() {
+                                                        "highpass" => 0.1160,   // 80Hz
+                                                        "lowshelf" => 0.2316,   // 200Hz
+                                                        "highshelf" => 0.8176,  // 8kHz
+                                                        "lowpass" => 0.8848,    // 12kHz
                                                         _ => {
                                                             // Parametric bands: use REAPER index
-                                                            if idx == 3 { 0.57 } else { 0.39 }
-                                                            // band 2 → ~800Hz, band 3 → ~3kHz
+                                                            if idx == 3 { 0.6548 } else { 0.4408 }
+                                                            // band 2 → 800Hz, band 3 → 3kHz
                                                         }
                                                     };
                                                     let default_bw_norm = match band_type_reset.as_str() {
@@ -1130,6 +1131,20 @@ mod tests {
         assert_eq!(display_order("band"), 2);
         assert_eq!(display_order("highshelf"), 4);
         assert_eq!(display_order("lowpass"), 5);
+    }
+
+    /// Verify norm_to_freq_hz formula at key points.
+    /// NOTE: norm_to_freq_hz uses 20*1000^norm which is an approximation.
+    /// REAPER's actual mapping is different (range 20-24000Hz, non-standard curve).
+    /// The web app uses REAPER's formatted fh value for accurate display on load.
+    /// This formula is only used during slider drag as a rough preview.
+    #[test]
+    fn test_norm_to_freq_hz_endpoints() {
+        assert!((norm_to_freq_hz(0.0) - 20.0).abs() < 0.1);
+        assert!((norm_to_freq_hz(1.0) - 20000.0).abs() < 1.0);
+        // Monotonically increasing
+        assert!(norm_to_freq_hz(0.5) > norm_to_freq_hz(0.25));
+        assert!(norm_to_freq_hz(0.75) > norm_to_freq_hz(0.5));
     }
 
     #[test]

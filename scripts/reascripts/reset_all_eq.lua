@@ -29,12 +29,13 @@ end
 local band_types = { "4", "0", "8", "8", "1" }
 
 -- Default parameters: { freq_norm, gain_norm(0.25=0dB), bw_norm }
+-- freq_norm verified empirically against REAPER's GetFormattedParamValue
 local defaults = {
-    { 0.12, 0.25, 0.50 },  -- HPF ~80Hz
-    { 0.17, 0.25, 0.50 },  -- Low Shelf ~200Hz
-    { 0.39, 0.25, 0.25 },  -- Band ~800Hz
-    { 0.57, 0.25, 0.25 },  -- Band ~3kHz
-    { 0.69, 0.25, 0.50 },  -- High Shelf ~8kHz
+    { 0.1160, 0.25, 0.50 },  -- HPF 80Hz
+    { 0.2316, 0.25, 0.50 },  -- Low Shelf 200Hz
+    { 0.4408, 0.25, 0.25 },  -- Band 800Hz
+    { 0.6548, 0.25, 0.25 },  -- Band 3kHz
+    { 0.8176, 0.25, 0.50 },  -- High Shelf 8kHz
 }
 
 -- Insert a fresh ReaEQ at position with correct band types and defaults

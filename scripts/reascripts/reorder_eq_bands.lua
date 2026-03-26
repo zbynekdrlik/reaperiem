@@ -32,13 +32,13 @@ local TYPE_HIGHPASS = "4"
 local TARGET_TYPES = { TYPE_HIGHPASS, TYPE_LOWSHELF, TYPE_BAND, TYPE_BAND, TYPE_HIGHSHELF }
 
 -- Sensible defaults for each band position (new order)
--- freq_norm, gain_norm(0.25=0dB), bw_norm
+-- freq_norm verified empirically against REAPER, gain_norm(0.25=0dB), bw_norm
 local DEFAULTS = {
-    { 0.12, 0.25, 0.50 },   -- Band 0: HPF ~80Hz, 0dB, 2.0 oct
-    { 0.17, 0.25, 0.50 },   -- Band 1: Low Shelf ~200Hz, 0dB, 2.0 oct
-    { 0.39, 0.25, 0.25 },   -- Band 2: Band ~800Hz, 0dB, 1.0 oct
-    { 0.57, 0.25, 0.25 },   -- Band 3: Band ~3kHz, 0dB, 1.0 oct
-    { 0.69, 0.25, 0.50 },   -- Band 4: High Shelf ~8kHz, 0dB, 2.0 oct
+    { 0.1160, 0.25, 0.50 },  -- Band 0: HPF 80Hz, 0dB, 2.0 oct
+    { 0.2316, 0.25, 0.50 },  -- Band 1: Low Shelf 200Hz, 0dB, 2.0 oct
+    { 0.4408, 0.25, 0.25 },  -- Band 2: Band 800Hz, 0dB, 1.0 oct
+    { 0.6548, 0.25, 0.25 },  -- Band 3: Band 3kHz, 0dB, 1.0 oct
+    { 0.8176, 0.25, 0.50 },  -- Band 4: High Shelf 8kHz, 0dB, 2.0 oct
 }
 
 local function find_reaeq(track)
