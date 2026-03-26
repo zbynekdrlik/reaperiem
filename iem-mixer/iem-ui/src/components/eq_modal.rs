@@ -656,7 +656,7 @@ pub fn EQModal(
                                                 title="Reset band"
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
-                                                    // Reset gain to 0dB (neutral — no boost/cut)
+                                                    // Reset gain to 0dB
                                                     gain_sig.set(0.25);
                                                     gain_db_sig.set(0.0);
                                                     on_param_change.run((idx, "gain".to_string(), 0.25));
@@ -664,22 +664,30 @@ pub fn EQModal(
                                                     bw_sig.set(0.5);
                                                     bw_oct_sig.set(norm_to_bw(0.5));
                                                     on_param_change.run((idx, "bw".to_string(), 0.5));
-                                                    // HPF/LPF: reset freq to boundary (disabled)
-                                                    // Shelf/Band: keep freq position (just zero gain)
-                                                    if band_type_reset == "highpass" {
-                                                        freq_sig.set(0.0);
-                                                        freq_hz_sig.set(20.0);
-                                                        on_param_change.run((idx, "freq".to_string(), 0.0));
-                                                    } else if band_type_reset == "lowpass" {
-                                                        freq_sig.set(1.0);
-                                                        freq_hz_sig.set(20000.0);
-                                                        on_param_change.run((idx, "freq".to_string(), 1.0));
-                                                    }
-                                                    // Disable band in REAPER and UI
-                                                    enabled_sig.set(false);
-                                                    on_param_change.run((idx, "enabled".to_string(), 0.0));
-                                                    saved_gain_norm_sig.set(0.25);
-                                                    saved_gain_db_sig.set(0.0);
+                                                    // Reset freq to per-band default (all types get a reset)
+                                                    let default_freq_norm = match band_type_reset {
+                                                        "highpass" => 0.12_f32,  // ~80Hz
+                                                        "lowshelf" => 0.17,      // ~200Hz
+                                                        "highshelf" => 0.69,     // ~8kHz
+                                                        "lowpass" => 0.82,       // ~12kHz
+                                                        _ => {
+                                                            // Parametric bands: use REAPER index
+                                                            if idx == 3 { 0.57 } else { 0.39 }
+                                                            // band 2 → ~800Hz, band 3 → ~3kHz
+                                                        }
+                                                    };
+                                                    let default_bw_norm = match band_type_reset {
+                                                        "highpass" | "lowshelf" | "highshelf" | "lowpass" => 0.50,
+                                                        _ => 0.25,
+                                                    };
+                                                    freq_sig.set(default_freq_norm);
+                                                    freq_hz_sig.set(norm_to_freq_hz(default_freq_norm));
+                                                    on_param_change.run((idx, "freq".to_string(), default_freq_norm));
+                                                    // Override BW with type-specific default
+                                                    bw_sig.set(default_bw_norm);
+                                                    bw_oct_sig.set(norm_to_bw(default_bw_norm));
+                                                    on_param_change.run((idx, "bw".to_string(), default_bw_norm));
+                                                    // Enable/disable state NOT changed — reset only affects parameters
                                                     curve_trigger.update(|n| *n += 1);
                                                 }
                                             >

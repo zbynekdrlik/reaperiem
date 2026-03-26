@@ -1341,15 +1341,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     const bandCards = page.locator(".eq-band-card");
     const targetBand = bandCards.nth(1);
 
-    // First reset to ensure clean state
-    const resetBtn = targetBand.locator(".eq-band-reset");
-    if (await resetBtn.isVisible().catch(() => false)) {
-      await resetBtn.click();
-      await page.waitForTimeout(500);
-    }
-
-    // The band should now be disabled (reset sets enabled=false)
-    // Verify toggle shows disabled state
+    // Explicitly disable the band via toggle (reset no longer changes enable state)
     const toggle = targetBand.locator(".eq-band-toggle");
     if (
       !assume(
@@ -1358,6 +1350,13 @@ test.describe("EQ value sync - ENGINEER track", () => {
       )
     )
       return;
+
+    // If band is enabled, click toggle to disable it
+    const toggleClasses = await toggle.getAttribute("class");
+    if (toggleClasses && toggleClasses.includes(" on")) {
+      await toggle.click();
+      await page.waitForTimeout(500);
+    }
 
     // Now drag the gain slider while band is disabled
     const gainSlider = targetBand.locator(".eq-slider-track").nth(1);
@@ -1382,9 +1381,11 @@ test.describe("EQ value sync - ENGINEER track", () => {
     // Band should remain disabled
     expect(band0!["en"]).toBe("0");
 
-    // Cleanup: reset and close
-    if (await resetBtn.isVisible().catch(() => false)) {
-      await resetBtn.click();
+    // Cleanup: re-enable band and close
+    const toggleAfter = targetBand.locator(".eq-band-toggle");
+    const afterClasses = await toggleAfter.getAttribute("class");
+    if (afterClasses && afterClasses.includes(" off")) {
+      await toggleAfter.click();
       await page.waitForTimeout(300);
     }
     await page.locator(".eq-close-btn").click();

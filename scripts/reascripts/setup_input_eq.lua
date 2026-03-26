@@ -103,7 +103,9 @@ local function setup_eq()
                         reaper.TrackFX_SetParam(track, fx_idx, b * 3, defaults[b + 1][1])
                         reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 1, defaults[b + 1][2])
                         reaper.TrackFX_SetParam(track, fx_idx, b * 3 + 2, defaults[b + 1][3])
-                        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDENABLED:" .. b, "0")
+                        -- Use BANDENABLED (NO colon) for per-band control
+                        -- BANDENABLED:N (WITH colon) is a GLOBAL toggle — do NOT use
+                        reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "BANDENABLED" .. b, "0")
                     end
 
                     inserted = inserted + 1

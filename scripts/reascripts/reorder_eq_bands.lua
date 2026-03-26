@@ -87,7 +87,7 @@ local function read_band(track, eq_idx, band)
     local gain = reaper.TrackFX_GetParam(track, eq_idx, band * 3 + 1)
     local bw = reaper.TrackFX_GetParam(track, eq_idx, band * 3 + 2)
     local btype = get_band_type(track, eq_idx, band)
-    local ok, en_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. band)
+    local ok, en_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDENABLED" .. band)
     local enabled = (not ok or en_val == "1")
     return { freq = freq, gain = gain, bw = bw, btype = btype, enabled = enabled }
 end
@@ -99,7 +99,7 @@ local function write_band(track, eq_idx, band, data)
     reaper.TrackFX_SetParam(track, eq_idx, band * 3 + 1, data.gain)
     reaper.TrackFX_SetParam(track, eq_idx, band * 3 + 2, data.bw)
     local en = data.enabled and "1" or "0"
-    reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. band, en)
+    reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED" .. band, en)
 end
 
 local function reorder_eq()
@@ -215,7 +215,7 @@ local function reorder_eq()
                         reaper.TrackFX_SetParam(track, eq_idx, b * 3, DEFAULTS[b + 1][1])
                         reaper.TrackFX_SetParam(track, eq_idx, b * 3 + 1, DEFAULTS[b + 1][2])
                         reaper.TrackFX_SetParam(track, eq_idx, b * 3 + 2, DEFAULTS[b + 1][3])
-                        reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED:" .. b, "0")
+                        reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED" .. b, "0")
                     end
                     defaulted = defaulted + 1
                     table.insert(details, name .. ":defaulted")
