@@ -4,53 +4,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "19": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.15132603,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.988553,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.35885,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.602439,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.190508,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.478534,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.114815,
+      "18": {
+        "vol": 0.716,
         "mute": false,
         "pan": 0.5
       },
@@ -59,38 +14,8 @@
         "mute": false,
         "pan": 0.5
       },
-      "16": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.457088,
-        "mute": false,
-        "pan": 0.6833335
-      },
-      "8": {
-        "vol": 0.160292,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.501187,
-        "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.716,
-        "mute": false,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": 0.536924,
+      "1": {
+        "vol": 0.478534,
         "mute": false,
         "pan": 0.5
       },
@@ -99,10 +24,25 @@
         "mute": false,
         "pan": 0.5
       },
-      "20": {
-        "vol": 0.2691,
+      "17": {
+        "vol": 0.190508,
         "mute": false,
         "pan": 0.5
+      },
+      "7": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.114815,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.457088,
+        "mute": false,
+        "pan": 0.6833335
       },
       "14": {
         "vol": 0.638136,
@@ -111,6 +51,66 @@
       },
       "15": {
         "vol": 0.426494,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.536924,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.35885,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 0.501187,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.988553,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.15132603,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.160292,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.103514,
         "mute": false,
         "pan": 0.5
       }
@@ -121,38 +121,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "22": {
-        "vol": 0.15132603,
-        "mute": false,
-        "pan": 0.5
-      },
       "17": {
         "vol": 0.190508,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.716,
-        "mute": false,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 0.426494,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 0.2691,
         "mute": false,
         "pan": 0.5
       },
@@ -161,28 +131,18 @@
         "mute": false,
         "pan": 0.5
       },
-      "2": {
-        "vol": 0.988553,
+      "8": {
+        "vol": 0.160292,
         "mute": false,
         "pan": 0.5
       },
-      "14": {
-        "vol": 0.638136,
+      "19": {
+        "vol": 0.2691,
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": 0.536924,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.536924,
+      "15": {
+        "vol": 0.426494,
         "mute": false,
         "pan": 0.5
       },
@@ -191,9 +151,9 @@
         "mute": false,
         "pan": 0.6833335
       },
-      "3": {
-        "vol": 0.501187,
-        "mute": true,
+      "14": {
+        "vol": 0.638136,
+        "mute": false,
         "pan": 0.5
       },
       "7": {
@@ -206,8 +166,53 @@
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 0.160292,
+      "16": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.536924,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.716,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.103514,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.15132603,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 0.501187,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.988553,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.536924,
         "mute": false,
         "pan": 0.5
       },
@@ -222,11 +227,6 @@
         "pan": 0.5
       },
       "20": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
         "vol": 0.2691,
         "mute": false,
         "pan": 0.5
@@ -238,73 +238,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "15": {
-        "vol": 0.426494,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.08709599,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.15132603,
-        "mute": false,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.602439,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.602439,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.536924,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.716,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.35885,
-        "mute": false,
-        "pan": 0.5
-      },
       "21": {
         "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": 0.536924,
         "mute": false,
         "pan": 0.5
       },
@@ -318,6 +253,36 @@
         "mute": false,
         "pan": 0.5
       },
+      "22": {
+        "vol": 0.15132603,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.160292,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.426494,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.716,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.08709599,
+        "mute": false,
+        "pan": 0.5
+      },
       "1": {
         "vol": 0.323594,
         "mute": false,
@@ -328,8 +293,38 @@
         "mute": false,
         "pan": 0.5
       },
+      "5": {
+        "vol": 0.103514,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
       "3": {
         "vol": 3.981072,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.536924,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.457088,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "6": {
+        "vol": 0.35885,
         "mute": false,
         "pan": 0.5
       },
@@ -338,15 +333,20 @@
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 0.160292,
+      "12": {
+        "vol": 0.536924,
         "mute": false,
         "pan": 0.5
       },
-      "4": {
-        "vol": 0.457088,
+      "20": {
+        "vol": 0.2691,
         "mute": false,
-        "pan": 0.6833335
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.5
       }
     }
   },
@@ -355,26 +355,6 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "12": {
-        "vol": 0.536924,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.08709599,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.323594,
-        "mute": false,
-        "pan": 0.5
-      },
       "9": {
         "vol": 1.0,
         "mute": false,
@@ -385,68 +365,8 @@
         "mute": false,
         "pan": 0.5
       },
-      "20": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 0.638136,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.15132603,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.602439,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.35885,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 3.981072,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.457088,
-        "mute": false,
-        "pan": 0.6833335
-      },
       "8": {
         "vol": 0.160292,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.536924,
-        "mute": false,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 0.426494,
         "mute": false,
         "pan": 0.5
       },
@@ -460,8 +380,88 @@
         "mute": false,
         "pan": 0.5
       },
+      "11": {
+        "vol": 0.536924,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.08709599,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.15132603,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.536924,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.103514,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.323594,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.638136,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.457088,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "15": {
+        "vol": 0.426494,
+        "mute": false,
+        "pan": 0.5
+      },
       "18": {
         "vol": 0.716,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 3.981072,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.114815,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.35885,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.114815,
         "mute": false,
         "pan": 0.5
       }
@@ -472,14 +472,24 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "22": {
+      "7": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.877
+      },
+      "3": {
         "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
-      "9": {
+      "1": {
+        "vol": 0.323594,
+        "mute": false,
+        "pan": 0.63199997
+      },
+      "22": {
         "vol": 1.0,
-        "mute": true,
+        "mute": false,
         "pan": 0.5
       },
       "19": {
@@ -487,14 +497,9 @@
         "mute": false,
         "pan": 0.5
       },
-      "17": {
-        "vol": 0.08709599,
+      "5": {
+        "vol": 0.103514,
         "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 1.0,
-        "mute": true,
         "pan": 0.5
       },
       "18": {
@@ -507,63 +512,8 @@
         "mute": false,
         "pan": 0.5
       },
-      "3": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.316228,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.323594,
-        "mute": false,
-        "pan": 0.63199997
-      },
-      "20": {
-        "vol": 0.2691,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.602439,
-        "mute": false,
-        "pan": 0.877
-      },
-      "2": {
-        "vol": 0.421696,
-        "mute": false,
-        "pan": 0.329
-      },
-      "8": {
-        "vol": 0.160292,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 0.638136,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
       "11": {
         "vol": 0.316228,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
         "mute": false,
         "pan": 0.5
       },
@@ -572,35 +522,33 @@
         "mute": false,
         "pan": 0.5
       },
+      "6": {
+        "vol": 0.35885,
+        "mute": false,
+        "pan": 0.68799996
+      },
       "4": {
         "vol": 0.457088,
         "mute": false,
         "pan": 0.6833335
       },
-      "6": {
-        "vol": 0.35885,
+      "16": {
+        "vol": 0.114815,
         "mute": false,
-        "pan": 0.68799996
-      }
-    }
-  },
-  {
-    "timestamp": 1773491005,
-    "label": "auto",
-    "pinned": false,
-    "channels": {
-      "4": {
-        "vol": 0.21134898,
-        "mute": false,
-        "pan": 0.6833335
+        "pan": 0.5
       },
-      "6": {
-        "vol": 0.35885,
+      "2": {
+        "vol": 0.421696,
         "mute": false,
-        "pan": 0.68799996
+        "pan": 0.329
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
       },
       "13": {
-        "vol": 0.473151,
+        "vol": 0.316228,
         "mute": false,
         "pan": 0.5
       },
@@ -614,23 +562,35 @@
         "mute": false,
         "pan": 0.5
       },
+      "14": {
+        "vol": 0.638136,
+        "mute": false,
+        "pan": 0.5
+      },
       "8": {
         "vol": 0.160292,
         "mute": false,
         "pan": 0.5
       },
-      "19": {
-        "vol": 0.2691,
-        "mute": false,
+      "10": {
+        "vol": 1.0,
+        "mute": true,
         "pan": 0.5
       },
-      "15": {
-        "vol": 0.426494,
+      "21": {
+        "vol": 0.114815,
         "mute": false,
         "pan": 0.5
-      },
-      "18": {
-        "vol": 0.350752,
+      }
+    }
+  },
+  {
+    "timestamp": 1773491005,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "11": {
+        "vol": 0.457088,
         "mute": false,
         "pan": 0.5
       },
@@ -639,18 +599,18 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 0.24547099,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.103514,
-        "mute": false,
-        "pan": 0.5
-      },
       "12": {
         "vol": 0.537032,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
         "mute": false,
         "pan": 0.5
       },
@@ -659,13 +619,18 @@
         "mute": true,
         "pan": 0.5
       },
-      "7": {
-        "vol": 0.602439,
+      "5": {
+        "vol": 0.103514,
         "mute": false,
-        "pan": 0.877
+        "pan": 0.5
       },
-      "16": {
-        "vol": 0.114815,
+      "17": {
+        "vol": 0.08709599,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.426494,
         "mute": false,
         "pan": 0.5
       },
@@ -673,6 +638,51 @@
         "vol": 0.5188,
         "mute": false,
         "pan": 0.329
+      },
+      "21": {
+        "vol": 0.114815,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.35885,
+        "mute": false,
+        "pan": 0.68799996
+      },
+      "19": {
+        "vol": 0.2691,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.473151,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.21134898,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "8": {
+        "vol": 0.160292,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.24547099,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.602439,
+        "mute": false,
+        "pan": 0.877
+      },
+      "18": {
+        "vol": 0.350752,
+        "mute": false,
+        "pan": 0.5
       },
       "14": {
         "vol": 0.638136,
@@ -684,18 +694,8 @@
         "mute": false,
         "pan": 0.63199997
       },
-      "21": {
+      "16": {
         "vol": 0.114815,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.457088,
         "mute": false,
         "pan": 0.5
       }
@@ -706,13 +706,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "7": {
-        "vol": 0.60255957,
-        "mute": false,
-        "pan": 0.877
-      },
-      "22": {
-        "vol": 1.0,
+      "12": {
+        "vol": 0.53703177,
         "mute": false,
         "pan": 0.5
       },
@@ -721,13 +716,8 @@
         "mute": false,
         "pan": 0.5
       },
-      "5": {
-        "vol": 0.102329314,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.08709635,
+      "21": {
+        "vol": 0.11481538,
         "mute": false,
         "pan": 0.5
       },
@@ -741,43 +731,13 @@
         "mute": true,
         "pan": 0.5
       },
-      "14": {
-        "vol": 0.63095737,
+      "4": {
+        "vol": 0.21379623,
         "mute": false,
-        "pan": 0.5
+        "pan": 0.6833335
       },
-      "10": {
-        "vol": 0.24547088,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.45708817,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 0.26915348,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.11481538,
-        "mute": false,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 0.15848932,
-        "mute": false,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": 0.53703177,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 1.5488166,
+      "13": {
+        "vol": 0.46773517,
         "mute": false,
         "pan": 0.5
       },
@@ -786,8 +746,33 @@
         "mute": false,
         "pan": 0.329
       },
+      "17": {
+        "vol": 0.08709635,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.60255957,
+        "mute": false,
+        "pan": 0.877
+      },
+      "5": {
+        "vol": 0.102329314,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.63095737,
+        "mute": false,
+        "pan": 0.5
+      },
       "20": {
         "vol": 0.26915348,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.24547088,
         "mute": false,
         "pan": 0.5
       },
@@ -796,18 +781,18 @@
         "mute": false,
         "pan": 0.5
       },
-      "4": {
-        "vol": 0.21379623,
-        "mute": false,
-        "pan": 0.6833335
-      },
-      "15": {
-        "vol": 0.4265795,
+      "19": {
+        "vol": 0.26915348,
         "mute": false,
         "pan": 0.5
       },
-      "13": {
-        "vol": 0.46773517,
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.4265795,
         "mute": false,
         "pan": 0.5
       },
@@ -815,6 +800,21 @@
         "vol": 0.3548134,
         "mute": false,
         "pan": 0.68799996
+      },
+      "3": {
+        "vol": 1.5488166,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.45708817,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.15848932,
+        "mute": false,
+        "pan": 0.5
       }
     }
   },
@@ -823,10 +823,10 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "1": {
-        "vol": 0.19498447,
+      "14": {
+        "vol": 0.46773517,
         "mute": false,
-        "pan": 0.63199997
+        "pan": 0.5
       },
       "4": {
         "vol": 1.5488166,
@@ -838,58 +838,13 @@
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 0.60255957,
-        "mute": false,
-        "pan": 0.877
-      },
-      "5": {
-        "vol": 0.21379623,
-        "mute": false,
-        "pan": 0.6833335
-      },
-      "9": {
-        "vol": 0.15848932,
-        "mute": false,
+      "10": {
+        "vol": 1.0,
+        "mute": true,
         "pan": 0.5
       },
       "20": {
         "vol": 0.26915348,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.53703177,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.5128614,
-        "mute": false,
-        "pan": 0.329
-      },
-      "16": {
-        "vol": 0.4265795,
-        "mute": false,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 0.63095737,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.26915348,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.102329314,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.11481538,
         "mute": false,
         "pan": 0.5
       },
@@ -898,28 +853,38 @@
         "mute": false,
         "pan": 0.5
       },
-      "7": {
-        "vol": 0.3548134,
-        "mute": false,
-        "pan": 0.68799996
-      },
       "11": {
         "vol": 0.24547088,
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
+      "3": {
+        "vol": 0.5128614,
+        "mute": false,
+        "pan": 0.329
       },
-      "18": {
-        "vol": 0.08709635,
+      "21": {
+        "vol": 0.26915348,
         "mute": false,
         "pan": 0.5
       },
-      "19": {
-        "vol": 0.3548134,
+      "17": {
+        "vol": 0.11481538,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.53703177,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.21379623,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "18": {
+        "vol": 0.08709635,
         "mute": false,
         "pan": 0.5
       },
@@ -928,10 +893,45 @@
         "mute": false,
         "pan": 0.5
       },
-      "14": {
-        "vol": 0.46773517,
+      "16": {
+        "vol": 0.4265795,
         "mute": false,
         "pan": 0.5
+      },
+      "9": {
+        "vol": 0.15848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.63095737,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.102329314,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.68799996
+      },
+      "1": {
+        "vol": 0.19498447,
+        "mute": false,
+        "pan": 0.63199997
+      },
+      "19": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.60255957,
+        "mute": false,
+        "pan": 0.877
       }
     }
   },
@@ -940,103 +940,13 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "4": {
-        "vol": 0.21379623,
-        "mute": false,
-        "pan": 0.6833335
-      },
-      "6": {
-        "vol": 0.3548134,
-        "mute": false,
-        "pan": 0.68799996
-      },
-      "12": {
-        "vol": 0.53703177,
-        "mute": false,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 0.26915348,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 1.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.45708817,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.60255957,
-        "mute": false,
-        "pan": 0.877
-      },
-      "17": {
-        "vol": 0.08709635,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 1.5488166,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.19498447,
-        "mute": false,
-        "pan": 0.63199997
-      },
-      "19": {
-        "vol": 0.26915348,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 1.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 0.15848932,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.102329314,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
+      "16": {
         "vol": 0.11481538,
         "mute": false,
         "pan": 0.5
       },
       "10": {
         "vol": 0.24547088,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.46773517,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 0.63095737,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.5128614,
-        "mute": false,
-        "pan": 0.329
-      },
-      "16": {
-        "vol": 0.11481538,
         "mute": false,
         "pan": 0.5
       },
@@ -1049,6 +959,96 @@
         "vol": 0.3548134,
         "mute": false,
         "pan": 0.5
+      },
+      "11": {
+        "vol": 0.45708817,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.11481538,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.68799996
+      },
+      "13": {
+        "vol": 0.46773517,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.19498447,
+        "mute": false,
+        "pan": 0.63199997
+      },
+      "8": {
+        "vol": 0.15848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.08709635,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.102329314,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.26915348,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.26915348,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.21379623,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "14": {
+        "vol": 0.63095737,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.53703177,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.60255957,
+        "mute": false,
+        "pan": 0.877
+      },
+      "3": {
+        "vol": 1.5488166,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.5128614,
+        "mute": false,
+        "pan": 0.329
       }
     }
   },
@@ -1062,10 +1062,30 @@
         "mute": false,
         "pan": 0.5
       },
-      "22": {
-        "vol": 1.0,
+      "19": {
+        "vol": 0.26915348,
         "mute": false,
         "pan": 0.5
+      },
+      "4": {
+        "vol": 0.26915348,
+        "mute": false,
+        "pan": 0.6833335
+      },
+      "12": {
+        "vol": 0.3311311,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.3311311,
+        "mute": false,
+        "pan": 0.329
       },
       "21": {
         "vol": 0.11481538,
@@ -1077,13 +1097,120 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 0.24547088,
+      "7": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.877
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.08709635,
         "mute": false,
         "pan": 0.5
       },
       "3": {
         "vol": 1.5848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.26302677,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.067608304,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.19498447,
+        "mute": false,
+        "pan": 0.63199997
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.102329314,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.15848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 1.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.24547088,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.16595867,
+        "mute": false,
+        "pan": 0.68799996
+      },
+      "20": {
+        "vol": 0.26915348,
+        "mute": false,
+        "pan": 0.5
+      }
+    }
+  },
+  {
+    "timestamp": 1774529476,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "8": {
+        "vol": 0.15848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.3548134,
+        "mute": false,
+        "pan": 0.877
+      },
+      "6": {
+        "vol": 0.16595867,
+        "mute": false,
+        "pan": 0.68799996
+      },
+      "15": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.26302677,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.067608304,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.08709635,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.3548134,
         "mute": false,
         "pan": 0.5
       },
@@ -1097,8 +1224,8 @@
         "mute": false,
         "pan": 0.329
       },
-      "17": {
-        "vol": 0.08709635,
+      "5": {
+        "vol": 0.102329314,
         "mute": false,
         "pan": 0.5
       },
@@ -1107,49 +1234,14 @@
         "mute": false,
         "pan": 0.6833335
       },
-      "15": {
-        "vol": 1.0,
+      "21": {
+        "vol": 0.11481538,
         "mute": false,
         "pan": 0.5
-      },
-      "11": {
-        "vol": 0.26302677,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.16595867,
-        "mute": false,
-        "pan": 0.68799996
       },
       "9": {
         "vol": 1.0,
         "mute": true,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": 0.3311311,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.067608304,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.3548134,
-        "mute": false,
-        "pan": 0.877
-      },
-      "18": {
-        "vol": 0.3548134,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.102329314,
-        "mute": false,
         "pan": 0.5
       },
       "20": {
@@ -1157,8 +1249,28 @@
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 0.15848932,
+      "12": {
+        "vol": 0.3311311,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.2818383,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 1.5848932,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.24547088,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.46773517,
         "mute": false,
         "pan": 0.5
       },
@@ -1166,7 +1278,742 @@
         "vol": 0.19498447,
         "mute": false,
         "pan": 0.63199997
+      },
+      "22": {
+        "vol": 1.0,
+        "mute": false,
+        "pan": 0.5
       }
+    },
+    "eq_bands": {
+      "1": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "20": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "9": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "21": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "5": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "7": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "3": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "10": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "22": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "6": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "4": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "2": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "19": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 83.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.12,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 126.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.17,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 580.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.39,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1786.4,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.57,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 3709.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.69,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ]
     }
   }
 ]
