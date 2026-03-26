@@ -1139,7 +1139,10 @@ mod tests {
     #[test]
     fn test_norm_to_gain_db_range() {
         // Verified against live REAPER ReaEQ measurements
-        assert!(norm_to_gain_db(0.001) <= -40.0, "Near-zero norm should be very negative dB");
+        assert!(
+            norm_to_gain_db(0.001) <= -40.0,
+            "Near-zero norm should be very negative dB"
+        );
         assert!((norm_to_gain_db(0.125) - (-6.0)).abs() < 0.3);
         assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
         assert!((norm_to_gain_db(0.5) - 6.0).abs() < 0.3);
@@ -1153,7 +1156,10 @@ mod tests {
         for i in 2..=100 {
             let norm = i as f32 / 100.0;
             let db = norm_to_gain_db(norm);
-            assert!(db >= prev, "norm_to_gain_db must be monotonic: at {norm}, {db} < {prev}");
+            assert!(
+                db >= prev,
+                "norm_to_gain_db must be monotonic: at {norm}, {db} < {prev}"
+            );
             prev = db;
         }
     }
