@@ -85,6 +85,9 @@ pub struct AppState {
     /// Mutex to serialize EQ EXTSTATE writes (prevents race condition
     /// where concurrent tokio tasks overwrite the shared EXTSTATE key)
     pub eq_write_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Mutex to serialize EQ EXTSTATE reads (eq_read_track + eq_params
+    /// is a single-slot channel — concurrent reads clobber each other)
+    pub eq_read_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Global IEM output volume state for a member
@@ -158,6 +161,7 @@ impl AppState {
             #[cfg(feature = "audio")]
             audio_diagnostics: Arc::new(Mutex::new(audio_stream::AudioDiagnostics::default())),
             eq_write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }

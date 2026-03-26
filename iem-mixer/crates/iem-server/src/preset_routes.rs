@@ -109,7 +109,7 @@ async fn save_preset(
 
     let entry = state
         .preset_store
-        .save_with_stems(&member, &name, req.channels, req.stems_level_db)
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db, req.eq_bands)
         .map_err(|e| {
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
@@ -126,15 +126,6 @@ async fn save_preset(
             };
             (code, Json(err))
         })?;
-
-    // If EQ bands provided, update the saved entry with EQ data
-    if req.eq_bands.is_some() {
-        let mut entry_with_eq = entry.clone();
-        entry_with_eq.eq_bands = req.eq_bands;
-        if let Err(e) = state.preset_store.save_raw(&member, entry_with_eq) {
-            tracing::error!("Failed to save preset EQ bands: {}", e);
-        }
-    }
 
     Ok((
         StatusCode::CREATED,
@@ -179,7 +170,7 @@ async fn update_preset(
 
     let entry = state
         .preset_store
-        .save_with_stems(&member, &name, req.channels, req.stems_level_db)
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db, req.eq_bands)
         .map_err(|e| {
             tracing::error!("Failed to update preset: {}", e);
             (
@@ -187,15 +178,6 @@ async fn update_preset(
                 Json(ApiError::new("IO_ERROR", "Failed to update preset")),
             )
         })?;
-
-    // If EQ bands provided, update the saved entry with EQ data
-    if req.eq_bands.is_some() {
-        let mut entry_with_eq = entry.clone();
-        entry_with_eq.eq_bands = req.eq_bands;
-        if let Err(e) = state.preset_store.save_raw(&member, entry_with_eq) {
-            tracing::error!("Failed to update preset EQ bands: {}", e);
-        }
-    }
 
     Ok(Json(entry))
 }
@@ -347,6 +329,7 @@ async fn restore_preset(
                     ("freq", band.freq_norm),
                     ("gain", band.gain_norm),
                     ("bw", band.bw_norm),
+                    ("enabled", if band.enabled { 1.0 } else { 0.0 }),
                 ] {
                     let _lock = state.eq_write_lock.lock().await;
                     let input = format!(

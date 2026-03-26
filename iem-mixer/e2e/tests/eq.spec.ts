@@ -602,9 +602,7 @@ test.describe("EQ Feature", () => {
     expect(svgTexts).not.toContain("+24");
   });
 
-  test("HPF toggle sends SetEqBand with param 'freq' (frequency-based toggle)", async ({
-    page,
-  }) => {
+  test("HPF toggle sends SetEqBand with param 'enabled'", async ({ page }) => {
     if (!(await waitForMixer(page))) return;
 
     // Track WebSocket messages
@@ -646,12 +644,12 @@ test.describe("EQ Feature", () => {
     await toggleBtn.click();
     await page.waitForTimeout(200);
 
-    // Verify SetEqBand was sent with param: "freq" (HPF toggled via frequency)
+    // Verify SetEqBand was sent with param: "enabled"
     const messages = await page.evaluate(
       () => (window as any).__hpfToggleMessages || [],
     );
     expect(messages.length).toBeGreaterThan(0);
-    expect(messages[0].param).toBe("freq");
+    expect(messages[0].param).toBe("enabled");
   });
 
   test("EQ access control: member only sees EQ on own tracks", async ({

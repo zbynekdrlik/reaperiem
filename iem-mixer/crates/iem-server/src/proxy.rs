@@ -1721,6 +1721,8 @@ pub async fn handle_get_eq_params(
     state: &AppState,
     track_index: usize,
 ) -> Option<iem_core::ServerMsg> {
+    let _read_lock = state.eq_read_lock.lock().await;
+
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
     drop(config);
@@ -1837,8 +1839,16 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let bw_norm = get_field("bn=")?;
 
     // Use REAPER-formatted values if available, otherwise approximate
-    let freq_hz = get_field("fh=").unwrap_or(20.0 * 1000.0_f32.powf(freq_norm));
-    let gain_db = get_field("gd=").unwrap_or((gain_norm.min(0.5) - 0.25) * 48.0);
+    let freq_hz = get_field("fh=").unwrap_or(20.0 * 1200.0_f32.powf(freq_norm));
+    let gain_db = get_field("gd=").unwrap_or_else(|| {
+        if gain_norm <= 0.001 {
+            -60.0
+        } else if gain_norm <= 0.25 {
+            24.0 * (gain_norm / 0.25).log2()
+        } else {
+            12.0 * ((gain_norm - 0.25) / 0.75).powf(0.631)
+        }
+    });
     let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
 
     // Parse enabled state (en=0/1), default to true for backward compat

@@ -346,6 +346,7 @@ async fn restore_snapshot(
                     ("freq", band.freq_norm),
                     ("gain", band.gain_norm),
                     ("bw", band.bw_norm),
+                    ("enabled", if band.enabled { 1.0 } else { 0.0 }),
                 ] {
                     let _lock = state.eq_write_lock.lock().await;
                     let input = format!(

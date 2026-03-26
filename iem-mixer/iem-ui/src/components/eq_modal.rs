@@ -661,7 +661,7 @@ pub fn EQModal(
                                                 {i + 1}
                                             </span>
                                             <span class="eq-band-type">{band_type.clone()}</span>
-                                            // Toggle on/off: for HPF/LPF toggle freq, for others toggle gain
+                                            // Toggle band enabled/disabled
                                             <button
                                                 class=move || {
                                                     if enabled_sig.get() { "eq-band-toggle on" } else { "eq-band-toggle off" }
