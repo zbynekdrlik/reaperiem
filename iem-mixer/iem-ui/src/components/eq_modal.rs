@@ -377,6 +377,7 @@ pub fn EQModal(
     /// Callback to close the modal
     on_close: Callback<()>,
 ) -> impl IntoView {
+    let _ = track_index;
     let track_name = StoredValue::new(track_name);
 
     // SVG dimensions
