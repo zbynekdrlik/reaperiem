@@ -53,9 +53,32 @@ fn band_color(band_type: &str) -> &'static str {
     }
 }
 
-/// Convert normalized frequency (0-1) to Hz (ReaEQ log mapping: 20 Hz to 20 kHz)
+/// Convert normalized frequency (0-1) to Hz matching REAPER's ReaEQ curve.
+/// Uses lookup table with log-space interpolation from empirical REAPER data.
+/// Range: 20 Hz to 24,000 Hz (NOT 20,000 — REAPER's actual range).
 fn norm_to_freq_hz(norm: f32) -> f32 {
-    20.0 * 1000.0_f32.powf(norm)
+    const TABLE: [(f32, f32); 11] = [
+        (0.0, 20.0),
+        (0.1, 69.2),
+        (0.2, 158.9),
+        (0.3, 322.1),
+        (0.4, 619.3),
+        (0.5, 1160.5),
+        (0.6, 2146.2),
+        (0.7, 3941.0),
+        (0.8, 7209.5),
+        (0.9, 13161.4),
+        (1.0, 24000.0),
+    ];
+    let norm = norm.clamp(0.0, 1.0);
+    let idx = (norm * 10.0) as usize;
+    if idx >= 10 {
+        return TABLE[10].1;
+    }
+    let t = norm * 10.0 - idx as f32;
+    let log_lo = TABLE[idx].1.ln();
+    let log_hi = TABLE[idx + 1].1.ln();
+    (log_lo + t * (log_hi - log_lo)).exp()
 }
 
 /// Approximate normalized gain (0-1) to dB matching REAPER's non-linear curve.
@@ -1133,18 +1156,61 @@ mod tests {
         assert_eq!(display_order("lowpass"), 5);
     }
 
-    /// Verify norm_to_freq_hz formula at key points.
-    /// NOTE: norm_to_freq_hz uses 20*1000^norm which is an approximation.
-    /// REAPER's actual mapping is different (range 20-24000Hz, non-standard curve).
-    /// The web app uses REAPER's formatted fh value for accurate display on load.
-    /// This formula is only used during slider drag as a rough preview.
+    /// Verify norm_to_freq_hz matches REAPER's actual ReaEQ frequency mapping.
+    /// Data points measured empirically via REAPER's GetFormattedParamValue.
     #[test]
-    fn test_norm_to_freq_hz_endpoints() {
-        assert!((norm_to_freq_hz(0.0) - 20.0).abs() < 0.1);
-        assert!((norm_to_freq_hz(1.0) - 20000.0).abs() < 1.0);
-        // Monotonically increasing
-        assert!(norm_to_freq_hz(0.5) > norm_to_freq_hz(0.25));
-        assert!(norm_to_freq_hz(0.75) > norm_to_freq_hz(0.5));
+    fn test_norm_to_freq_hz_matches_reaper() {
+        let data = [
+            (0.00, 20.0),
+            (0.10, 69.2),
+            (0.20, 158.9),
+            (0.30, 322.1),
+            (0.40, 619.3),
+            (0.50, 1160.5),
+            (0.60, 2146.2),
+            (0.70, 3941.0),
+            (0.80, 7209.5),
+            (0.90, 13161.4),
+            (1.00, 24000.0),
+        ];
+        for (norm, expected_hz) in data {
+            let actual = norm_to_freq_hz(norm);
+            let tolerance = expected_hz * 0.02; // 2% tolerance
+            assert!(
+                (actual - expected_hz).abs() < tolerance,
+                "norm={norm}: expected {expected_hz}Hz, got {actual}Hz"
+            );
+        }
+    }
+
+    /// Verify reset default norm values produce correct Hz.
+    #[test]
+    fn test_reset_default_frequencies() {
+        assert!(
+            (norm_to_freq_hz(0.1160) - 80.0).abs() < 3.0,
+            "HPF default: expected ~80Hz, got {}",
+            norm_to_freq_hz(0.1160)
+        );
+        assert!(
+            (norm_to_freq_hz(0.2316) - 200.0).abs() < 5.0,
+            "LowShelf default: expected ~200Hz, got {}",
+            norm_to_freq_hz(0.2316)
+        );
+        assert!(
+            (norm_to_freq_hz(0.4408) - 800.0).abs() < 20.0,
+            "Band default: expected ~800Hz, got {}",
+            norm_to_freq_hz(0.4408)
+        );
+        assert!(
+            (norm_to_freq_hz(0.6548) - 3000.0).abs() < 60.0,
+            "Band2 default: expected ~3000Hz, got {}",
+            norm_to_freq_hz(0.6548)
+        );
+        assert!(
+            (norm_to_freq_hz(0.8176) - 8000.0).abs() < 160.0,
+            "HighShelf default: expected ~8000Hz, got {}",
+            norm_to_freq_hz(0.8176)
+        );
     }
 
     #[test]
