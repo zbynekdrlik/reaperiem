@@ -914,3 +914,473 @@ test.describe("EQ Feature", () => {
     await page.locator(".eq-close-btn").click();
   });
 });
+
+// ============================================================
+// EQ Value Sync Tests — ENGINEER track only
+// These tests verify frontend-backend value consistency
+// by reading REAPER state via HTTP API after UI interactions.
+// IMPORTANT: Only touches ENGINEER inear track, never band members.
+// ============================================================
+
+// Helper: read EQ params from REAPER HTTP API for a given track index
+async function readReaperEq(trackIndex: number): Promise<string | null> {
+  try {
+    await fetch(
+      `http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/eq_read_track/${trackIndex}`,
+    );
+    await fetch(`http://iem.lan:8080/_/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 500));
+    const resp = await fetch(
+      `http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/eq_params`,
+    );
+    const text = await resp.text();
+    // Extract the value after the last tab (EXTSTATE response format: "EXTSTATE\tsection\tkey\tvalue")
+    const parts = text.split("\t");
+    return parts.length >= 4 ? parts[3] : text;
+  } catch {
+    return null;
+  }
+}
+
+// Helper: parse a band from REAPER EQ response
+function parseReaperBand(
+  eqResponse: string,
+  bandIndex: number,
+): Record<string, string> | null {
+  const parts = eqResponse.split("|");
+  for (const part of parts) {
+    if (part.startsWith(`b${bandIndex}:`)) {
+      const fields: Record<string, string> = {};
+      // Format: "b0:lowshelf,fn=0.265000,gn=0.250000,bn=0.500000,fh=253.6,gd=0.0,bo=2.00,en=1"
+      const commaFields = part.split(",");
+      // First field is "bN:type"
+      const typePart = commaFields[0].split(":");
+      fields["type"] = typePart[1];
+      for (let i = 1; i < commaFields.length; i++) {
+        const [key, val] = commaFields[i].split("=");
+        fields[key] = val;
+      }
+      return fields;
+    }
+  }
+  return null;
+}
+
+// Helper: open EQ for a specific channel by name text
+async function openEqForChannel(
+  page: Page,
+  channelNameContains: string,
+): Promise<boolean> {
+  // Find channel card containing the name
+  const channelCards = page.locator(".ch-strip, .channel-card");
+  const count = await channelCards.count();
+
+  for (let i = 0; i < count; i++) {
+    const card = channelCards.nth(i);
+    const text = await card.textContent();
+    if (text && text.includes(channelNameContains)) {
+      // Click the kebab menu on this specific channel
+      const menuBtn = card.locator(".ch-menu-btn");
+      const visible = await menuBtn.isVisible().catch(() => false);
+      if (!visible) continue;
+      await menuBtn.click({ force: true });
+      // Wait for and click EQ option
+      const eqOption = await page
+        .waitForSelector(".ch-menu-popup >> text=EQ >> visible=true", {
+          timeout: 3000,
+        })
+        .catch(() => null);
+      if (!eqOption) return false;
+      await eqOption.click();
+      return true;
+    }
+  }
+  return false;
+}
+
+test.describe("EQ value sync - ENGINEER track", () => {
+  const consoleMessages: string[] = [];
+
+  test.beforeEach(async ({ page }) => {
+    consoleMessages.length = 0;
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
+      }
+    });
+
+    await page.goto("/");
+    await loginAs(page, "engineer");
+    await page.goto("/engineer");
+  });
+
+  test.afterEach(async () => {
+    // Filter out known third-party noise
+    const real = consoleMessages.filter(
+      (m) => !m.includes("[vite]") && !m.includes("favicon"),
+    );
+    expect(real).toEqual([]);
+  });
+
+  test("gain dB display matches REAPER on initial load", async ({ page }) => {
+    if (!(await waitForMixer(page, "Engineer mixer must load"))) return;
+
+    // Check REAPER is reachable
+    const reaperEq = await readReaperEq(32);
+    if (
+      !assume(
+        reaperEq && reaperEq.startsWith("OK:"),
+        "REAPER must be reachable with EQ on track 32",
+      )
+    )
+      return;
+
+    // Open EQ on ENGINEER inear
+    const opened = await openEqForChannel(page, "ENGINEER");
+    if (!assume(opened, "Must be able to open EQ on ENGINEER channel")) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load")) return;
+
+    // Wait for REAPER data to populate
+    await page.waitForTimeout(1000);
+
+    // Read gain dB from second band card (lowshelf, band index 0 in REAPER)
+    const bandCards = page.locator(".eq-band-card");
+    const firstBand = bandCards.first();
+    const gainText = await firstBand
+      .locator(".eq-param-row")
+      .nth(1)
+      .locator(".eq-param-value")
+      .textContent();
+
+    if (!assume(gainText, "Gain value must be visible")) return;
+
+    // Parse dB from UI (format: "+6.0 dB" or "-3.2 dB")
+    const uiDb = parseFloat(gainText!.replace(/[^\d.\-+]/g, ""));
+
+    // Read REAPER's reported dB for the same band
+    const freshEq = await readReaperEq(32);
+    if (!assume(freshEq, "Must read fresh EQ from REAPER")) return;
+
+    // First band card in display order is HPF (display_order=0), which is REAPER band 4
+    const reaperBand = parseReaperBand(freshEq!, 4); // HPF = band 4
+    if (!assume(reaperBand, "Must parse REAPER band 4")) return;
+
+    const reaperDb = parseFloat(reaperBand!["gd"]);
+
+    // They should match within ±1.0 dB
+    expect(Math.abs(uiDb - reaperDb)).toBeLessThan(1.0);
+
+    // Cleanup
+    await page.locator(".eq-close-btn").click();
+  });
+
+  test("gain slider at 50% shows ~+6dB not +12dB", async ({ page }) => {
+    if (!(await waitForMixer(page, "Engineer mixer must load"))) return;
+
+    const reaperEq = await readReaperEq(32);
+    if (
+      !assume(
+        reaperEq && reaperEq.startsWith("OK:"),
+        "REAPER must be reachable",
+      )
+    )
+      return;
+
+    const opened = await openEqForChannel(page, "ENGINEER");
+    if (!assume(opened, "Must open EQ on ENGINEER")) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load")) return;
+
+    await page.waitForTimeout(500);
+
+    // Use second band card (lowshelf) — it has a gain slider
+    const bandCards = page.locator(".eq-band-card");
+    const targetBand = bandCards.nth(1); // lowshelf
+    const gainSlider = targetBand.locator(".eq-slider-track").nth(1); // gain is second slider
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Slider must have bounding box")) return;
+
+    // Drag gain slider to roughly 50% position (= norm 0.5 = +6dB REAPER)
+    const midX = box!.x + box!.width * 0.5;
+    const startY = box!.y + box!.height / 2;
+
+    // First reset to 0dB by clicking reset button
+    const resetBtn = targetBand.locator(".eq-band-reset");
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click();
+      await page.waitForTimeout(300);
+    }
+
+    // Now drag from left edge to 50% position
+    const leftX = box!.x + 5;
+    await page.mouse.move(leftX, startY);
+    await page.mouse.down();
+    await page.waitForTimeout(200); // activation delay
+    await page.mouse.move(midX, startY, { steps: 10 });
+    await page.mouse.up();
+
+    await page.waitForTimeout(300);
+
+    // Read displayed gain dB
+    const gainText = await targetBand
+      .locator(".eq-param-row")
+      .nth(1)
+      .locator(".eq-param-value")
+      .textContent();
+
+    if (!assume(gainText, "Gain text must be readable after drag")) return;
+
+    const displayedDb = parseFloat(gainText!.replace(/[^\d.\-+]/g, ""));
+
+    // Should be around +6dB at 50% slider, NOT +12dB (old bug)
+    // Allow wide tolerance since drag position isn't perfectly precise
+    expect(displayedDb).toBeLessThan(9.0); // Must not be +12 or higher
+    expect(displayedDb).toBeGreaterThan(2.0); // Should be positive
+
+    // Reset for cleanup
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click();
+      await page.waitForTimeout(500);
+    }
+
+    await page.locator(".eq-close-btn").click();
+  });
+
+  test("reset button moves sliders visually", async ({ page }) => {
+    if (!(await waitForMixer(page, "Engineer mixer must load"))) return;
+
+    const reaperEq = await readReaperEq(32);
+    if (
+      !assume(
+        reaperEq && reaperEq.startsWith("OK:"),
+        "REAPER must be reachable",
+      )
+    )
+      return;
+
+    const opened = await openEqForChannel(page, "ENGINEER");
+    if (!assume(opened, "Must open EQ on ENGINEER")) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load")) return;
+
+    await page.waitForTimeout(500);
+
+    // Use second band card (lowshelf)
+    const bandCards = page.locator(".eq-band-card");
+    const targetBand = bandCards.nth(1);
+    const gainSlider = targetBand.locator(".eq-slider-track").nth(1);
+
+    const sliderVisible = await gainSlider.isVisible().catch(() => false);
+    if (!assume(sliderVisible, "Gain slider must be visible")) return;
+
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Slider must have bounding box")) return;
+
+    // Drag gain slider to a non-center position
+    const startX = box!.x + box!.width * 0.25; // start at 25%
+    const endX = box!.x + box!.width * 0.75; // drag to 75%
+    const y = box!.y + box!.height / 2;
+
+    await page.mouse.move(startX, y);
+    await page.mouse.down();
+    await page.waitForTimeout(200);
+    await page.mouse.move(endX, y, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(300);
+
+    // Record slider fill width BEFORE reset
+    const fillBefore = await gainSlider
+      .locator(".eq-slider-fill")
+      .evaluate((el) => el.style.width);
+
+    // Click reset button
+    const resetBtn = targetBand.locator(".eq-band-reset");
+    if (
+      !assume(
+        await resetBtn.isVisible().catch(() => false),
+        "Reset button must be visible",
+      )
+    )
+      return;
+    await resetBtn.click();
+    await page.waitForTimeout(300);
+
+    // Record slider fill width AFTER reset
+    const fillAfter = await gainSlider
+      .locator(".eq-slider-fill")
+      .evaluate((el) => el.style.width);
+
+    // Fill should have changed (slider moved visually)
+    expect(fillAfter).not.toBe(fillBefore);
+
+    // Fill after reset should be ~25% (0.25 norm = 0dB center)
+    const fillPct = parseFloat(fillAfter);
+    expect(fillPct).toBeGreaterThan(20);
+    expect(fillPct).toBeLessThan(30);
+
+    await page.locator(".eq-close-btn").click();
+  });
+
+  test("reset button resets REAPER values", async ({ page }) => {
+    if (!(await waitForMixer(page, "Engineer mixer must load"))) return;
+
+    const reaperEq = await readReaperEq(32);
+    if (
+      !assume(
+        reaperEq && reaperEq.startsWith("OK:"),
+        "REAPER must be reachable",
+      )
+    )
+      return;
+
+    const opened = await openEqForChannel(page, "ENGINEER");
+    if (!assume(opened, "Must open EQ on ENGINEER")) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load")) return;
+
+    await page.waitForTimeout(500);
+
+    // Drag gain slider on second band (lowshelf) to a non-zero position
+    const bandCards = page.locator(".eq-band-card");
+    const targetBand = bandCards.nth(1);
+    const gainSlider = targetBand.locator(".eq-slider-track").nth(1);
+
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Slider must have bounding box")) return;
+
+    const y = box!.y + box!.height / 2;
+    await page.mouse.move(box!.x + box!.width * 0.3, y);
+    await page.mouse.down();
+    await page.waitForTimeout(200);
+    await page.mouse.move(box!.x + box!.width * 0.7, y, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // Click reset
+    const resetBtn = targetBand.locator(".eq-band-reset");
+    await resetBtn.click();
+    await page.waitForTimeout(500);
+
+    // Close and reopen to get fresh REAPER data
+    await page.locator(".eq-close-btn").click();
+    await expect(page.locator(".eq-overlay")).not.toBeVisible({
+      timeout: 3000,
+    });
+    await page.waitForTimeout(500);
+
+    // Read REAPER state directly
+    const freshEq = await readReaperEq(32);
+    if (!assume(freshEq, "Must read REAPER EQ after reset")) return;
+
+    // Lowshelf is band 0 in REAPER
+    const band0 = parseReaperBand(freshEq!, 0);
+    if (!assume(band0, "Must parse band 0")) return;
+
+    // Gain should be 0.0 dB after reset
+    const gainDb = parseFloat(band0!["gd"]);
+    expect(Math.abs(gainDb)).toBeLessThan(0.5);
+
+    // Cleanup: close modal if still open
+    const closeBtn = page.locator(".eq-close-btn");
+    if (await closeBtn.isVisible().catch(() => false)) {
+      await closeBtn.click();
+    }
+  });
+
+  test("gain change on disabled band keeps it disabled", async ({ page }) => {
+    if (!(await waitForMixer(page, "Engineer mixer must load"))) return;
+
+    const reaperEq = await readReaperEq(32);
+    if (
+      !assume(
+        reaperEq && reaperEq.startsWith("OK:"),
+        "REAPER must be reachable",
+      )
+    )
+      return;
+
+    const opened = await openEqForChannel(page, "ENGINEER");
+    if (!assume(opened, "Must open EQ on ENGINEER")) return;
+
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    const bandCard = await page
+      .waitForSelector(".eq-band-card", { timeout: 5000 })
+      .catch(() => null);
+    if (!assume(bandCard, "EQ band cards must load")) return;
+
+    await page.waitForTimeout(500);
+
+    // Use second band card (lowshelf)
+    const bandCards = page.locator(".eq-band-card");
+    const targetBand = bandCards.nth(1);
+
+    // First reset to ensure clean state
+    const resetBtn = targetBand.locator(".eq-band-reset");
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click();
+      await page.waitForTimeout(500);
+    }
+
+    // The band should now be disabled (reset sets enabled=false)
+    // Verify toggle shows disabled state
+    const toggle = targetBand.locator(".eq-band-toggle");
+    if (
+      !assume(
+        await toggle.isVisible().catch(() => false),
+        "Toggle must be visible",
+      )
+    )
+      return;
+
+    // Now drag the gain slider while band is disabled
+    const gainSlider = targetBand.locator(".eq-slider-track").nth(1);
+    const box = await gainSlider.boundingBox();
+    if (!assume(box, "Slider must have bounding box")) return;
+
+    const y = box!.y + box!.height / 2;
+    await page.mouse.move(box!.x + box!.width * 0.25, y);
+    await page.mouse.down();
+    await page.waitForTimeout(200);
+    await page.mouse.move(box!.x + box!.width * 0.6, y, { steps: 5 });
+    await page.mouse.up();
+    await page.waitForTimeout(500);
+
+    // Check REAPER: band should still be disabled (en=0)
+    const freshEq = await readReaperEq(32);
+    if (!assume(freshEq, "Must read REAPER EQ")) return;
+
+    const band0 = parseReaperBand(freshEq!, 0);
+    if (!assume(band0, "Must parse band 0")) return;
+
+    // Band should remain disabled
+    expect(band0!["en"]).toBe("0");
+
+    // Cleanup: reset and close
+    if (await resetBtn.isVisible().catch(() => false)) {
+      await resetBtn.click();
+      await page.waitForTimeout(300);
+    }
+    await page.locator(".eq-close-btn").click();
+  });
+});

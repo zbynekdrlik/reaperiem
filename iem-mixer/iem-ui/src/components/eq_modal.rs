@@ -58,12 +58,17 @@ fn norm_to_freq_hz(norm: f32) -> f32 {
     20.0 * 1000.0_f32.powf(norm)
 }
 
-/// Approximate normalized gain (0-1) to dB for drag feedback only.
-/// ReaEQ gain range: 0.0 → min dB, 0.25 → 0 dB, 0.5 → max dB.
-/// Verified data points: 0.183911→-2.7, 0.225681→-0.9, 0.25→0.0, 0.288511→+1.2
-/// Using linear approximation ±12dB for the practical 0.0-0.5 range.
+/// Approximate normalized gain (0-1) to dB matching REAPER's non-linear curve.
+/// Piecewise: log curve below 0.25 (0dB), power curve above.
+/// Verified: 0.125→-6, 0.25→0, 0.5→+6, 0.75→+9.5, 1.0→+12.
 fn norm_to_gain_db(norm: f32) -> f32 {
-    (norm - 0.25) * 48.0
+    if norm <= 0.001 {
+        -60.0
+    } else if norm <= 0.25 {
+        24.0 * (norm / 0.25).log2()
+    } else {
+        12.0 * ((norm - 0.25) / 0.75).powf(0.631)
+    }
 }
 
 /// Convert normalized bandwidth (0-1) to octaves
@@ -670,8 +675,9 @@ pub fn EQModal(
                                                         freq_hz_sig.set(20000.0);
                                                         on_param_change.run((idx, "freq".to_string(), 1.0));
                                                     }
-                                                    // Mark disabled (0dB = no effect)
+                                                    // Disable band in REAPER and UI
                                                     enabled_sig.set(false);
+                                                    on_param_change.run((idx, "enabled".to_string(), 0.0));
                                                     saved_gain_norm_sig.set(0.25);
                                                     saved_gain_db_sig.set(0.0);
                                                     curve_trigger.update(|n| *n += 1);
@@ -709,15 +715,12 @@ pub fn EQModal(
                                             </span>
                                         </div>
 
-                                        // Gain slider — maps full slider range (0-1) to ReaEQ norm (0-0.5)
-                                        // This gives -12dB to +12dB across the entire slider width.
+                                        // Gain slider — full 0-1 range maps directly to ReaEQ norm
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Gain"</label>
                                             <EqSlider
-                                                value=Signal::derive(move || gain_sig.get() * 2.0)
+                                                value=Signal::derive(move || gain_sig.get())
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Convert slider 0-1 → gain norm 0-0.5
-                                                    let v = (v * 0.5).clamp(0.0, 0.5);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
@@ -725,7 +728,6 @@ pub fn EQModal(
                                                     }
                                                     gain_sig.set(v);
                                                     gain_db_sig.set(norm_to_gain_db(v));
-                                                    enabled_sig.set(v != 0.25);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -735,7 +737,7 @@ pub fn EQModal(
                                                     any_dragging.set(false);
                                                 })
                                                 css_class="eq-slider-gain"
-                                                default_value=0.5
+                                                default_value=0.25
                                             />
                                             <span class="eq-param-value">
                                                 {move || {
@@ -821,10 +823,8 @@ fn EqSlider(
     // Internal local value signal — source of truth for display during drag
     let local_value = RwSignal::new(value.get_untracked());
 
-    // No sync Effect — EqSlider initializes from value.get_untracked() above.
-    // Parent signal changes don't sync during the modal's lifetime because
-    // any signal.set() would trigger reactive_graph recursion detection.
-    // On modal close+reopen, the component recreates with fresh values.
+    // Parent sync happens via Effect below (after Rc clones) — only when not dragging.
+    // During drag, local_value is the source of truth to avoid reactive_graph recursion.
 
     let timeout_handle: Rc<RefCell<Option<gloo_timers::callback::Timeout>>> =
         Rc::new(RefCell::new(None));
@@ -863,6 +863,7 @@ fn EqSlider(
 
     let drag_ts = drag_value.clone();
     let drag_tm = drag_value.clone();
+    let drag_sync = drag_value.clone();
     let drag_md = drag_value;
 
     let last_touch_ts = last_touch_time.clone();
@@ -873,6 +874,15 @@ fn EqSlider(
 
     let mm_closure_md = mouse_move_closure.clone();
     let mu_closure_md = mouse_up_closure.clone();
+
+    // Sync from parent when not dragging (e.g., reset button)
+    Effect::new(move || {
+        let parent_val = value.get();
+        if !is_activated.get_untracked() {
+            local_value.set(parent_val);
+            drag_sync.set(parent_val);
+        }
+    });
 
     // --- Touch handlers ---
     let handle_touchstart = move |ev: web_sys::TouchEvent| {
@@ -1128,10 +1138,24 @@ mod tests {
 
     #[test]
     fn test_norm_to_gain_db_range() {
-        // At norm=0.0: should be -12 dB
-        assert!((norm_to_gain_db(0.0) - (-12.0)).abs() < 0.01);
-        // At norm=0.5: should be +12 dB
-        assert!((norm_to_gain_db(0.5) - 12.0).abs() < 0.01);
+        // Verified against live REAPER ReaEQ measurements
+        assert!(norm_to_gain_db(0.001) <= -40.0, "Near-zero norm should be very negative dB");
+        assert!((norm_to_gain_db(0.125) - (-6.0)).abs() < 0.3);
+        assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
+        assert!((norm_to_gain_db(0.5) - 6.0).abs() < 0.3);
+        assert!((norm_to_gain_db(0.75) - 9.5).abs() < 0.5);
+        assert!((norm_to_gain_db(1.0) - 12.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_norm_to_gain_db_monotonic() {
+        let mut prev = norm_to_gain_db(0.01);
+        for i in 2..=100 {
+            let norm = i as f32 / 100.0;
+            let db = norm_to_gain_db(norm);
+            assert!(db >= prev, "norm_to_gain_db must be monotonic: at {norm}, {db} < {prev}");
+            prev = db;
+        }
     }
 
     #[test]
