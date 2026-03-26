@@ -53,39 +53,15 @@ local function set_eq()
         return
     end
 
-    -- "enabled" param is handled by the UI via gain/freq changes (not BANDENABLED).
-    -- BANDENABLED:N is a GLOBAL toggle that disables ALL bands — cannot use per-band.
-    -- If "enabled" arrives here, it's a legacy message; translate to gain=0dB disable.
+    -- Handle "enabled" param via BANDENABLEDM (NO colon, M=band number).
+    -- IMPORTANT: BANDENABLED:N (WITH colon) is a GLOBAL toggle — do NOT use.
+    -- BANDENABLEDM (without colon) is the actual per-band enabled checkbox.
     if param_name == "enabled" then
-        -- Determine band type from param name to choose disable method
-        local freq_param_idx = band * 3
-        local _, freq_name = reaper.TrackFX_GetParamName(track, eq_idx, freq_param_idx)
-        local is_hpf = freq_name:match("High Pass")
-        local is_lpf = freq_name:match("Low Pass")
-
-        if value >= 0.5 then
-            -- Enable: restore to a sensible default (UI should send specific values instead)
-            if is_hpf then
-                reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, 0.12) -- ~80Hz
-            elseif is_lpf then
-                reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, 0.95) -- ~18kHz
-            end
-            -- For shelf/band: no-op here (UI should send gain directly)
-        else
-            -- Disable: set to neutral
-            if is_hpf then
-                reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, 0.0) -- 20Hz = off
-            elseif is_lpf then
-                reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, 1.0) -- 20kHz = off
-            else
-                reaper.TrackFX_SetParam(track, eq_idx, band * 3 + 1, 0.25) -- gain 0dB = off
-            end
-        end
-
-        local _, fmt = reaper.TrackFX_GetFormattedParamValue(track, eq_idx, freq_param_idx)
+        local en = (value >= 0.5) and "1" or "0"
+        reaper.TrackFX_SetNamedConfigParm(track, eq_idx, "BANDENABLED" .. band, en)
         reaper.SetExtState(section, "eq_set_result",
             string.format("OK:track=%d,band=%d,param=enabled,value=%.6f,formatted=%s",
-                track_idx, band, value, value >= 0.5 and "enabled" or "disabled"), false)
+                track_idx, band, value, en == "1" and "enabled" or "disabled"), false)
         return
     end
 
