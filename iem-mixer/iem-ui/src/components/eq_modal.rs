@@ -665,7 +665,7 @@ pub fn EQModal(
                                                     bw_oct_sig.set(norm_to_bw(0.5));
                                                     on_param_change.run((idx, "bw".to_string(), 0.5));
                                                     // Reset freq to per-band default (all types get a reset)
-                                                    let default_freq_norm = match band_type_reset {
+                                                    let default_freq_norm = match band_type_reset.as_str() {
                                                         "highpass" => 0.12_f32,  // ~80Hz
                                                         "lowshelf" => 0.17,      // ~200Hz
                                                         "highshelf" => 0.69,     // ~8kHz
@@ -676,7 +676,7 @@ pub fn EQModal(
                                                             // band 2 → ~800Hz, band 3 → ~3kHz
                                                         }
                                                     };
-                                                    let default_bw_norm = match band_type_reset {
+                                                    let default_bw_norm = match band_type_reset.as_str() {
                                                         "highpass" | "lowshelf" | "highshelf" | "lowpass" => 0.50,
                                                         _ => 0.25,
                                                     };
