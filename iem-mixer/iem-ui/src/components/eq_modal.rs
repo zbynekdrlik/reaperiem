@@ -322,10 +322,6 @@ struct BandLocalState {
     bw_oct: RwSignal<f32>,
     /// Whether this band is enabled
     enabled: RwSignal<bool>,
-    /// Saved gain_norm before disable (for re-enable toggle on parametric/shelf)
-    saved_gain_norm: RwSignal<f32>,
-    /// Saved gain_db before disable
-    saved_gain_db: RwSignal<f32>,
 }
 
 /// Full-screen EQ modal component
@@ -421,8 +417,6 @@ pub fn EQModal(
                     gain_db: RwSignal::new(b.gain_db),
                     bw_oct: RwSignal::new(b.bw),
                     enabled: RwSignal::new(b.enabled),
-                    saved_gain_norm: RwSignal::new(b.gain_norm),
-                    saved_gain_db: RwSignal::new(b.gain_db),
                 })
                 .collect();
             stored_locals.set_value(locals);
@@ -616,8 +610,7 @@ pub fn EQModal(
                                 let gain_db_sig = local.gain_db;
                                 let bw_oct_sig = local.bw_oct;
                                 let enabled_sig = local.enabled;
-                                let saved_gain_norm_sig = local.saved_gain_norm;
-                                let saved_gain_db_sig = local.saved_gain_db;
+
 
                                 // Throttle WebSocket sends to 50ms intervals per band.
                                 let last_send_freq = RwSignal::new(0.0_f64);
