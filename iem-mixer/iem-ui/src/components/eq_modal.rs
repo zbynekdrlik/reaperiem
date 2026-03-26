@@ -94,6 +94,20 @@ fn norm_to_gain_db(norm: f32) -> f32 {
     }
 }
 
+/// Convert dB (-12 to +12) back to REAPER normalized gain (inverse of norm_to_gain_db).
+fn gain_db_to_norm(db: f32) -> f32 {
+    let db = db.clamp(-12.0, 12.0);
+    if db <= 0.0 {
+        // Inverse of: db = 24 * log2(norm / 0.25)
+        // norm = 0.25 * 2^(db/24)
+        0.25 * 2.0_f32.powf(db / 24.0)
+    } else {
+        // Inverse of: db = 12 * ((norm - 0.25) / 0.75)^0.631
+        // (norm - 0.25) / 0.75 = (db / 12)^(1/0.631)
+        0.25 + 0.75 * (db / 12.0).powf(1.0 / 0.631)
+    }
+}
+
 /// Convert normalized bandwidth (0-1) to octaves
 fn norm_to_bw(norm: f32) -> f32 {
     0.01 + norm * 3.99
@@ -740,19 +754,27 @@ pub fn EQModal(
                                             </span>
                                         </div>
 
-                                        // Gain slider — full 0-1 range maps directly to ReaEQ norm
+                                        // Gain slider: -12dB to +12dB, 0dB at center (slider 0.5)
+                                        // Slider 0.0=-12dB, 0.5=0dB, 1.0=+12dB
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Gain"</label>
                                             <EqSlider
-                                                value=Signal::derive(move || gain_sig.get())
+                                                value=Signal::derive(move || {
+                                                    // Convert REAPER norm → dB → slider position
+                                                    let db = norm_to_gain_db(gain_sig.get()).clamp(-12.0, 12.0);
+                                                    (db + 12.0) / 24.0
+                                                })
                                                 on_change=Callback::new(move |v: f32| {
+                                                    // Convert slider position → dB → REAPER norm
+                                                    let db = (v - 0.5) * 24.0; // slider 0-1 → -12 to +12 dB
+                                                    let norm = gain_db_to_norm(db);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         last_send_gain.set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "gain".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "gain".to_string(), norm));
                                                     }
-                                                    gain_sig.set(v);
-                                                    gain_db_sig.set(norm_to_gain_db(v));
+                                                    gain_sig.set(norm);
+                                                    gain_db_sig.set(db);
                                                     curve_trigger.update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -762,7 +784,7 @@ pub fn EQModal(
                                                     any_dragging.set(false);
                                                 })
                                                 css_class="eq-slider-gain"
-                                                default_value=0.25
+                                                default_value=0.5
                                             />
                                             <span class="eq-param-value">
                                                 {move || {
@@ -1216,6 +1238,29 @@ mod tests {
     #[test]
     fn test_norm_to_gain_db_center() {
         assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
+    }
+
+    /// Verify gain_db_to_norm is the inverse of norm_to_gain_db.
+    #[test]
+    fn test_gain_db_to_norm_roundtrip() {
+        // Test key dB values roundtrip: dB → norm → dB
+        for db in [-12.0, -6.0, -3.0, 0.0, 3.0, 6.0, 9.0, 12.0] {
+            let norm = gain_db_to_norm(db);
+            let db_back = norm_to_gain_db(norm);
+            assert!(
+                (db_back - db).abs() < 0.5,
+                "dB={db}: norm={norm}, back={db_back}"
+            );
+        }
+        // 0dB must map to norm=0.25
+        assert!(
+            (gain_db_to_norm(0.0) - 0.25).abs() < 0.001,
+            "0dB must be norm 0.25"
+        );
+        // Slider center (0.5) → 0dB → norm 0.25
+        let slider_center_db = (0.5 - 0.5) * 24.0; // = 0dB
+        assert!((slider_center_db).abs() < 0.001);
+        assert!((gain_db_to_norm(slider_center_db) - 0.25).abs() < 0.001);
     }
 
     #[test]
