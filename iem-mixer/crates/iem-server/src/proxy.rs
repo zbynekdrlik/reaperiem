@@ -399,7 +399,7 @@ pub async fn batch_control(
                             let si = if member_id == "engineer" {
                                 m.mix_send_index
                             } else {
-                                m.mix_send_indices.get(&member_id).copied()
+                                m.mix_send_indices.get(member_id.as_str()).copied()
                             };
                             si.map(|s| reaper_api::set_send_mute(&reaper_url, m.track_index, s, 1))
                         })
@@ -1272,7 +1272,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
                     discovered
                         .iter()
                         .find(|m| m.track_index == ch.track_index)
-                        .and_then(|m| m.mix_send_indices.get(&member_id).copied())
+                        .and_then(|m| m.mix_send_indices.get(member_id.as_str()).copied())
                 }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
@@ -1359,7 +1359,7 @@ async fn apply_command_to_cache(
             .iter()
             .filter(|m| m.id() != member_id && m.id() != "engineer")
             .map(|m| {
-                let si = m.mix_send_indices.get(&member_id).copied();
+                let si = m.mix_send_indices.get(member_id.as_str()).copied();
                 (m.track_index, si)
             })
             .collect()
