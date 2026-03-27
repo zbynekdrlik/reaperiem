@@ -269,10 +269,10 @@ async fn elevated_needs_rediscovery(state: &AppState) -> bool {
     }
     let discovered = state.discovered_members.read().await;
     for id in elevated.list() {
-        if let Some(member) = discovered.iter().find(|m| m.id() == *id) {
-            if member.mix_send_indices.is_empty() {
-                return true;
-            }
+        if let Some(member) = discovered.iter().find(|m| m.id() == *id)
+            && member.mix_send_indices.is_empty()
+        {
+            return true;
         }
     }
     false
