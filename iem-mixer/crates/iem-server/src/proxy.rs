@@ -135,19 +135,31 @@ pub async fn get_mixer_state(
         }
     }
 
-    // For engineer: append mix channels (member inear → ENGINEER sends)
-    if member_id == "engineer" {
+    // For engineer or elevated: append mix channels
+    let is_elevated = state.elevated_store.read().await.is_elevated(&member_id);
+    if member_id == "engineer" || is_elevated {
         let discovered = state.discovered_members.read().await;
-        let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
+        let mut mix_channels = build_mix_channel_templates(&discovered, &member_id);
 
-        // Query mix send states using discovered mix_send_index (NOT hardcoded 0!)
         let mix_futures: Vec<_> = mix_channels
             .iter()
             .filter_map(|ch| {
-                let mix_si = discovered
-                    .iter()
-                    .find(|m| m.track_index == ch.track_index)
-                    .and_then(|m| m.mix_send_index)?;
+                let mix_si = if member_id == "engineer" {
+                    discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .and_then(|m| m.mix_send_index)
+                } else {
+                    // mix_send_indices stored on elevated member, keyed by source ID
+                    let source_id = discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .map(|m| m.id());
+                    let elevated = discovered.iter().find(|m| m.id() == member_id);
+                    source_id.and_then(|sid| {
+                        elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
+                    })
+                }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
                 let track_index = ch.track_index;
@@ -384,21 +396,32 @@ pub async fn batch_control(
                 })
                 .collect();
 
-            // For engineer: also mute mix channels (member inear → ENGINEER sends)
-            // CRITICAL: Use discovered mix_send_index, NOT hardcoded 0!
+            // For engineer or elevated: also mute mix channels
+            // CRITICAL: Use discovered send indices, NOT hardcoded 0!
             // Send 0 on member inear tracks is the hardware output (Dante to speakers).
             // Muting Send 0 kills the member's audio entirely.
-            if member_id == "engineer" {
-                let discovered = state.discovered_members.read().await;
-                let mix_urls: Vec<String> = discovered
-                    .iter()
-                    .filter(|m| m.id() != "engineer")
-                    .filter_map(|m| {
-                        m.mix_send_index
-                            .map(|si| reaper_api::set_send_mute(&reaper_url, m.track_index, si, 1))
-                    })
-                    .collect();
-                urls.extend(mix_urls);
+            {
+                let member_ref = member_id.as_ref();
+                let is_elev = state.elevated_store.read().await.is_elevated(member_ref);
+                if member_id == "engineer" || is_elev {
+                    let discovered = state.discovered_members.read().await;
+                    let elevated_member = discovered.iter().find(|m| m.id() == member_id);
+                    let mix_urls: Vec<String> = discovered
+                        .iter()
+                        .filter(|m| m.id() != member_id && m.id() != "engineer")
+                        .filter_map(|m| {
+                            let si = if member_id == "engineer" {
+                                m.mix_send_index
+                            } else {
+                                // mix_send_indices stored on elevated member, keyed by source ID
+                                elevated_member
+                                    .and_then(|e| e.mix_send_indices.get(&m.id()).copied())
+                            };
+                            si.map(|s| reaper_api::set_send_mute(&reaper_url, m.track_index, s, 1))
+                        })
+                        .collect();
+                    urls.extend(mix_urls);
+                }
             }
 
             let results =
@@ -574,16 +597,16 @@ pub(crate) fn build_channel_templates(
         .collect()
 }
 
-/// Build channel templates for member mix monitoring (engineer only).
-/// Each discovered member (except engineer) becomes a "mixes" channel
+/// Build channel templates for member mix monitoring (engineer or elevated members).
+/// Each discovered member (except self and engineer) becomes a "mixes" channel
 /// with track_index = member's inear track index.
 pub(crate) fn build_mix_channel_templates(
     discovered: &[iem_core::DiscoveredMember],
-    engineer_id: &str,
+    viewer_id: &str,
 ) -> Vec<iem_core::Channel> {
     discovered
         .iter()
-        .filter(|m| m.id() != engineer_id)
+        .filter(|m| m.id() != viewer_id && (viewer_id == "engineer" || m.id() != "engineer"))
         .map(|m| {
             let name = m
                 .name
@@ -596,7 +619,7 @@ pub(crate) fn build_mix_channel_templates(
                 name,
                 level_db: 0.0,
                 pan: 0.5,
-                muted: false,
+                muted: true,
                 category: "mixes".to_string(),
                 stereo_pair: None,
                 stereo_side: None,
@@ -1242,19 +1265,37 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
         }
     }
 
-    // For engineer: append mix channels (member inear → ENGINEER sends)
-    if member_id == "engineer" {
+    // For engineer or elevated members: append mix channels
+    let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
+    if member_id == "engineer" || is_elevated {
         let discovered = state.discovered_members.read().await;
-        let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
+        let mut mix_channels = build_mix_channel_templates(&discovered, member_id);
 
-        // Use discovered mix_send_index (NOT hardcoded 0!)
+        // Look up the correct send index for each mix channel:
+        // - Engineer: use mix_send_index (sends from member inear TO engineer inear)
+        // - Elevated: use mix_send_indices[member_id] (sends from other inear TO this member's inear)
         let mix_futures: Vec<_> = mix_channels
             .iter()
             .filter_map(|ch| {
-                let mix_si = discovered
-                    .iter()
-                    .find(|m| m.track_index == ch.track_index)
-                    .and_then(|m| m.mix_send_index)?;
+                let mix_si = if member_id == "engineer" {
+                    discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .and_then(|m| m.mix_send_index)
+                } else {
+                    // For elevated member: mix_send_indices are stored on the
+                    // elevated member, keyed by source member ID.
+                    // Find source member's ID from track_index, then look up
+                    // the send index on the elevated member.
+                    let source_id = discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .map(|m| m.id());
+                    let elevated = discovered.iter().find(|m| m.id() == member_id);
+                    source_id.and_then(|sid| {
+                        elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
+                    })
+                }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
                 let track_index = ch.track_index;
@@ -1325,12 +1366,26 @@ async fn apply_command_to_cache(
         .find(|m| m.id() == member_id)
         .map(|m| m.send_index)
         .ok_or_else(|| "Unknown member".to_string())?;
-    // Collect mix channel track indices and their mix_send_index for engineer validation
+    // Collect mix channel track indices and their send_index for validation.
+    // For engineer: use mix_send_index (sends TO engineer).
+    // For elevated: use mix_send_indices[member_id] (sends TO this member).
+    let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
     let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
         discovered
             .iter()
             .filter(|m| m.id() != "engineer")
             .map(|m| (m.track_index, m.mix_send_index))
+            .collect()
+    } else if is_elevated {
+        // mix_send_indices stored on the elevated member, keyed by source member ID
+        let elevated = discovered.iter().find(|m| m.id() == member_id);
+        discovered
+            .iter()
+            .filter(|m| m.id() != member_id && m.id() != "engineer")
+            .map(|m| {
+                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
+                (m.track_index, si)
+            })
             .collect()
     } else {
         Vec::new()
@@ -2913,7 +2968,8 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 1,
                 dante_output_r: 2,
                 send_index: 0,
-                mix_send_index: Some(1), // Send 1 targets engineer (Send 0 = hw out)
+                mix_send_index: Some(1),
+                mix_send_indices: std::collections::HashMap::new(),
             },
             iem_core::DiscoveredMember {
                 name: "STEVO".to_string(),
@@ -2922,6 +2978,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_r: 4,
                 send_index: 1,
                 mix_send_index: Some(1),
+                mix_send_indices: std::collections::HashMap::new(),
             },
             iem_core::DiscoveredMember {
                 name: "MAREK".to_string(),
@@ -2930,6 +2987,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_r: 6,
                 send_index: 2,
                 mix_send_index: Some(1),
+                mix_send_indices: std::collections::HashMap::new(),
             },
             iem_core::DiscoveredMember {
                 name: "ENGINEER".to_string(),
@@ -2937,7 +2995,8 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 dante_output_l: 19,
                 dante_output_r: 20,
                 send_index: 9,
-                mix_send_index: None, // Engineer doesn't send to itself
+                mix_send_index: None,
+                mix_send_indices: std::collections::HashMap::new(),
             },
         ]
     }
@@ -2992,7 +3051,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         for ch in &mix {
             assert_eq!(ch.level_db, 0.0, "Default level should be 0 dB");
             assert_eq!(ch.pan, 0.5, "Default pan should be 0.5 (center)");
-            assert!(!ch.muted, "Default muted should be false");
+            assert!(ch.muted, "Default muted should be true (safe default)");
             assert!(ch.stereo_pair.is_none(), "No stereo pair");
             assert!(ch.stereo_side.is_none(), "No stereo side");
         }
@@ -3013,6 +3072,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             dante_output_r: 20,
             send_index: 9,
             mix_send_index: None,
+            mix_send_indices: std::collections::HashMap::new(),
         }];
         let mix = build_mix_channel_templates(&discovered, "engineer");
         assert!(mix.is_empty(), "No mix channels when only engineer exists");

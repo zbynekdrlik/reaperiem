@@ -30,6 +30,7 @@ class Config:
     action_rename_track: str = ""
     action_setup_trim: str = ""
     action_check_trim: str = ""
+    action_setup_mix_sends: str = ""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
@@ -53,6 +54,7 @@ class Config:
             action_rename_track=actions.get("rename_track", ""),
             action_setup_trim=actions.get("setup_trim", ""),
             action_check_trim=actions.get("check_trim", ""),
+            action_setup_mix_sends=actions.get("setup_mix_sends", ""),
         )
 
     @classmethod

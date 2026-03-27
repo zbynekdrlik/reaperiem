@@ -83,6 +83,11 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             "/api/mixer/{member_id}/customization",
             put(put_customization),
         )
+        // Elevated member access (mix channels for non-engineer members)
+        .route(
+            "/api/members/{member_id}/elevated",
+            get(get_elevated).put(put_elevated),
+        )
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
@@ -245,6 +250,80 @@ async fn put_customization(
             ))
         }
     }
+}
+
+/// Get elevated status for a member (accessible by the member themselves or engineer)
+async fn get_elevated(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<ElevatedResponse>, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
+    let store = state.elevated_store.read().await;
+    Ok(Json(ElevatedResponse {
+        elevated: store.is_elevated(&member_id),
+    }))
+}
+
+/// Set elevated status for a member (engineer-only)
+async fn put_elevated(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<ElevatedPayload>,
+) -> Result<Json<ElevatedResponse>, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    let claims = crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
+
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(iem_core::ApiError::new(
+                "FORBIDDEN",
+                "Only engineers can change elevated status",
+            )),
+        ));
+    }
+
+    let mut store = state.elevated_store.write().await;
+    store
+        .set_elevated(&member_id, payload.elevated)
+        .map_err(|e| {
+            tracing::error!("Failed to save elevated status: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(iem_core::ApiError::new(
+                    "IO_ERROR",
+                    "Failed to save elevated status",
+                )),
+            )
+        })?;
+
+    tracing::info!(
+        member = %member_id,
+        elevated = payload.elevated,
+        "Elevated status changed"
+    );
+
+    // The background poller detects elevated members with empty mix_send_indices
+    // and triggers re-discovery automatically (within ~10 seconds).
+
+    Ok(Json(ElevatedResponse {
+        elevated: payload.elevated,
+    }))
+}
+
+#[derive(Serialize)]
+struct ElevatedResponse {
+    elevated: bool,
+}
+
+#[derive(Deserialize)]
+struct ElevatedPayload {
+    elevated: bool,
 }
 
 /// Audio WebSocket handler — delegates to proxy::ws_audio when audio feature is enabled
