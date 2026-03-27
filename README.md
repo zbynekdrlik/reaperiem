@@ -6,6 +6,19 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.117.0 (2026-03-27)
+
+- **Feature**: Elevated member access — engineer can grant specific band members the Mixes tab to view/control other members' IEM mixes through physical Dante headphones (#122)
+- **Feature**: Engineer toggle in member settings panel to set/remove elevated access
+- **Feature**: Parametric EQ with HPF/LPF, symmetric -12/+12dB gain slider, consistent reset defaults (#119)
+- **Fix**: EQ gain dB mismatch (web app +12dB vs REAPER +6dB) — corrected non-linear gain/freq mapping
+- **Fix**: Reset button now moves all sliders, gain slider no longer auto-enables disabled bands
+- **Fix**: Preset/snapshot restore now preserves EQ band enabled state
+- **Fix**: EQ read race condition (added eq_read_lock for EXTSTATE serialization)
+- **Infra**: Pre-created cross-member inear sends for all members (72 sends, muted by default)
+- **Infra**: MCP-first mandate in CLAUDE.md — all REAPER operations must use MCP tools
+- **Closed**: #9 (mic trim + EQ done, stems trim not needed)
+
 ### v1.101.0 (2026-03-23)
 
 - **Feature**: Auto-insert "TRIM IN" (JS:Volume/Pan) as first FX on all mic/guitar tracks for input level normalization (#9)
