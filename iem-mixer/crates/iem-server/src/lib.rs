@@ -82,6 +82,14 @@ pub struct AppState {
     /// Audio pipeline health diagnostics
     #[cfg(feature = "audio")]
     pub audio_diagnostics: Arc<Mutex<audio_stream::AudioDiagnostics>>,
+    /// Mutex to serialize EQ EXTSTATE writes (prevents race condition
+    /// where concurrent tokio tasks overwrite the shared EXTSTATE key)
+    pub eq_write_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Mutex to serialize concurrent EQ reads against each other.
+    /// The read path (set eq_read_track → trigger script → read eq_params)
+    /// uses a shared EXTSTATE slot, so concurrent reads would clobber.
+    /// Note: this does NOT protect reads vs writes (they use different keys).
+    pub eq_read_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Global IEM output volume state for a member
@@ -154,6 +162,8 @@ impl AppState {
             audio_tx,
             #[cfg(feature = "audio")]
             audio_diagnostics: Arc::new(Mutex::new(audio_stream::AudioDiagnostics::default())),
+            eq_write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }

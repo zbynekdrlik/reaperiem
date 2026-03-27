@@ -22,6 +22,9 @@ pub struct PresetData {
     /// Stems bus volume in dB (None if no stems bus)
     #[serde(default)]
     pub stems_level_db: Option<f32>,
+    /// EQ band data per track (None if no EQ was loaded during this session)
+    #[serde(default)]
+    pub eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 }
 
 /// Channel state in a preset
@@ -52,6 +55,18 @@ struct PresetEntry {
     stems_level_db: Option<f32>,
 }
 
+/// EQ band data for preset save (mirrors iem_core::EqBand)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EqBandPreset {
+    pub band_type: String,
+    pub freq_hz: f32,
+    pub gain_db: f32,
+    pub bw: f32,
+    pub freq_norm: f32,
+    pub gain_norm: f32,
+    pub bw_norm: f32,
+}
+
 /// Request to save a preset
 #[derive(Serialize)]
 struct SavePresetRequest {
@@ -59,6 +74,8 @@ struct SavePresetRequest {
     channels: std::collections::HashMap<usize, ChannelState>,
     #[serde(skip_serializing_if = "Option::is_none")]
     stems_level_db: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 }
 
 /// Format timestamp for display in Slovak format (DD.MM. HH:MM)
@@ -114,6 +131,7 @@ async fn save_preset_api(
     name: &str,
     channels: std::collections::HashMap<usize, ChannelState>,
     stems_level_db: Option<f32>,
+    eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 ) -> Result<(), String> {
     let token = get_token().ok_or("Not authenticated")?;
     let url = format!("/api/presets/{}", member_id);
@@ -122,6 +140,7 @@ async fn save_preset_api(
         name: name.to_string(),
         channels,
         stems_level_db,
+        eq_bands,
     };
 
     let resp = gloo_net::http::Request::post(&url)
@@ -145,6 +164,7 @@ async fn update_preset_api(
     name: &str,
     channels: std::collections::HashMap<usize, ChannelState>,
     stems_level_db: Option<f32>,
+    eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 ) -> Result<(), String> {
     let token = get_token().ok_or("Not authenticated")?;
     let url = format!("/api/presets/{}/{}", member_id, encode_name(name));
@@ -153,6 +173,7 @@ async fn update_preset_api(
         name: name.to_string(),
         channels,
         stems_level_db,
+        eq_bands,
     };
 
     let resp = gloo_net::http::Request::put(&url)
@@ -248,7 +269,15 @@ pub fn PresetModal(
         set_loading.set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
-            match save_preset_api(&member_id, &name, state.channels, state.stems_level_db).await {
+            match save_preset_api(
+                &member_id,
+                &name,
+                state.channels,
+                state.stems_level_db,
+                state.eq_bands,
+            )
+            .await
+            {
                 Ok(()) => {
                     // Refresh list
                     if let Ok(list) = fetch_presets(&member_id).await {
@@ -333,6 +362,7 @@ pub fn PresetModal(
                                                                         created_at: Some(entry.created_at),
                                                                         updated_at: Some(entry.updated_at),
                                                                         stems_level_db: entry.stems_level_db,
+                                                                        eq_bands: None,
                                                                     };
                                                                     on_load.run(data);
                                                                     on_close.run(());
@@ -357,7 +387,15 @@ pub fn PresetModal(
                                                             set_loading.set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
-                                                                match update_preset_api(&member_id, &name, state.channels, state.stems_level_db).await {
+                                                                match update_preset_api(
+                                                                    &member_id,
+                                                                    &name,
+                                                                    state.channels,
+                                                                    state.stems_level_db,
+                                                                    state.eq_bands,
+                                                                )
+                                                                .await
+                                                                {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
                                                                             set_presets.set(list);

@@ -132,10 +132,27 @@ async fn create_snapshot(
         ));
     }
 
+    // Read EQ params for each track
+    let track_indices: Vec<usize> = channels.iter().map(|ch| ch.track_index).collect();
+    let mut eq_bands_map = std::collections::HashMap::new();
+    for track_idx in &track_indices {
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            crate::proxy::handle_get_eq_params(&state, *track_idx).await
+            && !bands.is_empty()
+        {
+            eq_bands_map.insert(*track_idx, bands);
+        }
+    }
+    let eq_bands = if eq_bands_map.is_empty() {
+        None
+    } else {
+        Some(eq_bands_map)
+    };
+
     // Create snapshot
     let channel_map = SnapshotStore::channels_from_state(&channels);
     let label = req.label.unwrap_or_else(|| "manual".to_string());
-    let snapshot = MixSnapshot::new_manual(label, channel_map);
+    let snapshot = MixSnapshot::new_manual(label, channel_map, eq_bands);
     let timestamp = snapshot.timestamp;
 
     state
@@ -318,6 +335,41 @@ async fn restore_snapshot(
     for handle in handles {
         if let Ok(count) = handle.await {
             total_ops += count;
+        }
+    }
+
+    // Restore EQ bands if present in snapshot (serialized via eq_write_lock)
+    if let Some(ref eq_bands_map) = snapshot.eq_bands {
+        for (track_index, bands) in eq_bands_map {
+            for (band_idx, band) in bands.iter().enumerate() {
+                for (param_name, value) in [
+                    ("freq", band.freq_norm),
+                    ("gain", band.gain_norm),
+                    ("bw", band.bw_norm),
+                    ("enabled", if band.enabled { 1.0 } else { 0.0 }),
+                ] {
+                    let _lock = state.eq_write_lock.lock().await;
+                    let input = format!(
+                        "track={}|band={}|param={}|value={:.6}",
+                        track_index, band_idx, param_name, value
+                    );
+                    let _ = state
+                        .http_client
+                        .get(format!(
+                            "{}/_/SET/EXTSTATE/reaperiem/eq_set/{}",
+                            reaper_url, input
+                        ))
+                        .send()
+                        .await;
+                    let _ = state
+                        .http_client
+                        .get(format!("{}/_/_RS_REAPERIEM_SET_EQ", reaper_url))
+                        .send()
+                        .await;
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    total_ops += 1;
+                }
+            }
         }
     }
 

@@ -2,6 +2,7 @@
 
 pub mod audio_player;
 pub mod category_tabs;
+pub mod eq_modal;
 pub mod fader;
 pub mod meter;
 pub mod pan;

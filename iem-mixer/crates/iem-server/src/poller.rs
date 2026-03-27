@@ -759,26 +759,59 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         // capturing the starting state before changes
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
         let last_date = cache.snapshot_last_date.get(member_id).cloned();
+        let needs_snapshot = last_date.as_deref() != Some(&today)
+            && !state.snapshot_store.has_snapshot_today(member_id)
+            && !result_channels.is_empty();
+        let snapshot_track_indices: Vec<usize> = if needs_snapshot {
+            result_channels.iter().map(|ch| ch.track_index).collect()
+        } else {
+            vec![]
+        };
         if last_date.as_deref() != Some(&today) {
-            // First activity today for this member - check if we need to save a snapshot
-            if !state.snapshot_store.has_snapshot_today(member_id) && !result_channels.is_empty() {
-                let channel_map = SnapshotStore::channels_from_state(&result_channels);
-                let snapshot = MixSnapshot::new_auto(channel_map);
-                if let Err(e) = state.snapshot_store.save_snapshot(member_id, snapshot) {
-                    tracing::error!(member = %member_id, error = %e, "Failed to save daily auto-snapshot");
-                } else {
-                    tracing::info!(member = %member_id, "Saved daily auto-snapshot");
-                }
-            }
-            // Update the tracking date regardless of whether we saved (to avoid repeated checks)
             cache.snapshot_last_date.insert(member_id.clone(), today);
         }
+        let snapshot_channels = if needs_snapshot {
+            Some(SnapshotStore::channels_from_state(&result_channels))
+        } else {
+            None
+        };
+        let snapshot_member_id = member_id.clone();
 
         // Periodic cleanup of stale command timestamps (>2s old)
         let stale_cutoff = Duration::from_secs(2);
         cache
             .command_timestamps
             .retain(|_, ts| now.duration_since(*ts) < stale_cutoff);
+
+        // Drop the cache lock before doing async EQ reads
+        drop(cache);
+
+        // Save auto-snapshot with EQ data (outside lock — EQ reads are async HTTP calls)
+        if let Some(channel_map) = snapshot_channels {
+            let mut eq_bands_map = std::collections::HashMap::new();
+            for track_idx in &snapshot_track_indices {
+                if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+                    crate::proxy::handle_get_eq_params(state, *track_idx).await
+                    && !bands.is_empty()
+                {
+                    eq_bands_map.insert(*track_idx, bands);
+                }
+            }
+            let eq_bands = if eq_bands_map.is_empty() {
+                None
+            } else {
+                Some(eq_bands_map)
+            };
+            let snapshot = MixSnapshot::new_auto(channel_map, eq_bands);
+            if let Err(e) = state
+                .snapshot_store
+                .save_snapshot(&snapshot_member_id, snapshot)
+            {
+                tracing::error!(member = %snapshot_member_id, error = %e, "Failed to save daily auto-snapshot");
+            } else {
+                tracing::info!(member = %snapshot_member_id, "Saved daily auto-snapshot with EQ");
+            }
+        }
     }
 }
 

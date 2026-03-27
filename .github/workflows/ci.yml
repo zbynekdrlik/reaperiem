@@ -1008,6 +1008,34 @@ jobs:
           } else {
             Write-Host "check_input_trim.lua already registered"
           }
+          # Register setup_input_eq.lua
+          if ($content -notmatch "RS_REAPERIEM_SETUP_EQ") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_EQ "Custom: Setup input EQ on mic/gtr tracks" reaperiem\setup_input_eq.lua'
+            Write-Host "Registered setup_input_eq.lua"
+          } else {
+            Write-Host "setup_input_eq.lua already registered"
+          }
+          # Register read_eq_params.lua
+          if ($content -notmatch "RS_REAPERIEM_READ_EQ") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_READ_EQ "Custom: Read EQ params from track" reaperiem\read_eq_params.lua'
+            Write-Host "Registered read_eq_params.lua"
+          } else {
+            Write-Host "read_eq_params.lua already registered"
+          }
+          # Register set_eq_param.lua
+          if ($content -notmatch "RS_REAPERIEM_SET_EQ") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SET_EQ "Custom: Set EQ param on track" reaperiem\set_eq_param.lua'
+            Write-Host "Registered set_eq_param.lua"
+          } else {
+            Write-Host "set_eq_param.lua already registered"
+          }
+          # Register reset_all_eq.lua
+          if ($content -notmatch "RS_REAPERIEM_RESET_ALL_EQ") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_RESET_ALL_EQ "Custom: Reset all EQ to defaults" reaperiem\reset_all_eq.lua'
+            Write-Host "Registered reset_all_eq.lua"
+          } else {
+            Write-Host "reset_all_eq.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -1031,7 +1059,7 @@ jobs:
           }
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
           Start-Sleep -Seconds 3
           $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
           Write-Host "Dynamic registration result: $result"
@@ -1268,6 +1296,121 @@ jobs:
 
           Write-Host "Input trim check: OK (all mic/gtr tracks have TRIM IN)"
 
+      - name: Setup input EQ on mic/guitar tracks
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER was running before deploy but is now unreachable!"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available. Skipping EQ setup."
+              exit 0
+            }
+          }
+
+          # First ensure meter_bridge is running (needed for dynamic registration)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -ErrorAction SilentlyContinue | Out-Null
+          Start-Sleep -Seconds 2
+
+          # Register and get dynamic action IDs
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_input_eq.lua" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+          $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
+          Write-Host "Registration result: $regResult"
+
+          # Extract numeric action ID from registration result
+          if ($regResult -match "setup_input_eq=(\d+)") {
+            $actionId = $matches[1]
+            Write-Host "Using dynamic action ID: $actionId"
+          } else {
+            Write-Host "::error::Failed to register setup_input_eq.lua dynamically: $regResult"
+            exit 1
+          }
+
+          # Trigger setup_input_eq.lua via dynamic action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$actionId" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/eq_setup_result" -UseBasicParsing).Content
+          Write-Host "EQ setup result: $response"
+
+          if ($response -match "ERROR") {
+            Write-Host "::error::setup_input_eq.lua failed: $response"
+            exit 1
+          }
+
+          if ($response -match "OK") {
+            Write-Host "Input EQ setup complete"
+          } else {
+            Write-Host "::error::Unexpected EQ setup result: $response"
+            exit 1
+          }
+
+      - name: Verify input EQ on mic/guitar tracks
+        shell: powershell
+        run: |
+          $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"
+
+          $reaperAvailable = $false
+          try {
+            $resp = Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK" -UseBasicParsing -TimeoutSec 5
+            if ($resp.StatusCode -eq 200) { $reaperAvailable = $true }
+          } catch {
+            Write-Host "REAPER HTTP API not available: $_"
+          }
+
+          if (-not $reaperAvailable) {
+            if ($wasRunning -eq "true") {
+              Write-Host "::error::REAPER unreachable after EQ setup!"
+              exit 1
+            } else {
+              Write-Host "::warning::REAPER not available. Skipping EQ verify."
+              exit 0
+            }
+          }
+
+          # Register and get dynamic action ID for read script
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/read_eq_params.lua" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+          $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
+          Write-Host "Registration result: $regResult"
+
+          if ($regResult -match "read_eq_params=(\d+)") {
+            $actionId = $matches[1]
+            Write-Host "Using dynamic action ID: $actionId"
+          } else {
+            Write-Host "::error::Failed to register read_eq_params.lua dynamically: $regResult"
+            exit 1
+          }
+
+          # Test reading EQ from track 1 (should have ReaEQ after setup)
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/eq_read_track/1" -UseBasicParsing | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$actionId" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/eq_params" -UseBasicParsing).Content
+          Write-Host "EQ read result: $response"
+
+          if ($response -match "OK:") {
+            Write-Host "Input EQ verify: OK (ReaEQ present and readable)"
+          } elseif ($response -match "NO_EQ") {
+            Write-Host "::warning::Track 1 has no ReaEQ (may not be a mic/gtr track)"
+          } else {
+            Write-Host "::error::EQ read failed: $response"
+            exit 1
+          }
+
       - name: Setup and verify VBAN IEM on engineer track
         shell: powershell
         run: |
@@ -1296,7 +1439,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"

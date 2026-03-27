@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
 use crate::components::category_tabs::{Category, CategoryTabs};
+use crate::components::eq_modal::{EQModal, EqBandState};
 use crate::components::fader::Fader;
 use crate::components::meter::Meter;
 use crate::components::pan::PanKnob;
@@ -93,6 +94,8 @@ fn connect_websocket(
     set_stems_muted: WriteSignal<bool>,
     stems_touched: ReadSignal<bool>,
     set_stems_bus_idx: WriteSignal<Option<usize>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -262,6 +265,31 @@ fn connect_websocket(
                     iem_core::ServerMsg::AudioStatus { .. } => {
                         // Audio status handled by ListenButton's own audio WebSocket
                     }
+                    iem_core::ServerMsg::EqParams {
+                        track_index: _,
+                        track_name: _,
+                        bands,
+                    } => {
+                        set_eq_bands.set(
+                            bands
+                                .into_iter()
+                                .map(|b| EqBandState {
+                                    band_type: b.band_type,
+                                    freq_hz: b.freq_hz,
+                                    gain_db: b.gain_db,
+                                    bw: b.bw,
+                                    freq_norm: b.freq_norm,
+                                    gain_norm: b.gain_norm,
+                                    bw_norm: b.bw_norm,
+                                    enabled: b.enabled,
+                                })
+                                .collect(),
+                        );
+                        set_eq_loading.set(false);
+                    }
+                    iem_core::ServerMsg::EqParamsMulti { .. } => {
+                        // Handled by preset modal (future integration)
+                    }
                 }
             }
         }
@@ -358,6 +386,11 @@ pub fn MixerPage() -> impl IntoView {
     let (stems_touched, set_stems_touched) = signal(false);
     let (stems_bus_idx, set_stems_bus_idx) = signal(Option::<usize>::None);
 
+    // EQ modal state
+    let (eq_open, set_eq_open) = signal(Option::<(usize, String)>::None);
+    let (eq_bands, set_eq_bands) = signal(Vec::<EqBandState>::new());
+    let (eq_loading, set_eq_loading) = signal(false);
+
     // Channel customization (pin/hide) — loaded from server via WS
     let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
     let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
@@ -414,6 +447,8 @@ pub fn MixerPage() -> impl IntoView {
             set_stems_muted,
             stems_touched,
             set_stems_bus_idx,
+            set_eq_bands,
+            set_eq_loading,
         );
     });
 
@@ -478,6 +513,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_stems_muted,
                 stems_touched,
                 set_stems_bus_idx,
+                set_eq_bands,
+                set_eq_loading,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -654,11 +691,42 @@ pub fn MixerPage() -> impl IntoView {
         } else {
             None
         };
+        // Include cached EQ data if the user has loaded EQ for a track
+        let eq_data = {
+            let bands = eq_bands.get_untracked();
+            let open = eq_open.get_untracked();
+            if !bands.is_empty() {
+                if let Some((track_idx, _)) = open {
+                    let mut eq_map = HashMap::new();
+                    eq_map.insert(
+                        track_idx,
+                        bands
+                            .iter()
+                            .map(|b| crate::components::preset_modal::EqBandPreset {
+                                band_type: b.band_type.clone(),
+                                freq_hz: b.freq_hz,
+                                gain_db: b.gain_db,
+                                bw: b.bw,
+                                freq_norm: b.freq_norm,
+                                gain_norm: b.gain_norm,
+                                bw_norm: b.bw_norm,
+                            })
+                            .collect(),
+                    );
+                    Some(eq_map)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
         PresetData {
             channels: channel_states,
             created_at: None,
             updated_at: None,
             stems_level_db: current_stems_level,
+            eq_bands: eq_data,
         }
     });
 
@@ -820,6 +888,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 output_track_idx=output_track_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                         <Show
@@ -836,6 +907,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 stems_bus_idx=stems_bus_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                         <ChannelList
@@ -856,6 +930,11 @@ pub fn MixerPage() -> impl IntoView {
                             hidden_channels=hidden_channels
                             set_hidden_channels=set_hidden_channels
                             active_category=active_category
+                            set_eq_open=set_eq_open
+                            set_eq_bands=set_eq_bands
+                            set_eq_loading=set_eq_loading
+                            member_id=member_id()
+                            is_engineer=is_engineer
                         />
                         <Show
                             when=move || active_category.get() == Category::Main
@@ -871,6 +950,9 @@ pub fn MixerPage() -> impl IntoView {
                                 ws=ws
                                 meters=meters.into()
                                 stems_bus_idx=stems_bus_idx
+                                set_eq_open=set_eq_open
+                                set_eq_bands=set_eq_bands
+                                set_eq_loading=set_eq_loading
                             />
                         </Show>
                     </div>
@@ -915,6 +997,47 @@ pub fn MixerPage() -> impl IntoView {
                 member_id=member_id()
                 on_close=Callback::new(move |_: ()| set_snapshot_modal_visible.set(false))
             />
+
+            // EQ Modal (full-screen, shown when eq_open is Some)
+            <Show when=move || eq_open.get().is_some() fallback=|| ()>
+                {move || {
+                    let (track_idx, track_name) = eq_open.get().unwrap();
+                    let ws_for_eq = ws;
+                    view! {
+                        <EQModal
+                            track_index=track_idx
+                            track_name=track_name
+                            bands=eq_bands
+                            loading=eq_loading
+                            on_param_change=Callback::new(move |(band, param, value): (u8, String, f32)| {
+                                if let Some((ti, _)) = eq_open.get_untracked() {
+                                    ws_send(ws_for_eq, &iem_core::ClientMsg::SetEqBand {
+                                        track_index: ti,
+                                        band,
+                                        param,
+                                        value,
+                                    });
+                                }
+                            })
+                            on_close=Callback::new(move |_: ()| {
+                                // Defer to next macrotask via setTimeout(0) — setting eq_open=None
+                                // destroys the EQ modal DOM. This must happen AFTER the current
+                                // event handler stack fully unwinds (including microtasks), or
+                                // Leptos reactive graph teardown hits dropped closures.
+                                let cb = Closure::once(move || {
+                                    set_eq_open.set(None);
+                                    set_eq_bands.set(Vec::new());
+                                });
+                                web_sys::window()
+                                    .unwrap()
+                                    .set_timeout_with_callback(cb.as_ref().unchecked_ref())
+                                    .unwrap();
+                                cb.forget(); // prevent drop before timer fires
+                            })
+                        />
+                    }
+                }}
+            </Show>
         </div>
     }
 }
@@ -931,6 +1054,9 @@ fn GlobalVolumeFader(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     meters: ReadSignal<HashMap<usize, [f32; 2]>>,
     output_track_idx: ReadSignal<Option<usize>>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -1108,7 +1234,22 @@ fn GlobalVolumeFader(
             <div class="pan-container"></div>
 
             <div class="channel-btns">
-                <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                <button
+                    class="eq-btn-small"
+                    on:click=move |_| {
+                        if let Some(idx) = output_track_idx.get() {
+                            set_eq_bands.set(Vec::new());
+                            set_eq_loading.set(true);
+                            set_eq_open.set(Some((idx, "IEM VOL".to_string())));
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::GetEqParams { track_index: idx },
+                            );
+                        }
+                    }
+                >
+                    "EQ"
+                </button>
                 <button
                     class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                     on:click=on_mute_click
@@ -1132,6 +1273,9 @@ fn StemsVolumeFader(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     meters: ReadSignal<HashMap<usize, [f32; 2]>>,
     stems_bus_idx: ReadSignal<Option<usize>>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -1309,7 +1453,22 @@ fn StemsVolumeFader(
                 <div class="pan-container"></div>
 
                 <div class="channel-btns">
-                    <div class="solo-btn off" style="visibility: hidden">"S"</div>
+                    <button
+                        class="eq-btn-small"
+                        on:click=move |_| {
+                            if let Some(idx) = stems_bus_idx.get() {
+                                set_eq_bands.set(Vec::new());
+                                set_eq_loading.set(true);
+                                set_eq_open.set(Some((idx, "STEMS".to_string())));
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::GetEqParams { track_index: idx },
+                                );
+                            }
+                        }
+                    >
+                        "EQ"
+                    </button>
                     <button
                         class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                         on:click=on_mute_click
@@ -1342,6 +1501,15 @@ fn ChannelList(
     hidden_channels: ReadSignal<Vec<usize>>,
     set_hidden_channels: WriteSignal<Vec<usize>>,
     active_category: ReadSignal<Category>,
+    set_eq_open: WriteSignal<Option<(usize, String)>>,
+    set_eq_bands: WriteSignal<Vec<EqBandState>>,
+    set_eq_loading: WriteSignal<bool>,
+    /// Member ID for EQ access control (e.g., "petka")
+    #[prop(into)]
+    member_id: String,
+    /// Whether the current user is an engineer (engineers can access all EQ)
+    #[prop(default = false)]
+    is_engineer: bool,
 ) -> impl IntoView {
     // Guard timeout IDs as raw JS setTimeout handles (i32 = Copy + Send + Sync).
     // Key scheme: track_idx for fader, track_idx+10000 for pan, track_idx+20000 for mute.
@@ -1354,6 +1522,10 @@ fn ChannelList(
 
     // Shared signal: which channel's kebab menu is open (None = all closed)
     let (open_menu, set_open_menu) = signal(Option::<usize>::None);
+
+    // EQ access control: store member_id as StoredValue for use in closures
+    let eq_member_id = StoredValue::new(member_id.to_uppercase());
+    let eq_is_engineer = is_engineer;
 
     // CRITICAL: Use <For> with stable key to preserve Fader component identity
     // across re-renders. Without this, optimistic updates cause all Faders to
@@ -1370,6 +1542,13 @@ fn ChannelList(
                     let track_idx = ch.track_index;
                     let partner_idx = ch.partner_index;
                     let name = ch.display_name.clone();
+                    let eq_name = StoredValue::new(name.clone()); // For EQ button closure (Copy)
+                    // EQ access: engineer can EQ any track; members only their own
+                    let show_eq = eq_is_engineer || {
+                        let mid = eq_member_id.get_value();
+                        let upper_name = name.to_uppercase();
+                        upper_name.starts_with(&mid)
+                    };
                     let is_my = ch.is_my_input;
                     let is_stereo = ch.is_stereo;
                     let ch_is_pinned =
@@ -2024,18 +2203,35 @@ fn ChannelList(
                                 <div class="ch-menu-popup" on:click=move |ev: web_sys::MouseEvent| ev.stop_propagation()>
                                     <button
                                         class=move || if ch_is_pinned() { "ch-menu-item pinned" } else { "ch-menu-item" }
-                                        on:click=move |ev: web_sys::MouseEvent| { on_pin_click(ev); set_open_menu.set(None); }
+                                        on:click=move |ev: web_sys::MouseEvent| { ev.stop_propagation(); on_pin_click(ev); set_open_menu.set(None); }
                                     >
                                         <span class="menu-icon">{move || if ch_is_pinned() { "\u{2605}" } else { "\u{2606}" }}</span>
                                         {move || if ch_is_pinned() { "Unpin" } else { "Pin to Main" }}
                                     </button>
                                     <button
                                         class="ch-menu-item"
-                                        on:click=move |ev: web_sys::MouseEvent| { on_hide_click(ev); set_open_menu.set(None); }
+                                        on:click=move |ev: web_sys::MouseEvent| { ev.stop_propagation(); on_hide_click(ev); set_open_menu.set(None); }
                                     >
                                         <span class="menu-icon">{move || if is_hidden_tab() { "\u{25C9}" } else { "\u{2715}" }}</span>
                                         {move || if is_hidden_tab() { "Unhide" } else { "Hide" }}
                                     </button>
+                                    {if show_eq { Some(view! {
+                                        <button
+                                            class="ch-menu-item"
+                                            on:click=move |ev: web_sys::MouseEvent| {
+                                                ev.stop_propagation();
+                                                set_open_menu.set(None);
+                                                set_eq_bands.set(Vec::new());
+                                                set_eq_loading.set(true);
+                                                set_eq_open.set(Some((track_idx, eq_name.get_value())));
+                                                // Request EQ params from REAPER
+                                                ws_send(ws, &iem_core::ClientMsg::GetEqParams { track_index: track_idx });
+                                            }
+                                        >
+                                            <span class="menu-icon">"\u{2261}"</span>
+                                            "EQ"
+                                        </button>
+                                    }) } else { None }}
                                 </div>
                             </Show>
                         </div>

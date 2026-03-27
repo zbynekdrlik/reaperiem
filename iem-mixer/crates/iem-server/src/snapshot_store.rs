@@ -224,7 +224,7 @@ mod tests {
             },
         );
 
-        let snapshot = MixSnapshot::new_manual("test".to_string(), channels);
+        let snapshot = MixSnapshot::new_manual("test".to_string(), channels, None);
         store.save_snapshot("petka", snapshot).unwrap();
 
         let list = store.list("petka");
@@ -240,7 +240,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
-        let snapshot = MixSnapshot::new_manual("to_delete".to_string(), HashMap::new());
+        let snapshot = MixSnapshot::new_manual("to_delete".to_string(), HashMap::new(), None);
         let timestamp = snapshot.timestamp;
         store.save_snapshot("petka", snapshot).unwrap();
 
@@ -257,7 +257,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let store = SnapshotStore::new(&dir);
 
-        let snapshot = MixSnapshot::new_auto(HashMap::new());
+        let snapshot = MixSnapshot::new_auto(HashMap::new(), None);
         let timestamp = snapshot.timestamp;
         store.save_snapshot("petka", snapshot).unwrap();
 
@@ -285,7 +285,7 @@ mod tests {
 
         // Add MAX_SNAPSHOTS + 5 snapshots
         for i in 0..(MAX_SNAPSHOTS + 5) {
-            let mut snapshot = MixSnapshot::new_auto(HashMap::new());
+            let mut snapshot = MixSnapshot::new_auto(HashMap::new(), None);
             snapshot.timestamp = i as i64;
             store.save_snapshot("petka", snapshot).unwrap();
         }
@@ -303,7 +303,7 @@ mod tests {
         let store = SnapshotStore::new(&dir);
 
         // Add a pinned snapshot with old timestamp
-        let mut pinned = MixSnapshot::new_auto(HashMap::new());
+        let mut pinned = MixSnapshot::new_auto(HashMap::new(), None);
         pinned.timestamp = 1;
         pinned.pinned = true;
         pinned.label = "pinned".to_string();
@@ -311,7 +311,7 @@ mod tests {
 
         // Add enough to trigger pruning
         for i in 2..=(MAX_SNAPSHOTS + 5) {
-            let mut snapshot = MixSnapshot::new_auto(HashMap::new());
+            let mut snapshot = MixSnapshot::new_auto(HashMap::new(), None);
             snapshot.timestamp = i as i64;
             store.save_snapshot("petka", snapshot).unwrap();
         }

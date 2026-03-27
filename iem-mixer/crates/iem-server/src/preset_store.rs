@@ -69,7 +69,7 @@ impl PresetStore {
         name: &str,
         channels: HashMap<usize, ChannelPreset>,
     ) -> Result<PresetEntry, PresetError> {
-        self.save_with_stems(member_id, name, channels, None)
+        self.save_with_stems(member_id, name, channels, None, None)
     }
 
     /// Save a preset with optional stems bus volume
@@ -79,6 +79,7 @@ impl PresetStore {
         name: &str,
         channels: HashMap<usize, ChannelPreset>,
         stems_level_db: Option<f32>,
+        eq_bands: Option<HashMap<usize, Vec<iem_core::EqBand>>>,
     ) -> Result<PresetEntry, PresetError> {
         let mut presets = self.load_all(member_id);
 
@@ -89,22 +90,22 @@ impl PresetStore {
 
         let now = chrono::Utc::now().timestamp();
         let entry = if let Some(existing) = presets.get(name) {
-            // Update: preserve created_at
             PresetEntry {
                 name: name.to_string(),
                 channels,
                 created_at: existing.created_at,
                 updated_at: now,
                 stems_level_db,
+                eq_bands,
             }
         } else {
-            // New preset
             PresetEntry {
                 name: name.to_string(),
                 channels,
                 created_at: now,
                 updated_at: now,
                 stems_level_db,
+                eq_bands,
             }
         };
 
