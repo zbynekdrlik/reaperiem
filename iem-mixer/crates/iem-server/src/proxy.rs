@@ -3028,7 +3028,7 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         for ch in &mix {
             assert_eq!(ch.level_db, 0.0, "Default level should be 0 dB");
             assert_eq!(ch.pan, 0.5, "Default pan should be 0.5 (center)");
-            assert!(!ch.muted, "Default muted should be false");
+            assert!(ch.muted, "Default muted should be true (safe default)");
             assert!(ch.stereo_pair.is_none(), "No stereo pair");
             assert!(ch.stereo_side.is_none(), "No stereo side");
         }
