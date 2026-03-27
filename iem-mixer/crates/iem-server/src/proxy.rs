@@ -135,19 +135,31 @@ pub async fn get_mixer_state(
         }
     }
 
-    // For engineer: append mix channels (member inear → ENGINEER sends)
-    if member_id == "engineer" {
+    // For engineer or elevated: append mix channels
+    let is_elevated = state.elevated_store.read().await.is_elevated(&member_id);
+    if member_id == "engineer" || is_elevated {
         let discovered = state.discovered_members.read().await;
-        let mut mix_channels = build_mix_channel_templates(&discovered, "engineer");
+        let mut mix_channels = build_mix_channel_templates(&discovered, &member_id);
 
-        // Query mix send states using discovered mix_send_index (NOT hardcoded 0!)
         let mix_futures: Vec<_> = mix_channels
             .iter()
             .filter_map(|ch| {
-                let mix_si = discovered
-                    .iter()
-                    .find(|m| m.track_index == ch.track_index)
-                    .and_then(|m| m.mix_send_index)?;
+                let mix_si = if member_id == "engineer" {
+                    discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .and_then(|m| m.mix_send_index)
+                } else {
+                    // mix_send_indices stored on elevated member, keyed by source ID
+                    let source_id = discovered
+                        .iter()
+                        .find(|m| m.track_index == ch.track_index)
+                        .map(|m| m.id());
+                    let elevated = discovered.iter().find(|m| m.id() == member_id);
+                    source_id.and_then(|sid| {
+                        elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
+                    })
+                }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
                 let track_index = ch.track_index;
