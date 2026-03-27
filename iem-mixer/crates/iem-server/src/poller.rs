@@ -726,7 +726,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                             .iter()
                             .find(|m| m.track_index == ch.track_index)
                             .map(|m| m.id());
-                        let elevated = discovered_snapshot.iter().find(|m| m.id() == member_id);
+                        let elevated = discovered_snapshot.iter().find(|m| m.id() == *member_id);
                         source_id.and_then(|sid| {
                             elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
                         })
