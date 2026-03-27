@@ -174,19 +174,11 @@ async fn update_preset(
     if existing.is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Preset"))));
     }
-    let eq_bands = req
-        .eq_bands
-        .or_else(|| existing.and_then(|e| e.eq_bands));
+    let eq_bands = req.eq_bands.or_else(|| existing.and_then(|e| e.eq_bands));
 
     let entry = state
         .preset_store
-        .save_with_stems(
-            &member,
-            &name,
-            req.channels,
-            req.stems_level_db,
-            eq_bands,
-        )
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db, eq_bands)
         .map_err(|e| {
             tracing::error!("Failed to update preset: {}", e);
             (
