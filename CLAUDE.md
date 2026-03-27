@@ -1,5 +1,8 @@
 # REAPER IEM Mixing System
 
+<!-- Global rules inherited from ~/.claude/CLAUDE.md (managed by airuleset) -->
+<!-- PR merge policy, CI monitoring, TDD, autonomous verification, git workflow, test strictness, deploy patterns -->
+
 ## ⚠️ CRITICAL: Git Workflow Rules
 
 **READ THIS FIRST - ENFORCED BY GIT HOOKS**
@@ -37,64 +40,7 @@
 
 ---
 
-## ⚠️ CLAUDE AUTONOMOUS WINDOWS ENGINEER (CAWE) DIRECTIVE
-
-**You are "Claude Autonomous Windows Engineer" (CAWE).**
-
-You have the tools and skills to autonomously verify ALL Windows deployments. You MUST:
-
-1. **Deploy to iem.lan** via CI
-2. **Capture screenshot** of the deployed result (CI artifact)
-3. **Download and verify** the screenshot yourself
-4. **Report ONLY verified facts** (not hopes, not "should work")
-
-### CAWE Verification Protocol
-
-```
-For ANY visual change (icons, UI, colors):
-  1. Push code to trigger CI
-  2. Wait for CI to complete
-  3. Download the taskbar-screenshot artifact
-  4. View it yourself (Read tool on downloaded file)
-  5. Report: "VERIFIED: [what you actually saw]"
-     OR: "FAILED: [what was wrong]"
-
-NEVER: "It should work now" / "The icon should appear"
-```
-
-### CAWE Capabilities
-
-- **SSH to iem.lan**: You can run commands on the Windows host
-- **Screenshot capture**: CI uploads taskbar screenshot artifact
-- **Icon pixel verification**: verify_icons.py tests in CI
-- **Process control**: Start/stop apps remotely
-
-### CAWE Rules
-
-- Never claim success without downloading/viewing verification artifacts
-- Never use speculative language ("should", "will probably", "might")
-- Never ask user to verify something you can verify yourself
-- Use: `VERIFIED: [what you saw]` / `FAILED: [what was wrong]` / `NOT VERIFIED: CI still running`
-
----
-
 ## Git Branching Model
-
-**Two branches only: `main` + `dev`** (enforced by GitHub rulesets)
-
-| Branch | Purpose     | Direct push | Force push | Delete  |
-| ------ | ----------- | :---------: | :--------: | :-----: |
-| `main` | Production  |   BLOCKED   |  BLOCKED   | BLOCKED |
-| `dev`  | Development |   allowed   |  BLOCKED   | BLOCKED |
-
-### Development Workflow
-
-1. Push all code to `dev`
-2. Create PR `dev` → `main` when ready to deploy
-3. CI runs all checks on PR (lint, tests, build, e2e, version bump)
-4. **Wait for explicit user approval** (user must say "approved" or equivalent in the conversation)
-5. Merge commit (only method allowed — no squash, no rebase)
-6. Merge triggers auto-deploy to iem.lan
 
 ### CI Job Matrix
 
@@ -108,21 +54,6 @@ NEVER: "It should work now" / "The icon should appear"
 | check-version-bump |     -      |   **yes**    |      -      |
 | build-tauri        |  **yes**   |   **yes**    |   **yes**   |
 | deploy             |  **yes**   |      -       |   **yes**   |
-
-### PR Delivery Requirement
-
-**You are responsible for delivering a GREEN, mergeable PR.** When creating a PR from `dev` → `main`:
-
-1. Push to `dev`, wait for CI to pass (including deploy to iem.lan)
-2. Fix any failures on `dev` before creating the PR
-3. Create PR only when `dev` CI is fully green
-4. Monitor PR CI until ALL required checks pass
-5. Provide the PR URL to the user only after it is confirmed green and mergeable
-6. **The PR URL you give the user must be ready to merge — no exceptions**
-7. **⚠️ NEVER merge the PR yourself — wait for the user's explicit approval in the conversation** (e.g., "approved, do it", "merge it", "go ahead"). Only then run `gh pr merge`.
-8. **After merge: Update README.md changelog** with user-facing changes from the PR
-
-If CI fails on the PR, fix the issue, push to `dev`, and wait for the PR to go green before reporting.
 
 ### ⚠️ CHANGELOG MAINTENANCE (MANDATORY)
 
@@ -147,18 +78,6 @@ Include ALL user-facing changes:
 - **Feature**: Description
 - **Fix**: Description
 - **Setting**: New option in Settings modal
-```
-
-### NEVER DO:
-
-```
-❌ Push directly to main (blocked by GitHub ruleset)
-❌ Create feature branches (blocked by GitHub ruleset)
-❌ Force push to main or dev (blocked)
-❌ Squash or rebase merge (only merge commits allowed)
-❌ Give the user a PR URL that has failing CI checks
-❌ Ask the user to merge a PR that isn't green
-❌ Merge a PR without explicit user approval in the conversation (NEVER auto-merge!)
 ```
 
 ---
@@ -348,19 +267,39 @@ Input tracks from FOH: Single stereo track (DRUMS, BASS, INST, OTHER, BGVS)
 
 **This section documents the patterns Claude MUST follow. Read it EVERY session.**
 
-### MCP Tools — ALWAYS USE FIRST
+### MCP Tools — MANDATORY FIRST PRIORITY
 
-You have an `reaperiem` MCP server with 24 tools for controlling REAPER. **Always use MCP tools before falling back to curl or SSH.**
+You have a `reaperiem` MCP server with 24+ tools for controlling REAPER. **MCP tools are the MANDATORY first choice for ALL REAPER operations. NEVER use curl or SSH when an MCP tool can do the job.**
+
+**If an MCP tool is missing, incomplete, or cannot handle an operation you need — you MUST extend the MCP server to add that capability BEFORE proceeding with the task.** Do not work around missing MCP functionality with curl/SSH. Instead:
+
+1. Add the new tool to `mcp/reaperiem_mcp/tools/` (or create a new module)
+2. Add the corresponding ReaScript if needed (`scripts/reascripts/`)
+3. Register the tool in `server.py`
+4. Deploy via CI (push to `dev`)
+5. Then use the new MCP tool for the operation
+
+**This is non-negotiable.** Every curl workaround is technical debt. Every SSH hack is a missed MCP improvement. The MCP server should be the complete, authoritative interface for REAPER operations.
 
 ```
 DECISION TREE:
   Need to read/write REAPER state? → Use MCP tool (list_tracks, set_send_level, etc.)
-  Need to trigger a ReaScript?     → Use curl: curl "http://iem.lan:8080/_/_RS_REAPERIEM_ACTION_NAME"
-  Need EXTSTATE read/write?         → Use curl: curl "http://iem.lan:8080/_/SET/EXTSTATE/section/key/value"
-                                              curl "http://iem.lan:8080/_/GET/EXTSTATE/section/key"
-  Need to run Windows commands?     → SSH: ssh newlevel@iem.lan "command"
+  MCP tool missing for operation?  → STOP. Add MCP tool first, then use it.
+  Need to trigger a ReaScript?     → Add MCP tool wrapper, OR use curl as LAST RESORT
+  Need EXTSTATE read/write?         → Add MCP tool wrapper, OR use curl as LAST RESORT
+  Need to run Windows commands?     → Use win-iem-snv MCP tools (Shell, Snapshot, FileRead, FileWrite, etc.)
+  Need screenshots/desktop?         → Use win-iem-snv Snapshot (NEVER ssh + screenshot script)
   Need git ops on iem.lan?          → Use MCP git tools (git_status, git_commit, git_push, git_log)
   Need to add REAPER capability?    → Extend MCP server (see "Adding New MCP Tools" below)
+```
+
+**NEVER DO:**
+
+```
+❌ Use curl to REAPER when an MCP tool exists for the same operation
+❌ Use SSH to iem.lan for REAPER operations (SSH is for Windows system ops only)
+❌ Leave a curl/SSH workaround in place — always follow up by adding the MCP tool
+❌ Say "I'll add the MCP tool later" — add it NOW before proceeding
 ```
 
 ### How to Talk to REAPER (3 Methods)
@@ -567,42 +506,9 @@ See `.claude/skills/dante.md` for full Dante documentation and `config/dante_net
 
 ---
 
-## ⚠️ CI/CD MONITORING REQUIREMENTS
+## ⚠️ VERSION FILES
 
-**CRITICAL: Always commit, push, and monitor CI automatically - DO NOT wait for user confirmation.**
-
-**FULL CYCLE REQUIREMENT: You MUST complete the ENTIRE pipeline before reporting to the user:**
-
-1. Commit immediately with a descriptive message
-2. Push to trigger CI
-3. Monitor CI until all jobs pass
-4. If CI fails, fix and repeat
-5. After merge to main: **monitor the deploy CI run** until Deploy job completes
-6. After deploy: **verify the live app** at http://10.77.9.231/ responds correctly
-7. **Only THEN** report success to the user
-
-**DO NOT interrupt the user mid-pipeline.** The full cycle is: code → commit → push → CI green → merge → deploy CI green → verify live app. Complete all steps autonomously.
-
-**CRITICAL: After EVERY push, you MUST monitor CI until ALL jobs are GREEN.**
-
-### ⚠️ NEVER STOP AT PARTIAL CI GREEN (STRICT)
-
-**ALL CI jobs must pass — including Deploy — before reporting to the user.** If deploy fails (even for infrastructure reasons like REAPER being unreachable), you MUST:
-
-1. Investigate the root cause (SSH to iem.lan, check REAPER, check processes)
-2. Fix the issue (restart REAPER, clear locks, fix config)
-3. Re-run or re-push until ALL jobs are green
-4. Only THEN report success
-
-**NEVER declare "all code jobs passed" as success when deploy failed.** You own the ENTIRE pipeline end-to-end. Partial green = not done. Iterate until fully green and PR is mergeable.
-
-### ⚠️ VERSION BUMP REQUIREMENT
-
-**BUMP VERSION AT THE START OF EVERY DEVELOPMENT SESSION that will deploy to production.**
-
-The CI version check runs FIRST to fail fast (within seconds) rather than after expensive builds.
-
-**Version file:** `iem-mixer/crates/iem-core/Cargo.toml` (this is where VERSION constant comes from)
+**Version file (primary):** `iem-mixer/crates/iem-core/Cargo.toml` (this is where VERSION constant comes from)
 
 **Also update for consistency:**
 
@@ -620,114 +526,29 @@ sed -i 's/version = "1.1.0"/version = "1.2.0"/' iem-mixer/crates/iem-core/Cargo.
 sed -i 's/"version": "1.1.0"/"version": "1.2.0"/' iem-mixer/src-tauri/tauri.conf.json
 ```
 
-### ⚠️ PRE-PUSH VALIDATION CHECKLIST (MANDATORY)
+---
 
-**Before EVERY push, mentally verify:**
+## ⚠️ PRE-PUSH VALIDATION CHECKLIST (MANDATORY)
+
+**Before EVERY push, verify these project-specific rules:**
 
 1. **Dead code** - Any new function/module used somewhere? If only in tests, mark `#[cfg(test)]`. **NEVER use `#[allow(dead_code)]`** — if code isn't used, remove it entirely.
-2. **Format** - Code must match rustfmt (no trailing whitespace, proper line lengths)
-3. **Platform** - Self-hosted runner is Windows. Never use `shell: bash` for iem-lan jobs!
-4. **REAPER API** - All URLs must have `/_/` prefix. All SEND parsing must use field index 4/3/5 for vol/mute/pan
-5. **Feature flags** - `--features standalone` needed for server binary
+2. **Platform** - Self-hosted runner is Windows. Never use `shell: bash` for iem-lan jobs!
+3. **REAPER API** - All URLs must have `/_/` prefix. All SEND parsing must use field index 4/3/5 for vol/mute/pan
+4. **Feature flags** - `--features standalone` needed for server binary
 
 **NEVER DO:**
 
 ```
 ❌ Push code that introduces dead_code warnings (remove unused code, don't suppress with #[allow(dead_code)])
-❌ Use `#[allow(dead_code)]` to suppress warnings — remove the unused code instead
 ❌ Use `shell: bash` on Windows self-hosted runner
 ❌ Change REAPER parsing without adding tests that verify real response format
 ❌ Push multiple "fix CI" commits in a row - think before pushing!
-❌ Use `continue-on-error: true` in CI — FORBIDDEN without explicit written user approval. Every step must pass or fail the build. Enforced by test-integrity check.
 ```
 
-**THE RULE:** One push should work. If CI fails, the fix should be ONE commit that addresses ALL issues found, not a stream of partial fixes.
+---
 
-### ⚠️ ZERO TOLERANCE FOR TRANSIENT CI FAILURES
-
-**The iem.lan network and GitHub runners are on strong infrastructure. There is NO excuse for transient failures.**
-
-Every CI failure must be treated as a real bug and hardened against:
-
-- **Network downloads** (wasm-bindgen, trunk, crates) — must use caching, retries, or pre-installed binaries
-- **Timeouts** — increase timeouts or add proper wait-for-ready logic
-- **Flaky tests** — fix the root cause, never re-run and hope
-- **Resource exhaustion** — size runners appropriately
-
-If a "transient" failure happens, the CI pipeline itself has a bug. Fix the pipeline, don't just re-run.
-
-### After Pushing Code:
-
-```bash
-# 1. Check CI status immediately
-gh run list --limit 3
-
-# 2. Watch the run until complete
-gh run watch <run-id>
-
-# 3. If any job fails, check logs and fix
-gh run view <run-id> --log-failed
-```
-
-### ⚠️ TDD MANDATORY
-
-- **Every plan MUST have test steps BEFORE code steps.** A plan without test steps is rejected.
-- **Every bug fix starts with a failing test.** No test = no fix = no commit.
-- **Every new feature starts with tests describing expected behavior.** No tests = no implementation.
-- **The user is NOT your test suite.** Catch regressions with automated tests.
-
-**For bug fixes — REPRODUCE BEFORE FIXING:**
-
-1. **Write a failing test that captures the EXACT reported bug** — if you can't reproduce the bug in a test, you don't understand it yet
-2. Run the test, confirm it FAILS (proving the bug exists)
-3. ONLY THEN write the fix
-4. Run the test again, confirm it PASSES
-5. Run ALL tests to verify nothing else broke
-
-**For new features — TESTS FIRST:**
-
-1. Write E2E tests that describe the expected behavior BEFORE writing implementation
-2. Write unit tests for new functions BEFORE implementing them
-3. Implement until all tests pass
-4. If tests pass but the feature is broken in the real app, THE TESTS ARE WRONG — fix the tests first
-
-**For EVERY implementation plan — MANDATORY test steps:**
-
-```
-EVERY plan must follow this structure:
-  Step 1: Write failing tests (E2E + unit) for the feature/bug
-  Step 2: Confirm tests fail (proving they test the right thing)
-  Step 3: Implement the feature/fix
-  Step 4: Confirm tests pass
-  Step 5: Run ALL existing tests to catch regressions
-  Step 6: Push and monitor CI
-
-A plan that goes straight to "implement X" without "write tests for X" first
-is WRONG and must be rewritten.
-```
-
-**Test quality rules:**
-
-- Tests must verify **behavior**, not just rendering ("element does X when clicked", not "element exists")
-- Every bug that reaches production gets a regression test
-- Use `page.waitForRequest()` to verify API calls fire without needing REAPER
-- Settings tests must verify persistence (save, reload, verify)
-- Visual/icon tests must verify pixel data, not just file existence
-
-### ⚠️ USER-REPORTED ISSUES: E2E HARDENING FIRST, CODE SECOND
-
-**When the user reports a bug, DO NOT start coding. Write a failing E2E test against the REAL deployed system first.**
-
-```
-Phase 1: Write E2E test → run against iem.lan/10.77.9.231 → confirm it FAILS (catches the bug)
-Phase 2: Write fix → deploy → run E2E test on live system → confirm it PASSES → report success
-```
-
-CI uses synthetic data. User-reported issues MUST be verified against the real deployed system.
-
-### ⚠️ VISUAL CHANGES REQUIRE PIXEL-LEVEL VERIFICATION
-
-For icon/image fixes: write pixel-level automated test BEFORE generating the asset, verify with CI screenshot artifact. Never claim visual fixes without downloading and checking the artifact yourself. See CAWE rules above for reporting format.
+## ⚠️ PROJECT-SPECIFIC TEST NOTES
 
 ### Known Test Gaps
 
@@ -740,7 +561,22 @@ Existing tests are mostly rendering checks. Green CI does NOT guarantee features
 
 After every deploy, manually verify: fader → REAPER value changes, mute → channel mutes in REAPER.
 
-**Test files location:**
+### E2E Against Real System
+
+When the user reports a bug, write a failing E2E test against the REAL deployed system first.
+
+```
+Phase 1: Write E2E test → run against iem.lan/10.77.9.231 → confirm it FAILS (catches the bug)
+Phase 2: Write fix → deploy → run E2E test on live system → confirm it PASSES → report success
+```
+
+CI uses synthetic data. User-reported issues MUST be verified against the real deployed system.
+
+### Visual Changes
+
+For icon/image fixes: write pixel-level automated test BEFORE generating the asset, verify with CI screenshot artifact. Never claim visual fixes without downloading and checking the artifact yourself.
+
+### Test File Locations
 
 - `iem-mixer/crates/*/src/*.rs` - Unit tests (inline #[cfg(test)])
 - `iem-mixer/tests/` - Integration tests
@@ -758,10 +594,6 @@ npx playwright test              # E2E (requires trunk serve)
 
 ## CI Policy
 
-- No `#[ignore]`, no `skip`, no `continue-on-error: true` (enforced by test-integrity job)
-- `continue-on-error` requires explicit written user approval
-- CI test-integrity job counts tests (fails if < threshold), scans for skips/ignores
-
 ### GitHub Secrets
 
 - `IEM_LAN_SSH_KEY` - SSH key for deploy@iem.lan
@@ -776,7 +608,7 @@ The `iem-mixer/` directory contains the new Tauri + Leptos WASM desktop applicat
 ### Structure:
 
 ```
-iem-mixer/
+ iem-mixer/
 ├── crates/
 │   ├── iem-core/     # Shared types, config
 │   └── iem-server/   # Axum API server
@@ -809,7 +641,7 @@ cd iem-mixer/src-tauri && cargo tauri build
 After completing any task that affects the IEM Mixer application, always provide the deployment status:
 
 ```
-✅ Deployed: http://10.77.9.231/ (internal) / https://iem.newlevel.media/ (user-facing)
+PR: <url> | CI: green | Deploy: verified | Dashboard: http://10.77.9.231/ (internal) / https://iem.newlevel.media/ (user-facing)
 ```
 
 This ensures the user can immediately access and verify the changes.

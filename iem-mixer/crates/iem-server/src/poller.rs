@@ -150,6 +150,69 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
             }
         }
     }
+    // Discover mix_send_indices for elevated members: find sends from OTHER members'
+    // inear tracks that target this elevated member's inear track.
+    // Same mechanism as engineer discovery, but for each elevated member.
+    {
+        let elevated = state.elevated_store.read().await;
+        let elevated_list: Vec<String> = elevated.list().iter().cloned().collect();
+        drop(elevated);
+
+        // Build a track_index → member_id lookup for all members
+        let track_to_member: HashMap<usize, String> =
+            members.iter().map(|m| (m.track_index, m.id())).collect();
+
+        for elevated_id in &elevated_list {
+            let elevated_ti = members
+                .iter()
+                .find(|m| m.id() == *elevated_id)
+                .map(|m| m.track_index);
+            let Some(elev_ti) = elevated_ti else {
+                continue;
+            };
+
+            // For each OTHER member's inear track, probe sends to find one targeting this elevated member
+            let other_members: Vec<(String, usize)> = members
+                .iter()
+                .filter(|m| m.id() != *elevated_id && m.id() != "engineer")
+                .map(|m| (m.id(), m.track_index))
+                .collect();
+
+            for (other_id, other_track) in &other_members {
+                for si in 0..15 {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    if let Some(dest) = crate::proxy::query_send_destination(
+                        &state.http_client,
+                        &reaper_url,
+                        *other_track,
+                        si,
+                    )
+                    .await
+                    {
+                        if dest >= 0 && dest as usize == elev_ti {
+                            // Found: OTHER's inear SEND/si targets this elevated member's inear
+                            if let Some(member) =
+                                members.iter_mut().find(|m| m.id() == *elevated_id)
+                            {
+                                member.mix_send_indices.insert(other_id.clone(), si);
+                                tracing::info!(
+                                    elevated = %elevated_id,
+                                    source = %other_id,
+                                    source_track = other_track,
+                                    send_index = si,
+                                    "Discovered mix send for elevated member"
+                                );
+                            }
+                            break;
+                        }
+                    } else {
+                        break; // No more sends on this track
+                    }
+                }
+            }
+        }
+    }
+
     if members.is_empty() {
         tracing::warn!("No members discovered from REAPER - using fallback from config.members");
         // Fallback: create DiscoveredMember from legacy config.members
@@ -165,6 +228,7 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
                 dante_output_r: m.dante_output_r,
                 send_index: idx,
                 mix_send_index: None,
+                mix_send_indices: std::collections::HashMap::new(),
             });
         }
     }
@@ -644,19 +708,28 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             }
         }
 
-        // For engineer: also query mix channels (member inear → ENGINEER sends)
-        if member_id == "engineer" {
+        // For engineer or elevated members: also query mix channels
+        let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
+        if member_id == "engineer" || is_elevated {
             let mut mix_channels =
-                crate::proxy::build_mix_channel_templates(&discovered_snapshot, "engineer");
+                crate::proxy::build_mix_channel_templates(&discovered_snapshot, member_id);
 
             let mix_futures: Vec<_> = mix_channels
                 .iter()
                 .filter_map(|ch| {
-                    // Look up the discovered mix_send_index for this track
-                    let mix_si = discovered_snapshot
-                        .iter()
-                        .find(|m| m.track_index == ch.track_index)
-                        .and_then(|m| m.mix_send_index)?;
+                    // Look up the correct send index:
+                    // Engineer: mix_send_index, Elevated: mix_send_indices[member_id]
+                    let mix_si = if member_id == "engineer" {
+                        discovered_snapshot
+                            .iter()
+                            .find(|m| m.track_index == ch.track_index)
+                            .and_then(|m| m.mix_send_index)
+                    } else {
+                        discovered_snapshot
+                            .iter()
+                            .find(|m| m.track_index == ch.track_index)
+                            .and_then(|m| m.mix_send_indices.get(member_id).copied())
+                    }?;
                     let client = state.http_client.clone();
                     let url = reaper_url.clone();
                     let track_index = ch.track_index;
@@ -1252,6 +1325,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             dante_output_r: 4,
             send_index: 0,
             mix_send_index: Some(1),
+            mix_send_indices: std::collections::HashMap::new(),
         };
 
         // Simulate: poller found "PETKA inear" at track 24 (shifted by 1)
@@ -1276,6 +1350,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             dante_output_r: 4,
             send_index: 0,
             mix_send_index: Some(1),
+            mix_send_indices: std::collections::HashMap::new(),
         };
 
         let new_idx: usize = 23;
@@ -1599,6 +1674,7 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             dante_output_r: 2,
             send_index: 0,
             mix_send_index,
+            mix_send_indices: std::collections::HashMap::new(),
         }
     }
 

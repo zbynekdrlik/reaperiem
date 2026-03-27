@@ -328,6 +328,12 @@ pub struct DiscoveredMember {
     /// None if no send to engineer exists (e.g., engineer's own track).
     #[serde(default)]
     pub mix_send_index: Option<usize>,
+
+    /// Send indices on OTHER members' inear tracks that route TO this member.
+    /// Only populated for elevated members. Maps source member_id → send_index.
+    /// Example: { "marek": 3 } means MAREK inear SEND/3 targets this member's inear.
+    #[serde(default)]
+    pub mix_send_indices: HashMap<String, usize>,
 }
 
 impl DiscoveredMember {
@@ -362,6 +368,7 @@ impl DiscoveredMember {
             dante_output_r: dante_channels[1],
             send_index,
             mix_send_index: None, // Discovered later by querying REAPER send destinations
+            mix_send_indices: HashMap::new(), // Populated for elevated members
         })
     }
 }
