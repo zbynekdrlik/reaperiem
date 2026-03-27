@@ -113,8 +113,16 @@ test.describe("Elevated member access (#122)", () => {
     expect(resp.status()).toBe(403);
   });
 
-  test("elevated member gets mix channels in mixer state", async ({ page }) => {
+  test("elevated member gets mix channels in mixer state (requires REAPER)", async ({
+    page,
+  }) => {
     await page.goto("/");
+
+    // This test requires REAPER to be running (mix sends must exist)
+    const reaperCheck = await page.request
+      .get("/api/reaper/NTRACK")
+      .catch(() => null);
+    if (!assume(reaperCheck?.ok(), "REAPER must be reachable")) return;
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
@@ -138,6 +146,9 @@ test.describe("Elevated member access (#122)", () => {
       },
     );
     expect(setResp.status()).toBe(200);
+
+    // Wait for background re-discovery to complete
+    await page.waitForTimeout(5000);
 
     // Get mixer state for the elevated member (as engineer)
     const mixerResp = await page.request.get(`/api/mixer/${member.id}`, {
