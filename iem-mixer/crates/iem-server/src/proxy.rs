@@ -1839,6 +1839,7 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let bw_norm = get_field("bn=")?;
 
     // Use REAPER-formatted values if available, otherwise approximate
+    // Fallback: approximate ReaEQ freq (20-24000Hz, non-linear curve)
     let freq_hz = get_field("fh=").unwrap_or(20.0 * 1200.0_f32.powf(freq_norm));
     let gain_db = get_field("gd=").unwrap_or_else(|| {
         if gain_norm <= 0.001 {

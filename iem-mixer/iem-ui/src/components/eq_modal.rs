@@ -1244,7 +1244,7 @@ mod tests {
             let norm = gain_db_to_norm(db);
             let db_back = norm_to_gain_db(norm);
             assert!(
-                (db_back - db).abs() < 0.5,
+                (db_back - db).abs() < 0.1,
                 "dB={db}: norm={norm}, back={db_back}"
             );
         }
