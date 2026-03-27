@@ -308,6 +308,12 @@ async fn put_elevated(
         "Elevated status changed"
     );
 
+    // Re-discover members so mix_send_indices get populated for the newly elevated member
+    let members = crate::poller::discover_members(&state).await;
+    let mut discovered = state.discovered_members.write().await;
+    *discovered = members;
+    tracing::info!("Re-discovered members after elevated toggle");
+
     Ok(Json(ElevatedResponse {
         elevated: payload.elevated,
     }))

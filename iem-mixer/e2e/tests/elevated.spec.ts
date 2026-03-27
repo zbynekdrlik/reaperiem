@@ -113,6 +113,60 @@ test.describe("Elevated member access (#122)", () => {
     expect(resp.status()).toBe(403);
   });
 
+  test("elevated member gets mix channels in mixer state", async ({ page }) => {
+    await page.goto("/");
+
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+
+    const member = members.find((m: { id: string }) => m.id !== "engineer");
+    if (!assume(member, "No non-engineer member found")) return;
+
+    const engAuth = await getEngineerToken(page);
+    if (!assume(engAuth, "Engineer login failed")) return;
+
+    // Set elevated
+    const setResp = await page.request.put(
+      `/api/members/${member.id}/elevated`,
+      {
+        headers: {
+          Authorization: `Bearer ${engAuth!.token}`,
+          "Content-Type": "application/json",
+        },
+        data: { elevated: true },
+      },
+    );
+    expect(setResp.status()).toBe(200);
+
+    // Get mixer state for the elevated member (as engineer)
+    const mixerResp = await page.request.get(`/api/mixer/${member.id}`, {
+      headers: { Authorization: `Bearer ${engAuth!.token}` },
+    });
+
+    if (mixerResp.status() === 200) {
+      const mixer = await mixerResp.json();
+      const mixChannels = mixer.channels.filter(
+        (ch: { category: string }) => ch.category === "mixes",
+      );
+      // Mix channels should exist for elevated member
+      expect(mixChannels.length).toBeGreaterThan(0);
+      // All mix channels should be muted by default
+      for (const ch of mixChannels) {
+        expect(ch.muted).toBe(true);
+      }
+    }
+
+    // Clean up
+    await page.request.put(`/api/members/${member.id}/elevated`, {
+      headers: {
+        Authorization: `Bearer ${engAuth!.token}`,
+        "Content-Type": "application/json",
+      },
+      data: { elevated: false },
+    });
+  });
+
   test("engineer can set elevated=false to remove access", async ({ page }) => {
     await page.goto("/");
 
