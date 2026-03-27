@@ -346,14 +346,13 @@ async fn put_elevated(
             ))
             .send()
             .await
+            && let Ok(text) = resp.text().await
         {
-            if let Ok(text) = resp.text().await {
-                tracing::info!(
-                    member = %member_id,
-                    result = %text,
-                    "Mix sends setup result"
-                );
-            }
+            tracing::info!(
+                member = %member_id,
+                result = %text,
+                "Mix sends setup result"
+            );
         }
 
         // Re-discover members to pick up new send indices
