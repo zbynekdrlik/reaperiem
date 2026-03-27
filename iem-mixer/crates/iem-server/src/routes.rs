@@ -308,6 +308,61 @@ async fn put_elevated(
         "Elevated status changed"
     );
 
+    // When setting elevated=true, trigger ReaScript to create cross-member sends in REAPER
+    if payload.elevated {
+        let config = state.config.read().await;
+        let reaper_url = config.reaper_url.clone();
+        drop(config);
+
+        let member_upper = member_id.to_uppercase();
+        // Set elevated member name for ReaScript
+        let _ = state
+            .http_client
+            .get(format!(
+                "{}/_/SET/EXTSTATE/reaperiem/elevated_members/{}",
+                reaper_url, member_upper
+            ))
+            .send()
+            .await;
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // Trigger setup_mix_sends.lua
+        let _ = state
+            .http_client
+            .get(format!("{}/_/_RS_REAPERIEM_SETUP_MIX_SENDS", reaper_url))
+            .send()
+            .await;
+
+        // Wait for script completion (creating sends takes time)
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        // Read result
+        if let Ok(resp) = state
+            .http_client
+            .get(format!(
+                "{}/_/GET/EXTSTATE/reaperiem/mix_sends_result",
+                reaper_url
+            ))
+            .send()
+            .await
+        {
+            if let Ok(text) = resp.text().await {
+                tracing::info!(
+                    member = %member_id,
+                    result = %text,
+                    "Mix sends setup result"
+                );
+            }
+        }
+
+        // Re-discover members to pick up new send indices
+        let members = crate::poller::discover_members(&state).await;
+        let mut discovered = state.discovered_members.write().await;
+        *discovered = members;
+        tracing::info!("Re-discovered members after elevated toggle");
+    }
+
     Ok(Json(ElevatedResponse {
         elevated: payload.elevated,
     }))

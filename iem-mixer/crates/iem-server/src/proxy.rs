@@ -604,7 +604,7 @@ pub(crate) fn build_mix_channel_templates(
                 name,
                 level_db: 0.0,
                 pan: 0.5,
-                muted: false,
+                muted: true,
                 category: "mixes".to_string(),
                 stereo_pair: None,
                 stereo_side: None,
