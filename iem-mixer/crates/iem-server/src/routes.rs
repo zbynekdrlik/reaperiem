@@ -308,17 +308,15 @@ async fn put_elevated(
         "Elevated status changed"
     );
 
-    // Re-discover members in background so mix_send_indices get populated.
-    // Spawned as a task so the API response returns immediately.
-    let state_clone = state.clone();
-    tokio::spawn(async move {
-        let members = crate::poller::discover_members(&state_clone).await;
-        if !members.is_empty() {
-            let mut discovered = state_clone.discovered_members.write().await;
-            *discovered = members;
-            tracing::info!("Re-discovered members after elevated toggle");
-        }
-    });
+    // Re-discover members so mix_send_indices get populated for elevated members.
+    // This blocks the response but ensures discovery completes before the client
+    // tries to use mix channels.
+    let members = crate::poller::discover_members(&state).await;
+    if !members.is_empty() {
+        let mut discovered = state.discovered_members.write().await;
+        *discovered = members;
+        tracing::info!("Re-discovered members after elevated toggle");
+    }
 
     Ok(Json(ElevatedResponse {
         elevated: payload.elevated,
