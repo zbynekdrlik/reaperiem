@@ -389,7 +389,7 @@ pub async fn batch_control(
             // Send 0 on member inear tracks is the hardware output (Dante to speakers).
             // Muting Send 0 kills the member's audio entirely.
             {
-                let mstr = member_id.as_str();
+                let mstr: &str = &member_id;
                 let is_elev = state.elevated_store.read().await.is_elevated(mstr);
                 if member_id == "engineer" || is_elev {
                     let discovered = state.discovered_members.read().await;
@@ -1348,7 +1348,7 @@ async fn apply_command_to_cache(
     // Collect mix channel track indices and their send_index for validation.
     // For engineer: use mix_send_index (sends TO engineer).
     // For elevated: use mix_send_indices[member_id] (sends TO this member).
-    let member_str = member_id.as_str();
+    let member_str: &str = &member_id;
     let is_elevated = state.elevated_store.read().await.is_elevated(member_str);
     let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
         discovered
