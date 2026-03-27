@@ -257,14 +257,32 @@ async fn get_elevated(
     State(state): State<AppState>,
     Path(member_id): Path<String>,
     headers: axum::http::HeaderMap,
-) -> Result<Json<ElevatedResponse>, (StatusCode, Json<iem_core::ApiError>)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<iem_core::ApiError>)> {
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
     drop(config);
     let store = state.elevated_store.read().await;
-    Ok(Json(ElevatedResponse {
-        elevated: store.is_elevated(&member_id),
-    }))
+    let elevated = store.is_elevated(&member_id);
+    let elevated_list: Vec<String> = store.list().iter().cloned().collect();
+    drop(store);
+
+    // Include discovery debug info
+    let discovered = state.discovered_members.read().await;
+    let member_discovery = discovered.iter().find(|m| m.id() == member_id).map(|m| {
+        serde_json::json!({
+            "track_index": m.track_index,
+            "mix_send_index": m.mix_send_index,
+            "mix_send_indices_count": m.mix_send_indices.len(),
+            "mix_send_indices": m.mix_send_indices,
+        })
+    });
+    drop(discovered);
+
+    Ok(Json(serde_json::json!({
+        "elevated": elevated,
+        "elevated_list": elevated_list,
+        "discovery": member_discovery,
+    })))
 }
 
 /// Set elevated status for a member (engineer-only)
