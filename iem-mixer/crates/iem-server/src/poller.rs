@@ -261,14 +261,34 @@ pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
     })
 }
 
+/// Check if any elevated member is missing mix_send_indices (needs re-discovery).
+async fn elevated_needs_rediscovery(state: &AppState) -> bool {
+    let elevated = state.elevated_store.read().await;
+    if elevated.list().is_empty() {
+        return false;
+    }
+    let discovered = state.discovered_members.read().await;
+    for id in elevated.list() {
+        if let Some(member) = discovered.iter().find(|m| m.id() == *id) {
+            if member.mix_send_indices.is_empty() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Single poll cycle: query REAPER, diff against cache, broadcast changes
 async fn poll_reaper_and_broadcast(state: &AppState) {
     // Retry discovery if previous attempt was incomplete (e.g., REAPER was down at startup)
+    // Also re-discover when elevated members are missing mix_send_indices
     {
         let discovered = state.discovered_members.read().await;
-        if needs_rediscovery(&discovered) {
-            drop(discovered); // release read lock before write
+        let needs_basic = needs_rediscovery(&discovered);
+        drop(discovered);
+        let needs_elevated = elevated_needs_rediscovery(state).await;
 
+        if needs_basic || needs_elevated {
             // Only attempt re-discovery every 10 seconds to avoid hammering REAPER
             let now_ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -278,9 +298,9 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
             if now_ms.saturating_sub(last) > 10_000 {
                 LAST_REDISCOVERY_ATTEMPT.store(now_ms, Ordering::Relaxed);
                 let new_members = discover_members(state).await;
-                if !new_members.is_empty() && !needs_rediscovery(&new_members) {
+                if !new_members.is_empty() {
                     let mut discovered = state.discovered_members.write().await;
-                    tracing::info!("Re-discovery successful — replacing fallback members");
+                    tracing::info!("Re-discovery successful — updating members");
                     *discovered = new_members;
                     // Clear cached channel states to force full State resync
                     let mut cache = state.mixer_cache.write().await;

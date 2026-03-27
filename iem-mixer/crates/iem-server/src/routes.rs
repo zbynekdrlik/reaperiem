@@ -308,27 +308,8 @@ async fn put_elevated(
         "Elevated status changed"
     );
 
-    // Re-discover members so mix_send_indices get populated for elevated members.
-    // Only if REAPER is reachable (in CI there's no REAPER, skip gracefully).
-    {
-        let config = state.config.read().await;
-        let reaper_url = config.reaper_url.clone();
-        drop(config);
-        let reaper_ok = state
-            .http_client
-            .get(format!("{}/_/NTRACK", reaper_url))
-            .send()
-            .await
-            .is_ok();
-        if reaper_ok {
-            let members = crate::poller::discover_members(&state).await;
-            if !members.is_empty() {
-                let mut discovered = state.discovered_members.write().await;
-                *discovered = members;
-                tracing::info!("Re-discovered members after elevated toggle");
-            }
-        }
-    }
+    // The background poller detects elevated members with empty mix_send_indices
+    // and triggers re-discovery automatically (within ~10 seconds).
 
     Ok(Json(ElevatedResponse {
         elevated: payload.elevated,
