@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1774621413 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1774625771 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1110,6 +1110,14 @@
     AUXRECV 19 3 0.707946 0.020000458 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.707946 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 33 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1171,6 +1179,14 @@
     AUXRECV 19 3 0.010471288 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.015848933 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 34 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1231,6 +1247,14 @@
     AUXRECV 19 3 0.26909956 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.11481538 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 35 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1291,6 +1315,14 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 36 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1351,6 +1383,14 @@
     AUXRECV 19 3 0.05370318 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.19054608 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11220185 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 37 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1411,6 +1451,14 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.15848932 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 38 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1471,6 +1519,14 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 39 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1532,6 +1588,14 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 40 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1592,6 +1656,14 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 27 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 28 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 29 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 41 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
