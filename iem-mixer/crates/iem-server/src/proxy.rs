@@ -389,9 +389,9 @@ pub async fn batch_control(
             // Send 0 on member inear tracks is the hardware output (Dante to speakers).
             // Muting Send 0 kills the member's audio entirely.
             {
-                let is_elev = state.elevated_store.read().await.is_elevated(&member_id);
+                let mstr = member_id.as_str();
+                let is_elev = state.elevated_store.read().await.is_elevated(mstr);
                 if member_id == "engineer" || is_elev {
-                    let mid: &str = &member_id;
                     let discovered = state.discovered_members.read().await;
                     let mix_urls: Vec<String> = discovered
                         .iter()
@@ -400,7 +400,7 @@ pub async fn batch_control(
                             let si = if member_id == "engineer" {
                                 m.mix_send_index
                             } else {
-                                m.mix_send_indices.get(mid).copied()
+                                m.mix_send_indices.get(mstr).copied()
                             };
                             si.map(|s| reaper_api::set_send_mute(&reaper_url, m.track_index, s, 1))
                         })
@@ -1348,7 +1348,8 @@ async fn apply_command_to_cache(
     // Collect mix channel track indices and their send_index for validation.
     // For engineer: use mix_send_index (sends TO engineer).
     // For elevated: use mix_send_indices[member_id] (sends TO this member).
-    let is_elevated = state.elevated_store.read().await.is_elevated(&member_id);
+    let member_str = member_id.as_str();
+    let is_elevated = state.elevated_store.read().await.is_elevated(member_str);
     let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
         discovered
             .iter()
@@ -1356,12 +1357,11 @@ async fn apply_command_to_cache(
             .map(|m| (m.track_index, m.mix_send_index))
             .collect()
     } else if is_elevated {
-        let mid: &str = &member_id;
         discovered
             .iter()
             .filter(|m| m.id() != member_id && m.id() != "engineer")
             .map(|m| {
-                let si = m.mix_send_indices.get(mid).copied();
+                let si = m.mix_send_indices.get(member_str).copied();
                 (m.track_index, si)
             })
             .collect()
