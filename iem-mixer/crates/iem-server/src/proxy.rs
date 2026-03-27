@@ -393,6 +393,7 @@ pub async fn batch_control(
                 let is_elev = state.elevated_store.read().await.is_elevated(member_ref);
                 if member_id == "engineer" || is_elev {
                     let discovered = state.discovered_members.read().await;
+                    let elevated_member = discovered.iter().find(|m| m.id() == member_id);
                     let mix_urls: Vec<String> = discovered
                         .iter()
                         .filter(|m| m.id() != member_id && m.id() != "engineer")
@@ -400,7 +401,9 @@ pub async fn batch_control(
                             let si = if member_id == "engineer" {
                                 m.mix_send_index
                             } else {
-                                m.mix_send_indices.get(member_ref).copied()
+                                // mix_send_indices stored on elevated member, keyed by source ID
+                                elevated_member
+                                    .and_then(|e| e.mix_send_indices.get(&m.id()).copied())
                             };
                             si.map(|s| reaper_api::set_send_mute(&reaper_url, m.track_index, s, 1))
                         })
@@ -1268,12 +1271,18 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
                         .find(|m| m.track_index == ch.track_index)
                         .and_then(|m| m.mix_send_index)
                 } else {
-                    // For elevated member: look up the send on this source track
-                    // that targets the elevated member's inear
-                    discovered
+                    // For elevated member: mix_send_indices are stored on the
+                    // elevated member, keyed by source member ID.
+                    // Find source member's ID from track_index, then look up
+                    // the send index on the elevated member.
+                    let source_id = discovered
                         .iter()
                         .find(|m| m.track_index == ch.track_index)
-                        .and_then(|m| m.mix_send_indices.get(member_id).copied())
+                        .map(|m| m.id());
+                    let elevated = discovered.iter().find(|m| m.id() == member_id);
+                    source_id.and_then(|sid| {
+                        elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
+                    })
                 }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
@@ -1356,11 +1365,13 @@ async fn apply_command_to_cache(
             .map(|m| (m.track_index, m.mix_send_index))
             .collect()
     } else if is_elevated {
+        // mix_send_indices stored on the elevated member, keyed by source member ID
+        let elevated = discovered.iter().find(|m| m.id() == member_id);
         discovered
             .iter()
             .filter(|m| m.id() != member_id && m.id() != "engineer")
             .map(|m| {
-                let si = m.mix_send_indices.get(member_id).copied();
+                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
                 (m.track_index, si)
             })
             .collect()

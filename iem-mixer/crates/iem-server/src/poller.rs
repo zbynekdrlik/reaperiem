@@ -721,10 +721,15 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                             .find(|m| m.track_index == ch.track_index)
                             .and_then(|m| m.mix_send_index)
                     } else {
-                        discovered_snapshot
+                        // mix_send_indices stored on elevated member, keyed by source ID
+                        let source_id = discovered_snapshot
                             .iter()
                             .find(|m| m.track_index == ch.track_index)
-                            .and_then(|m| m.mix_send_indices.get(member_id).copied())
+                            .map(|m| m.id());
+                        let elevated = discovered_snapshot.iter().find(|m| m.id() == member_id);
+                        source_id.and_then(|sid| {
+                            elevated.and_then(|e| e.mix_send_indices.get(&sid).copied())
+                        })
                     }?;
                     let client = state.http_client.clone();
                     let url = reaper_url.clone();
