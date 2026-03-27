@@ -309,13 +309,25 @@ async fn put_elevated(
     );
 
     // Re-discover members so mix_send_indices get populated for elevated members.
-    // This blocks the response but ensures discovery completes before the client
-    // tries to use mix channels.
-    let members = crate::poller::discover_members(&state).await;
-    if !members.is_empty() {
-        let mut discovered = state.discovered_members.write().await;
-        *discovered = members;
-        tracing::info!("Re-discovered members after elevated toggle");
+    // Only if REAPER is reachable (in CI there's no REAPER, skip gracefully).
+    {
+        let config = state.config.read().await;
+        let reaper_url = config.reaper_url.clone();
+        drop(config);
+        let reaper_ok = state
+            .http_client
+            .get(format!("{}/_/NTRACK", reaper_url))
+            .send()
+            .await
+            .is_ok();
+        if reaper_ok {
+            let members = crate::poller::discover_members(&state).await;
+            if !members.is_empty() {
+                let mut discovered = state.discovered_members.write().await;
+                *discovered = members;
+                tracing::info!("Re-discovered members after elevated toggle");
+            }
+        }
     }
 
     Ok(Json(ElevatedResponse {
