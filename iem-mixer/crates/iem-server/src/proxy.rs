@@ -389,7 +389,7 @@ pub async fn batch_control(
             // Send 0 on member inear tracks is the hardware output (Dante to speakers).
             // Muting Send 0 kills the member's audio entirely.
             {
-                let is_elev = state.elevated_store.read().await.is_elevated(member_id);
+                let is_elev = state.elevated_store.read().await.is_elevated(&member_id);
                 if member_id == "engineer" || is_elev {
                     let discovered = state.discovered_members.read().await;
                     let mix_urls: Vec<String> = discovered
@@ -399,7 +399,7 @@ pub async fn batch_control(
                             let si = if member_id == "engineer" {
                                 m.mix_send_index
                             } else {
-                                m.mix_send_indices.get(member_id).copied()
+                                m.mix_send_indices.get(&member_id).copied()
                             };
                             si.map(|s| reaper_api::set_send_mute(&reaper_url, m.track_index, s, 1))
                         })
@@ -1250,7 +1250,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
     }
 
     // For engineer or elevated members: append mix channels
-    let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
+    let is_elevated = state.elevated_store.read().await.is_elevated(&member_id);
     if member_id == "engineer" || is_elevated {
         let discovered = state.discovered_members.read().await;
         let mut mix_channels = build_mix_channel_templates(&discovered, member_id);
@@ -1272,7 +1272,7 @@ async fn build_full_state(state: &AppState, member_id: &str) -> Result<iem_core:
                     discovered
                         .iter()
                         .find(|m| m.track_index == ch.track_index)
-                        .and_then(|m| m.mix_send_indices.get(member_id).copied())
+                        .and_then(|m| m.mix_send_indices.get(&member_id).copied())
                 }?;
                 let client = state.http_client.clone();
                 let url = reaper_url.clone();
@@ -1347,7 +1347,7 @@ async fn apply_command_to_cache(
     // Collect mix channel track indices and their send_index for validation.
     // For engineer: use mix_send_index (sends TO engineer).
     // For elevated: use mix_send_indices[member_id] (sends TO this member).
-    let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
+    let is_elevated = state.elevated_store.read().await.is_elevated(&member_id);
     let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
         discovered
             .iter()
@@ -1359,7 +1359,7 @@ async fn apply_command_to_cache(
             .iter()
             .filter(|m| m.id() != member_id && m.id() != "engineer")
             .map(|m| {
-                let si = m.mix_send_indices.get(member_id).copied();
+                let si = m.mix_send_indices.get(&member_id).copied();
                 (m.track_index, si)
             })
             .collect()

@@ -158,10 +158,6 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
         let elevated_list: Vec<String> = elevated.list().iter().cloned().collect();
         drop(elevated);
 
-        // Build a track_index → member_id lookup for all members
-        let track_to_member: HashMap<usize, String> =
-            members.iter().map(|m| (m.track_index, m.id())).collect();
-
         for elevated_id in &elevated_list {
             let elevated_ti = members
                 .iter()
