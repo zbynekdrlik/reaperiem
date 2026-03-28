@@ -434,12 +434,12 @@ mod tests {
         assert_eq!(claims.sub, "engineer");
         assert!(claims.engineer);
 
-        // Verify expiry is approximately 4h from now (within 5 sec tolerance)
+        // Verify expiry is approximately 24h from now (within 5 sec tolerance)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let expected_exp = now + 4 * 60 * 60;
+        let expected_exp = now + 24 * 60 * 60;
         assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
     }
 
