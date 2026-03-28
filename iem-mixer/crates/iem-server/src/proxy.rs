@@ -401,7 +401,7 @@ pub async fn batch_control(
             // Send 0 on member inear tracks is the hardware output (Dante to speakers).
             // Muting Send 0 kills the member's audio entirely.
             {
-                let member_ref = member_id.as_ref();
+                let member_ref: &str = member_id.as_ref();
                 let is_elev = member_ref == "petronela";
                 if member_id == "engineer" || is_elev {
                     let discovered = state.discovered_members.read().await;
