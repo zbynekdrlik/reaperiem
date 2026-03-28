@@ -85,7 +85,6 @@ pub fn ListenButton(
     let (listen_target, set_listen_target) = signal(String::new());
     let (stream_stats, set_stream_stats) = signal(StreamStats::default());
     let (reconnect_interval, set_reconnect_interval) = signal(Option::<i32>::None);
-    let (reconnect_member_id, set_reconnect_member_id) = signal(String::new());
 
     // Check browser support on mount
     Effect::new(move || {
@@ -206,7 +205,6 @@ pub fn ListenButton(
 
         if state.get() == ListenState::Idle || state.get() == ListenState::NoSource {
             // Start listening
-            set_reconnect_member_id.set(member_id_toggle.clone());
             start_listening(
                 set_state,
                 set_ws,
