@@ -6,6 +6,16 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.120.0 (2026-03-28)
+
+- **Fix**: Routing loop bug — cross-member inear sends created bidirectional loops that REAPER silently blocked, preventing ALL audio from reaching member inear tracks. Replaced with one-directional sends TO Petronela only (#121)
+- **Fix**: Listen mode auto-reconnect — audio WebSocket now retries forever on disconnect instead of resetting button to idle. Exponential backoff (1-8s), AudioContext stays alive for seamless resume
+- **Fix**: Listen mode server-side mute restoration — REAPER send mutes always restored on WebSocket disconnect (prevents orphaned mute states)
+- **Fix**: Adaptive jitter buffer — grows from 80ms to 500ms on dropout, shrinks slowly when stable. Reduces audible drops on bad networks
+- **Fix**: Opus FEC enabled on VST encoder — each packet now contains redundant data from previous frame for loss recovery
+- **Simplify**: Elevated member access hardcoded to Petronela only (removed dynamic toggle, ElevatedStore, API endpoints, settings UI)
+- **Closed**: #55 (app upgrade — solved by CI auto-deploy), #122 (elevated access — implemented v1.117.0)
+
 ### v1.118.0 (2026-03-28)
 
 - **Fix**: Engineer token expiry extended from 4 hours to 24 hours — no more repeated PIN entry during rehearsal/service sessions (#124)
