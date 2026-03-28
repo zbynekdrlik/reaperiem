@@ -35,6 +35,7 @@ extern "C" {
 enum ListenState {
     Idle,
     Listening,
+    Reconnecting,
     NoSource,
     Unsupported,
 }
@@ -83,6 +84,7 @@ pub fn ListenButton(
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
     let (listen_target, set_listen_target) = signal(String::new());
     let (stream_stats, set_stream_stats) = signal(StreamStats::default());
+    let (reconnect_interval, set_reconnect_interval) = signal(Option::<i32>::None);
 
     // Check browser support on mount
     Effect::new(move || {
@@ -122,9 +124,69 @@ pub fn ListenButton(
         }
     });
 
+    // Auto-reconnect: when state becomes Reconnecting, start exponential backoff
+    let member_id_reconnect = member_id.clone();
+    Effect::new(move || {
+        let current_state = state.get();
+
+        // Clear existing reconnect timer if state changed away from Reconnecting
+        if current_state != ListenState::Reconnecting {
+            if let Some(id) = reconnect_interval.get_untracked() {
+                if let Some(w) = web_sys::window() {
+                    w.clear_interval_with_handle(id);
+                }
+                set_reconnect_interval.set(None);
+            }
+            return;
+        }
+
+        // Already have a reconnect timer running
+        if reconnect_interval.get_untracked().is_some() {
+            return;
+        }
+
+        // Start reconnection with exponential backoff (1s, 2s, 4s, 8s cap)
+        let backoff = std::rc::Rc::new(std::cell::Cell::new(1000u32));
+        let member_id_inner = member_id_reconnect.clone();
+        let closure = Closure::wrap(Box::new(move || {
+            let current_backoff = backoff.get();
+            web_sys::console::log_1(
+                &format!("[audio] Reconnect attempt (backoff {}ms)", current_backoff).into(),
+            );
+
+            // Try to reconnect
+            start_listening(
+                set_state,
+                set_ws,
+                set_listen_target,
+                member_id_inner.clone(),
+            );
+
+            // Increase backoff for next attempt (cap at 8s)
+            let next = (current_backoff * 2).min(8000);
+            backoff.set(next);
+        }) as Box<dyn FnMut()>);
+
+        // Use the initial backoff for the first attempt
+        let id = web_sys::window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                2000, // Check every 2s, backoff controls actual attempt timing
+            )
+            .unwrap();
+        closure.forget();
+        set_reconnect_interval.set(Some(id));
+    });
+
     // Cleanup on unmount
     on_cleanup(move || {
         if let Some(id) = stats_interval.get_untracked() {
+            if let Some(w) = web_sys::window() {
+                w.clear_interval_with_handle(id);
+            }
+        }
+        if let Some(id) = reconnect_interval.get_untracked() {
             if let Some(w) = web_sys::window() {
                 w.clear_interval_with_handle(id);
             }
@@ -150,7 +212,13 @@ pub fn ListenButton(
                 member_id_toggle.clone(),
             );
         } else {
-            // Stop listening
+            // Stop listening (also cancels reconnection)
+            if let Some(id) = reconnect_interval.get_untracked() {
+                if let Some(w) = web_sys::window() {
+                    w.clear_interval_with_handle(id);
+                }
+                set_reconnect_interval.set(None);
+            }
             stop_listening(ws, set_state, set_ws);
             set_listen_target.set(String::new());
             set_stream_stats.set(StreamStats::default());
@@ -160,6 +228,7 @@ pub fn ListenButton(
     let btn_class = move || match state.get() {
         ListenState::Idle => "toolbar-btn toolbar-btn-listen",
         ListenState::Listening => "toolbar-btn toolbar-btn-listen listening",
+        ListenState::Reconnecting => "toolbar-btn toolbar-btn-listen reconnecting",
         ListenState::NoSource => "toolbar-btn toolbar-btn-listen no-source",
         ListenState::Unsupported => "toolbar-btn toolbar-btn-listen unsupported",
     };
@@ -179,6 +248,7 @@ pub fn ListenButton(
                 format!("\u{1F50A} {}", cap)
             }
         }
+        ListenState::Reconnecting => "\u{1F50A} Reconnecting...".to_string(),
         ListenState::NoSource => "\u{1F50A} No Source".to_string(),
         ListenState::Unsupported => "\u{1F507} Unsupported".to_string(),
     };
@@ -325,21 +395,20 @@ fn start_listening(
         }
     }) as Box<dyn FnMut(_)>);
 
-    // On close: reset state
+    // On close: start reconnection (never give up)
     let set_state_close = set_state;
     let set_ws_close = set_ws;
     let on_close = Closure::wrap(Box::new(move |_: web_sys::Event| {
-        stop_audio_player();
-        set_state_close.set(ListenState::Idle);
+        web_sys::console::log_1(&"[audio] WebSocket closed — will reconnect".into());
+        // Don't stop audio player — keep AudioContext alive for seamless resume
         set_ws_close.set(None);
+        // Transition to Reconnecting (auto-reconnect starts via the Effect below)
+        set_state_close.set(ListenState::Reconnecting);
     }) as Box<dyn FnMut(_)>);
 
-    // On error: log and reset state
-    let set_state_error = set_state;
+    // On error: log only — let on_close handle reconnection
     let on_error = Closure::wrap(Box::new(move |_: web_sys::Event| {
         web_sys::console::error_1(&"[audio] WebSocket error".into());
-        stop_audio_player();
-        set_state_error.set(ListenState::Idle);
     }) as Box<dyn FnMut(_)>);
 
     // Store WS ref globally BEFORE registering on_open callback.

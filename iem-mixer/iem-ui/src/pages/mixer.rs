@@ -984,7 +984,6 @@ pub fn MixerPage() -> impl IntoView {
                 set_double_tap_fader=set_double_tap_fader
                 member_id=member_id()
                 is_engineer=is_engineer_own_mixer
-                is_engineer_viewing_member={is_engineer && member_id() != "engineer"}
             />
 
             <PinChangeModal

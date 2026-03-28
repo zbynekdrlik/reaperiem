@@ -390,17 +390,12 @@ async def set_hardware_output(
 
 
 @mcp.tool
-async def setup_mix_sends(elevated_members: str) -> str:
-    """Set up cross-member inear sends for elevated members in REAPER.
+async def setup_mix_sends() -> str:
+    """Set up inear sends for Petronela's elevated access in REAPER.
 
-    Creates sends from each band member's inear track to each elevated
-    member's inear track. These sends enable elevated members to hear
-    other members' mixes through their physical IEMs.
-
-    Sends are created muted by default. Idempotent (skips existing sends).
-
-    Args:
-        elevated_members: Pipe-delimited member names (e.g., "PETRONELA|MAREK")
+    Creates one-directional sends FROM each band member's inear track
+    TO Petronela's inear track. Sends are muted by default.
+    Idempotent (skips existing sends).
 
     Returns:
         Result message with counts of created/skipped/error sends
@@ -413,14 +408,10 @@ async def setup_mix_sends(elevated_members: str) -> str:
 
     client = get_reaper_client()
 
-    # Set elevated members via EXTSTATE
-    await client.set_extstate("reaperiem", "elevated_members", elevated_members)
-    await asyncio.sleep(0.1)
-
-    # Trigger the ReaScript
+    # Trigger the ReaScript (Petronela is hardcoded in the script)
     await client.trigger_action(config.action_setup_mix_sends)
 
-    # Wait for script to complete (creating sends takes time)
+    # Wait for script to complete
     await asyncio.sleep(3.0)
     result = await client.get_extstate("reaperiem", "mix_sends_result")
 

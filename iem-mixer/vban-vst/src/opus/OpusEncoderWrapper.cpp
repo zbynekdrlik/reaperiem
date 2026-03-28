@@ -34,6 +34,10 @@ bool OpusEncoderWrapper::configure(int sampleRate, int channels, int bitrate) {
     opus_encoder_ctl(encoder, OPUS_SET_VBR(1));
     // Signal type: music
     opus_encoder_ctl(encoder, OPUS_SET_SIGNAL(OPUS_SIGNAL_MUSIC));
+    // Forward Error Correction: embed redundant data from previous frame
+    // so decoder can recover lost packets without retransmission
+    opus_encoder_ctl(encoder, OPUS_SET_INBAND_FEC(1));
+    opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(10));
 
     return true;
 }

@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.118.0 (2026-03-28)
+
+- **Fix**: Engineer token expiry extended from 4 hours to 24 hours — no more repeated PIN entry during rehearsal/service sessions (#124)
+- **Fix**: Nightly backup now force-saves REAPER project before collecting files — backed-up RPP is always current (#126)
+- **Fix**: Backup worktree creation no longer fails when REAPER has unsaved project changes (added `--force` flag)
+- **Fix**: Backup error handling — worktree creation failures now detected and reported instead of silently committing to wrong branch
+- **Closed**: #124 (engineer auth too short), #126 (daily backup broken)
+
 ### v1.117.0 (2026-03-27)
 
 - **Feature**: Elevated member access — engineer can grant specific band members the Mixes tab to view/control other members' IEM mixes through physical Dante headphones (#122)

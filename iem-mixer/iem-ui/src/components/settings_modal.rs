@@ -59,10 +59,6 @@ pub fn SettingsModal(
     /// Whether the current user is an engineer (shows Audio section)
     #[prop(default = false)]
     is_engineer: bool,
-    /// Whether the current user is engineer viewing another member's page
-    /// (shows Elevated toggle for granting mix channel access)
-    #[prop(default = false)]
-    is_engineer_viewing_member: bool,
 ) -> impl IntoView {
     // StoredValue is Copy + Send + Sync — closures inside view! can use it freely
     let member_id = StoredValue::new(member_id);
@@ -155,73 +151,6 @@ pub fn SettingsModal(
                                         >
                                             "+"
                                         </button>
-                                    </div>
-                                </div>
-                            </div>
-                        })
-                    } else {
-                        None
-                    }}
-
-                    {if is_engineer_viewing_member {
-                        let (elevated, set_elevated) = signal(false);
-                        // Fetch current elevated status on mount
-                        let mid_for_fetch = member_id.get_value();
-                        leptos::task::spawn_local({
-                            let mid = mid_for_fetch.clone();
-                            async move {
-                                if let Some(auth) = crate::auth::get_auth() {
-                                    let url = format!("/api/members/{}/elevated", mid);
-                                    let opts = web_sys::RequestInit::new();
-                                    opts.set_method("GET");
-                                    let headers = web_sys::Headers::new().unwrap();
-                                    headers.set("Authorization", &format!("Bearer {}", auth.token)).ok();
-                                    opts.set_headers(&headers);
-                                    if let Ok(resp) = wasm_bindgen_futures::JsFuture::from(
-                                        web_sys::window().unwrap().fetch_with_str_and_init(&url, &opts),
-                                    ).await {
-                                        let resp: web_sys::Response = resp.into();
-                                        if resp.ok() {
-                                            if let Ok(json) = wasm_bindgen_futures::JsFuture::from(resp.json().unwrap()).await {
-                                                if let Some(val) = js_sys::Reflect::get(&json, &"elevated".into()).ok() {
-                                                    set_elevated.set(val.as_bool().unwrap_or(false));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                        Some(view! {
-                            <div class="settings-section">
-                                <div class="settings-section-title">"Access"</div>
-                                <div class="settings-row" on:click=move |_| {
-                                    let new_val = !elevated.get_untracked();
-                                    set_elevated.set(new_val);
-                                    let mid = member_id.get_value();
-                                    leptos::task::spawn_local(async move {
-                                        if let Some(auth) = crate::auth::get_auth() {
-                                            let url = format!("/api/members/{}/elevated", mid);
-                                            let opts = web_sys::RequestInit::new();
-                                            opts.set_method("PUT");
-                                            let headers = web_sys::Headers::new().unwrap();
-                                            headers.set("Authorization", &format!("Bearer {}", auth.token)).ok();
-                                            headers.set("Content-Type", "application/json").ok();
-                                            opts.set_headers(&headers);
-                                            let body = format!(r#"{{"elevated":{}}}"#, new_val);
-                                            opts.set_body(&wasm_bindgen::JsValue::from_str(&body));
-                                            let _ = wasm_bindgen_futures::JsFuture::from(
-                                                web_sys::window().unwrap().fetch_with_str_and_init(&url, &opts),
-                                            ).await;
-                                        }
-                                    });
-                                }>
-                                    <div class="settings-label">
-                                        <div class="settings-name">"Elevated access"</div>
-                                        <div class="settings-desc">"Allow this member to view and control other members' mixes"</div>
-                                    </div>
-                                    <div class=move || if elevated.get() { "toggle-switch on" } else { "toggle-switch" }>
-                                        <div class="toggle-knob"></div>
                                     </div>
                                 </div>
                             </div>
