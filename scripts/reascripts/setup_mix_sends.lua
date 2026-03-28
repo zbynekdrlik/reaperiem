@@ -79,6 +79,25 @@ for _, src_name in ipairs(inear_names) do
     end
 end
 
+-- Ensure PETRONELA inear has a send TO ENGINEER inear (for engineer listen/monitoring).
+-- This send is NOT a cross-member send — it lets the engineer hear Petronela's mix
+-- via the Listen feature and Mixes tab.
+local engineer_track = inear_tracks["ENGINEER"]
+if engineer_track and not send_exists(petronela_track, engineer_track) then
+    local send_idx = reaper.CreateTrackSend(petronela_track, engineer_track)
+    if send_idx >= 0 then
+        reaper.SetTrackSendInfo_Value(petronela_track, 0, send_idx, "D_VOL", 1.0)
+        reaper.SetTrackSendInfo_Value(petronela_track, 0, send_idx, "D_PAN", 0.0)
+        reaper.SetTrackSendInfo_Value(petronela_track, 0, send_idx, "I_SENDMODE", 0)
+        reaper.SetTrackSendInfo_Value(petronela_track, 0, send_idx, "B_MUTE", 1)
+        created = created + 1
+        log("Created send: PETRONELA inear -> ENGINEER inear (send " .. send_idx .. ")")
+    else
+        log("ERROR: Failed to create send: PETRONELA -> ENGINEER")
+        errors = errors + 1
+    end
+end
+
 reaper.PreventUIRefresh(-1)
 reaper.Undo_EndBlock("Setup mix sends for Petronela elevated access", -1)
 

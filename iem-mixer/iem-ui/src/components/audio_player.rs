@@ -85,6 +85,9 @@ pub fn ListenButton(
     let (listen_target, set_listen_target) = signal(String::new());
     let (stream_stats, set_stream_stats) = signal(StreamStats::default());
     let (reconnect_interval, set_reconnect_interval) = signal(Option::<i32>::None);
+    // Flag to distinguish user-initiated stop from unexpected disconnect.
+    // When true, on_close should NOT trigger auto-reconnect.
+    let (intentional_stop, set_intentional_stop) = signal(false);
 
     // Check browser support on mount
     Effect::new(move || {
@@ -160,6 +163,8 @@ pub fn ListenButton(
                 set_ws,
                 set_listen_target,
                 member_id_inner.clone(),
+                intentional_stop,
+                set_intentional_stop,
             );
 
             // Increase backoff for next attempt (cap at 8s)
@@ -191,6 +196,7 @@ pub fn ListenButton(
                 w.clear_interval_with_handle(id);
             }
         }
+        set_intentional_stop.set(true);
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
         }
@@ -210,6 +216,8 @@ pub fn ListenButton(
                 set_ws,
                 set_listen_target,
                 member_id_toggle.clone(),
+                intentional_stop,
+                set_intentional_stop,
             );
         } else {
             // Stop listening (also cancels reconnection)
@@ -219,7 +227,7 @@ pub fn ListenButton(
                 }
                 set_reconnect_interval.set(None);
             }
-            stop_listening(ws, set_state, set_ws);
+            stop_listening(ws, set_state, set_ws, set_intentional_stop);
             set_listen_target.set(String::new());
             set_stream_stats.set(StreamStats::default());
         }
@@ -284,6 +292,8 @@ fn start_listening(
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
     set_listen_target: WriteSignal<String>,
     member_id: String,
+    intentional_stop: ReadSignal<bool>,
+    set_intentional_stop: WriteSignal<bool>,
 ) {
     // Build WebSocket URL
     let auth = match crate::auth::get_auth() {
@@ -395,15 +405,24 @@ fn start_listening(
         }
     }) as Box<dyn FnMut(_)>);
 
-    // On close: start reconnection (never give up)
+    // On close: reconnect only if this was NOT a user-initiated stop.
+    // When the user clicks stop, stop_listening() sets intentional_stop=true
+    // BEFORE calling socket.close(), so on_close sees the flag and stays Idle.
     let set_state_close = set_state;
     let set_ws_close = set_ws;
     let on_close = Closure::wrap(Box::new(move |_: web_sys::Event| {
-        web_sys::console::log_1(&"[audio] WebSocket closed — will reconnect".into());
-        // Don't stop audio player — keep AudioContext alive for seamless resume
         set_ws_close.set(None);
-        // Transition to Reconnecting (auto-reconnect starts via the Effect below)
-        set_state_close.set(ListenState::Reconnecting);
+        if intentional_stop.get_untracked() {
+            // User clicked stop — stay in Idle, don't reconnect
+            web_sys::console::log_1(&"[audio] WebSocket closed (user stopped)".into());
+            set_intentional_stop.set(false);
+            set_state_close.set(ListenState::Idle);
+        } else {
+            // Unexpected disconnect — auto-reconnect
+            web_sys::console::log_1(&"[audio] WebSocket closed — will reconnect".into());
+            // Don't stop audio player — keep AudioContext alive for seamless resume
+            set_state_close.set(ListenState::Reconnecting);
+        }
     }) as Box<dyn FnMut(_)>);
 
     // On error: log only — let on_close handle reconnection
@@ -438,7 +457,10 @@ fn stop_listening(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
     set_state: WriteSignal<ListenState>,
     set_ws: WriteSignal<Option<web_sys::WebSocket>>,
+    set_intentional_stop: WriteSignal<bool>,
 ) {
+    // Set the flag BEFORE closing — on_close checks this to avoid auto-reconnect
+    set_intentional_stop.set(true);
     if let Some(socket) = ws.get_untracked() {
         // Send ListenStop command before closing
         let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStop).unwrap_or_default();

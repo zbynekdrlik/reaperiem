@@ -486,8 +486,10 @@ mod tests {
 
     #[test]
     fn test_engineer_pin_config_overrides_default() {
-        let mut config = Config::default();
-        config.engineer_pin = Some("9999".to_string());
+        let mut config = Config {
+            engineer_pin: Some("9999".to_string()),
+            ..Config::default()
+        };
         config.members.push(make_test_member("Petka"));
         // Config engineer PIN works
         assert_eq!(

@@ -651,6 +651,73 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     }
   });
 
+  test("Listen stop stays stopped — no auto-reconnect after user clicks stop", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const membersResp = await page.request.get("/api/members");
+    const members = await membersResp.json();
+    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+
+    const member = members[0].id;
+    await loginAs(page, "engineer", "1177");
+    await page.goto(`/${member}`);
+    if (!(await waitForMixer(page))) return;
+
+    const toolbarLoaded = await page
+      .waitForSelector(".toolbar", { timeout: 10000 })
+      .catch(() => null);
+    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+
+    const listenBtn = page.locator(".toolbar-btn-listen");
+    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
+      return;
+
+    // Click Listen to start
+    await listenBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Verify it started (button text changes from "Listen")
+    const textAfterStart = await listenBtn.textContent();
+    const started =
+      textAfterStart?.includes("Reconnecting") ||
+      textAfterStart?.includes(member.charAt(0).toUpperCase());
+    // It should have moved away from idle "Listen" state
+    if (
+      !assume(
+        textAfterStart && !textAfterStart.includes("Listen\n"),
+        `Listen should have started, got: "${textAfterStart}"`,
+      )
+    )
+      return;
+
+    // Click Listen again to stop
+    await listenBtn.click();
+    await page.waitForTimeout(1000);
+
+    // Should be in Idle state now
+    const textAfterStop = await listenBtn.textContent();
+    expect(
+      textAfterStop,
+      "Button should show 'Listen' (idle) after clicking stop",
+    ).toContain("Listen");
+
+    // Wait 5 seconds and verify it STAYS stopped (no auto-reconnect)
+    await page.waitForTimeout(5000);
+    const textAfterWait = await listenBtn.textContent();
+    expect(
+      textAfterWait,
+      "Button should STILL show 'Listen' (idle) after 5s — must not auto-reconnect",
+    ).toContain("Listen");
+
+    // Verify it's not in Reconnecting state
+    const btnClass = await listenBtn.getAttribute("class");
+    expect(
+      btnClass,
+      "Button should not have 'reconnecting' class",
+    ).not.toContain("reconnecting");
+  });
+
   test("Rapid listen toggle does not corrupt mute state", async ({ page }) => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
