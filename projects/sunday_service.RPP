@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1774697762 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1774708513 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -114,7 +114,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 0
+    SEL 1
     REC 1 2 1 2 0 0 0 0
     VU 76
     TRACKHEIGHT 64 0 0 0 0 0 0
@@ -126,9 +126,9 @@
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
-      WNDRECT 293 289 736 461
+      WNDRECT 293 289 716 290
       SHOW 0
-      LASTSEL 1
+      LASTSEL 2
       DOCKED 0
       BYPASS 0 0 0
       <JS utility/volume_pan "TRIM IN"
@@ -148,7 +148,7 @@
       FLOATPOS 0 0 0 0
       FXID {463030CD-7B1D-43D1-9FA7-A41DE58CE5DD}
       WAK 0 0
-      BYPASS 1 0 0
+      BYPASS 0 0 0
       <JS synthesis/tonegenerator ""
         -12 -6 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
@@ -1095,7 +1095,7 @@
     FX 1
     TRACKID {6561EBEC-611D-461D-9855-C99AF01DA123}
     PERF 0
-    AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 1 -1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.58884364 -0.79999995 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.58884364 0.76 1 0 0 0 0 -1:U 0 -1 ''
@@ -1179,7 +1179,6 @@
     AUXRECV 19 3 0.010471288 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.015848933 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1247,7 +1246,6 @@
     AUXRECV 19 3 0.26909956 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.11481538 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1315,7 +1313,6 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11481538 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 26 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1383,7 +1380,6 @@
     AUXRECV 19 3 0.05370318 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.19054608 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.11220185 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1451,7 +1447,6 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.15848932 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1519,7 +1514,6 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1588,7 +1582,6 @@
     AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1656,7 +1649,6 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1711,7 +1703,7 @@
     FX 1
     TRACKID {BB7BB7CA-A675-4639-A353-359B00245678}
     PERF 0
-    AUXRECV 0 3 0.26302677 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.26302677 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 1.5488166 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 1.9498447 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1726,7 +1718,6 @@
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.691831 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 22 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 1 0.040000916 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -2255,7 +2246,7 @@
     AUTOMODE 0
     PANLAWFLAGS 3
     VOLPAN 1 0 -1 -1 1
-    MUTESOLO 1 0 0
+    MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
     ISBUS 0 0
