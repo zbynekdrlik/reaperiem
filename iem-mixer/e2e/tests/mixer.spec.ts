@@ -2069,17 +2069,17 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
   test("regular member mixer does NOT include mix channels", async ({
     request,
   }) => {
+    // Use stevo (not petronela — she is hardcoded elevated)
     const loginResp = await request.post("/api/auth", {
-      data: { member: "petronela", pin: "7711" },
+      data: { member: "stevo", pin: "7711" },
     });
     expect(loginResp.status()).toBe(200);
     const { token } = await loginResp.json();
 
-    const mixerResp = await request.get("/api/mixer/petronela", {
+    const mixerResp = await request.get("/api/mixer/stevo", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(mixerResp.ok(), "Petronela mixer endpoint must respond"))
-      return;
+    if (!assume(mixerResp.ok(), "Stevo mixer endpoint must respond")) return;
 
     const data = await mixerResp.json();
     const mixChannels = data.channels.filter(
@@ -2116,9 +2116,10 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
   });
 
   test("regular member does NOT see Mixes tab", async ({ page }) => {
+    // Use stevo (not petronela — she is hardcoded elevated)
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "stevo");
+    await page.goto("/stevo");
     if (!(await waitForMixer(page))) return;
 
     // Regular member should NOT see Mixes tab (hidden via CSS display:none)

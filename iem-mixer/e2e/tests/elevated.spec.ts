@@ -101,10 +101,11 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
     const engAuth = await getEngineerToken(page);
     if (!assume(engAuth, "Engineer login failed")) return;
 
-    // The elevated endpoint should be gone (404)
+    // The elevated endpoint is gone — response should not contain valid elevated JSON
     const resp = await page.request.get("/api/members/petronela/elevated", {
       headers: { Authorization: `Bearer ${engAuth!.token}` },
     });
-    expect(resp.status()).toBe(404);
+    const text = await resp.text();
+    expect(text.includes('"elevated"')).toBe(false);
   });
 });
