@@ -11,8 +11,11 @@ let pendingFrames = [];
 
 // Buffer constants
 const FRAME_DURATION_MS = 20;
-const BUFFER_MS = 80; // Fixed scheduling buffer after dropout
+const MIN_BUFFER_MS = 80; // Minimum buffer depth (good network)
+const MAX_BUFFER_MS = 500; // Maximum buffer depth (bad network)
 const MAX_LATENCY_S = 0.5; // Cap: skip ahead if drift exceeds 500ms
+let bufferMs = MIN_BUFFER_MS; // Adaptive buffer — grows on dropout, shrinks when stable
+let lastDropoutTime = 0; // Timestamp of last dropout (for shrink logic)
 let lastFrameArrivalTime = 0;
 
 // Dropout counter state
@@ -49,6 +52,8 @@ export function initAudioPlayer() {
   lastError = null;
 
   // Reset buffer state
+  bufferMs = MIN_BUFFER_MS;
+  lastDropoutTime = 0;
   lastFrameArrivalTime = 0;
 
   // Reset dropout counters
@@ -94,8 +99,8 @@ export function initAudioPlayer() {
     audioContext.sampleRate,
     "state:",
     audioContext.state,
-    "buffer:",
-    BUFFER_MS + "ms, max latency:",
+    "adaptive buffer:",
+    MIN_BUFFER_MS + "-" + MAX_BUFFER_MS + "ms, max latency:",
     MAX_LATENCY_S * 1000 + "ms",
   );
 }
@@ -111,14 +116,38 @@ export function feedOpusFrame(opusData) {
   const now = performance.now();
   totalFrames++;
 
-  // Track arrival gaps for dropout counting
+  // Track arrival gaps for dropout counting + adaptive buffer
   if (lastFrameArrivalTime > 0) {
     const delta = now - lastFrameArrivalTime;
     if (delta > 60) {
       dropoutCount++;
+      // Adaptive buffer: grow on dropout (fast)
+      const oldBuf = bufferMs;
+      bufferMs = Math.min(bufferMs + 40, MAX_BUFFER_MS);
+      lastDropoutTime = now;
+      if (bufferMs !== oldBuf) {
+        console.log(
+          `[audio] Buffer grew: ${oldBuf}ms -> ${bufferMs}ms (dropout)`,
+        );
+      }
     }
   }
   lastFrameArrivalTime = now;
+
+  // Adaptive buffer: shrink when stable (slow — every frame check, 10s since last dropout)
+  if (
+    lastDropoutTime > 0 &&
+    now - lastDropoutTime > 10000 &&
+    bufferMs > MIN_BUFFER_MS
+  ) {
+    const oldBuf = bufferMs;
+    bufferMs = Math.max(bufferMs - 1, MIN_BUFFER_MS); // Shrink 1ms per frame (~50ms/sec)
+    if (oldBuf !== bufferMs && bufferMs % 20 === 0) {
+      console.log(
+        `[audio] Buffer shrunk: ${oldBuf}ms -> ${bufferMs}ms (stable)`,
+      );
+    }
+  }
 
   // Diagnostic: log frame info (throttled to every 50th frame)
   if (frameIndex % 50 === 0) {
@@ -241,7 +270,7 @@ function scheduleAudioData(audioData) {
   // Cap latency: if we've drifted too far ahead, skip to keep it live
   const gap = nextStartTime - now;
   if (gap > MAX_LATENCY_S) {
-    nextStartTime = now + BUFFER_MS / 1000;
+    nextStartTime = now + bufferMs / 1000;
   }
 
   if (nextStartTime <= now) {
@@ -249,8 +278,8 @@ function scheduleAudioData(audioData) {
     if (scheduledFrameCount > 1) {
       playbackDropouts++;
     }
-    // Schedule ahead by fixed buffer depth
-    nextStartTime = now + BUFFER_MS / 1000;
+    // Schedule ahead by adaptive buffer depth
+    nextStartTime = now + bufferMs / 1000;
   }
   source.start(nextStartTime);
   nextStartTime += buffer.duration;
@@ -277,6 +306,8 @@ export function stopAudioPlayer() {
   lastAudioLevel = -150;
   lastError = null;
   pendingFrames = [];
+  bufferMs = MIN_BUFFER_MS;
+  lastDropoutTime = 0;
   lastFrameArrivalTime = 0;
   dropoutCount = 0;
   playbackDropouts = 0;
@@ -358,12 +389,7 @@ export function getStreamStats() {
   return {
     dropouts: playbackDropouts,
     frames: totalFrames,
-    bufferMs: audioContext
-      ? Math.max(
-          0,
-          Math.round((nextStartTime - audioContext.currentTime) * 1000),
-        )
-      : 0,
+    bufferMs: bufferMs,
     quality,
   };
 }

@@ -2127,6 +2127,25 @@ pub async fn ws_audio(
 /// Handle the audio WebSocket connection.
 /// Uses a bounded frame dropper (mpsc channel, cap=5) between the broadcast receiver
 /// and WebSocket sender to prevent TCP buffer bloat from causing latency accumulation.
+/// Restore REAPER send mute states saved during listen mode, then reset to Idle.
+/// Called from both ListenStop handler and WebSocket disconnect cleanup.
+#[cfg(feature = "audio")]
+async fn restore_listen_mutes(state: &AppState) {
+    let listen_state = state.engineer_listen_target.read().await.clone();
+    if let crate::ListenTarget::Member(saved_mutes) = listen_state {
+        let config = state.config.read().await;
+        let reaper_url = config.reaper_url.clone();
+        drop(config);
+        for (track_idx, send_idx, was_muted) in &saved_mutes {
+            let mute_val = if *was_muted { 1 } else { 0 };
+            let url = reaper_api::set_send_mute(&reaper_url, *track_idx, *send_idx, mute_val);
+            let _ = state.http_client.get(&url).send().await;
+        }
+        tracing::info!("Restored {} send mute states", saved_mutes.len());
+    }
+    *state.engineer_listen_target.write().await = crate::ListenTarget::Idle;
+}
+
 #[cfg(feature = "audio")]
 async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppState) {
     use axum::extract::ws::Message;
@@ -2134,6 +2153,15 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
     use tokio::time::{Duration, Instant};
 
     tracing::info!("Audio WebSocket connected");
+
+    // Recover from orphaned listen state (previous session crashed without cleanup)
+    {
+        let stale = state.engineer_listen_target.read().await.clone();
+        if let crate::ListenTarget::Member(_) = stale {
+            tracing::warn!("Found orphaned listen mutes from previous session, restoring");
+            restore_listen_mutes(&state).await;
+        }
+    }
 
     // Frame dropper: bounded channel between broadcast receiver and WebSocket sender.
     // When TCP backpressure stalls the sender, stale frames are dropped instead of queuing.
@@ -2152,6 +2180,9 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                             match cmd {
                                 ClientMsg::ListenStart { member_id } => {
                                     tracing::info!(target_member = %member_id, "Audio listen started");
+
+                                    // Restore any previous listen mutes first (concurrent device safety)
+                                    restore_listen_mutes(&state).await;
 
                                     // On band member page: mute all other member sends to ENGINEER
                                     // except the target member's send (app-level solo via send muting)
@@ -2233,18 +2264,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                     }
 
                                     // Restore saved mute states if band member listen was active
-                                    let listen_state = state.engineer_listen_target.read().await.clone();
-                                    if let crate::ListenTarget::Member(saved_mutes) = listen_state {
-                                        let config = state.config.read().await;
-                                        let reaper_url = config.reaper_url.clone();
-                                        drop(config);
-                                        for (track_idx, send_idx, was_muted) in &saved_mutes {
-                                            let mute_val = if *was_muted { 1 } else { 0 };
-                                            let url = reaper_api::set_send_mute(&reaper_url, *track_idx, *send_idx, mute_val);
-                                            let _ = state.http_client.get(&url).send().await;
-                                        }
-                                    }
-                                    *state.engineer_listen_target.write().await = crate::ListenTarget::Idle;
+                                    restore_listen_mutes(&state).await;
 
                                     is_listening = false;
                                     let status = ServerMsg::AudioStatus {
@@ -2284,6 +2304,16 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
             // Not listening — just wait
             _ = tokio::time::sleep(Duration::from_secs(60)), if !is_listening => {}
 
+            // Ping every 30s to detect half-open TCP connections
+            _ = tokio::time::sleep(Duration::from_secs(30)), if is_listening => {
+                if last_audio_time.elapsed() <= Duration::from_secs(5) {
+                    // Audio is flowing, send a ping to keep the connection alive
+                    if socket.send(Message::Ping(vec![].into())).await.is_err() {
+                        break; // Connection dead — cleanup will restore mutes
+                    }
+                }
+            }
+
             // No-source timeout: if listening but no audio for 5 seconds
             _ = tokio::time::sleep(Duration::from_secs(5)), if is_listening => {
                 if last_audio_time.elapsed() > Duration::from_secs(5) {
@@ -2302,12 +2332,16 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
         }
     }
 
-    // Cleanup
+    // Cleanup: abort producer and restore mutes if listen was active
     if let Some(handle) = producer_handle {
         handle.abort();
     }
-
-    tracing::info!("Audio WebSocket disconnected");
+    if is_listening {
+        restore_listen_mutes(&state).await;
+        tracing::info!("Audio WebSocket disconnected — mutes restored");
+    } else {
+        tracing::info!("Audio WebSocket disconnected");
+    }
 }
 
 #[cfg(test)]
