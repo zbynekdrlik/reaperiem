@@ -153,10 +153,9 @@ pub async fn discover_members(state: &AppState) -> Vec<DiscoveredMember> {
     // Discover mix_send_indices for elevated members: find sends from OTHER members'
     // inear tracks that target this elevated member's inear track.
     // Same mechanism as engineer discovery, but for each elevated member.
+    // Hardcoded: only "petronela" is elevated.
     {
-        let elevated = state.elevated_store.read().await;
-        let elevated_list: Vec<String> = elevated.list().iter().cloned().collect();
-        drop(elevated);
+        let elevated_list: Vec<String> = vec!["petronela".to_string()];
 
         for elevated_id in &elevated_list {
             let elevated_ti = members
@@ -261,19 +260,13 @@ pub fn spawn_poller(state: AppState) -> tokio::task::JoinHandle<()> {
     })
 }
 
-/// Check if any elevated member is missing mix_send_indices (needs re-discovery).
+/// Check if the elevated member (petronela) is missing mix_send_indices (needs re-discovery).
 async fn elevated_needs_rediscovery(state: &AppState) -> bool {
-    let elevated = state.elevated_store.read().await;
-    if elevated.list().is_empty() {
-        return false;
-    }
     let discovered = state.discovered_members.read().await;
-    for id in elevated.list() {
-        if let Some(member) = discovered.iter().find(|m| m.id() == *id)
-            && member.mix_send_indices.is_empty()
-        {
-            return true;
-        }
+    if let Some(member) = discovered.iter().find(|m| m.id() == "petronela")
+        && member.mix_send_indices.is_empty()
+    {
+        return true;
     }
     false
 }
@@ -725,7 +718,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         }
 
         // For engineer or elevated members: also query mix channels
-        let is_elevated = state.elevated_store.read().await.is_elevated(member_id);
+        let is_elevated = member_id == "petronela";
         if member_id == "engineer" || is_elevated {
             let mut mix_channels =
                 crate::proxy::build_mix_channel_templates(&discovered_snapshot, member_id);

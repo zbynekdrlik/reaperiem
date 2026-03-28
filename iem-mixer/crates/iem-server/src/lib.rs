@@ -10,7 +10,6 @@
 pub mod audio_stream;
 pub mod auth;
 pub mod customization_store;
-pub mod elevated_store;
 pub mod pin_store;
 pub mod poller;
 pub mod preset_routes;
@@ -72,8 +71,6 @@ pub struct AppState {
     pub preset_store: Arc<preset_store::PresetStore>,
     /// Channel customization storage (pin/hide preferences)
     pub customization_store: Arc<customization_store::CustomizationStore>,
-    /// Elevated member storage (members with mix channel access)
-    pub elevated_store: Arc<RwLock<elevated_store::ElevatedStore>>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
     /// Listen mode target (Idle / Member).
@@ -159,7 +156,6 @@ impl AppState {
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
-            elevated_store: Arc::new(RwLock::new(elevated_store::ElevatedStore::load(config_dir))),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
             engineer_listen_target: Arc::new(RwLock::new(ListenTarget::Idle)),
             #[cfg(feature = "audio")]

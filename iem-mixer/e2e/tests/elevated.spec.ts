@@ -31,89 +31,8 @@ function assume(condition: unknown, message: string): condition is true {
   return true;
 }
 
-test.describe("Elevated member access (#122)", () => {
-  test("GET elevated returns false by default", async ({ page }) => {
-    await page.goto("/");
-
-    const membersResp = await page.request.get("/api/members");
-    const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
-
-    const member = members[0].id;
-    const engAuth = await getEngineerToken(page);
-    if (!assume(engAuth, "Engineer login failed")) return;
-
-    const resp = await page.request.get(`/api/members/${member}/elevated`, {
-      headers: { Authorization: `Bearer ${engAuth!.token}` },
-    });
-    expect(resp.status()).toBe(200);
-    const body = await resp.json();
-    expect(body.elevated).toBe(false);
-  });
-
-  test("engineer can set elevated=true", async ({ page }) => {
-    await page.goto("/");
-
-    const membersResp = await page.request.get("/api/members");
-    const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
-
-    const member = members[0].id;
-    const engAuth = await getEngineerToken(page);
-    if (!assume(engAuth, "Engineer login failed")) return;
-
-    // Set elevated
-    const setResp = await page.request.put(`/api/members/${member}/elevated`, {
-      headers: {
-        Authorization: `Bearer ${engAuth!.token}`,
-        "Content-Type": "application/json",
-      },
-      data: { elevated: true },
-    });
-    expect(setResp.status()).toBe(200);
-    const setBody = await setResp.json();
-    expect(setBody.elevated).toBe(true);
-
-    // Verify it persisted
-    const getResp = await page.request.get(`/api/members/${member}/elevated`, {
-      headers: { Authorization: `Bearer ${engAuth!.token}` },
-    });
-    expect(getResp.status()).toBe(200);
-    const getBody = await getResp.json();
-    expect(getBody.elevated).toBe(true);
-
-    // Clean up: set back to false
-    await page.request.put(`/api/members/${member}/elevated`, {
-      headers: {
-        Authorization: `Bearer ${engAuth!.token}`,
-        "Content-Type": "application/json",
-      },
-      data: { elevated: false },
-    });
-  });
-
-  test("non-engineer cannot set elevated", async ({ page }) => {
-    await page.goto("/");
-
-    const membersResp = await page.request.get("/api/members");
-    const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
-
-    const member = members[0].id;
-    const memberAuth = await getToken(page, member);
-    if (!assume(memberAuth, "Member login failed")) return;
-
-    const resp = await page.request.put(`/api/members/${member}/elevated`, {
-      headers: {
-        Authorization: `Bearer ${memberAuth!.token}`,
-        "Content-Type": "application/json",
-      },
-      data: { elevated: true },
-    });
-    expect(resp.status()).toBe(403);
-  });
-
-  test("elevated member gets mix channels in mixer state (requires REAPER)", async ({
+test.describe("Elevated member access (Petronela hardcoded)", () => {
+  test("petronela gets mix channels in mixer state (requires REAPER)", async ({
     page,
   }) => {
     await page.goto("/");
@@ -124,34 +43,14 @@ test.describe("Elevated member access (#122)", () => {
       .catch(() => null);
     if (!assume(reaperCheck?.ok(), "REAPER must be reachable")) return;
 
-    const membersResp = await page.request.get("/api/members");
-    const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
-
-    const member = members.find((m: { id: string }) => m.id !== "engineer");
-    if (!assume(member, "No non-engineer member found")) return;
-
     const engAuth = await getEngineerToken(page);
     if (!assume(engAuth, "Engineer login failed")) return;
 
-    // Set elevated
-    const setResp = await page.request.put(
-      `/api/members/${member.id}/elevated`,
-      {
-        headers: {
-          Authorization: `Bearer ${engAuth!.token}`,
-          "Content-Type": "application/json",
-        },
-        data: { elevated: true },
-      },
-    );
-    expect(setResp.status()).toBe(200);
-
-    // Wait for background re-discovery to complete
+    // Wait for background discovery to complete
     await page.waitForTimeout(5000);
 
-    // Get mixer state for the elevated member (as engineer)
-    const mixerResp = await page.request.get(`/api/mixer/${member.id}`, {
+    // Get mixer state for petronela (as engineer)
+    const mixerResp = await page.request.get("/api/mixer/petronela", {
       headers: { Authorization: `Bearer ${engAuth!.token}` },
     });
 
@@ -160,60 +59,52 @@ test.describe("Elevated member access (#122)", () => {
       const mixChannels = mixer.channels.filter(
         (ch: { category: string }) => ch.category === "mixes",
       );
-      // Mix channels should exist for elevated member
+      // Mix channels should exist for petronela (hardcoded elevated)
       expect(mixChannels.length).toBeGreaterThan(0);
       // All mix channels should be muted by default
       for (const ch of mixChannels) {
         expect(ch.muted).toBe(true);
       }
     }
-
-    // Clean up
-    await page.request.put(`/api/members/${member.id}/elevated`, {
-      headers: {
-        Authorization: `Bearer ${engAuth!.token}`,
-        "Content-Type": "application/json",
-      },
-      data: { elevated: false },
-    });
   });
 
-  test("engineer can set elevated=false to remove access", async ({ page }) => {
+  test("non-petronela member does NOT get mix channels", async ({ page }) => {
     await page.goto("/");
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    const nonPetronela = members.find(
+      (m: { id: string }) => m.id !== "engineer" && m.id !== "petronela",
+    );
+    if (!assume(nonPetronela, "No non-petronela member found")) return;
 
-    const member = members[0].id;
     const engAuth = await getEngineerToken(page);
     if (!assume(engAuth, "Engineer login failed")) return;
 
-    // Set elevated true then false
-    await page.request.put(`/api/members/${member}/elevated`, {
-      headers: {
-        Authorization: `Bearer ${engAuth!.token}`,
-        "Content-Type": "application/json",
-      },
-      data: { elevated: true },
-    });
-
-    const unsetResp = await page.request.put(
-      `/api/members/${member}/elevated`,
-      {
-        headers: {
-          Authorization: `Bearer ${engAuth!.token}`,
-          "Content-Type": "application/json",
-        },
-        data: { elevated: false },
-      },
-    );
-    expect(unsetResp.status()).toBe(200);
-
-    const getResp = await page.request.get(`/api/members/${member}/elevated`, {
+    const mixerResp = await page.request.get(`/api/mixer/${nonPetronela.id}`, {
       headers: { Authorization: `Bearer ${engAuth!.token}` },
     });
-    const body = await getResp.json();
-    expect(body.elevated).toBe(false);
+
+    if (mixerResp.status() === 200) {
+      const mixer = await mixerResp.json();
+      const mixChannels = mixer.channels.filter(
+        (ch: { category: string }) => ch.category === "mixes",
+      );
+      // Non-petronela members should NOT have mix channels
+      expect(mixChannels.length).toBe(0);
+    }
+  });
+
+  test("elevated API endpoint no longer exists", async ({ page }) => {
+    await page.goto("/");
+
+    const engAuth = await getEngineerToken(page);
+    if (!assume(engAuth, "Engineer login failed")) return;
+
+    // The elevated endpoint should be gone (404)
+    const resp = await page.request.get("/api/members/petronela/elevated", {
+      headers: { Authorization: `Bearer ${engAuth!.token}` },
+    });
+    expect(resp.status()).toBe(404);
   });
 });
