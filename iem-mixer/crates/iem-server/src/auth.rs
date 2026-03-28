@@ -418,16 +418,16 @@ mod tests {
     }
 
     #[test]
-    fn test_engineer_token_expiry_4h() {
+    fn test_engineer_token_expiry_24h() {
         let config = test_config();
         let result = issue_token(&config, "engineer", true);
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
 
-        // Engineer tokens should have 4h expiry (shorter for elevated access)
+        // Engineer tokens should have 24h expiry (same as members)
         assert!(response.engineer);
-        assert_eq!(response.expires_in, 4 * 60 * 60);
+        assert_eq!(response.expires_in, 24 * 60 * 60);
 
         // Verify the token claims
         let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
@@ -445,12 +445,12 @@ mod tests {
 
     #[test]
     fn test_token_expiry_constants() {
-        // Verify expiry constants are correct
-        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60); // 24 hours
-        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 4 * 60 * 60); // 4 hours
+        // Verify expiry constants are correct — both 24 hours
+        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
 
-        // Engineer expiry should be shorter than member expiry
-        assert!(ENGINEER_TOKEN_EXPIRY_SECS < MEMBER_TOKEN_EXPIRY_SECS);
+        // Both roles should have the same expiry
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, MEMBER_TOKEN_EXPIRY_SECS);
     }
 
     /// Helper to create a JWT token for testing
