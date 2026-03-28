@@ -17,6 +17,15 @@ jobs:
           $repoPath = "C:\Users\newlevel\Documents\reaperiem"
           Push-Location $repoPath
 
+          # Force-save REAPER project before backup (non-fatal if REAPER not running)
+          try {
+            Invoke-WebRequest -Uri "http://localhost:8080/_/40026" -TimeoutSec 5 | Out-Null
+            Write-Host "REAPER project saved"
+            Start-Sleep -Seconds 2
+          } catch {
+            Write-Host "Warning: Could not save REAPER project (REAPER may not be running)"
+          }
+
           # Collect all backup data from main working tree
           $tmpDir = "$env:TEMP\reaperiem-backup"
           if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
@@ -55,11 +64,21 @@ jobs:
 
           $backupExists = git ls-remote --heads origin backup
           if ($backupExists) {
-            git worktree add $worktreePath backup
+            git worktree add --force $worktreePath backup
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Failed to create worktree for backup branch"
+              Pop-Location
+              exit 1
+            }
             Push-Location $worktreePath
             git reset --hard origin/backup
           } else {
             git worktree add --orphan $worktreePath backup
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::Failed to create orphan worktree for backup branch"
+              Pop-Location
+              exit 1
+            }
             Push-Location $worktreePath
             git rm -rf . 2>$null
           }

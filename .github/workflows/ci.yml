@@ -878,9 +878,14 @@ jobs:
           # Create a temporary worktree for the backup branch
           $backupExists = git ls-remote --heads origin backup
           if ($backupExists) {
-            git worktree add -b backup $wtPath origin/backup
+            git worktree add --force -b backup $wtPath origin/backup
           } else {
-            git worktree add --orphan -b backup $wtPath
+            git worktree add --force --orphan -b backup $wtPath
+          }
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Failed to create worktree for backup branch"
+            Pop-Location
+            exit 1
           }
 
           # Copy REAPER projects into the worktree (main repo is untouched)

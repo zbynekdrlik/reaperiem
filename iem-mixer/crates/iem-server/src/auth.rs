@@ -43,8 +43,8 @@ pub struct LoginResponse {
 
 /// Token expiration for members (24 hours)
 const MEMBER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
-/// Token expiration for engineers (4 hours - shorter for elevated access)
-const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 4 * 60 * 60;
+/// Token expiration for engineers (24 hours — same as members)
+const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
 
 /// Handle login and return JWT
 pub async fn login(
