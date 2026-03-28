@@ -43,8 +43,8 @@ pub struct LoginResponse {
 
 /// Token expiration for members (24 hours)
 const MEMBER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
-/// Token expiration for engineers (4 hours - shorter for elevated access)
-const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 4 * 60 * 60;
+/// Token expiration for engineers (24 hours — same as members)
+const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
 
 /// Handle login and return JWT
 pub async fn login(
@@ -418,39 +418,39 @@ mod tests {
     }
 
     #[test]
-    fn test_engineer_token_expiry_4h() {
+    fn test_engineer_token_expiry_24h() {
         let config = test_config();
         let result = issue_token(&config, "engineer", true);
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
 
-        // Engineer tokens should have 4h expiry (shorter for elevated access)
+        // Engineer tokens should have 24h expiry (same as members)
         assert!(response.engineer);
-        assert_eq!(response.expires_in, 4 * 60 * 60);
+        assert_eq!(response.expires_in, 24 * 60 * 60);
 
         // Verify the token claims
         let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
         assert_eq!(claims.sub, "engineer");
         assert!(claims.engineer);
 
-        // Verify expiry is approximately 4h from now (within 5 sec tolerance)
+        // Verify expiry is approximately 24h from now (within 5 sec tolerance)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let expected_exp = now + 4 * 60 * 60;
+        let expected_exp = now + 24 * 60 * 60;
         assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
     }
 
     #[test]
     fn test_token_expiry_constants() {
-        // Verify expiry constants are correct
-        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60); // 24 hours
-        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 4 * 60 * 60); // 4 hours
+        // Verify expiry constants are correct — both 24 hours
+        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
 
-        // Engineer expiry should be shorter than member expiry
-        assert!(ENGINEER_TOKEN_EXPIRY_SECS < MEMBER_TOKEN_EXPIRY_SECS);
+        // Both roles should have the same expiry
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, MEMBER_TOKEN_EXPIRY_SECS);
     }
 
     /// Helper to create a JWT token for testing
