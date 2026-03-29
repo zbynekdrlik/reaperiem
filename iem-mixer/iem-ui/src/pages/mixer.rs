@@ -97,6 +97,7 @@ fn connect_websocket(
     set_stems_bus_idx: WriteSignal<Option<usize>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
+    set_alert_data: WriteSignal<Option<(String, String)>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -142,9 +143,6 @@ fn connect_websocket(
     // Clone fail counter for use in closures
     let fail_count_msg = ws_fail_count.clone();
     let fail_count_close = ws_fail_count;
-
-    // Alert data for engineer toast (member_id, display_name) (#125)
-    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
 
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
@@ -418,6 +416,9 @@ pub fn MixerPage() -> impl IntoView {
     // Output track index for global volume metering (set from ServerMsg::State)
     let (output_track_idx, set_output_track_idx) = signal(Option::<usize>::None);
 
+    // Alert data for engineer toast (member_id, display_name) (#125)
+    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
+
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
@@ -466,6 +467,7 @@ pub fn MixerPage() -> impl IntoView {
             set_stems_bus_idx,
             set_eq_bands,
             set_eq_loading,
+            set_alert_data,
         );
     });
 
@@ -532,6 +534,7 @@ pub fn MixerPage() -> impl IntoView {
                 set_stems_bus_idx,
                 set_eq_bands,
                 set_eq_loading,
+                set_alert_data,
             );
         }
     }) as Box<dyn FnMut()>);
