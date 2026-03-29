@@ -1012,7 +1012,9 @@ pub fn MixerPage() -> impl IntoView {
                 alert_active=alert_active
             />
 
-            <AlertToast alert=alert_data ws=ws />
+            {is_engineer.then(|| view! {
+                <AlertToast alert=alert_data ws=ws />
+            })}
 
             <PresetModal
                 visible=preset_modal_visible.into()
