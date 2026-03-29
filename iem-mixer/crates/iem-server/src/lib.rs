@@ -130,6 +130,8 @@ pub struct MixerCache {
     pub stems_bus_indices: HashMap<String, usize>,
     /// Last known stems-bus volume per member (member_id -> state)
     pub stems_volumes: HashMap<String, GlobalVolState>,
+    /// Last alert timestamp per member for rate limiting (#125)
+    pub alert_cooldowns: HashMap<String, std::time::Instant>,
 }
 
 impl MixerCache {

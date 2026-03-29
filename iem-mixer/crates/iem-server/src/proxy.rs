@@ -1122,6 +1122,40 @@ async fn handle_ws(
                                 continue;
                             }
 
+                            // Handle band member alert to engineer (#125)
+                            if let ClientMsg::CallEngineer = cmd {
+                                // Rate limit: 30s cooldown per member
+                                let now = std::time::Instant::now();
+                                let mut cache = state.mixer_cache.write().await;
+                                if let Some(last) = cache.alert_cooldowns.get(&member_id) {
+                                    if now.duration_since(*last) < std::time::Duration::from_secs(30) {
+                                        drop(cache);
+                                        continue; // Rate limited
+                                    }
+                                }
+                                cache.alert_cooldowns.insert(member_id.clone(), now);
+                                drop(cache);
+
+                                // Look up member display name
+                                let discovered = state.discovered_members.read().await;
+                                let display_name = discovered
+                                    .iter()
+                                    .find(|m| m.id() == member_id)
+                                    .map(|m| m.name.clone())
+                                    .unwrap_or_else(|| member_id.clone());
+                                drop(discovered);
+
+                                // Broadcast to all engineer devices
+                                let _ = state.event_tx.send((
+                                    "engineer".to_string(),
+                                    ServerMsg::EngineerAlert {
+                                        from_member: member_id.clone(),
+                                        from_name: display_name,
+                                    },
+                                ));
+                                continue;
+                            }
+
                             // Handle solo state updates (no REAPER command — solo is UI-only sync)
                             if let ClientMsg::SetSolo { ref soloed } = cmd {
                                 {
@@ -1464,6 +1498,10 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("SetSolo should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::CallEngineer => {
+            // Handled in WS handler before apply_command_to_cache is called
+            return Err("CallEngineer should not reach apply_command_to_cache".to_string());
+        }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
@@ -1611,6 +1649,9 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::SetSolo { .. } => {
             unreachable!("SetSolo handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::CallEngineer => {
+            unreachable!("CallEngineer handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")

@@ -1,6 +1,6 @@
 [package]
 name = "iem-ui"
-version = "1.121.0"
+version = "1.122.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Leptos WASM frontend for IEM mixer"
@@ -51,6 +51,16 @@ web-sys = { version = "0.3", features = [
     "Request",
     "Response",
     "Headers",
+    # Web Audio API for alert sounds (#125)
+    "AudioContext",
+    "BaseAudioContext",
+    "AudioNode",
+    "AudioScheduledSourceNode",
+    "AudioDestinationNode",
+    "AudioParam",
+    "OscillatorNode",
+    "OscillatorType",
+    "GainNode",
 ] }
 js-sys = "0.3"
 

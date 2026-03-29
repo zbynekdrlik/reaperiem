@@ -74,6 +74,8 @@ pub enum ClientMsg {
     },
     /// Request EQ parameters for multiple tracks (used during preset save)
     GetEqParamsMulti { track_indices: Vec<usize> },
+    /// Band member calls engineer for help (#125)
+    CallEngineer,
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -135,6 +137,8 @@ pub enum ServerMsg {
     },
     /// EQ parameters for multiple tracks (response to GetEqParamsMulti)
     EqParamsMulti { bands: HashMap<usize, Vec<EqBand>> },
+    /// Alert: band member needs help (broadcast to engineer devices) (#125)
+    EngineerAlert { from_member: String, from_name: String },
 }
 
 #[cfg(test)]
@@ -632,6 +636,29 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"EqParamsMulti\""));
         assert!(json.contains("\"band_type\":\"band\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_call_engineer_serialization() {
+        let msg = ClientMsg::CallEngineer;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"CallEngineer\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_engineer_alert_serialization() {
+        let msg = ServerMsg::EngineerAlert {
+            from_member: "petka".to_string(),
+            from_name: "Petka".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"EngineerAlert\""));
+        assert!(json.contains("\"from_member\":\"petka\""));
+        assert!(json.contains("\"from_name\":\"Petka\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

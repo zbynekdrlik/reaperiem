@@ -17,6 +17,7 @@ use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::settings_modal::{SettingsModal, UserSettings};
 use crate::components::snapshot_modal::SnapshotModal;
+use crate::components::alert_toast::AlertToast;
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -258,12 +259,22 @@ fn connect_websocket(
                                     saved.insert(ch.track_index, ch.muted);
                                 }
                                 set_pre_solo_mutes.set(saved);
+                            } else if !new_soloed.is_empty() && !current.is_empty() {
+                                // Remote exclusive switch: update local mute display (#131)
+                                set_channels.update(|chs| {
+                                    for c in chs.iter_mut() {
+                                        c.muted = !new_soloed.contains(&c.track_index);
+                                    }
+                                });
                             }
                             set_soloed.set(new_soloed);
                         }
                     }
                     iem_core::ServerMsg::AudioStatus { .. } => {
                         // Audio status handled by ListenButton's own audio WebSocket
+                    }
+                    iem_core::ServerMsg::EngineerAlert { from_member, from_name } => {
+                        set_alert_data.set(Some((from_member, from_name)));
                     }
                     iem_core::ServerMsg::EqParams {
                         track_index: _,
@@ -400,6 +411,9 @@ pub fn MixerPage() -> impl IntoView {
 
     // Output track index for global volume metering (set from ServerMsg::State)
     let (output_track_idx, set_output_track_idx) = signal(Option::<usize>::None);
+
+    // Alert data for engineer toast (member_id, display_name) (#125)
+    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
 
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
@@ -966,7 +980,10 @@ pub fn MixerPage() -> impl IntoView {
                 on_mute_all=on_mute_all
                 is_engineer_own_mixer=is_engineer_own_mixer
                 member_id=member_id()
+                ws=ws
             />
+
+            <AlertToast alert=alert_data set_alert=set_alert_data />
 
             <PresetModal
                 visible=preset_modal_visible.into()
@@ -2010,29 +2027,25 @@ fn ChannelList(
                                     });
                                 }
                             } else {
-                                set_channels.update(|chs| {
-                                    if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
-                                        ch.muted = false;
-                                    }
-                                    if let Some(partner) = partner_idx {
-                                        if let Some(ch) = chs.iter_mut().find(|c| c.track_index == partner) {
-                                            ch.muted = false;
+                                // EXCLUSIVE: mute everything except the new solo target (#131)
+                                for ch in &all_channels {
+                                    let should_mute = ch.track_index != track_idx
+                                        && partner_idx != Some(ch.track_index);
+                                    let idx = ch.track_index;
+                                    set_channels.update(|chs| {
+                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
+                                            c.muted = should_mute;
                                         }
-                                    }
-                                });
-                                ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                    track_index: track_idx,
-                                    muted: false,
-                                });
-                                if let Some(partner) = partner_idx {
+                                    });
                                     ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: partner,
-                                        muted: false,
+                                        track_index: idx,
+                                        muted: should_mute,
                                     });
                                 }
                             }
 
-                            let mut new_soloed = current_soloed.clone();
+                            // Build soloed set — exclusive (only new track + partner)
+                            let mut new_soloed = std::collections::HashSet::new();
                             new_soloed.insert(track_idx);
                             if let Some(partner) = partner_idx {
                                 new_soloed.insert(partner);
