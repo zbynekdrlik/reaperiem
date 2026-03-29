@@ -2214,12 +2214,16 @@ body {
   background: #ff1744;
 }
 
-.alert-btn.cooldown {
-  background: #5d4037;
-  border-color: #795548;
-  color: #bcaaa4;
-  cursor: not-allowed;
-  opacity: 0.7;
+.alert-btn.active {
+  background: #d32f2f;
+  border-color: #ff5252;
+  color: #fff;
+  animation: alert-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes alert-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Alert toast — engineer notification (#125) */

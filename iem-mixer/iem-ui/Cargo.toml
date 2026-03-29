@@ -61,6 +61,11 @@ web-sys = { version = "0.3", features = [
     "OscillatorNode",
     "OscillatorType",
     "GainNode",
+    "HtmlAudioElement",
+    "HtmlMediaElement",
+    "Notification",
+    "NotificationOptions",
+    "NotificationPermission",
 ] }
 js-sys = "0.3"
 

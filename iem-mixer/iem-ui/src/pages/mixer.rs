@@ -98,6 +98,8 @@ fn connect_websocket(
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
     set_alert_data: WriteSignal<Option<(String, String)>>,
+    alert_data: ReadSignal<Option<(String, String)>>,
+    set_alert_active: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -278,7 +280,24 @@ fn connect_websocket(
                         from_member,
                         from_name,
                     } => {
-                        set_alert_data.set(Some((from_member, from_name)));
+                        set_alert_data.set(Some((from_member.clone(), from_name)));
+                        set_alert_active.set(true);
+                    }
+                    iem_core::ServerMsg::AlertCleared { member_id: cleared } => {
+                        set_alert_active.set(false);
+                        if let Some((ref m, _)) = alert_data.get_untracked() {
+                            if *m == cleared {
+                                set_alert_data.set(None);
+                            }
+                        }
+                    }
+                    iem_core::ServerMsg::ActiveAlerts { alerts } => {
+                        if let Some(first) = alerts.first() {
+                            set_alert_data.set(Some((
+                                first.from_member.clone(),
+                                first.from_name.clone(),
+                            )));
+                        }
                     }
                     iem_core::ServerMsg::EqParams {
                         track_index: _,
@@ -418,6 +437,7 @@ pub fn MixerPage() -> impl IntoView {
 
     // Alert data for engineer toast (member_id, display_name) (#125)
     let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
+    let (alert_active, set_alert_active) = signal(false);
 
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
@@ -468,6 +488,8 @@ pub fn MixerPage() -> impl IntoView {
             set_eq_bands,
             set_eq_loading,
             set_alert_data,
+            alert_data,
+            set_alert_active,
         );
     });
 
@@ -535,6 +557,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_eq_bands,
                 set_eq_loading,
                 set_alert_data,
+                alert_data,
+                set_alert_active,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -987,9 +1011,10 @@ pub fn MixerPage() -> impl IntoView {
                 is_engineer_own_mixer=is_engineer_own_mixer
                 member_id=member_id()
                 ws=ws
+                alert_active=alert_active
             />
 
-            <AlertToast alert=alert_data set_alert=set_alert_data />
+            <AlertToast alert=alert_data ws=ws />
 
             <PresetModal
                 visible=preset_modal_visible.into()

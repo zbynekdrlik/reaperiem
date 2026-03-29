@@ -29,6 +29,9 @@ pub fn Toolbar(
     /// WebSocket connection for alert button
     #[prop(optional)]
     ws: Option<ReadSignal<Option<web_sys::WebSocket>>>,
+    /// Whether alert is currently active (for toggle button)
+    #[prop(optional)]
+    alert_active: Option<ReadSignal<bool>>,
 ) -> impl IntoView {
     view! {
         <div class="toolbar">
@@ -65,10 +68,11 @@ pub fn Toolbar(
                     </button>
                 }
             })}
-            {(!is_engineer && ws.is_some()).then(|| {
+            {(!is_engineer && ws.is_some() && alert_active.is_some()).then(|| {
                 let ws_sig = ws.unwrap();
+                let active = alert_active.unwrap();
                 view! {
-                    <AlertButton ws=ws_sig />
+                    <AlertButton ws=ws_sig active=active />
                 }
             })}
         </div>
