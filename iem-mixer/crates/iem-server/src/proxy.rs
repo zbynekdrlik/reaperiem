@@ -1127,11 +1127,11 @@ async fn handle_ws(
                                 // Rate limit: 30s cooldown per member
                                 let now = std::time::Instant::now();
                                 let mut cache = state.mixer_cache.write().await;
-                                if let Some(last) = cache.alert_cooldowns.get(&member_id) {
-                                    if now.duration_since(*last) < std::time::Duration::from_secs(30) {
-                                        drop(cache);
-                                        continue; // Rate limited
-                                    }
+                                if let Some(last) = cache.alert_cooldowns.get(&member_id)
+                                    && now.duration_since(*last) < std::time::Duration::from_secs(30)
+                                {
+                                    drop(cache);
+                                    continue; // Rate limited
                                 }
                                 cache.alert_cooldowns.insert(member_id.clone(), now);
                                 drop(cache);
