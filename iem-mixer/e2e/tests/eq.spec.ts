@@ -1018,7 +1018,8 @@ test.describe("EQ value sync - ENGINEER track", () => {
         !m.includes("[vite]") &&
         !m.includes("favicon") &&
         !m.includes("integrity") &&
-        !m.includes("WebSocket connection"),
+        !m.includes("WebSocket connection") &&
+        !m.includes("navigator.vibrate"),
     );
     expect(real).toEqual([]);
   });

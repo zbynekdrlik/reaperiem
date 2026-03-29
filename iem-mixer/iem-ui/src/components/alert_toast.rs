@@ -106,17 +106,25 @@ fn play_chime() {
 
 fn stop_loops() {
     if let Some(window) = web_sys::window() {
+        let mut had_loops = false;
         if let Ok(val) = js_sys::Reflect::get(&window, &JsValue::from_str("__iem_alert_vib")) {
             if let Some(id) = val.as_f64() {
                 window.clear_interval_with_handle(id as i32);
+                let _ = js_sys::Reflect::delete_property(&window, &JsValue::from_str("__iem_alert_vib"));
+                had_loops = true;
             }
         }
         if let Ok(val) = js_sys::Reflect::get(&window, &JsValue::from_str("__iem_alert_snd")) {
             if let Some(id) = val.as_f64() {
                 window.clear_interval_with_handle(id as i32);
+                let _ = js_sys::Reflect::delete_property(&window, &JsValue::from_str("__iem_alert_snd"));
+                had_loops = true;
             }
         }
-        let _ = window.navigator().vibrate_with_duration(0);
+        // Only cancel vibration if we actually had loops running
+        if had_loops {
+            let _ = window.navigator().vibrate_with_duration(0);
+        }
     }
 }
 
