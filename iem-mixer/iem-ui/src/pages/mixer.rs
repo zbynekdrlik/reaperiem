@@ -293,10 +293,8 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::ActiveAlerts { alerts } => {
                         if let Some(first) = alerts.first() {
-                            set_alert_data.set(Some((
-                                first.from_member.clone(),
-                                first.from_name.clone(),
-                            )));
+                            set_alert_data
+                                .set(Some((first.from_member.clone(), first.from_name.clone())));
                         }
                     }
                     iem_core::ServerMsg::EqParams {
