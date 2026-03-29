@@ -124,7 +124,8 @@ test.describe("Band Member Alert Button (#125)", () => {
       return;
     }
 
-    // Login engineer
+    // Login engineer — navigate first to set origin for localStorage
+    await engineerPage.goto("/");
     await loginAs(engineerPage, "engineer", "1177");
     await engineerPage.goto("/engineer");
     if (!(await waitForMixer(engineerPage))) {
