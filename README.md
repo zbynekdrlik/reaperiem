@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.121.0 (2026-03-29)
+
+- **Fix**: Listen mode stop button now works — previously auto-reconnect overrode user stop, making it impossible to disable listening
+- **Fix**: Audio restored when listening on Petronela's page — missing REAPER send from PETRONELA inear to ENGINEER inear recreated
+- **Fix**: CI Tauri build no longer hangs on post-cache step (switched to cache/restore)
+
 ### v1.120.0 (2026-03-28)
 
 - **Fix**: Routing loop bug — cross-member inear sends created bidirectional loops that REAPER silently blocked, preventing ALL audio from reaching member inear tracks. Replaced with one-directional sends TO Petronela only (#121)
