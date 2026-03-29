@@ -33,6 +33,13 @@ fn default_enabled() -> bool {
     true
 }
 
+/// Alert info for ActiveAlerts catch-up message
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AlertInfo {
+    pub from_member: String,
+    pub from_name: String,
+}
+
 /// Client → Server commands (sent via WebSocket)
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "cmd")]
@@ -76,6 +83,8 @@ pub enum ClientMsg {
     GetEqParamsMulti { track_indices: Vec<usize> },
     /// Band member calls engineer for help (#125)
     CallEngineer,
+    /// Clear active alert (sent by engineer or member to dismiss)
+    ClearAlert,
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -142,6 +151,10 @@ pub enum ServerMsg {
         from_member: String,
         from_name: String,
     },
+    /// Alert cleared by engineer or member
+    AlertCleared { member_id: String },
+    /// Active alerts sent to engineer on WS connect (catch-up)
+    ActiveAlerts { alerts: Vec<AlertInfo> },
 }
 
 #[cfg(test)]
@@ -662,6 +675,42 @@ mod tests {
         assert!(json.contains("\"event\":\"EngineerAlert\""));
         assert!(json.contains("\"from_member\":\"petka\""));
         assert!(json.contains("\"from_name\":\"Petka\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_clear_alert_serialization() {
+        let msg = ClientMsg::ClearAlert;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ClearAlert\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_alert_cleared_serialization() {
+        let msg = ServerMsg::AlertCleared {
+            member_id: "petka".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"AlertCleared\""));
+        assert!(json.contains("\"member_id\":\"petka\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_active_alerts_serialization() {
+        let msg = ServerMsg::ActiveAlerts {
+            alerts: vec![AlertInfo {
+                from_member: "petka".to_string(),
+                from_name: "Petka".to_string(),
+            }],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"ActiveAlerts\""));
+        assert!(json.contains("\"from_member\":\"petka\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }
