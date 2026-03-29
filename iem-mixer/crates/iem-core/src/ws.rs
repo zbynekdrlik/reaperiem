@@ -138,7 +138,10 @@ pub enum ServerMsg {
     /// EQ parameters for multiple tracks (response to GetEqParamsMulti)
     EqParamsMulti { bands: HashMap<usize, Vec<EqBand>> },
     /// Alert: band member needs help (broadcast to engineer devices) (#125)
-    EngineerAlert { from_member: String, from_name: String },
+    EngineerAlert {
+        from_member: String,
+        from_name: String,
+    },
 }
 
 #[cfg(test)]

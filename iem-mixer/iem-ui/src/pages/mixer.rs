@@ -16,8 +16,8 @@ use crate::components::pan::PanKnob;
 use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::settings_modal::{SettingsModal, UserSettings};
-use crate::components::snapshot_modal::SnapshotModal;
 use crate::components::alert_toast::AlertToast;
+use crate::components::snapshot_modal::SnapshotModal;
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -273,7 +273,10 @@ fn connect_websocket(
                     iem_core::ServerMsg::AudioStatus { .. } => {
                         // Audio status handled by ListenButton's own audio WebSocket
                     }
-                    iem_core::ServerMsg::EngineerAlert { from_member, from_name } => {
+                    iem_core::ServerMsg::EngineerAlert {
+                        from_member,
+                        from_name,
+                    } => {
                         set_alert_data.set(Some((from_member, from_name)));
                     }
                     iem_core::ServerMsg::EqParams {
