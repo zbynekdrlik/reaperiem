@@ -18,8 +18,8 @@ pub fn AlertButton(ws: ReadSignal<Option<web_sys::WebSocket>>) -> impl IntoView 
         // Send CallEngineer via WebSocket
         if let Some(socket) = ws.get_untracked() {
             if socket.ready_state() == web_sys::WebSocket::OPEN {
-                let cmd = serde_json::to_string(&iem_core::ClientMsg::CallEngineer)
-                    .unwrap_or_default();
+                let cmd =
+                    serde_json::to_string(&iem_core::ClientMsg::CallEngineer).unwrap_or_default();
                 let _ = socket.send_with_str(&cmd);
             }
         }
