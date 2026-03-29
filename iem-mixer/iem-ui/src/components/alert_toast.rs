@@ -99,7 +99,7 @@ pub fn AlertToast(
 fn play_chime() {
     let audio = web_sys::HtmlAudioElement::new_with_src("/alert.mp3").ok();
     if let Some(audio) = audio {
-        audio.set_volume(0.5);
+        audio.set_volume(1.0);
         let _ = audio.play();
     }
 }
