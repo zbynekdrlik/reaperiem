@@ -65,7 +65,9 @@ test.describe("Band Member Alert Button (#125)", () => {
     await expect(alertBtn).toHaveCount(0);
   });
 
-  test("alert button shows cooldown after click", async ({ page }) => {
+  test("alert button shows active state after click (no countdown)", async ({
+    page,
+  }) => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
@@ -82,28 +84,34 @@ test.describe("Band Member Alert Button (#125)", () => {
       .catch(() => null);
     if (!assume(btnVisible, "alert button must be visible")) return;
 
-    // Click the alert button
+    // Click SOS
     await alertBtn.click({ force: true });
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
-    // Button should show cooldown state (disabled or cooldown class)
-    const isDisabled = await alertBtn.isDisabled();
-    const hasClass = (await alertBtn.getAttribute("class"))?.includes(
-      "cooldown",
+    // Button should show active state (not disabled, has "active" class)
+    const hasActive = (await alertBtn.getAttribute("class"))?.includes(
+      "active",
     );
-    expect(isDisabled || hasClass).toBeTruthy();
+    if (
+      !assume(hasActive, "button must show active state (requires server)")
+    )
+      return;
+
+    // Button should NOT be disabled (it's a toggle)
+    const isEnabled = !(await alertBtn.isDisabled());
+    expect(isEnabled).toBeTruthy();
+
+    // Button text should indicate active
+    const text = await alertBtn.textContent();
+    expect(text).toContain("Active");
   });
 
-  test("engineer receives alert toast when member calls for help", async ({
-    browser,
-  }) => {
-    // Two pages: member sends alert, engineer receives toast
+  test("alert persists until engineer dismisses", async ({ browser }) => {
     const ctx1 = await browser.newContext();
     const ctx2 = await browser.newContext();
     const memberPage = await ctx1.newPage();
     const engineerPage = await ctx2.newPage();
 
-    // Get first member
     await memberPage.goto("/");
     const membersResp = await memberPage.request.get("/api/members");
     const members = await membersResp.json();
@@ -114,8 +122,6 @@ test.describe("Band Member Alert Button (#125)", () => {
     }
 
     const member = members[0];
-
-    // Login member
     await loginAs(memberPage, member.id);
     await memberPage.goto(`/${member.id}`);
     if (!(await waitForMixer(memberPage))) {
@@ -124,7 +130,6 @@ test.describe("Band Member Alert Button (#125)", () => {
       return;
     }
 
-    // Login engineer — navigate first to set origin for localStorage
     await engineerPage.goto("/");
     await loginAs(engineerPage, "engineer", "1177");
     await engineerPage.goto("/engineer");
@@ -134,29 +139,40 @@ test.describe("Band Member Alert Button (#125)", () => {
       return;
     }
 
-    // Wait for WS connections to establish
     await memberPage.waitForTimeout(1000);
     await engineerPage.waitForTimeout(1000);
 
-    // Member clicks alert button
+    // Member clicks SOS
     const alertBtn = memberPage.locator(".alert-btn");
     const btnVisible = await alertBtn
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(btnVisible, "alert button must be visible on member page")) {
+    if (!assume(btnVisible, "alert button must be visible")) {
       await ctx1.close();
       await ctx2.close();
       return;
     }
     await alertBtn.click({ force: true });
 
-    // Engineer should see alert toast with member name
+    // Engineer sees toast
     const toast = engineerPage.locator(".alert-toast");
     await expect(toast).toBeVisible({ timeout: 5000 });
 
-    // Toast should contain the member's name
-    const toastText = await toast.textContent();
-    expect(toastText).toBeTruthy();
+    // Wait 6 seconds — toast must STILL be visible (no auto-dismiss)
+    await engineerPage.waitForTimeout(6000);
+    await expect(toast).toBeVisible();
+
+    // Engineer dismisses
+    const dismissBtn = engineerPage.locator(".alert-toast-dismiss");
+    await dismissBtn.click({ force: true });
+
+    // Toast disappears
+    await expect(toast).not.toBeVisible({ timeout: 3000 });
+
+    // Member button returns to idle (not active)
+    await memberPage.waitForTimeout(1000);
+    const memberBtnClass = await alertBtn.getAttribute("class");
+    expect(memberBtnClass).not.toContain("active");
 
     await ctx1.close();
     await ctx2.close();
