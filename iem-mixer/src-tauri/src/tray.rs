@@ -78,11 +78,10 @@ pub fn setup_tray(app: &AppHandle, port: u16) -> Result<(), Box<dyn std::error::
                 button_state: MouseButtonState::Up,
                 ..
             } = event
+                && let Some(window) = tray.app_handle().get_webview_window("main")
             {
-                if let Some(window) = tray.app_handle().get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
+                let _ = window.show();
+                let _ = window.set_focus();
             }
         })
         .build(app)?;
@@ -127,9 +126,9 @@ fn make_tray_icon() -> Image<'static> {
 
     // Headband (arc at top)
     for x in 3..=13 {
-        let y = if x < 5 || x > 11 {
+        let y = if !(5..=11).contains(&x) {
             4
-        } else if x < 7 || x > 9 {
+        } else if !(7..=9).contains(&x) {
             3
         } else {
             2

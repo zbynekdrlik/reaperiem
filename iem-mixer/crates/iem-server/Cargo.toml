@@ -1,6 +1,6 @@
 [package]
 name = "iem-server"
-version = "1.120.0"
+version = "1.121.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Axum API server for IEM mixer"
@@ -72,3 +72,6 @@ standalone = ["tracing-subscriber"]
 tls = ["axum-server", "rustls", "dirs"]
 audio = ["dep:bytes"]
 integration = []  # gates live REAPER integration tests in tests/reaper_live.rs
+
+[dev-dependencies]
+tower = "0.5"

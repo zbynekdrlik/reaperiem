@@ -446,7 +446,7 @@ mod tests {
         middleware,
         routing::get,
     };
-    use tower::ServiceExt;
+    use tower::util::ServiceExt;
 
     async fn dummy_handler() -> &'static str {
         "OK"
