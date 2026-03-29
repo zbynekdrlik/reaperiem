@@ -12,16 +12,9 @@ pub fn AlertToast(
 ) -> impl IntoView {
     // Play alert sound and vibrate
     let play_alert = move || {
-        // Vibrate SOS pattern
+        // Vibrate alert pattern
         if let Some(window) = web_sys::window() {
-            let navigator = window.navigator();
-            let pattern = js_sys::Array::new();
-            pattern.push(&JsValue::from(200));
-            pattern.push(&JsValue::from(100));
-            pattern.push(&JsValue::from(200));
-            pattern.push(&JsValue::from(100));
-            pattern.push(&JsValue::from(200));
-            let _ = navigator.vibrate_with_u32_sequence(&pattern);
+            let _ = window.navigator().vibrate_with_duration(500);
         }
 
         // Play alert beeps via Web Audio API

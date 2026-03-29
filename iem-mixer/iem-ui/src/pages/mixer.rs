@@ -143,6 +143,9 @@ fn connect_websocket(
     let fail_count_msg = ws_fail_count.clone();
     let fail_count_close = ws_fail_count;
 
+    // Alert data for engineer toast (member_id, display_name) (#125)
+    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
+
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
         if let Some(text) = e.data().as_string() {
@@ -414,9 +417,6 @@ pub fn MixerPage() -> impl IntoView {
 
     // Output track index for global volume metering (set from ServerMsg::State)
     let (output_track_idx, set_output_track_idx) = signal(Option::<usize>::None);
-
-    // Alert data for engineer toast (member_id, display_name) (#125)
-    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
 
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
