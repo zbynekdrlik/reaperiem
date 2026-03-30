@@ -159,13 +159,10 @@ async fn request_and_notify(name: &str) {
                         &JsValue::from_str("name"),
                         &JsValue::from_str(name),
                     );
-                    if let Ok(active) =
-                        js_sys::Reflect::get(&reg, &JsValue::from_str("active"))
-                    {
-                        if let Ok(post_fn) = js_sys::Reflect::get(
-                            &active,
-                            &JsValue::from_str("postMessage"),
-                        ) {
+                    if let Ok(active) = js_sys::Reflect::get(&reg, &JsValue::from_str("active")) {
+                        if let Ok(post_fn) =
+                            js_sys::Reflect::get(&active, &JsValue::from_str("postMessage"))
+                        {
                             if let Some(func) = post_fn.dyn_ref::<js_sys::Function>() {
                                 let _ = func.call1(&active, &msg);
                             }
