@@ -39,8 +39,8 @@ void OIEMReceiveProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
         interp.reset();
     }
 
-    // Allocate decode buffers
-    decodedInterleaved.resize(OPUS_FRAME_SAMPLES * 2); // stereo interleaved
+    // Allocate decode buffers (mono from browser mic, duplicated to stereo output)
+    decodedInterleaved.resize(OPUS_FRAME_SAMPLES); // mono decoded samples
     decoded48kLeft.resize(OPUS_FRAME_SAMPLES);
     decoded48kRight.resize(OPUS_FRAME_SAMPLES);
 
@@ -57,8 +57,8 @@ void OIEMReceiveProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     // Opus frame scratch buffer
     opusFrameBuffer.resize(2048);
 
-    // Configure Opus decoder for 48kHz stereo
-    opusDecoder.configure(48000, 2);
+    // Configure Opus decoder for 48kHz mono (browser mic sends mono Opus)
+    opusDecoder.configure(48000, 1);
 
     // Configure and start UDP receiver
     opusReceiver.configure(DEST_IP, PORT);
@@ -86,17 +86,17 @@ void OIEMReceiveProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
         if (frameSize <= 0)
             break;
 
-        // Decode Opus frame to interleaved 48kHz float PCM
+        // Decode Opus frame to mono 48kHz float PCM
         int samplesDecoded = opusDecoder.decode(opusFrameBuffer.data(), frameSize,
                                                  decodedInterleaved.data(),
                                                  OPUS_FRAME_SAMPLES);
         if (samplesDecoded <= 0)
             continue;
 
-        // Deinterleave into per-channel accumulation buffers
+        // Duplicate mono to both channels (dual mono for stereo output)
         for (int i = 0; i < samplesDecoded; ++i) {
-            accumLeft.push_back(decodedInterleaved[i * 2]);
-            accumRight.push_back(decodedInterleaved[i * 2 + 1]);
+            accumLeft.push_back(decodedInterleaved[i]);
+            accumRight.push_back(decodedInterleaved[i]);
         }
     }
 
