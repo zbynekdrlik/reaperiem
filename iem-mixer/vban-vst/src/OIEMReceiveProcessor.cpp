@@ -3,6 +3,7 @@
 
 OIEMReceiveProcessor::OIEMReceiveProcessor()
     : AudioProcessor(BusesProperties()
+        .withInput("Input", juce::AudioChannelSet::stereo(), true)
         .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
 }
@@ -126,14 +127,16 @@ void OIEMReceiveProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
                 0);
         }
 
-        // Copy resampled audio to output buffer
+        // MIX resampled talkback audio INTO existing buffer (Dante mic passthrough)
         if (channels >= 1) {
-            std::memcpy(buffer.getWritePointer(0), resampledLeft.data(),
-                        sizeof(float) * numSamples);
+            auto* out = buffer.getWritePointer(0);
+            for (int s = 0; s < numSamples; ++s)
+                out[s] += resampledLeft[s];
         }
         if (channels >= 2) {
-            std::memcpy(buffer.getWritePointer(1), resampledRight.data(),
-                        sizeof(float) * numSamples);
+            auto* out = buffer.getWritePointer(1);
+            for (int s = 0; s < numSamples; ++s)
+                out[s] += resampledRight[s];
         }
 
         // Remove consumed input samples from accumulation buffers
@@ -143,21 +146,18 @@ void OIEMReceiveProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::
 
         accumLeft.erase(accumLeft.begin(), accumLeft.begin() + consumed);
         accumRight.erase(accumRight.begin(), accumRight.begin() + consumed);
-
-        // Calculate output level
-        float maxLevel = 0.0f;
-        for (int ch = 0; ch < channels; ++ch) {
-            auto* data = buffer.getReadPointer(ch);
-            for (int s = 0; s < numSamples; ++s) {
-                maxLevel = std::max(maxLevel, std::abs(data[s]));
-            }
-        }
-        outputLevel = maxLevel;
-    } else {
-        // Not enough decoded samples — output silence
-        buffer.clear();
-        outputLevel = 0.0f;
     }
+    // When no talkback audio: buffer passes through unchanged (Dante mic only)
+
+    // Calculate output level
+    float maxLevel = 0.0f;
+    for (int ch = 0; ch < channels; ++ch) {
+        auto* data = buffer.getReadPointer(ch);
+        for (int s = 0; s < numSamples; ++s) {
+            maxLevel = std::max(maxLevel, std::abs(data[s]));
+        }
+    }
+    outputLevel = maxLevel;
 }
 
 void OIEMReceiveProcessor::getStateInformation(juce::MemoryBlock&) {

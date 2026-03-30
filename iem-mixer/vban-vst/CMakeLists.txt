@@ -74,7 +74,7 @@ endif()
 # OIEM Receive plugin — receives talkback audio from server (#123)
 juce_add_plugin(OIEMReceive
     COMPANY_NAME "NewLevel"
-    IS_SYNTH TRUE
+    IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
