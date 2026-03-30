@@ -78,9 +78,9 @@ export async function startTalkback(wsUrl) {
       bitrate: 64000,
     });
 
-    // 5. ScriptProcessor to feed encoder (960 samples = 20ms @ 48kHz)
+    // 5. ScriptProcessor to feed encoder (1024 samples — must be power of two)
     _sourceNode = _audioCtx.createMediaStreamSource(_stream);
-    _processorNode = _audioCtx.createScriptProcessor(960, 1, 1);
+    _processorNode = _audioCtx.createScriptProcessor(1024, 1, 1);
 
     _processorNode.onaudioprocess = (e) => {
       if (_encoder && _encoder.state === 'configured') {
