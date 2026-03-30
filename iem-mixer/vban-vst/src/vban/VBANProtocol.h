@@ -23,7 +23,7 @@ static_assert(sizeof(Header) == 28, "VBAN header must be 28 bytes");
 constexpr uint32_t MAGIC = 0x4E414256;
 
 // Default port
-constexpr uint16_t DEFAULT_PORT = 6980;
+constexpr uint16_t DEFAULT_PORT = 7980;
 
 // Packet sizes
 constexpr size_t MAX_PACKET_SIZE = 1464;

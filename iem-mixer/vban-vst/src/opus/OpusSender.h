@@ -39,7 +39,7 @@ private:
     void run() override;
 
     juce::String destinationIP = "127.0.0.1";
-    uint16_t port = 6980;
+    uint16_t port = 7980;
 
     /// Lock-free SPSC FIFO for Opus frames (byte-oriented)
     /// Each entry: [2 bytes frame_size LE] [frame_size bytes data]

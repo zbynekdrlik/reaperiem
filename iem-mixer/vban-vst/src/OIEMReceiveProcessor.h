@@ -1,12 +1,12 @@
 #pragma once
 #include <JuceHeader.h>
-#include "opus/OpusEncoderWrapper.h"
-#include "opus/OpusSender.h"
+#include "opus/OpusDecoderWrapper.h"
+#include "opus/OpusReceiver.h"
 
-class VBANIEMProcessor : public juce::AudioProcessor {
+class OIEMReceiveProcessor : public juce::AudioProcessor {
 public:
-    VBANIEMProcessor();
-    ~VBANIEMProcessor() override;
+    OIEMReceiveProcessor();
+    ~OIEMReceiveProcessor() override;
 
     // AudioProcessor interface
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
@@ -16,7 +16,7 @@ public:
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
 
     // Plugin info
-    const juce::String getName() const override { return "VBAN IEM"; }
+    const juce::String getName() const override { return "OIEM Receive"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }
@@ -38,38 +38,50 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
 
     // Status
-    bool isConnected() const;
+    bool isReceiving() const;
     uint64_t getPacketCount() const;
 
     // Level monitoring
-    float getInputLevel() const { return inputLevel.load(); }
     float getOutputLevel() const { return outputLevel.load(); }
 
 private:
-    // Hardcoded configuration for IEM use case
+    // Hardcoded configuration for IEM talkback use case
     static constexpr const char* DEST_IP = "127.0.0.1";
     static constexpr uint16_t PORT = 7980;
 
-    // Opus encoder (48kHz stereo)
-    OpusEncoderWrapper opusEncoder;
-    // UDP sender thread
-    OpusSender opusSender;
+    // Opus decoder (48kHz stereo)
+    OpusDecoderWrapper opusDecoder;
+    // UDP receiver thread
+    OpusReceiver opusReceiver;
 
-    // JUCE LagrangeInterpolator for zero-delay resampling (one per channel)
+    // JUCE LagrangeInterpolator for resampling from 48kHz to host sample rate
     std::vector<juce::LagrangeInterpolator> interpolators;
 
-    // Resampling buffers
+    // Decode buffer: interleaved 48kHz PCM from Opus decoder
+    static constexpr int OPUS_FRAME_SAMPLES = 960; // 20ms @ 48kHz
+    std::vector<float> decodedInterleaved;
+
+    // Per-channel buffers at 48kHz (deinterleaved)
+    std::vector<float> decoded48kLeft;
+    std::vector<float> decoded48kRight;
+
+    // Accumulation buffers for 48kHz samples (between processBlock calls)
+    std::vector<float> accumLeft;
+    std::vector<float> accumRight;
+
+    // Resampled output buffers at host sample rate
     std::vector<float> resampledLeft;
     std::vector<float> resampledRight;
-    std::vector<float> interleavedBuffer;
+
+    // Scratch buffer for popping Opus frames
+    std::vector<uint8_t> opusFrameBuffer;
 
     double currentSampleRate = 96000.0;
     int currentBlockSize = 512;
     int numChannels = 2;
-    double resampleRatio = 1.0; // inputRate / outputRate (e.g., 96000/48000 = 2.0)
+    double resampleRatio = 1.0; // 48000 / hostSampleRate (e.g., 48000/96000 = 0.5)
 
-    std::atomic<float> inputLevel{0.0f};
     std::atomic<float> outputLevel{0.0f};
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VBANIEMProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(OIEMReceiveProcessor)
 };

@@ -23,7 +23,7 @@ import * as dgram from "dgram";
 import WebSocket from "ws";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8080";
-const OIEM_PORT = 6980;
+const OIEM_PORT = 7980;
 
 // OIEM protocol constants
 const OIEM_MAGIC = Buffer.from([0x4f, 0x49, 0x45, 0x4d]); // "OIEM"

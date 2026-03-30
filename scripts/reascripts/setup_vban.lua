@@ -3,7 +3,7 @@
 -- Action ID: _RS_REAPERIEM_SETUP_VBAN
 -- Usage: One-time setup, idempotent (skips if VBAN IEM already present)
 --
--- VBAN IEM VST3 sends INT16 PCM via UDP to 127.0.0.1:6980 (hardcoded in plugin).
+-- VBAN IEM VST3 sends INT16 PCM via UDP to 127.0.0.1:7980 (hardcoded in plugin).
 -- The plugin auto-activates on load — no manual GUI configuration needed.
 -- If ReaStream was previously used, this script removes it first.
 --
@@ -76,7 +76,7 @@ if new_fx < 0 then
   return
 end
 
--- VBAN IEM auto-activates with hardcoded settings (127.0.0.1:6980, stream "engineer")
+-- VBAN IEM auto-activates with hardcoded settings (127.0.0.1:7980, stream "engineer")
 -- No manual GUI configuration needed (unlike ReaStream which required GUI setup)
 if had_reastream then
   reaper.SetExtState("reaperiem", "setup_vban", "REPLACED:" .. track_idx .. ":" .. new_fx, false)

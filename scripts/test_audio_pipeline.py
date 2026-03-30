@@ -5,7 +5,7 @@ Audio Pipeline E2E Test
 Tests the full audio streaming pipeline:
   VBAN UDP -> iem-mixer-app -> Opus encode -> WebSocket -> this script
 
-Sends synthetic VBAN UDP packets to localhost:6980 and verifies that
+Sends synthetic VBAN UDP packets to localhost:7980 and verifies that
 Opus-encoded audio frames arrive on the /ws/audio WebSocket endpoint.
 
 Usage:
@@ -26,7 +26,7 @@ import time
 
 # VBAN packet constants
 VBAN_MAGIC = b"\x56\x42\x41\x4E"  # "VBAN" in little-endian (0x4E414256)
-VBAN_PORT = 6980
+VBAN_PORT = 7980
 VBAN_HEADER_SIZE = 28
 VBAN_SR_INDEX_96000 = 4  # Index into sample rate table for 96000 Hz
 VBAN_DATATYPE_INT16 = 1
@@ -101,7 +101,7 @@ def send_vban_udp(host="127.0.0.1", port=VBAN_PORT, duration=5,
 
 
 def diagnose_udp(port=VBAN_PORT):
-    """Check if UDP port 6980 is in use and can receive packets."""
+    """Check if UDP port 7980 is in use and can receive packets."""
     print(f"=== UDP Port {port} Diagnostics ===")
 
     # Check if port is already bound

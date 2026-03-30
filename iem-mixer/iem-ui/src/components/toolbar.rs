@@ -4,6 +4,7 @@ use leptos::prelude::*;
 
 use super::alert_button::AlertButton;
 use super::audio_player::ListenButton;
+use super::talk_button::{TalkButton, TalkState};
 
 /// Bottom toolbar with Presets, History, and optional Mute All / Listen / Alert buttons
 /// Note: Reset button removed - 0 dB = unity gain = dangerously loud for IEMs
@@ -32,6 +33,12 @@ pub fn Toolbar(
     /// Whether alert is currently active (for toggle button)
     #[prop(optional)]
     alert_active: Option<ReadSignal<bool>>,
+    /// Talkback state (engineer only) (#123)
+    #[prop(optional)]
+    talk_state: Option<ReadSignal<TalkState>>,
+    /// Talkback state setter (engineer only) (#123)
+    #[prop(optional)]
+    set_talk_state: Option<WriteSignal<TalkState>>,
 ) -> impl IntoView {
     view! {
         <div class="toolbar">
@@ -39,10 +46,10 @@ pub fn Toolbar(
                 let cb = on_mute_all.clone().unwrap();
                 view! {
                     <button
-                        class="toolbar-btn toolbar-btn-mute-all"
+                        class="toolbar-btn toolbar-btn-mute-all toolbar-btn-icon"
                         on:click=move |_| cb.run(())
                     >
-                        "Mute All"
+                        "\u{1F507}"
                     </button>
                 }
             })}
@@ -50,6 +57,14 @@ pub fn Toolbar(
                 let member_id = member_id.clone();
                 view! {
                     <ListenButton member_id=member_id.clone() />
+                }
+            })}
+            {(is_engineer_own_mixer && talk_state.is_some() && set_talk_state.is_some() && ws.is_some()).then(|| {
+                let ts = talk_state.unwrap();
+                let set_ts = set_talk_state.unwrap();
+                let ws_sig = ws.unwrap();
+                view! {
+                    <TalkButton state=ts set_state=set_ts ws=ws_sig />
                 }
             })}
             {(!is_engineer).then(|| {

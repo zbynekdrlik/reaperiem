@@ -87,6 +87,8 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
         .route("/ws/audio", get(ws_audio_handler))
+        // Talkback WebSocket (engineer push-to-talk) (#123) — must be before /ws/{member_id}
+        .route("/ws/talkback", get(ws_talkback_handler))
         // Audio diagnostics (engineer-only)
         .route("/api/audio/diagnostics", get(audio_diagnostics_handler))
         // WebSocket
@@ -263,6 +265,21 @@ async fn ws_audio_handler() -> impl IntoResponse {
         StatusCode::NOT_FOUND,
         "Audio streaming not available (compiled without audio feature)",
     )
+}
+
+// Talkback WebSocket handler — delegates to proxy::ws_talkback (#123)
+#[cfg(feature = "audio")]
+async fn ws_talkback_handler(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    state: axum::extract::State<AppState>,
+    query: axum::extract::Query<proxy::WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<iem_core::ApiError>)> {
+    proxy::ws_talkback(ws, state, query).await
+}
+
+#[cfg(not(feature = "audio"))]
+async fn ws_talkback_handler() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "Talkback not available")
 }
 
 /// Audio diagnostics endpoint — returns pipeline health metrics (engineer-only)

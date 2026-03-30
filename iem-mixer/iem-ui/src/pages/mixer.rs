@@ -100,6 +100,7 @@ fn connect_websocket(
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
+    set_talk_state: WriteSignal<TalkState>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -297,6 +298,18 @@ fn connect_websocket(
                                 .set(Some((first.from_member.clone(), first.from_name.clone())));
                         }
                     }
+                    iem_core::ServerMsg::TalkAcquired => {
+                        set_talk_state.set(TalkState::Active);
+                    }
+                    iem_core::ServerMsg::TalkBusy { holder } => {
+                        web_sys::console::warn_1(
+                            &format!("Talkback busy, held by: {}", holder).into(),
+                        );
+                        set_talk_state.set(TalkState::Idle);
+                    }
+                    iem_core::ServerMsg::TalkReleased => {
+                        set_talk_state.set(TalkState::Idle);
+                    }
                     iem_core::ServerMsg::EqParams {
                         track_index: _,
                         track_name: _,
@@ -437,6 +450,10 @@ pub fn MixerPage() -> impl IntoView {
     let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
     let (alert_active, set_alert_active) = signal(false);
 
+    // Talkback state for engineer push-to-talk (#123)
+    use crate::components::talk_button::TalkState;
+    let (talk_state, set_talk_state) = signal(TalkState::Idle);
+
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
@@ -488,6 +505,7 @@ pub fn MixerPage() -> impl IntoView {
             set_alert_data,
             alert_data,
             set_alert_active,
+            set_talk_state,
         );
     });
 
@@ -557,6 +575,7 @@ pub fn MixerPage() -> impl IntoView {
                 set_alert_data,
                 alert_data,
                 set_alert_active,
+                set_talk_state,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -1010,6 +1029,8 @@ pub fn MixerPage() -> impl IntoView {
                 member_id=member_id()
                 ws=ws
                 alert_active=alert_active
+                talk_state=talk_state
+                set_talk_state=set_talk_state
             />
 
             {is_engineer.then(|| view! {

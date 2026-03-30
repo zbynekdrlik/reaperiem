@@ -57,7 +57,7 @@ void MeterComponent::paint(juce::Graphics& g) {
         statusText = "Stopped";
         statusColor = juce::Colours::darkgrey;
     } else if (isConnected) {
-        statusText = "Opus → 127.0.0.1:6980";
+        statusText = "Opus → 127.0.0.1:7980";
         statusColor = juce::Colours::green;
     } else {
         statusText = "Waiting for audio";
