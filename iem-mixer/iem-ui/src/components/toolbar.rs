@@ -2,9 +2,10 @@
 
 use leptos::prelude::*;
 
+use super::alert_button::AlertButton;
 use super::audio_player::ListenButton;
 
-/// Bottom toolbar with Presets, History, and optional Mute All / Listen buttons
+/// Bottom toolbar with Presets, History, and optional Mute All / Listen / Alert buttons
 /// Note: Reset button removed - 0 dB = unity gain = dangerously loud for IEMs
 /// Note: +Me button removed - was broken and unwanted by user
 #[component]
@@ -25,6 +26,12 @@ pub fn Toolbar(
     /// Member ID for listen target (whose mix to listen to)
     #[prop(default = String::new())]
     member_id: String,
+    /// WebSocket connection for alert button
+    #[prop(optional)]
+    ws: Option<ReadSignal<Option<web_sys::WebSocket>>>,
+    /// Whether alert is currently active (for toggle button)
+    #[prop(optional)]
+    alert_active: Option<ReadSignal<bool>>,
 ) -> impl IntoView {
     view! {
         <div class="toolbar">
@@ -59,6 +66,13 @@ pub fn Toolbar(
                     >
                         "History"
                     </button>
+                }
+            })}
+            {(!is_engineer && ws.is_some() && alert_active.is_some()).then(|| {
+                let ws_sig = ws.unwrap();
+                let active = alert_active.unwrap();
+                view! {
+                    <AlertButton ws=ws_sig active=active />
                 }
             })}
         </div>

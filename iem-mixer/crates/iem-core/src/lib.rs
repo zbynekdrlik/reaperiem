@@ -18,7 +18,7 @@ pub use types::{
     PollResponse, merge_or_replace_channels,
 };
 
-pub use ws::{ClientMsg, EqBand, ServerMsg};
+pub use ws::{AlertInfo, ClientMsg, EqBand, ServerMsg};
 
 /// Application version (from Cargo.toml)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

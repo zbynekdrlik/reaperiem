@@ -2347,4 +2347,74 @@ test.describe("Solo sync", () => {
     await ctx1.close();
     await ctx2.close();
   });
+
+  test("solo is exclusive — new solo replaces previous (#131)", async ({
+    browser,
+  }) => {
+    // Two solo buttons: clicking the second should desolo the first
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    if (!(await waitForMixer(page))) {
+      await ctx.close();
+      return;
+    }
+
+    const channelBtns = await page
+      .waitForSelector(".channel-btns", { timeout: 3000 })
+      .catch(() => null);
+    if (!assume(channelBtns, "channel buttons must load (requires REAPER)")) {
+      await ctx.close();
+      return;
+    }
+
+    const soloBtns = page.locator(".solo-btn");
+    const count = await soloBtns.count();
+    if (!assume(count >= 2, "need at least 2 solo buttons for exclusive test")) {
+      await ctx.close();
+      return;
+    }
+
+    const btn1 = soloBtns.nth(0);
+    const btn2 = soloBtns.nth(1);
+
+    // Both start as off
+    await expect(btn1).toHaveClass(/off/);
+    await expect(btn2).toHaveClass(/off/);
+
+    // Solo first track
+    await btn1.click({ force: true });
+    await page.waitForTimeout(300);
+
+    // Check if solo activated (needs REAPER connection for WebSocket)
+    const btn1Class = await btn1.getAttribute("class");
+    if (!assume(btn1Class?.includes("on"), "solo must activate (requires server)")) {
+      await ctx.close();
+      return;
+    }
+
+    // btn1 = on, btn2 = off
+    await expect(btn1).toHaveClass(/on/);
+    await expect(btn2).toHaveClass(/off/);
+
+    // Solo second track — should REPLACE first (exclusive)
+    await btn2.click({ force: true });
+    await page.waitForTimeout(300);
+
+    // btn1 should now be OFF (exclusive desolo), btn2 should be ON
+    await expect(btn2).toHaveClass(/on/, { timeout: 2000 });
+    await expect(btn1).toHaveClass(/off/, { timeout: 2000 });
+
+    // Unsolo btn2 — both should be off (back to normal)
+    await btn2.click({ force: true });
+    await page.waitForTimeout(300);
+
+    await expect(btn1).toHaveClass(/off/, { timeout: 2000 });
+    await expect(btn2).toHaveClass(/off/, { timeout: 2000 });
+
+    await ctx.close();
+  });
 });

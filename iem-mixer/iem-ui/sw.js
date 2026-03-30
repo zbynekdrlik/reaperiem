@@ -15,3 +15,29 @@ self.addEventListener("activate", (event) => {
       .then(() => self.clients.claim()),
   );
 });
+
+// Handle alert notifications from WASM (works when app is in background)
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "ALERT") {
+    const name = event.data.name || "Member";
+    self.registration.showNotification(`IEM Alert: ${name}`, {
+      body: `${name} needs help!`,
+      requireInteraction: true,
+      tag: "iem-alert", // Replace previous alert notification
+      vibrate: [500, 200, 500, 200, 500],
+    });
+  }
+});
+
+// Clicking notification brings app to foreground
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clients) => {
+      if (clients.length > 0) {
+        return clients[0].focus();
+      }
+      return self.clients.openWindow("/engineer");
+    }),
+  );
+});

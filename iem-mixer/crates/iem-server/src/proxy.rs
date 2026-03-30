@@ -1045,6 +1045,24 @@ async fn handle_ws(
         }
     }
 
+    // Send active alerts to engineer on connect (catch-up)
+    if member_id == "engineer" {
+        let cache = state.mixer_cache.read().await;
+        if !cache.active_alerts.is_empty() {
+            let alerts: Vec<iem_core::AlertInfo> = cache
+                .active_alerts
+                .values()
+                .map(|(from_member, from_name)| iem_core::AlertInfo {
+                    from_member: from_member.clone(),
+                    from_name: from_name.clone(),
+                })
+                .collect();
+            let msg = ServerMsg::ActiveAlerts { alerts };
+            let json = serde_json::to_string(&msg).unwrap_or_default();
+            let _ = socket.send(Message::Text(json.into())).await;
+        }
+    }
+
     // Send network mode (local/remote) — updates on every WS reconnect,
     // so switching between WiFi and mobile data triggers a fresh detection
     {
@@ -1119,6 +1137,83 @@ async fn handle_ws(
                                     // Broadcasting causes server echo → reactive_graph recursive
                                     // closure panic in the frontend's sync Effect.
                                 });
+                                continue;
+                            }
+
+                            // Handle band member alert to engineer (#125)
+                            if let ClientMsg::CallEngineer = cmd {
+                                // No-op if alert already active for this member
+                                let cache = state.mixer_cache.read().await;
+                                if cache.active_alerts.contains_key(&member_id) {
+                                    drop(cache);
+                                    continue;
+                                }
+                                drop(cache);
+
+                                // Look up member display name
+                                let discovered = state.discovered_members.read().await;
+                                let display_name = discovered
+                                    .iter()
+                                    .find(|m| m.id() == member_id)
+                                    .map(|m| m.name.clone())
+                                    .unwrap_or_else(|| member_id.clone());
+                                drop(discovered);
+
+                                // Store active alert
+                                let mut cache = state.mixer_cache.write().await;
+                                cache.active_alerts.insert(
+                                    member_id.clone(),
+                                    (member_id.clone(), display_name.clone()),
+                                );
+                                drop(cache);
+
+                                // Broadcast to all engineer devices
+                                let _ = state.event_tx.send((
+                                    "engineer".to_string(),
+                                    ServerMsg::EngineerAlert {
+                                        from_member: member_id.clone(),
+                                        from_name: display_name.clone(),
+                                    },
+                                ));
+                                // Also notify the member their alert is active
+                                let _ = state.event_tx.send((
+                                    member_id.clone(),
+                                    ServerMsg::EngineerAlert {
+                                        from_member: member_id.clone(),
+                                        from_name: String::new(),
+                                    },
+                                ));
+                                continue;
+                            }
+
+                            // Handle alert clear (from engineer or member)
+                            if let ClientMsg::ClearAlert = cmd {
+                                let mut cache = state.mixer_cache.write().await;
+                                let cleared_members = if member_id == "engineer" {
+                                    let keys: Vec<String> =
+                                        cache.active_alerts.keys().cloned().collect();
+                                    cache.active_alerts.clear();
+                                    keys
+                                } else {
+                                    cache.active_alerts.remove(&member_id);
+                                    vec![member_id.clone()]
+                                };
+                                drop(cache);
+
+                                for cleared in &cleared_members {
+                                    let _ = state.event_tx.send((
+                                        "engineer".to_string(),
+                                        ServerMsg::AlertCleared {
+                                            member_id: cleared.clone(),
+                                        },
+                                    ));
+                                    let _ = state.event_tx.send((
+                                        cleared.clone(),
+                                        ServerMsg::AlertCleared {
+                                            member_id: cleared.clone(),
+                                        },
+                                    ));
+                                }
                                 continue;
                             }
 
@@ -1464,6 +1559,13 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("SetSolo should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::CallEngineer => {
+            // Handled in WS handler before apply_command_to_cache is called
+            return Err("CallEngineer should not reach apply_command_to_cache".to_string());
+        }
+        iem_core::ClientMsg::ClearAlert => {
+            return Err("ClearAlert should not reach apply_command_to_cache".to_string());
+        }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
@@ -1611,6 +1713,12 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::SetSolo { .. } => {
             unreachable!("SetSolo handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::CallEngineer => {
+            unreachable!("CallEngineer handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::ClearAlert => {
+            unreachable!("ClearAlert handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")

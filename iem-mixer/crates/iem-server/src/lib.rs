@@ -130,6 +130,8 @@ pub struct MixerCache {
     pub stems_bus_indices: HashMap<String, usize>,
     /// Last known stems-bus volume per member (member_id -> state)
     pub stems_volumes: HashMap<String, GlobalVolState>,
+    /// Active SOS alerts (member_id -> (from_member, from_name)). Persists until cleared.
+    pub active_alerts: HashMap<String, (String, String)>,
 }
 
 impl MixerCache {

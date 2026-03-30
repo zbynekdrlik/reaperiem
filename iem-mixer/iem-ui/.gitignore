@@ -1,0 +1,2 @@
+# Allow bundled audio assets (overrides root *.mp3 exclusion)
+!alert.mp3
