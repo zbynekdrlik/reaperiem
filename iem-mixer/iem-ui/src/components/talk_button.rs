@@ -52,6 +52,62 @@ pub fn TalkButton(
         }
     });
 
+    // Vibration loop + page red overlay when Live
+    Effect::new(move || {
+        let current = state.get();
+        if let Some(window) = web_sys::window() {
+            if current == TalkState::Live {
+                // Start vibration loop (200ms pulse every 1s)
+                let vib_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move || {
+                    if let Some(w) = web_sys::window() {
+                        let _ = w.navigator().vibrate_with_duration(200);
+                    }
+                })
+                    as Box<dyn FnMut()>);
+                let id = window
+                    .set_interval_with_callback_and_timeout_and_arguments_0(
+                        vib_cb.as_ref().unchecked_ref(),
+                        1000,
+                    )
+                    .unwrap_or(0);
+                let _ = js_sys::Reflect::set(
+                    &window,
+                    &wasm_bindgen::JsValue::from_str("__iem_talk_vib"),
+                    &wasm_bindgen::JsValue::from(id),
+                );
+                vib_cb.forget();
+                // Initial vibrate
+                let _ = window.navigator().vibrate_with_duration(200);
+                // Add red overlay class to body
+                if let Some(doc) = window.document() {
+                    if let Some(body) = doc.body() {
+                        let _ = body.class_list().add_1("talk-live-overlay");
+                    }
+                }
+            } else {
+                // Stop vibration loop
+                if let Ok(val) = js_sys::Reflect::get(
+                    &window,
+                    &wasm_bindgen::JsValue::from_str("__iem_talk_vib"),
+                ) {
+                    if let Some(id) = val.as_f64() {
+                        window.clear_interval_with_handle(id as i32);
+                        let _ = js_sys::Reflect::delete_property(
+                            &window,
+                            &wasm_bindgen::JsValue::from_str("__iem_talk_vib"),
+                        );
+                    }
+                }
+                // Remove red overlay class from body
+                if let Some(doc) = window.document() {
+                    if let Some(body) = doc.body() {
+                        let _ = body.class_list().remove_1("talk-live-overlay");
+                    }
+                }
+            }
+        }
+    });
+
     // Build the talkback WS URL (separate from mixer WS)
     let build_talkback_ws_url = move || -> Option<String> {
         let location = web_sys::window()?.location();
