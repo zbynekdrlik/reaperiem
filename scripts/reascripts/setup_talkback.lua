@@ -88,6 +88,11 @@ if not track then
   end
 end
 
+-- Enable record-arm + input monitoring so REAPER processes FX even when stopped
+-- Without this, the OIEM Receive VST won't run (no audio flows through the track)
+reaper.SetMediaTrackInfo_Value(track, "I_RECARM", 1)
+reaper.SetMediaTrackInfo_Value(track, "I_RECMON", 1)
+
 -- Check if OIEM Receive already present
 local already_present, fx_idx = has_oiem_receive(track)
 if already_present then
