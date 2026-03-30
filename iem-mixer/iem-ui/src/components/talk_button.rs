@@ -69,6 +69,12 @@ pub fn TalkButton(
     let ws_url_builder = build_talkback_ws_url.clone();
     let on_pointer_down = move |e: web_sys::PointerEvent| {
         e.prevent_default();
+        // Capture pointer — prevents pointerleave from firing on slight finger movement
+        if let Some(target) = e.target() {
+            if let Ok(el) = target.dyn_into::<web_sys::Element>() {
+                let _ = el.set_pointer_capture(e.pointer_id());
+            }
+        }
         let current = state.get_untracked();
         if current == TalkState::Unsupported
             || current == TalkState::MicBlocked
@@ -132,8 +138,15 @@ pub fn TalkButton(
         set_state.set(TalkState::Idle);
     };
 
-    let on_pointer_up = move |_: web_sys::PointerEvent| release_talk();
-    let on_pointer_leave = move |_: web_sys::PointerEvent| release_talk();
+    let on_pointer_up = move |e: web_sys::PointerEvent| {
+        // Release pointer capture
+        if let Some(target) = e.target() {
+            if let Ok(el) = target.dyn_into::<web_sys::Element>() {
+                let _ = el.release_pointer_capture(e.pointer_id());
+            }
+        }
+        release_talk();
+    };
 
     let btn_class = move || match state.get() {
         TalkState::Idle => "toolbar-btn-talk",
@@ -168,7 +181,6 @@ pub fn TalkButton(
             class=btn_class
             on:pointerdown=on_pointer_down
             on:pointerup=on_pointer_up
-            on:pointerleave=on_pointer_leave
             disabled=is_disabled
         >
             {btn_text}
