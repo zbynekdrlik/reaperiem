@@ -1228,6 +1228,11 @@ async fn handle_ws(
                                         "engineer".to_string(),
                                         ServerMsg::TalkAcquired,
                                     ));
+                                    // Notify ALL band members (red page overlay)
+                                    let _ = state.event_tx.send((
+                                        String::new(),
+                                        ServerMsg::EngineerTalking { active: true },
+                                    ));
                                 } else {
                                     let holder =
                                         tb.active_talker.clone().unwrap_or_default();
@@ -1251,6 +1256,11 @@ async fn handle_ws(
                                     let _ = state.event_tx.send((
                                         "engineer".to_string(),
                                         ServerMsg::TalkReleased,
+                                    ));
+                                    // Notify ALL band members (remove red overlay)
+                                    let _ = state.event_tx.send((
+                                        String::new(),
+                                        ServerMsg::EngineerTalking { active: false },
                                     ));
                                 } else {
                                     drop(tb);
@@ -1345,6 +1355,9 @@ async fn handle_ws(
             let _ = state
                 .event_tx
                 .send(("engineer".to_string(), ServerMsg::TalkReleased));
+            let _ = state
+                .event_tx
+                .send((String::new(), ServerMsg::EngineerTalking { active: false }));
         }
     }
 

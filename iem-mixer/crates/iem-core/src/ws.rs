@@ -165,6 +165,8 @@ pub enum ServerMsg {
     TalkBusy { holder: String },
     /// Talkback lock released (#123)
     TalkReleased,
+    /// Engineer is talking — broadcast to all band members for red overlay (#123)
+    EngineerTalking { active: bool },
 }
 
 #[cfg(test)]

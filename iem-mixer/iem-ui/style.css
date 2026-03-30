@@ -2338,6 +2338,29 @@ body {
   50% { box-shadow: 0 0 20px rgba(244, 67, 54, 0.8); }
 }
 
+/* "ENGINEER SPEAKING" banner for band members (#123) */
+.engineer-speaking-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: rgba(211, 47, 47, 0.9);
+  color: #fff;
+  font-size: 0.85em;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: banner-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes banner-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.6; }
+}
+
 /* Full-page red pulsing overlay when engineer is talking (#123) */
 body.talk-live-overlay {
   animation: talk-page-pulse 1.5s ease-in-out infinite;

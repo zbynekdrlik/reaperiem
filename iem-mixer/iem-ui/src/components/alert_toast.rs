@@ -62,8 +62,25 @@ pub fn AlertToast(
                 );
             }
             sound_cb.forget();
+
+            // Red page pulse overlay for SOS alert (#123)
+            if let Some(window) = web_sys::window() {
+                if let Some(doc) = window.document() {
+                    if let Some(body) = doc.body() {
+                        let _ = body.class_list().add_1("talk-live-overlay");
+                    }
+                }
+            }
         } else {
             stop_loops();
+            // Remove red page pulse overlay
+            if let Some(window) = web_sys::window() {
+                if let Some(doc) = window.document() {
+                    if let Some(body) = doc.body() {
+                        let _ = body.class_list().remove_1("talk-live-overlay");
+                    }
+                }
+            }
         }
     });
 
