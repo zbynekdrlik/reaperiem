@@ -100,7 +100,7 @@ fn connect_websocket(
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
-    set_talk_state: WriteSignal<TalkState>,
+    set_talk_state: WriteSignal<crate::components::talk_button::TalkState>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -299,13 +299,10 @@ fn connect_websocket(
                         }
                     }
                     iem_core::ServerMsg::TalkAcquired => {
-                        set_talk_state.set(TalkState::Active);
+                        set_talk_state.set(TalkState::Live);
                     }
-                    iem_core::ServerMsg::TalkBusy { holder } => {
-                        web_sys::console::warn_1(
-                            &format!("Talkback busy, held by: {}", holder).into(),
-                        );
-                        set_talk_state.set(TalkState::Idle);
+                    iem_core::ServerMsg::TalkBusy { .. } => {
+                        set_talk_state.set(TalkState::InUse);
                     }
                     iem_core::ServerMsg::TalkReleased => {
                         set_talk_state.set(TalkState::Idle);
