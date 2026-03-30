@@ -25,6 +25,10 @@
     <script>
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js');
+        // Request notification permission for engineer alerts
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
     }
     </script>
 </body>

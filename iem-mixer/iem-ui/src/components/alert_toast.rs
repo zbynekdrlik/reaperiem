@@ -21,17 +21,17 @@ pub fn AlertToast(
                 request_and_notify(&name_clone).await;
             });
 
-            // Start vibration loop (every 3s)
+            // Start vibration loop (500ms pulse every 1.5s — urgent)
             let vib_cb = Closure::wrap(Box::new(move || {
                 if let Some(window) = web_sys::window() {
-                    let _ = window.navigator().vibrate_with_duration(200);
+                    let _ = window.navigator().vibrate_with_duration(500);
                 }
             }) as Box<dyn FnMut()>);
             if let Some(window) = web_sys::window() {
                 let id = window
                     .set_interval_with_callback_and_timeout_and_arguments_0(
                         vib_cb.as_ref().unchecked_ref(),
-                        3000,
+                        1500,
                     )
                     .unwrap_or(0);
                 let _ = js_sys::Reflect::set(
@@ -39,7 +39,7 @@ pub fn AlertToast(
                     &JsValue::from_str("__iem_alert_vib"),
                     &JsValue::from(id),
                 );
-                let _ = window.navigator().vibrate_with_duration(200);
+                let _ = window.navigator().vibrate_with_duration(500);
             }
             vib_cb.forget();
 
@@ -134,26 +134,49 @@ fn stop_loops() {
     }
 }
 
+/// Send notification via service worker (works in background + when app minimized)
 async fn request_and_notify(name: &str) {
     let window = match web_sys::window() {
         Some(w) => w,
         None => return,
     };
-    if let Ok(perm) = js_sys::Reflect::get(&window, &JsValue::from_str("Notification")) {
-        if let Ok(permission) = js_sys::Reflect::get(&perm, &JsValue::from_str("permission")) {
-            if permission.as_string().as_deref() != Some("granted") {
-                let promise = js_sys::Reflect::get(&perm, &JsValue::from_str("requestPermission"))
-                    .ok()
-                    .and_then(|f| f.dyn_ref::<js_sys::Function>().cloned());
-                if let Some(func) = promise {
-                    let result = func.call0(&perm).ok();
-                    if let Some(p) = result.and_then(|v| v.dyn_into::<js_sys::Promise>().ok()) {
-                        let _ = wasm_bindgen_futures::JsFuture::from(p).await;
+    let navigator = window.navigator();
+
+    // Try to send via service worker (most reliable, works in background)
+    if let Ok(sw) = js_sys::Reflect::get(&navigator, &JsValue::from_str("serviceWorker")) {
+        if let Ok(ready) = js_sys::Reflect::get(&sw, &JsValue::from_str("ready")) {
+            if let Ok(promise) = ready.dyn_into::<js_sys::Promise>() {
+                if let Ok(reg) = wasm_bindgen_futures::JsFuture::from(promise).await {
+                    // Post message to SW to show notification
+                    let msg = js_sys::Object::new();
+                    let _ = js_sys::Reflect::set(
+                        &msg,
+                        &JsValue::from_str("type"),
+                        &JsValue::from_str("ALERT"),
+                    );
+                    let _ = js_sys::Reflect::set(
+                        &msg,
+                        &JsValue::from_str("name"),
+                        &JsValue::from_str(name),
+                    );
+                    if let Ok(active) =
+                        js_sys::Reflect::get(&reg, &JsValue::from_str("active"))
+                    {
+                        if let Ok(post_fn) = js_sys::Reflect::get(
+                            &active,
+                            &JsValue::from_str("postMessage"),
+                        ) {
+                            if let Some(func) = post_fn.dyn_ref::<js_sys::Function>() {
+                                let _ = func.call1(&active, &msg);
+                            }
+                        }
                     }
                 }
             }
         }
     }
+
+    // Fallback: try direct Notification API
     let opts = web_sys::NotificationOptions::new();
     opts.set_body(&format!("{} needs help!", name));
     opts.set_require_interaction(true);
