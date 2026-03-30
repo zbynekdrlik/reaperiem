@@ -2286,36 +2286,54 @@ body {
   to { transform: translateX(-50%) translateY(0); opacity: 1; }
 }
 
-/* Talk button — engineer push-to-talk (#123) */
-.toolbar-btn-icon {
-  min-width: 44px;
-  padding: 10px;
-  font-size: 1.3em;
+/* Icon-only Mute All button (#123) */
+.toolbar-btn-mute-all.toolbar-btn-icon {
+  flex: 0 0 48px;
+  min-width: 48px;
+  max-width: 48px;
+  padding: 12px 0;
+  font-size: 18px;
 }
 
-.talk-btn {
-  padding: 10px 16px;
-  border: 2px solid var(--accent);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--accent);
+/* Talk button — engineer push-to-talk (#123) */
+.toolbar-btn-talk {
+  flex: 1;
+  padding: 14px 8px;
+  border: 2px solid #1976d2;
+  border-radius: 10px;
+  background: #0d3b66;
+  color: #64b5f6;
+  font-size: 0.85em;
   font-weight: 700;
-  font-size: 0.9em;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  text-align: center;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+  transition: background 0.12s, border-color 0.12s;
 }
 
-.talk-btn:active,
-.talk-btn.active {
-  background: var(--accent);
-  color: var(--bg-primary);
-  border-color: var(--accent);
+.toolbar-btn-talk.live {
+  background: #d32f2f;
+  border-color: #f44336;
+  color: #fff;
+  animation: talk-pulse 1s ease-in-out infinite;
 }
 
-.talk-btn.waiting {
-  opacity: 0.5;
-  pointer-events: none;
+.toolbar-btn-talk.in-use {
+  background: #333;
+  border-color: #555;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.toolbar-btn-talk.mic-blocked,
+.toolbar-btn-talk.unsupported {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes talk-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(244, 67, 54, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(244, 67, 54, 0.8); }
 }
