@@ -18,6 +18,7 @@ use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::settings_modal::{SettingsModal, UserSettings};
 use crate::components::snapshot_modal::SnapshotModal;
+use crate::components::talk_button::TalkState;
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -100,7 +101,7 @@ fn connect_websocket(
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
-    set_talk_state: WriteSignal<crate::components::talk_button::TalkState>,
+    set_talk_state: WriteSignal<TalkState>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -448,7 +449,6 @@ pub fn MixerPage() -> impl IntoView {
     let (alert_active, set_alert_active) = signal(false);
 
     // Talkback state for engineer push-to-talk (#123)
-    use crate::components::talk_button::TalkState;
     let (talk_state, set_talk_state) = signal(TalkState::Idle);
 
     // WebSocket connection
