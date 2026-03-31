@@ -1,7 +1,7 @@
 //! Web Push encryption (RFC 8291) and VAPID delivery (#133)
 
 use crate::push_store::PushSubscription;
-use aes_gcm::{aead::Aead, Aes128Gcm, KeyInit, Nonce};
+use aes_gcm::{Aes128Gcm, KeyInit, Nonce, aead::Aead};
 use base64::Engine;
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -37,8 +37,7 @@ pub fn encrypt_payload(
     info_ikm.extend_from_slice(&subscriber_pub_bytes);
     info_ikm.extend_from_slice(ephemeral_pub_bytes.as_bytes());
 
-    let hkdf_auth =
-        Hkdf::<Sha256>::new(Some(&auth_secret), shared.raw_secret_bytes().as_slice());
+    let hkdf_auth = Hkdf::<Sha256>::new(Some(&auth_secret), shared.raw_secret_bytes().as_slice());
     let mut ikm = [0u8; 32];
     hkdf_auth
         .expand(&info_ikm, &mut ikm)
@@ -88,11 +87,7 @@ pub fn build_vapid_header(
 
     // Audience = origin of the push endpoint
     let parsed = url::Url::parse(endpoint)?;
-    let audience = format!(
-        "{}://{}",
-        parsed.scheme(),
-        parsed.host_str().unwrap_or("")
-    );
+    let audience = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
 
     // Build JWT claims
     let now = std::time::SystemTime::now()
@@ -135,10 +130,7 @@ pub async fn send_push(
         .header("Content-Type", "application/octet-stream")
         .header("Content-Encoding", "aes128gcm")
         .header("TTL", "86400")
-        .header(
-            "Authorization",
-            format!("vapid t={}, k={}", jwt, pub_key),
-        )
+        .header("Authorization", format!("vapid t={}, k={}", jwt, pub_key))
         .body(body)
         .send()
         .await?;
@@ -228,11 +220,8 @@ mod tests {
         let sk = p256::SecretKey::random(&mut rand_core::OsRng);
         let key_b64 = B64.encode(sk.to_bytes());
 
-        let (jwt, pub_key) = build_vapid_header(
-            &key_b64,
-            "https://fcm.googleapis.com/fcm/send/test",
-        )
-        .unwrap();
+        let (jwt, pub_key) =
+            build_vapid_header(&key_b64, "https://fcm.googleapis.com/fcm/send/test").unwrap();
 
         assert_eq!(jwt.split('.').count(), 3);
         assert!(!pub_key.is_empty());

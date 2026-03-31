@@ -403,17 +403,16 @@ fn subscribe_to_push() {
             None => return,
         };
         let navigator = window.navigator();
-        let sw_container: web_sys::ServiceWorkerContainer =
-            match js_sys::Reflect::get(
-                &navigator,
-                &wasm_bindgen::JsValue::from_str("serviceWorker"),
-            )
-            .ok()
-            .and_then(|v| v.dyn_into().ok())
-            {
-                Some(c) => c,
-                None => return,
-            };
+        let sw_container: web_sys::ServiceWorkerContainer = match js_sys::Reflect::get(
+            &navigator,
+            &wasm_bindgen::JsValue::from_str("serviceWorker"),
+        )
+        .ok()
+        .and_then(|v| v.dyn_into().ok())
+        {
+            Some(c) => c,
+            None => return,
+        };
 
         let ready_promise = match sw_container.ready() {
             Ok(p) => p,
@@ -449,21 +448,18 @@ fn subscribe_to_push() {
         let sub_promise = match push_manager.subscribe_with_options(&opts) {
             Ok(p) => p,
             Err(e) => {
-                web_sys::console::warn_1(
-                    &format!("[push] subscribe failed: {:?}", e).into(),
-                );
+                web_sys::console::warn_1(&format!("[push] subscribe failed: {:?}", e).into());
                 return;
             }
         };
-        let sub: web_sys::PushSubscription =
-            match wasm_bindgen_futures::JsFuture::from(sub_promise)
-                .await
-                .ok()
-                .and_then(|v| v.dyn_into().ok())
-            {
-                Some(s) => s,
-                None => return,
-            };
+        let sub: web_sys::PushSubscription = match wasm_bindgen_futures::JsFuture::from(sub_promise)
+            .await
+            .ok()
+            .and_then(|v| v.dyn_into().ok())
+        {
+            Some(s) => s,
+            None => return,
+        };
 
         // 4. Send subscription JSON to server
         let sub_json = sub.to_json();
@@ -485,9 +481,7 @@ fn subscribe_to_push() {
             .header("Authorization", &format!("Bearer {}", token))
             .json(&body)
             .map_err(|e| {
-                web_sys::console::warn_1(
-                    &format!("[push] serialize error: {:?}", e).into(),
-                );
+                web_sys::console::warn_1(&format!("[push] serialize error: {:?}", e).into());
             })
             .ok()
             .map(|req| {
@@ -500,8 +494,7 @@ fn subscribe_to_push() {
                         }
                         Ok(r) => {
                             web_sys::console::warn_1(
-                                &format!("[push] subscribe POST failed: {}", r.status())
-                                    .into(),
+                                &format!("[push] subscribe POST failed: {}", r.status()).into(),
                             );
                         }
                         Err(e) => {

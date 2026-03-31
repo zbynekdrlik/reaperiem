@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.125.0 (2026-03-31)
+
+- **Feature**: Web Push notifications for SOS alert — engineer gets notified even when app is closed or screen is off (#133)
+- **Feature**: VAPID P-256 key auto-generation for Web Push (pure-Rust crypto, no OpenSSL)
+
 ### v1.124.0 (2026-03-31)
 
 - **Fix**: PWA app freezing on phones — eliminated memory leaks from `Closure::wrap().forget()` in Effects

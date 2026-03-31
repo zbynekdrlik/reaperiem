@@ -26,7 +26,10 @@ impl PushStore {
         } else {
             Vec::new()
         };
-        Self { subscriptions, path }
+        Self {
+            subscriptions,
+            path,
+        }
     }
 
     pub fn all(&self) -> &[PushSubscription] {
