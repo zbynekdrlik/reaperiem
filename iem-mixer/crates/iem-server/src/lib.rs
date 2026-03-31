@@ -41,6 +41,15 @@ pub enum ListenTarget {
     Member(Vec<(usize, usize, bool)>),
 }
 
+/// Talkback lock state — only one engineer can talk at a time (#123)
+#[derive(Debug, Clone, Default)]
+pub struct TalkbackState {
+    /// Engineer ID holding the talkback lock (None = idle)
+    pub active_talker: Option<String>,
+    /// UDP address of the OIEM Receive VST3 (learned from heartbeat packets)
+    pub recv_vst_addr: Option<std::net::SocketAddr>,
+}
+
 /// Write data to a file atomically by writing to a temp file then renaming.
 /// Prevents corruption on crash/power failure.
 pub fn atomic_write(path: &std::path::Path, data: &str) -> std::io::Result<()> {
@@ -82,6 +91,12 @@ pub struct AppState {
     /// Audio pipeline health diagnostics
     #[cfg(feature = "audio")]
     pub audio_diagnostics: Arc<Mutex<audio_stream::AudioDiagnostics>>,
+    /// Talkback lock state (one-at-a-time engineer talk) (#123)
+    #[cfg(feature = "audio")]
+    pub talkback_state: Arc<RwLock<TalkbackState>>,
+    /// UDP socket for sending talkback OIEM packets to receive VST (#123)
+    #[cfg(feature = "audio")]
+    pub talkback_socket: Arc<tokio::net::UdpSocket>,
     /// Mutex to serialize EQ EXTSTATE writes (prevents race condition
     /// where concurrent tokio tasks overwrite the shared EXTSTATE key)
     pub eq_write_lock: Arc<tokio::sync::Mutex<()>>,
@@ -164,6 +179,14 @@ impl AppState {
             audio_tx,
             #[cfg(feature = "audio")]
             audio_diagnostics: Arc::new(Mutex::new(audio_stream::AudioDiagnostics::default())),
+            #[cfg(feature = "audio")]
+            talkback_state: Arc::new(RwLock::new(TalkbackState::default())),
+            #[cfg(feature = "audio")]
+            talkback_socket: {
+                let sock = std::net::UdpSocket::bind("127.0.0.1:0").expect("bind talkback UDP");
+                sock.set_nonblocking(true).expect("set nonblocking");
+                Arc::new(tokio::net::UdpSocket::from_std(sock).expect("tokio UdpSocket"))
+            },
             eq_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
@@ -238,7 +261,11 @@ pub async fn start_server(
 
     // Spawn audio listener (receives OIEM Opus packets from VST plugin)
     #[cfg(feature = "audio")]
-    audio_stream::spawn_audio_listener(state.audio_tx.clone(), state.audio_diagnostics.clone());
+    audio_stream::spawn_audio_listener(
+        state.audio_tx.clone(),
+        state.audio_diagnostics.clone(),
+        state.talkback_state.clone(),
+    );
 
     let cors = CorsLayer::permissive();
 

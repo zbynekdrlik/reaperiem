@@ -1217,6 +1217,57 @@ async fn handle_ws(
                                 continue;
                             }
 
+                            // Handle talkback lock (#123)
+                            #[cfg(feature = "audio")]
+                            if let ClientMsg::TalkStart = cmd {
+                                let mut tb = state.talkback_state.write().await;
+                                if tb.active_talker.is_none() {
+                                    tb.active_talker = Some(member_id.clone());
+                                    drop(tb);
+                                    let _ = state.event_tx.send((
+                                        "engineer".to_string(),
+                                        ServerMsg::TalkAcquired,
+                                    ));
+                                    // Notify ALL band members (red page overlay)
+                                    let _ = state.event_tx.send((
+                                        String::new(),
+                                        ServerMsg::EngineerTalking { active: true },
+                                    ));
+                                } else {
+                                    let holder =
+                                        tb.active_talker.clone().unwrap_or_default();
+                                    drop(tb);
+                                    let json = serde_json::to_string(
+                                        &ServerMsg::TalkBusy { holder },
+                                    )
+                                    .unwrap_or_default();
+                                    let _ =
+                                        socket.send(Message::Text(json.into())).await;
+                                }
+                                continue;
+                            }
+
+                            #[cfg(feature = "audio")]
+                            if let ClientMsg::TalkStop = cmd {
+                                let mut tb = state.talkback_state.write().await;
+                                if tb.active_talker.as_deref() == Some(&member_id) {
+                                    tb.active_talker = None;
+                                    drop(tb);
+                                    let _ = state.event_tx.send((
+                                        "engineer".to_string(),
+                                        ServerMsg::TalkReleased,
+                                    ));
+                                    // Notify ALL band members (remove red overlay)
+                                    let _ = state.event_tx.send((
+                                        String::new(),
+                                        ServerMsg::EngineerTalking { active: false },
+                                    ));
+                                } else {
+                                    drop(tb);
+                                }
+                                continue;
+                            }
+
                             // Handle solo state updates (no REAPER command — solo is UI-only sync)
                             if let ClientMsg::SetSolo { ref soloed } = cmd {
                                 {
@@ -1293,6 +1344,22 @@ async fn handle_ws(
     }
 
     tracing::info!(member_id = %member_id, "WebSocket disconnected");
+
+    // Release talkback lock if this engineer held it (#123)
+    #[cfg(feature = "audio")]
+    {
+        let mut tb = state.talkback_state.write().await;
+        if tb.active_talker.as_deref() == Some(&member_id) {
+            tb.active_talker = None;
+            drop(tb);
+            let _ = state
+                .event_tx
+                .send(("engineer".to_string(), ServerMsg::TalkReleased));
+            let _ = state
+                .event_tx
+                .send((String::new(), ServerMsg::EngineerTalking { active: false }));
+        }
+    }
 
     // Cleanup: decrement ref count, remove only when no tabs remain
     let mut cache = state.mixer_cache.write().await;
@@ -1566,6 +1633,9 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::ClearAlert => {
             return Err("ClearAlert should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::TalkStart | iem_core::ClientMsg::TalkStop => {
+            return Err("Talk commands handled before apply_command_to_cache".to_string());
+        }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             // Audio commands are handled by ws_audio, not the mixer WS
             return Err("Audio commands should use /ws/audio endpoint".to_string());
@@ -1719,6 +1789,9 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::ClearAlert => {
             unreachable!("ClearAlert handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::TalkStart | iem_core::ClientMsg::TalkStop => {
+            unreachable!("Talk commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::ListenStart { .. } | iem_core::ClientMsg::ListenStop => {
             unreachable!("Audio commands handled by ws_audio, not mixer WS")
@@ -2450,6 +2523,76 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
     } else {
         tracing::info!("Audio WebSocket disconnected");
     }
+}
+
+/// WebSocket talkback endpoint — receives Opus audio from engineer's mic (#123)
+#[cfg(feature = "audio")]
+pub async fn ws_talkback(
+    ws: axum::extract::ws::WebSocketUpgrade,
+    State(state): State<AppState>,
+    Query(query): Query<WsQuery>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ApiError>)> {
+    let config = state.config.read().await;
+
+    let token = query
+        .token
+        .as_deref()
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized())))?;
+
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret)
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, Json(ApiError::unauthorized())))?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if claims.exp < now {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ApiError::new("TOKEN_EXPIRED", "Token has expired")),
+        ));
+    }
+
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ApiError::new("FORBIDDEN", "Talkback is engineer-only")),
+        ));
+    }
+
+    drop(config);
+
+    Ok(ws.on_upgrade(move |socket| handle_talkback_ws(socket, state)))
+}
+
+#[cfg(feature = "audio")]
+async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: AppState) {
+    use axum::extract::ws::Message;
+
+    tracing::info!("Talkback WebSocket connected");
+    let mut sequence: u16 = 0;
+
+    loop {
+        match socket.recv().await {
+            Some(Ok(Message::Binary(data))) => {
+                let tb = state.talkback_state.read().await;
+                if let Some(addr) = tb.recv_vst_addr {
+                    drop(tb);
+                    let mut packet = Vec::with_capacity(8 + data.len());
+                    packet.extend_from_slice(b"OIEM");
+                    packet.extend_from_slice(&sequence.to_le_bytes());
+                    packet.extend_from_slice(&(data.len() as u16).to_le_bytes());
+                    packet.extend_from_slice(&data);
+                    let _ = state.talkback_socket.send_to(&packet, addr).await;
+                    sequence = sequence.wrapping_add(1);
+                }
+            }
+            Some(Ok(Message::Close(_))) | None => break,
+            _ => {}
+        }
+    }
+
+    tracing::info!("Talkback WebSocket disconnected");
 }
 
 #[cfg(test)]

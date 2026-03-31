@@ -17,7 +17,7 @@ private:
     VBANIEMProcessor& processor;
 
     juce::Label titleLabel{"", "VBAN IEM"};
-    juce::Label destLabel{"", "Opus → 127.0.0.1:6980"};
+    juce::Label destLabel{"", "Opus → 127.0.0.1:7980"};
     juce::Label streamLabel{"", "48kHz stereo 160kbps"};
     MeterComponent meterComponent;
 

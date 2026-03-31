@@ -493,17 +493,19 @@ jobs:
         working-directory: iem-mixer/vban-vst
         run: cmake --build build --config Release
 
-      - name: Find and verify VST3 bundle
+      - name: Find and verify VST3 bundles
         shell: bash
         run: |
-          VST3=$(find iem-mixer/vban-vst/build -name "*.vst3" -type d | head -1)
-          if [ -z "$VST3" ]; then
-            echo "ERROR: VST3 bundle not found"
+          BUNDLES=$(find iem-mixer/vban-vst/build -name "*.vst3" -type d)
+          if [ -z "$BUNDLES" ]; then
+            echo "ERROR: No VST3 bundles found"
             find iem-mixer/vban-vst/build -type f -name "*.dll" -o -name "*.vst3" 2>/dev/null
             exit 1
           fi
-          echo "VST3 bundle found: $VST3"
-          ls -la "$VST3"
+          echo "$BUNDLES" | while read -r VST3; do
+            echo "VST3 bundle found: $VST3"
+            ls -la "$VST3"
+          done
 
       - name: Upload VBAN VST3 artifact
         uses: actions/upload-artifact@v4
@@ -587,13 +589,13 @@ jobs:
           Write-Host "Process stopped"
           exit 0
 
-      - name: Verify UDP 6980 is localhost-only (no firewall needed)
+      - name: Verify UDP 7980 is localhost-only (no firewall needed)
         shell: powershell
         run: |
-          # VBAN IEM sends UDP to 127.0.0.1:6980 (localhost-only).
+          # VBAN IEM sends UDP to 127.0.0.1:7980 (localhost-only).
           # Windows firewall does not block localhost traffic, so no rule is needed.
           # Just log the status for visibility.
-          Write-Host "VBAN audio uses localhost UDP (127.0.0.1:6980) - firewall not required"
+          Write-Host "VBAN audio uses localhost UDP (127.0.0.1:7980) - firewall not required"
 
       - name: Install and start IEM Mixer
         shell: powershell
@@ -740,10 +742,10 @@ jobs:
             New-Item -ItemType Directory -Path $vst3Dest -Force | Out-Null
           }
 
-          # Find the VST3 bundle in the artifact
-          $vst3Source = Get-ChildItem -Path "vban-vst3" -Filter "*.vst3" -Recurse -Directory | Select-Object -First 1
-          if (-not $vst3Source) {
-            Write-Host "::error::VBAN VST3 bundle not found in artifact"
+          # Find all VST3 bundles in the artifact
+          $vst3Sources = Get-ChildItem -Path "vban-vst3" -Filter "*.vst3" -Recurse -Directory
+          if (-not $vst3Sources) {
+            Write-Host "::error::No VST3 bundles found in artifact"
             exit 1
           }
 
@@ -773,18 +775,20 @@ jobs:
             Write-Host "REAPER stopped"
           }
 
-          # Copy the entire VST3 bundle directory
-          $destPath = Join-Path $vst3Dest $vst3Source.Name
-          if (Test-Path $destPath) {
-            Remove-Item $destPath -Recurse -Force
-          }
-          Copy-Item $vst3Source.FullName $destPath -Recurse -Force
-          Write-Host "VBAN VST3 deployed: $destPath"
+          # Copy each VST3 bundle directory
+          foreach ($vst3Source in $vst3Sources) {
+            $destPath = Join-Path $vst3Dest $vst3Source.Name
+            if (Test-Path $destPath) {
+              Remove-Item $destPath -Recurse -Force
+            }
+            Copy-Item $vst3Source.FullName $destPath -Recurse -Force
+            Write-Host "VST3 deployed: $destPath"
 
-          # Verify the bundle was copied
-          if (-not (Test-Path $destPath)) {
-            Write-Host "::error::VST3 bundle not found at $destPath"
-            exit 1
+            # Verify the bundle was copied
+            if (-not (Test-Path $destPath)) {
+              Write-Host "::error::VST3 bundle not found at $destPath"
+              exit 1
+            }
           }
 
           # Restart REAPER with project
@@ -833,8 +837,11 @@ jobs:
               Write-Host "::warning::Could not save REAPER project after restart: $_"
             }
           }
-          Write-Host "VST3 bundle contents:"
-          Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+          Write-Host "Deployed VST3 bundles:"
+          foreach ($vst3Source in $vst3Sources) {
+            $destPath = Join-Path $vst3Dest $vst3Source.Name
+            Get-ChildItem -Path $destPath -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
+          }
 
       - name: Verify app listens on VBAN port
         shell: powershell
@@ -842,12 +849,12 @@ jobs:
           # Wait for app to fully start
           Start-Sleep -Seconds 5
 
-          # Verify app has port 6980
-          $appListener = netstat -an | Select-String "UDP.*:6980"
+          # Verify app has port 7980
+          $appListener = netstat -an | Select-String "UDP.*:7980"
           if ($appListener) {
-            Write-Host "App owns VBAN port 6980: $appListener"
+            Write-Host "App owns VBAN port 7980: $appListener"
           } else {
-            Write-Host "::error::App did not bind VBAN port 6980 - audio streaming broken"
+            Write-Host "::error::App did not bind VBAN port 7980 - audio streaming broken"
             exit 1
           }
 
@@ -1055,6 +1062,13 @@ jobs:
           } else {
             Write-Host "reset_all_eq.lua already registered"
           }
+          # Register setup_talkback.lua
+          if ($content -notmatch "RS_REAPERIEM_SETUP_TALKBACK") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_TALKBACK "Custom: Setup talkback on engineer track" reaperiem\setup_talkback.lua'
+            Write-Host "Registered setup_talkback.lua"
+          } else {
+            Write-Host "setup_talkback.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -1078,7 +1092,7 @@ jobs:
           }
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
           Start-Sleep -Seconds 3
           $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
           Write-Host "Dynamic registration result: $result"
@@ -1458,7 +1472,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"
@@ -1547,7 +1561,7 @@ jobs:
         shell: powershell
         run: |
           # This test PROVES the full audio pipeline works end-to-end:
-          #   1. Send synthetic OIEM UDP packets to 127.0.0.1:6980
+          #   1. Send synthetic OIEM UDP packets to 127.0.0.1:7980
           #   2. Login as engineer, get JWT
           #   3. Connect WebSocket to ws://localhost:80/ws/audio?token=JWT
           #   4. Send ListenStart command
@@ -1559,13 +1573,13 @@ jobs:
 
           $ErrorActionPreference = "Stop"
 
-          # Verify UDP listener exists on port 6980
-          $udpListeners = netstat -an | Select-String "UDP.*:6980"
+          # Verify UDP listener exists on port 7980
+          $udpListeners = netstat -an | Select-String "UDP.*:7980"
           if (-not $udpListeners) {
-            Write-Host "::error::No UDP listener on port 6980 - app not listening for OIEM"
+            Write-Host "::error::No UDP listener on port 7980 - app not listening for OIEM"
             exit 1
           }
-          Write-Host "UDP 6980 listener found: $udpListeners"
+          Write-Host "UDP 7980 listener found: $udpListeners"
 
           # Step 1: Start background OIEM UDP sender (keeps sending for 15 seconds)
           # Sends fake Opus-sized payloads (server just relays them)
@@ -1589,7 +1603,7 @@ jobs:
                 [void]$pkt.Add([byte](($sent + $i) % 256))
               }
               $data = [byte[]]$pkt.ToArray()
-              $udp.Send($data, $data.Length, "127.0.0.1", 6980) | Out-Null
+              $udp.Send($data, $data.Length, "127.0.0.1", 7980) | Out-Null
               $sent++
               # 20ms per frame = 50 frames/sec (matches real Opus timing)
               Start-Sleep -Milliseconds 20
@@ -1686,7 +1700,7 @@ jobs:
             exit 0
           } elseif ($gotNoSource) {
             Write-Host "::error::AUDIO PIPELINE FAIL: Got 'no_source' - OIEM UDP packets not reaching audio pipeline"
-            Write-Host "Check: Is VBAN IEM VST sending OIEM to 127.0.0.1:6980? Is the UDP listener bound?"
+            Write-Host "Check: Is VBAN IEM VST sending OIEM to 127.0.0.1:7980? Is the UDP listener bound?"
             exit 1
           } else {
             Write-Host "::error::AUDIO PIPELINE FAIL: No binary frames and no status - WebSocket not responding"
@@ -1698,7 +1712,7 @@ jobs:
         run: |
           # This test verifies REAL OIEM audio from REAPER reaches the app.
           # It does NOT send synthetic UDP - it relies on REAPER's VBAN IEM VST3
-          # being active on the engineer track, sending OIEM Opus to 127.0.0.1:6980.
+          # being active on the engineer track, sending OIEM Opus to 127.0.0.1:7980.
           # FAILS the deploy if REAPER was running and VST setup succeeded but no audio arrives.
 
           $wasRunning = "${{ steps.reaper-pre.outputs.was_running }}"

@@ -1,13 +1,13 @@
 //! Audio streaming pipeline: OIEM UDP relay → WebSocket
 //!
 //! Receives pre-encoded Opus frames from the VST3 plugin via OIEM UDP protocol
-//! on port 6980 and broadcasts them directly to WebSocket clients.
+//! on port 7980 and broadcasts them directly to WebSocket clients.
 //! No resampling or encoding on the server — the VST handles everything.
 
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 
 /// OIEM packet magic bytes: "OIEM" as bytes
 const OIEM_MAGIC: [u8; 4] = [b'O', b'I', b'E', b'M'];
@@ -16,7 +16,7 @@ const OIEM_MAGIC: [u8; 4] = [b'O', b'I', b'E', b'M'];
 const OIEM_HEADER_SIZE: usize = 8;
 
 /// UDP bind address for receiving OIEM audio from the local VST3 plugin.
-const OIEM_BIND_ADDR: &str = "127.0.0.1:6980";
+const OIEM_BIND_ADDR: &str = "127.0.0.1:7980";
 
 /// Audio pipeline health diagnostics
 #[derive(Debug, Clone, serde::Serialize)]
@@ -120,6 +120,7 @@ pub fn parse_oiem_packet(data: &[u8]) -> Result<(u16, Bytes), &'static str> {
 pub fn spawn_audio_listener(
     audio_tx: broadcast::Sender<Bytes>,
     diagnostics: Arc<Mutex<AudioDiagnostics>>,
+    talkback_state: Arc<RwLock<crate::TalkbackState>>,
 ) {
     tokio::spawn(async move {
         let socket = match tokio::net::UdpSocket::bind(OIEM_BIND_ADDR).await {
@@ -143,13 +144,29 @@ pub fn spawn_audio_listener(
         let mut sequence_gaps: u64 = 0;
 
         loop {
-            let len = match socket.recv(&mut buf).await {
-                Ok(len) => len,
+            let (len, src_addr) = match socket.recv_from(&mut buf).await {
+                Ok(result) => result,
                 Err(e) => {
                     tracing::warn!("UDP recv error: {}", e);
                     continue;
                 }
             };
+
+            // Detect heartbeat from OIEM Receive VST (#123)
+            if len == OIEM_HEADER_SIZE
+                && buf[0..4] == OIEM_MAGIC
+                && u16::from_le_bytes([buf[6], buf[7]]) == 0
+            {
+                let mut tb = talkback_state.write().await;
+                if tb.recv_vst_addr != Some(src_addr) {
+                    tracing::info!(
+                        addr = %src_addr,
+                        "OIEM Receive VST registered via heartbeat"
+                    );
+                    tb.recv_vst_addr = Some(src_addr);
+                }
+                continue;
+            }
 
             let (sequence, opus_frame) = match parse_oiem_packet(&buf[..len]) {
                 Ok(result) => result,
@@ -285,7 +302,7 @@ mod tests {
     #[test]
     fn test_bind_address_uses_correct_port() {
         let addr: std::net::SocketAddr = OIEM_BIND_ADDR.parse().unwrap();
-        assert_eq!(addr.port(), 6980, "Must bind to port 6980");
+        assert_eq!(addr.port(), 7980, "Must bind to port 7980");
         assert!(
             addr.ip().is_loopback(),
             "Must be localhost, got {}",

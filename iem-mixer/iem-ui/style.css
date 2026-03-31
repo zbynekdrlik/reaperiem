@@ -2285,3 +2285,94 @@ body {
   from { transform: translateX(-50%) translateY(-100%); opacity: 0; }
   to { transform: translateX(-50%) translateY(0); opacity: 1; }
 }
+
+/* Icon-only Mute All button (#123) */
+.toolbar-btn-mute-all.toolbar-btn-icon {
+  flex: 0 0 48px;
+  min-width: 48px;
+  max-width: 48px;
+  padding: 12px 0;
+  font-size: 18px;
+}
+
+/* Talk button — engineer push-to-talk (#123) */
+.toolbar-btn-talk {
+  flex: 1;
+  padding: 14px 8px;
+  border: 2px solid #1976d2;
+  border-radius: 10px;
+  background: #0d3b66;
+  color: #64b5f6;
+  font-size: 0.85em;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.toolbar-btn-talk.live {
+  background: #d32f2f;
+  border-color: #f44336;
+  color: #fff;
+  animation: talk-pulse 1s ease-in-out infinite;
+}
+
+.toolbar-btn-talk.in-use {
+  background: #333;
+  border-color: #555;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.toolbar-btn-talk.mic-blocked,
+.toolbar-btn-talk.unsupported {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes talk-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(244, 67, 54, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(244, 67, 54, 0.8); }
+}
+
+/* "ENGINEER SPEAKING" banner for band members (#123) */
+.engineer-speaking-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: rgba(211, 47, 47, 0.9);
+  color: #fff;
+  font-size: 0.85em;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: banner-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes banner-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.6; }
+}
+
+/* Full-page red pulsing overlay when engineer is talking (#123) */
+body.talk-live-overlay {
+  animation: talk-page-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes talk-page-pulse {
+  0%, 100% {
+    box-shadow: inset 0 0 30px rgba(244, 67, 54, 0.3);
+    border: 3px solid rgba(244, 67, 54, 0.5);
+  }
+  50% {
+    box-shadow: inset 0 0 60px rgba(244, 67, 54, 0.5);
+    border: 3px solid rgba(244, 67, 54, 0.8);
+  }
+}

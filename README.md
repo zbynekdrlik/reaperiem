@@ -6,6 +6,16 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.122.0 (2026-03-30)
+
+- **Feature**: Solo exclusive mode — clicking solo on a new track desolos the previous one instead of appending (#131)
+- **Feature**: Band member SOS alert button — calls engineer for help with persistent notification until cleared (#125)
+- **Feature**: Engineer alert toast with vibration loop (500ms/1.5s), subtle chime sound, and system notification via service worker
+- **Feature**: Alert persists until engineer or member explicitly dismisses — no auto-timeout
+- **Feature**: Engineer reconnect catches up on active alerts (no missed SOS)
+- **Fix**: CI concurrency — push and PR runs no longer cancel each other's Tauri build
+- **Closed**: #131 (solo exclusive), #125 (alert button)
+
 ### v1.121.0 (2026-03-29)
 
 - **Fix**: Listen mode stop button now works — previously auto-reconnect overrode user stop, making it impossible to disable listening

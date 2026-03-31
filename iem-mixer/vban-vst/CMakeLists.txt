@@ -70,3 +70,51 @@ target_compile_definitions(VBANiem
 if(WIN32)
     target_link_libraries(VBANiem PRIVATE ws2_32)
 endif()
+
+# OIEM Receive plugin — receives talkback audio from server (#123)
+juce_add_plugin(OIEMReceive
+    COMPANY_NAME "NewLevel"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    IS_MIDI_EFFECT FALSE
+    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE
+    PLUGIN_MANUFACTURER_CODE Riem
+    PLUGIN_CODE Oirv
+    FORMATS VST3
+    VST3_CATEGORIES "Fx" "Network"
+    PRODUCT_NAME "OIEM Receive")
+
+juce_generate_juce_header(OIEMReceive)
+
+target_sources(OIEMReceive PRIVATE
+    src/OIEMReceiveProcessor.cpp
+    src/OIEMReceiveEditor.cpp
+    src/opus/OpusDecoderWrapper.cpp
+    src/opus/OpusReceiver.cpp
+    src/ui/MeterComponent.cpp)
+
+target_include_directories(OIEMReceive PRIVATE ${opus_SOURCE_DIR}/include)
+
+target_link_libraries(OIEMReceive
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_audio_processors
+        juce::juce_gui_extra
+        juce::juce_core
+        opus
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
+target_compile_definitions(OIEMReceive
+    PUBLIC
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_VST3_CAN_REPLACE_VST2=0
+        JUCE_DISPLAY_SPLASH_SCREEN=0)
+
+if(WIN32)
+    target_link_libraries(OIEMReceive PRIVATE ws2_32)
+endif()

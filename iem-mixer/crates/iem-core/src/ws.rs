@@ -85,6 +85,10 @@ pub enum ClientMsg {
     CallEngineer,
     /// Clear active alert (sent by engineer or member to dismiss)
     ClearAlert,
+    /// Engineer requests talkback lock (#123)
+    TalkStart,
+    /// Engineer releases talkback lock (#123)
+    TalkStop,
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -155,6 +159,14 @@ pub enum ServerMsg {
     AlertCleared { member_id: String },
     /// Active alerts sent to engineer on WS connect (catch-up)
     ActiveAlerts { alerts: Vec<AlertInfo> },
+    /// Talkback lock acquired — engineer may start sending audio (#123)
+    TalkAcquired,
+    /// Talkback lock denied — another engineer is talking (#123)
+    TalkBusy { holder: String },
+    /// Talkback lock released (#123)
+    TalkReleased,
+    /// Engineer is talking — broadcast to all band members for red overlay (#123)
+    EngineerTalking { active: bool },
 }
 
 #[cfg(test)]
@@ -711,6 +723,54 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"event\":\"ActiveAlerts\""));
         assert!(json.contains("\"from_member\":\"petka\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_talk_start_serialization() {
+        let msg = ClientMsg::TalkStart;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"TalkStart\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_talk_stop_serialization() {
+        let msg = ClientMsg::TalkStop;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"TalkStop\""));
+        let decoded: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_talk_acquired_serialization() {
+        let msg = ServerMsg::TalkAcquired;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"TalkAcquired\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_talk_busy_serialization() {
+        let msg = ServerMsg::TalkBusy {
+            holder: "engineer".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"TalkBusy\""));
+        assert!(json.contains("\"holder\":\"engineer\""));
+        let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_server_msg_talk_released_serialization() {
+        let msg = ServerMsg::TalkReleased;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"event\":\"TalkReleased\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
     }

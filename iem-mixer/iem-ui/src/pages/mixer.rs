@@ -18,6 +18,7 @@ use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
 use crate::components::settings_modal::{SettingsModal, UserSettings};
 use crate::components::snapshot_modal::SnapshotModal;
+use crate::components::talk_button::TalkState;
 use crate::components::toolbar::Toolbar;
 
 /// Post-release guard duration in milliseconds.
@@ -100,6 +101,8 @@ fn connect_websocket(
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
+    set_talk_state: WriteSignal<TalkState>,
+    set_engineer_talking: WriteSignal<bool>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -297,6 +300,30 @@ fn connect_websocket(
                                 .set(Some((first.from_member.clone(), first.from_name.clone())));
                         }
                     }
+                    iem_core::ServerMsg::TalkAcquired => {
+                        set_talk_state.set(TalkState::Live);
+                    }
+                    iem_core::ServerMsg::TalkBusy { .. } => {
+                        set_talk_state.set(TalkState::InUse);
+                    }
+                    iem_core::ServerMsg::TalkReleased => {
+                        set_talk_state.set(TalkState::Idle);
+                    }
+                    iem_core::ServerMsg::EngineerTalking { active } => {
+                        // Red page overlay on band member devices (no vibration)
+                        if let Some(window) = web_sys::window() {
+                            if let Some(doc) = window.document() {
+                                if let Some(body) = doc.body() {
+                                    if active {
+                                        let _ = body.class_list().add_1("talk-live-overlay");
+                                    } else {
+                                        let _ = body.class_list().remove_1("talk-live-overlay");
+                                    }
+                                }
+                            }
+                        }
+                        set_engineer_talking.set(active);
+                    }
                     iem_core::ServerMsg::EqParams {
                         track_index: _,
                         track_name: _,
@@ -437,6 +464,11 @@ pub fn MixerPage() -> impl IntoView {
     let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
     let (alert_active, set_alert_active) = signal(false);
 
+    // Talkback state for engineer push-to-talk (#123)
+    let (talk_state, set_talk_state) = signal(TalkState::Idle);
+    // Engineer speaking indicator for band members (#123)
+    let (engineer_talking, set_engineer_talking) = signal(false);
+
     // WebSocket connection
     let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
@@ -488,6 +520,8 @@ pub fn MixerPage() -> impl IntoView {
             set_alert_data,
             alert_data,
             set_alert_active,
+            set_talk_state,
+            set_engineer_talking,
         );
     });
 
@@ -557,6 +591,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_alert_data,
                 alert_data,
                 set_alert_active,
+                set_talk_state,
+                set_engineer_talking,
             );
         }
     }) as Box<dyn FnMut()>);
@@ -1010,11 +1046,18 @@ pub fn MixerPage() -> impl IntoView {
                 member_id=member_id()
                 ws=ws
                 alert_active=alert_active
+                talk_state=talk_state
+                set_talk_state=set_talk_state
             />
 
             {is_engineer.then(|| view! {
                 <AlertToast alert=alert_data ws=ws />
             })}
+
+            // "ENGINEER SPEAKING" banner for band members (#123)
+            <Show when=move || engineer_talking.get()>
+                <div class="engineer-speaking-banner">"ENGINEER SPEAKING"</div>
+            </Show>
 
             <PresetModal
                 visible=preset_modal_visible.into()

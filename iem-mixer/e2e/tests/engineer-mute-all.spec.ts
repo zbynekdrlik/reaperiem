@@ -51,7 +51,8 @@ test.describe("Engineer Mute All (#88)", () => {
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
     await expect(muteAllBtn).toBeVisible({ timeout: 5000 });
-    expect(await muteAllBtn.textContent()).toBe("Mute All");
+    // Mute All button is now icon-only (🔇) — just verify it's visible
+    expect(await muteAllBtn.textContent()).toBeTruthy();
   });
 
   test("regular member does NOT see Mute All button", async ({ page }) => {
