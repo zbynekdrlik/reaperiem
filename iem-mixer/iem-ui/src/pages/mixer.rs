@@ -378,7 +378,10 @@ fn subscribe_to_push() {
         // 1. Fetch VAPID public key from server
         let token = match crate::auth::get_token() {
             Some(t) => t,
-            None => return,
+            None => {
+                web_sys::console::warn_1(&"[push] no auth token".into());
+                return;
+            }
         };
 
         let resp = match gloo_net::http::Request::get("/api/push/vapid-key")
@@ -386,16 +389,32 @@ fn subscribe_to_push() {
             .await
         {
             Ok(r) if r.ok() => r,
-            _ => return,
+            Ok(r) => {
+                web_sys::console::warn_1(
+                    &format!("[push] vapid-key request failed: {}", r.status()).into(),
+                );
+                return;
+            }
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] vapid-key fetch error: {:?}", e).into());
+                return;
+            }
         };
         let json: serde_json::Value = match resp.json().await {
             Ok(j) => j,
-            Err(_) => return,
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] vapid-key parse error: {:?}", e).into());
+                return;
+            }
         };
         let vapid_key = match json.get("key").and_then(|k| k.as_str()) {
             Some(k) => k.to_string(),
-            None => return,
+            None => {
+                web_sys::console::warn_1(&"[push] no VAPID key in response".into());
+                return;
+            }
         };
+        web_sys::console::log_1(&format!("[push] got VAPID key: {}...", &vapid_key[..20]).into());
 
         // 2. Get ServiceWorkerRegistration
         let window = match web_sys::window() {
@@ -411,26 +430,47 @@ fn subscribe_to_push() {
         .and_then(|v| v.dyn_into().ok())
         {
             Some(c) => c,
-            None => return,
+            None => {
+                web_sys::console::warn_1(&"[push] serviceWorker not available".into());
+                return;
+            }
         };
 
         let ready_promise = match sw_container.ready() {
             Ok(p) => p,
-            Err(_) => return,
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] sw.ready() failed: {:?}", e).into());
+                return;
+            }
         };
+        web_sys::console::log_1(&"[push] waiting for SW ready...".into());
         let registration: web_sys::ServiceWorkerRegistration =
             match wasm_bindgen_futures::JsFuture::from(ready_promise).await {
                 Ok(r) => match r.dyn_into() {
                     Ok(reg) => reg,
-                    Err(_) => return,
+                    Err(e) => {
+                        web_sys::console::warn_1(
+                            &format!("[push] SW registration cast failed: {:?}", e).into(),
+                        );
+                        return;
+                    }
                 },
-                Err(_) => return,
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[push] SW ready await failed: {:?}", e).into(),
+                    );
+                    return;
+                }
             };
+        web_sys::console::log_1(&"[push] SW ready, getting push manager...".into());
 
         // 3. Subscribe to push
         let push_manager = match registration.push_manager() {
             Ok(pm) => pm,
-            Err(_) => return,
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] push_manager() failed: {:?}", e).into());
+                return;
+            }
         };
 
         // Decode base64url VAPID key to Uint8Array
@@ -452,13 +492,23 @@ fn subscribe_to_push() {
                 return;
             }
         };
+        web_sys::console::log_1(&"[push] subscribing to push...".into());
         let sub: web_sys::PushSubscription = match wasm_bindgen_futures::JsFuture::from(sub_promise)
             .await
-            .ok()
-            .and_then(|v| v.dyn_into().ok())
         {
-            Some(s) => s,
-            None => return,
+            Ok(v) => match v.dyn_into() {
+                Ok(s) => s,
+                Err(e) => {
+                    web_sys::console::warn_1(
+                        &format!("[push] subscription cast failed: {:?}", e).into(),
+                    );
+                    return;
+                }
+            },
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] subscribe await failed: {:?}", e).into());
+                return;
+            }
         };
 
         // 4. Send subscription JSON to server
