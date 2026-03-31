@@ -388,6 +388,7 @@ mod tests {
             pins: HashMap::new(),
             engineer_pin: Some("1177".to_string()),
             local_public_ip: None,
+            vapid_private_key: String::new(),
         }
     }
 

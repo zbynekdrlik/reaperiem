@@ -179,6 +179,7 @@ impl Config {
         }
 
         // Auto-generate VAPID key pair for Web Push if not set
+        #[cfg(feature = "vapid")]
         if self.vapid_private_key.is_empty() {
             let sk = p256::SecretKey::random(&mut rand_core::OsRng);
             use base64::Engine;
@@ -298,6 +299,7 @@ impl Config {
     }
 
     /// Derive the VAPID public key (base64url, uncompressed P-256 point) from the private key.
+    #[cfg(feature = "vapid")]
     pub fn vapid_public_key_base64url(private_key_b64: &str) -> Result<String, ConfigError> {
         use base64::Engine;
         use p256::elliptic_curve::sec1::ToEncodedPoint;

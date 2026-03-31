@@ -8,7 +8,7 @@ license = "MIT"
 
 [dependencies]
 # Core library
-iem-core = { path = "../iem-core" }
+iem-core = { path = "../iem-core", features = ["vapid"] }
 
 # Web framework
 axum = { version = "0.8", features = ["macros", "json", "ws"] }
