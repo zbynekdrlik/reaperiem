@@ -441,7 +441,7 @@ fn subscribe_to_push() {
         let key_array = js_sys::Uint8Array::new_with_length(key_bytes.len() as u32);
         key_array.copy_from(&key_bytes);
 
-        let mut opts = web_sys::PushSubscriptionOptionsInit::new();
+        let opts = web_sys::PushSubscriptionOptionsInit::new();
         opts.set_user_visible_only(true);
         opts.set_application_server_key(&key_array.into());
 
