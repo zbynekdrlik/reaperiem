@@ -443,7 +443,7 @@ fn subscribe_to_push() {
 
         let mut opts = web_sys::PushSubscriptionOptionsInit::new();
         opts.set_user_visible_only(true);
-        opts.set_application_server_key(Some(&key_array.into()));
+        opts.set_application_server_key(&key_array.into());
 
         let sub_promise = match push_manager.subscribe_with_options(&opts) {
             Ok(p) => p,
