@@ -138,7 +138,7 @@ pub async fn send_push(
 
     let status = resp.status().as_u16();
     match status {
-        200 | 201 | 202 => Ok(true),
+        200..=202 => Ok(true),
         404 | 410 => Ok(false),
         _ => {
             let text = resp.text().await.unwrap_or_default();
