@@ -1115,7 +1115,7 @@ pub fn MixerPage() -> impl IntoView {
                                 // destroys the EQ modal DOM. This must happen AFTER the current
                                 // event handler stack fully unwinds (including microtasks), or
                                 // Leptos reactive graph teardown hits dropped closures.
-                                let cb = Closure::once(move || {
+                                let cb = Closure::once_into_js(move || {
                                     set_eq_open.set(None);
                                     set_eq_bands.set(Vec::new());
                                 });
@@ -1123,7 +1123,6 @@ pub fn MixerPage() -> impl IntoView {
                                     .unwrap()
                                     .set_timeout_with_callback(cb.as_ref().unchecked_ref())
                                     .unwrap();
-                                cb.forget(); // prevent drop before timer fires
                             })
                         />
                     }

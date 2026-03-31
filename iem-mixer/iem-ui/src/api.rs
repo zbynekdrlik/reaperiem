@@ -65,9 +65,9 @@ pub async fn get_members_with_timeout() -> Result<Vec<MemberInfo>, String> {
 
     // Set up timeout to abort the fetch
     let controller_clone = controller.clone();
-    let timeout_closure = Closure::once(Box::new(move || {
+    let timeout_closure = Closure::once_into_js(move || {
         controller_clone.abort();
-    }) as Box<dyn FnOnce()>);
+    });
 
     window
         .set_timeout_with_callback_and_timeout_and_arguments_0(
@@ -75,9 +75,6 @@ pub async fn get_members_with_timeout() -> Result<Vec<MemberInfo>, String> {
             NETWORK_TIMEOUT_MS,
         )
         .map_err(|_| "Failed to set timeout")?;
-
-    // Keep closure alive until timeout fires or fetch completes
-    timeout_closure.forget();
 
     // Create fetch request with abort signal
     let opts = RequestInit::new();
