@@ -103,6 +103,7 @@ fn connect_websocket(
     set_alert_active: WriteSignal<bool>,
     set_talk_state: WriteSignal<TalkState>,
     set_engineer_talking: WriteSignal<bool>,
+    page_visible: std::rc::Rc<std::cell::Cell<bool>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -195,6 +196,9 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
+                        if !page_visible.get() {
+                            return; // Skip meter updates when backgrounded
+                        }
                         // Throttle: skip if less than 50ms since last meter update
                         let now = js_sys::Date::now();
                         if now - last_meter_time.get() >= 50.0 {
@@ -478,10 +482,32 @@ pub fn MixerPage() -> impl IntoView {
     // WS failure counter: tracks consecutive failures without receiving data
     let ws_fail_count: WsFailCounter = std::rc::Rc::new(std::cell::Cell::new(0));
 
+    // Track page visibility — skip meter updates when backgrounded.
+    // Created once in component body (NOT in connect_websocket) to avoid stacking listeners.
+    let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
+    {
+        let pv = page_visible.clone();
+        let vis_closure = Closure::wrap(Box::new(move || {
+            if let Some(w) = web_sys::window() {
+                if let Some(doc) = w.document() {
+                    pv.set(!doc.hidden());
+                }
+            }
+        }) as Box<dyn FnMut()>);
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            let _ = doc.add_event_listener_with_callback(
+                "visibilitychange",
+                vis_closure.as_ref().unchecked_ref(),
+            );
+        }
+        vis_closure.forget(); // Lives for component lifetime — one-time registration
+    }
+
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
     let ws_closures_effect = ws_closures.clone();
     let ws_fail_count_effect = ws_fail_count.clone();
+    let page_visible_effect = page_visible.clone();
     Effect::new(move |_| {
         let member = ws_member_id();
         if member.is_empty() {
@@ -522,6 +548,7 @@ pub fn MixerPage() -> impl IntoView {
             set_alert_active,
             set_talk_state,
             set_engineer_talking,
+            page_visible_effect.clone(),
         );
     });
 
@@ -593,6 +620,7 @@ pub fn MixerPage() -> impl IntoView {
                 set_alert_active,
                 set_talk_state,
                 set_engineer_talking,
+                page_visible.clone(),
             );
         }
     }) as Box<dyn FnMut()>);
@@ -1115,7 +1143,7 @@ pub fn MixerPage() -> impl IntoView {
                                 // destroys the EQ modal DOM. This must happen AFTER the current
                                 // event handler stack fully unwinds (including microtasks), or
                                 // Leptos reactive graph teardown hits dropped closures.
-                                let cb = Closure::once(move || {
+                                let cb = Closure::once_into_js(move || {
                                     set_eq_open.set(None);
                                     set_eq_bands.set(Vec::new());
                                 });
@@ -1123,7 +1151,6 @@ pub fn MixerPage() -> impl IntoView {
                                     .unwrap()
                                     .set_timeout_with_callback(cb.as_ref().unchecked_ref())
                                     .unwrap();
-                                cb.forget(); // prevent drop before timer fires
                             })
                         />
                     }

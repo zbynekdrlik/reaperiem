@@ -100,6 +100,8 @@ pub fn ListenButton(
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
     // since gloo_timers::Interval contains non-Send closures.
     let (stats_interval, set_stats_interval) = signal(Option::<i32>::None);
+    let stats_closure_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
     Effect::new(move || {
         let current_state = state.get();
 
@@ -110,6 +112,8 @@ pub fn ListenButton(
             }
             set_stats_interval.set(None);
         }
+        // Drop old closure (prevents leak)
+        stats_closure_effect.borrow_mut().take();
 
         if current_state == ListenState::Listening {
             let closure = Closure::wrap(Box::new(move || {
@@ -122,13 +126,16 @@ pub fn ListenButton(
                     500,
                 )
                 .unwrap();
-            closure.forget();
+            // Store closure to keep it alive (and allow cleanup on re-run)
+            *stats_closure_effect.borrow_mut() = Some(closure);
             set_stats_interval.set(Some(id));
         }
     });
 
     // Auto-reconnect: when state becomes Reconnecting, start exponential backoff
     let member_id_reconnect = member_id.clone();
+    let reconnect_closure_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
     Effect::new(move || {
         let current_state = state.get();
 
@@ -180,11 +187,15 @@ pub fn ListenButton(
                 2000, // Check every 2s, backoff controls actual attempt timing
             )
             .unwrap();
-        closure.forget();
+        // Store closure to keep it alive (and allow cleanup on re-run)
+        *reconnect_closure_effect.borrow_mut() = Some(closure);
         set_reconnect_interval.set(Some(id));
     });
 
     // Cleanup on unmount
+    // Note: stats_closure_ref and reconnect_closure_ref are Rc<RefCell<>> (not Send),
+    // so they can't be captured in on_cleanup. They are dropped naturally when the
+    // component scope drops. The Effects already clean them up on re-run.
     on_cleanup(move || {
         if let Some(id) = stats_interval.get_untracked() {
             if let Some(w) = web_sys::window() {

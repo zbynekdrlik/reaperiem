@@ -297,15 +297,16 @@ export function stopAudioPlayer() {
     }
     decoder = null;
   }
+  pendingFrames = [];
   gainNode = null;
   if (audioContext) {
+    audioContext.onstatechange = null;
     audioContext.close();
     audioContext = null;
   }
   nextStartTime = 0;
   lastAudioLevel = -150;
   lastError = null;
-  pendingFrames = [];
   bufferMs = MIN_BUFFER_MS;
   lastDropoutTime = 0;
   lastFrameArrivalTime = 0;
