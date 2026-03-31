@@ -103,6 +103,7 @@ fn connect_websocket(
     set_alert_active: WriteSignal<bool>,
     set_talk_state: WriteSignal<TalkState>,
     set_engineer_talking: WriteSignal<bool>,
+    page_visible: std::rc::Rc<std::cell::Cell<bool>>,
 ) {
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
@@ -143,41 +144,11 @@ fn connect_websocket(
     // Meter update throttle: skip updates arriving faster than 50ms apart.
     // Server sends every 150ms but network jitter can bunch messages.
     // This caps reactive signal storms at ~20/sec instead of unbounded.
-    let last_meter_time = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
-    let last_channel_time = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
-
-    // Track page visibility — skip meter updates when backgrounded
-    let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
-    let page_visible_msg = page_visible.clone();
+    let last_meter_time = std::cell::Cell::new(0.0_f64);
 
     // Clone fail counter for use in closures
     let fail_count_msg = ws_fail_count.clone();
     let fail_count_close = ws_fail_count;
-
-    // Listen for page visibility changes
-    let page_visible_closure = page_visible.clone();
-    let last_meter_vis = last_meter_time.clone();
-    let last_channel_vis = last_channel_time.clone();
-    let vis_closure = Closure::wrap(Box::new(move || {
-        if let Some(w) = web_sys::window() {
-            if let Some(doc) = w.document() {
-                let hidden = doc.hidden();
-                page_visible_closure.set(!hidden);
-                if !hidden {
-                    // Page resumed — reset throttle timestamps to process next message immediately
-                    last_meter_vis.set(0.0);
-                    last_channel_vis.set(0.0);
-                }
-            }
-        }
-    }) as Box<dyn FnMut()>);
-    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-        let _ = doc.add_event_listener_with_callback(
-            "visibilitychange",
-            vis_closure.as_ref().unchecked_ref(),
-        );
-    }
-    vis_closure.forget(); // Lives for page lifetime — acceptable since it's one-time
 
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
@@ -225,7 +196,7 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
-                        if !page_visible_msg.get() {
+                        if !page_visible.get() {
                             return; // Skip meter updates when backgrounded
                         }
                         // Throttle: skip if less than 50ms since last meter update
@@ -247,20 +218,16 @@ fn connect_websocket(
                         muted,
                         pan,
                     } => {
-                        let now = js_sys::Date::now();
-                        if now - last_channel_time.get() >= 50.0 {
-                            last_channel_time.set(now);
-                            if !touched.get(&track_index).copied().unwrap_or(false) {
-                                set_channels.update(|chs| {
-                                    if let Some(ch) =
-                                        chs.iter_mut().find(|c| c.track_index == track_index)
-                                    {
-                                        ch.level_db = level_db;
-                                        ch.muted = muted;
-                                        ch.pan = pan;
-                                    }
-                                });
-                            }
+                        if !touched.get(&track_index).copied().unwrap_or(false) {
+                            set_channels.update(|chs| {
+                                if let Some(ch) =
+                                    chs.iter_mut().find(|c| c.track_index == track_index)
+                                {
+                                    ch.level_db = level_db;
+                                    ch.muted = muted;
+                                    ch.pan = pan;
+                                }
+                            });
                         }
                     }
                     iem_core::ServerMsg::GlobalVolumeUpdate { level_db, muted } => {
@@ -515,10 +482,32 @@ pub fn MixerPage() -> impl IntoView {
     // WS failure counter: tracks consecutive failures without receiving data
     let ws_fail_count: WsFailCounter = std::rc::Rc::new(std::cell::Cell::new(0));
 
+    // Track page visibility — skip meter updates when backgrounded.
+    // Created once in component body (NOT in connect_websocket) to avoid stacking listeners.
+    let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
+    {
+        let pv = page_visible.clone();
+        let vis_closure = Closure::wrap(Box::new(move || {
+            if let Some(w) = web_sys::window() {
+                if let Some(doc) = w.document() {
+                    pv.set(!doc.hidden());
+                }
+            }
+        }) as Box<dyn FnMut()>);
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            let _ = doc.add_event_listener_with_callback(
+                "visibilitychange",
+                vis_closure.as_ref().unchecked_ref(),
+            );
+        }
+        vis_closure.forget(); // Lives for component lifetime — one-time registration
+    }
+
     // Connect WebSocket when member is known
     let ws_member_id = member_id.clone();
     let ws_closures_effect = ws_closures.clone();
     let ws_fail_count_effect = ws_fail_count.clone();
+    let page_visible_effect = page_visible.clone();
     Effect::new(move |_| {
         let member = ws_member_id();
         if member.is_empty() {
@@ -559,6 +548,7 @@ pub fn MixerPage() -> impl IntoView {
             set_alert_active,
             set_talk_state,
             set_engineer_talking,
+            page_visible_effect.clone(),
         );
     });
 
@@ -630,6 +620,7 @@ pub fn MixerPage() -> impl IntoView {
                 set_alert_active,
                 set_talk_state,
                 set_engineer_talking,
+                page_visible.clone(),
             );
         }
     }) as Box<dyn FnMut()>);
