@@ -379,7 +379,7 @@ fn subscribe_to_push() {
         let token = match crate::auth::get_token() {
             Some(t) => t,
             None => {
-                web_sys::console::warn_1(&"[push] no auth token".into());
+                web_sys::console::log_1(&"[push] no auth token, skipping".into());
                 return;
             }
         };
@@ -410,7 +410,7 @@ fn subscribe_to_push() {
         let vapid_key = match json.get("key").and_then(|k| k.as_str()) {
             Some(k) => k.to_string(),
             None => {
-                web_sys::console::warn_1(&"[push] no VAPID key in response".into());
+                web_sys::console::log_1(&"[push] VAPID not configured, skipping".into());
                 return;
             }
         };
@@ -431,7 +431,7 @@ fn subscribe_to_push() {
         {
             Some(c) => c,
             None => {
-                web_sys::console::warn_1(&"[push] serviceWorker not available".into());
+                web_sys::console::log_1(&"[push] serviceWorker not available, skipping".into());
                 return;
             }
         };
