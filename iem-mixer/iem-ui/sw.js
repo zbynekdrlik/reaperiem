@@ -41,3 +41,33 @@ self.addEventListener("notificationclick", (event) => {
     }),
   );
 });
+
+// Handle Web Push notifications (works even when app is fully closed) (#133)
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data?.json() ?? {};
+  } catch {
+    data = {};
+  }
+
+  if (data.type === "SOS") {
+    event.waitUntil(
+      self.registration.showNotification(`IEM Alert: ${data.name || "Member"}`, {
+        body: `${data.name || "Someone"} needs help!`,
+        requireInteraction: true,
+        tag: "iem-alert",
+        vibrate: [500, 200, 500, 200, 500],
+      }),
+    );
+  } else {
+    // Generic fallback for unknown push types
+    event.waitUntil(
+      self.registration.showNotification("IEM Mixer", {
+        body: "New alert — tap to open",
+        requireInteraction: true,
+        tag: "iem-generic",
+      }),
+    );
+  }
+});
