@@ -4,6 +4,7 @@ use crate::push_store::PushSubscription;
 use aes_gcm::{Aes128Gcm, KeyInit, Nonce, aead::Aead};
 use base64::Engine;
 use hkdf::Hkdf;
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 use sha2::Sha256;
 
 const B64: base64::engine::GeneralPurpose = base64::engine::general_purpose::URL_SAFE_NO_PAD;

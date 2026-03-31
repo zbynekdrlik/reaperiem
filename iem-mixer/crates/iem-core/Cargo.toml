@@ -15,7 +15,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 # Constant-time comparison for PIN verification (prevents timing attacks)
 subtle = "2"
 # VAPID key generation (Web Push)
-p256 = { version = "0.13", features = ["pkcs8"] }
+p256 = { version = "0.13", features = ["pkcs8", "ecdsa"] }
 rand_core = { version = "0.6", features = ["getrandom"] }
 base64 = "0.22"
 

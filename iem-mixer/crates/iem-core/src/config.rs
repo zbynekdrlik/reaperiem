@@ -300,6 +300,7 @@ impl Config {
     /// Derive the VAPID public key (base64url, uncompressed P-256 point) from the private key.
     pub fn vapid_public_key_base64url(private_key_b64: &str) -> Result<String, ConfigError> {
         use base64::Engine;
+        use p256::elliptic_curve::sec1::ToEncodedPoint;
         let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD
             .decode(private_key_b64)
             .map_err(|e| ConfigError::Io(format!("invalid VAPID key base64: {}", e)))?;
