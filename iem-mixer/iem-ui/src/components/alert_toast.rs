@@ -12,6 +12,12 @@ pub fn AlertToast(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
     // Start/stop vibration loop and sound loop when alert changes
+    let alert_vib_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    let alert_snd_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    let vib_effect = alert_vib_ref.clone();
+    let snd_effect = alert_snd_ref.clone();
     Effect::new(move || {
         let current = alert.get();
         if let Some((_, ref name)) = current {
@@ -41,7 +47,7 @@ pub fn AlertToast(
                 );
                 let _ = window.navigator().vibrate_with_duration(500);
             }
-            vib_cb.forget();
+            *vib_effect.borrow_mut() = Some(vib_cb);
 
             // Start sound loop (play chime, repeat every 10s)
             play_chime();
@@ -61,7 +67,7 @@ pub fn AlertToast(
                     &JsValue::from(id),
                 );
             }
-            sound_cb.forget();
+            *snd_effect.borrow_mut() = Some(sound_cb);
 
             // Red page pulse overlay for SOS alert (#123)
             if let Some(window) = web_sys::window() {
@@ -72,6 +78,9 @@ pub fn AlertToast(
                 }
             }
         } else {
+            // Drop closures
+            vib_effect.borrow_mut().take();
+            snd_effect.borrow_mut().take();
             stop_loops();
             // Remove red page pulse overlay
             if let Some(window) = web_sys::window() {

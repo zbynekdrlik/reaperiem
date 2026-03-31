@@ -53,6 +53,9 @@ pub fn TalkButton(
     });
 
     // Vibration loop + page red overlay when Live
+    let vib_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    let vib_closure_effect = vib_closure_ref.clone();
     Effect::new(move || {
         let current = state.get();
         if let Some(window) = web_sys::window() {
@@ -75,7 +78,8 @@ pub fn TalkButton(
                     &wasm_bindgen::JsValue::from_str("__iem_talk_vib"),
                     &wasm_bindgen::JsValue::from(id),
                 );
-                vib_cb.forget();
+                // Store closure (dropped when state changes or component unmounts)
+                *vib_closure_effect.borrow_mut() = Some(vib_cb);
                 // Initial vibrate
                 let _ = window.navigator().vibrate_with_duration(200);
                 // Add red overlay class to body
@@ -85,6 +89,8 @@ pub fn TalkButton(
                     }
                 }
             } else {
+                // Drop old closure
+                vib_closure_effect.borrow_mut().take();
                 // Stop vibration loop
                 if let Ok(val) = js_sys::Reflect::get(
                     &window,
@@ -229,6 +235,7 @@ pub fn TalkButton(
 
     // Cleanup on unmount
     on_cleanup(move || {
+        vib_closure_ref.borrow_mut().take();
         stop_talkback();
     });
 

@@ -100,6 +100,9 @@ pub fn ListenButton(
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
     // since gloo_timers::Interval contains non-Send closures.
     let (stats_interval, set_stats_interval) = signal(Option::<i32>::None);
+    let stats_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    let stats_closure_effect = stats_closure_ref.clone();
     Effect::new(move || {
         let current_state = state.get();
 
@@ -110,6 +113,8 @@ pub fn ListenButton(
             }
             set_stats_interval.set(None);
         }
+        // Drop old closure (prevents leak)
+        stats_closure_effect.borrow_mut().take();
 
         if current_state == ListenState::Listening {
             let closure = Closure::wrap(Box::new(move || {
@@ -122,13 +127,17 @@ pub fn ListenButton(
                     500,
                 )
                 .unwrap();
-            closure.forget();
+            // Store closure to keep it alive (and allow cleanup on re-run)
+            *stats_closure_effect.borrow_mut() = Some(closure);
             set_stats_interval.set(Some(id));
         }
     });
 
     // Auto-reconnect: when state becomes Reconnecting, start exponential backoff
     let member_id_reconnect = member_id.clone();
+    let reconnect_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+    let reconnect_closure_effect = reconnect_closure_ref.clone();
     Effect::new(move || {
         let current_state = state.get();
 
@@ -180,7 +189,8 @@ pub fn ListenButton(
                 2000, // Check every 2s, backoff controls actual attempt timing
             )
             .unwrap();
-        closure.forget();
+        // Store closure to keep it alive (and allow cleanup on re-run)
+        *reconnect_closure_effect.borrow_mut() = Some(closure);
         set_reconnect_interval.set(Some(id));
     });
 
@@ -196,6 +206,9 @@ pub fn ListenButton(
                 w.clear_interval_with_handle(id);
             }
         }
+        // Drop stored closures
+        stats_closure_ref.borrow_mut().take();
+        reconnect_closure_ref.borrow_mut().take();
         set_intentional_stop.set(true);
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
