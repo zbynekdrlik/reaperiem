@@ -371,6 +371,162 @@ fn connect_websocket(
     *ws_closures.borrow_mut() = Some((onmessage, onclose));
 }
 
+/// Subscribe to Web Push for engineer SOS alerts (#133).
+/// Fetches VAPID key, subscribes via Push API, sends subscription to server.
+fn subscribe_to_push() {
+    wasm_bindgen_futures::spawn_local(async move {
+        // 1. Fetch VAPID public key from server
+        let token = match crate::auth::get_token() {
+            Some(t) => t,
+            None => return,
+        };
+
+        let resp = match gloo_net::http::Request::get("/api/push/vapid-key")
+            .send()
+            .await
+        {
+            Ok(r) if r.ok() => r,
+            _ => return,
+        };
+        let json: serde_json::Value = match resp.json().await {
+            Ok(j) => j,
+            Err(_) => return,
+        };
+        let vapid_key = match json.get("key").and_then(|k| k.as_str()) {
+            Some(k) => k.to_string(),
+            None => return,
+        };
+
+        // 2. Get ServiceWorkerRegistration
+        let window = match web_sys::window() {
+            Some(w) => w,
+            None => return,
+        };
+        let navigator = window.navigator();
+        let sw_container: web_sys::ServiceWorkerContainer =
+            match js_sys::Reflect::get(
+                &navigator,
+                &wasm_bindgen::JsValue::from_str("serviceWorker"),
+            )
+            .ok()
+            .and_then(|v| v.dyn_into().ok())
+            {
+                Some(c) => c,
+                None => return,
+            };
+
+        let ready_promise = match sw_container.ready() {
+            Ok(p) => p,
+            Err(_) => return,
+        };
+        let registration: web_sys::ServiceWorkerRegistration =
+            match wasm_bindgen_futures::JsFuture::from(ready_promise).await {
+                Ok(r) => match r.dyn_into() {
+                    Ok(reg) => reg,
+                    Err(_) => return,
+                },
+                Err(_) => return,
+            };
+
+        // 3. Subscribe to push
+        let push_manager = match registration.push_manager() {
+            Ok(pm) => pm,
+            Err(_) => return,
+        };
+
+        // Decode base64url VAPID key to Uint8Array
+        let key_bytes = match base64url_decode(&vapid_key) {
+            Some(b) => b,
+            None => return,
+        };
+        let key_array = js_sys::Uint8Array::new_with_length(key_bytes.len() as u32);
+        key_array.copy_from(&key_bytes);
+
+        let mut opts = web_sys::PushSubscriptionOptionsInit::new();
+        opts.user_visible_only(true);
+        opts.application_server_key(Some(&key_array.into()));
+
+        let sub_promise = match push_manager.subscribe_with_options(&opts) {
+            Ok(p) => p,
+            Err(e) => {
+                web_sys::console::warn_1(
+                    &format!("[push] subscribe failed: {:?}", e).into(),
+                );
+                return;
+            }
+        };
+        let sub: web_sys::PushSubscription =
+            match wasm_bindgen_futures::JsFuture::from(sub_promise)
+                .await
+                .ok()
+                .and_then(|v| v.dyn_into().ok())
+            {
+                Some(s) => s,
+                None => return,
+            };
+
+        // 4. Send subscription JSON to server
+        let sub_json = sub.to_json();
+        let json_str = match js_sys::JSON::stringify(&sub_json)
+            .ok()
+            .and_then(|s| s.as_string())
+        {
+            Some(s) => s,
+            None => return,
+        };
+
+        // Parse the JSON string to a serde_json::Value for gloo_net
+        let body: serde_json::Value = match serde_json::from_str(&json_str) {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let _ = gloo_net::http::Request::post("/api/push/subscribe")
+            .header("Authorization", &format!("Bearer {}", token))
+            .json(&body)
+            .map_err(|e| {
+                web_sys::console::warn_1(
+                    &format!("[push] serialize error: {:?}", e).into(),
+                );
+            })
+            .ok()
+            .map(|req| {
+                wasm_bindgen_futures::spawn_local(async move {
+                    match req.send().await {
+                        Ok(r) if r.ok() => {
+                            web_sys::console::log_1(
+                                &"[push] engineer subscribed to Web Push".into(),
+                            );
+                        }
+                        Ok(r) => {
+                            web_sys::console::warn_1(
+                                &format!("[push] subscribe POST failed: {}", r.status())
+                                    .into(),
+                            );
+                        }
+                        Err(e) => {
+                            web_sys::console::warn_1(
+                                &format!("[push] subscribe POST error: {:?}", e).into(),
+                            );
+                        }
+                    }
+                });
+            });
+    });
+}
+
+/// Decode base64url (no padding) to bytes.
+fn base64url_decode(input: &str) -> Option<Vec<u8>> {
+    let mut s = input.replace('-', "+").replace('_', "/");
+    while s.len() % 4 != 0 {
+        s.push('=');
+    }
+    web_sys::window()?
+        .atob(&s)
+        .ok()
+        .map(|decoded| decoded.bytes().collect())
+}
+
 /// Mixer page for a specific member
 #[component]
 pub fn MixerPage() -> impl IntoView {
@@ -884,6 +1040,11 @@ pub fn MixerPage() -> impl IntoView {
     let is_engineer = crate::auth::get_auth().map(|a| a.engineer).unwrap_or(false);
     // Mute All only on /engineer (engineer's own mixer)
     let is_engineer_own_mixer = is_engineer && member_id() == "engineer";
+
+    // Subscribe to Web Push for SOS alerts (engineer only, one-time) (#133)
+    if is_engineer {
+        subscribe_to_push();
+    }
 
     let on_presets = Callback::new(move |_: ()| {
         set_preset_modal_visible.set(true);
