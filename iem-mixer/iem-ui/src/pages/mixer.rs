@@ -562,6 +562,8 @@ fn subscribe_to_push() {
 }
 
 /// Decode base64url (no padding) to bytes.
+/// Note: atob() returns a Latin-1 string (each char = one byte 0-255).
+/// Rust's `.bytes()` gives UTF-8 which mangles values > 127. Use `.chars() as u8` instead.
 fn base64url_decode(input: &str) -> Option<Vec<u8>> {
     let mut s = input.replace('-', "+").replace('_', "/");
     while s.len() % 4 != 0 {
@@ -570,7 +572,7 @@ fn base64url_decode(input: &str) -> Option<Vec<u8>> {
     web_sys::window()?
         .atob(&s)
         .ok()
-        .map(|decoded| decoded.bytes().collect())
+        .map(|decoded| decoded.chars().map(|c| c as u8).collect())
 }
 
 /// Mixer page for a specific member
