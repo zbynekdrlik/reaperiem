@@ -442,8 +442,8 @@ fn subscribe_to_push() {
         key_array.copy_from(&key_bytes);
 
         let mut opts = web_sys::PushSubscriptionOptionsInit::new();
-        opts.user_visible_only(true);
-        opts.application_server_key(Some(&key_array.into()));
+        opts.set_user_visible_only(true);
+        opts.set_application_server_key(Some(&key_array.into()));
 
         let sub_promise = match push_manager.subscribe_with_options(&opts) {
             Ok(p) => p,
@@ -462,7 +462,10 @@ fn subscribe_to_push() {
         };
 
         // 4. Send subscription JSON to server
-        let sub_json = sub.to_json();
+        let sub_json = match sub.to_json() {
+            Ok(j) => j,
+            Err(_) => return,
+        };
         let json_str = match js_sys::JSON::stringify(&sub_json)
             .ok()
             .and_then(|s| s.as_string())
