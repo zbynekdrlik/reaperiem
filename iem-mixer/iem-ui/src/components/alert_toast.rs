@@ -12,12 +12,10 @@ pub fn AlertToast(
     ws: ReadSignal<Option<web_sys::WebSocket>>,
 ) -> impl IntoView {
     // Start/stop vibration loop and sound loop when alert changes
-    let alert_vib_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+    let vib_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
-    let alert_snd_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+    let snd_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
-    let vib_effect = alert_vib_ref.clone();
-    let snd_effect = alert_snd_ref.clone();
     Effect::new(move || {
         let current = alert.get();
         if let Some((_, ref name)) = current {

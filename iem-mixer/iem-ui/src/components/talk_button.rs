@@ -53,9 +53,8 @@ pub fn TalkButton(
     });
 
     // Vibration loop + page red overlay when Live
-    let vib_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+    let vib_closure_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
-    let vib_closure_effect = vib_closure_ref.clone();
     Effect::new(move || {
         let current = state.get();
         if let Some(window) = web_sys::window() {
@@ -235,7 +234,6 @@ pub fn TalkButton(
 
     // Cleanup on unmount
     on_cleanup(move || {
-        vib_closure_ref.borrow_mut().take();
         stop_talkback();
     });
 

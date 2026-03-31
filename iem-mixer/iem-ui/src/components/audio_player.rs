@@ -100,9 +100,8 @@ pub fn ListenButton(
     // Uses raw JS setInterval to get an i32 handle (Send+Sync) for on_cleanup,
     // since gloo_timers::Interval contains non-Send closures.
     let (stats_interval, set_stats_interval) = signal(Option::<i32>::None);
-    let stats_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+    let stats_closure_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
-    let stats_closure_effect = stats_closure_ref.clone();
     Effect::new(move || {
         let current_state = state.get();
 
@@ -135,9 +134,8 @@ pub fn ListenButton(
 
     // Auto-reconnect: when state becomes Reconnecting, start exponential backoff
     let member_id_reconnect = member_id.clone();
-    let reconnect_closure_ref: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+    let reconnect_closure_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
-    let reconnect_closure_effect = reconnect_closure_ref.clone();
     Effect::new(move || {
         let current_state = state.get();
 
@@ -195,6 +193,9 @@ pub fn ListenButton(
     });
 
     // Cleanup on unmount
+    // Note: stats_closure_ref and reconnect_closure_ref are Rc<RefCell<>> (not Send),
+    // so they can't be captured in on_cleanup. They are dropped naturally when the
+    // component scope drops. The Effects already clean them up on re-run.
     on_cleanup(move || {
         if let Some(id) = stats_interval.get_untracked() {
             if let Some(w) = web_sys::window() {
@@ -206,9 +207,6 @@ pub fn ListenButton(
                 w.clear_interval_with_handle(id);
             }
         }
-        // Drop stored closures
-        stats_closure_ref.borrow_mut().take();
-        reconnect_closure_ref.borrow_mut().take();
         set_intentional_stop.set(true);
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
