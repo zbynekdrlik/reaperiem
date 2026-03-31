@@ -521,12 +521,17 @@ fn serve_embedded_file(path: &str) -> Response {
             "no-cache, must-revalidate"
         };
 
-        return Response::builder()
+        let mut resp = Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, mime)
-            .header(header::CACHE_CONTROL, cache_control)
-            .body(Body::from(file.data.into_owned()))
-            .unwrap();
+            .header(header::CACHE_CONTROL, cache_control);
+
+        // Service worker must never be cached by CDN — stale sw.js breaks push notifications
+        if path == "sw.js" {
+            resp = resp.header("CDN-Cache-Control", "no-store");
+        }
+
+        return resp.body(Body::from(file.data.into_owned())).unwrap();
     }
 
     // Try with .html extension
