@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.124.0 (2026-03-31)
+
+- **Fix**: PWA app freezing on phones — eliminated memory leaks from `Closure::wrap().forget()` in Effects
+- **Fix**: AudioContext `onstatechange` handler cleared before close (prevents ~2MB leak per listen/stop cycle)
+- **Fix**: Visibility listener moved to component body (was stacking on every WebSocket reconnect)
+- **Fix**: Meters skipped when page is backgrounded — prevents freeze on tab resume
+- **Fix**: `Closure::once().forget()` replaced with `Closure::once_into_js()` (auto-deallocates after fire)
+
 ### v1.123.0 (2026-03-31)
 
 - **Feature**: Engineer talk button — push-to-talk to speak to band members via IEM from phone/laptop (#123)
