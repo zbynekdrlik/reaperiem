@@ -143,11 +143,41 @@ fn connect_websocket(
     // Meter update throttle: skip updates arriving faster than 50ms apart.
     // Server sends every 150ms but network jitter can bunch messages.
     // This caps reactive signal storms at ~20/sec instead of unbounded.
-    let last_meter_time = std::cell::Cell::new(0.0_f64);
+    let last_meter_time = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
+    let last_channel_time = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
+
+    // Track page visibility — skip meter updates when backgrounded
+    let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
+    let page_visible_msg = page_visible.clone();
 
     // Clone fail counter for use in closures
     let fail_count_msg = ws_fail_count.clone();
     let fail_count_close = ws_fail_count;
+
+    // Listen for page visibility changes
+    let page_visible_closure = page_visible.clone();
+    let last_meter_vis = last_meter_time.clone();
+    let last_channel_vis = last_channel_time.clone();
+    let vis_closure = Closure::wrap(Box::new(move || {
+        if let Some(w) = web_sys::window() {
+            if let Some(doc) = w.document() {
+                let hidden = doc.hidden();
+                page_visible_closure.set(!hidden);
+                if !hidden {
+                    // Page resumed — reset throttle timestamps to process next message immediately
+                    last_meter_vis.set(0.0);
+                    last_channel_vis.set(0.0);
+                }
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+        let _ = doc.add_event_listener_with_callback(
+            "visibilitychange",
+            vis_closure.as_ref().unchecked_ref(),
+        );
+    }
+    vis_closure.forget(); // Lives for page lifetime — acceptable since it's one-time
 
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
@@ -195,6 +225,9 @@ fn connect_websocket(
                         set_loading.set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
+                        if !page_visible_msg.get() {
+                            return; // Skip meter updates when backgrounded
+                        }
                         // Throttle: skip if less than 50ms since last meter update
                         let now = js_sys::Date::now();
                         if now - last_meter_time.get() >= 50.0 {
@@ -214,16 +247,20 @@ fn connect_websocket(
                         muted,
                         pan,
                     } => {
-                        if !touched.get(&track_index).copied().unwrap_or(false) {
-                            set_channels.update(|chs| {
-                                if let Some(ch) =
-                                    chs.iter_mut().find(|c| c.track_index == track_index)
-                                {
-                                    ch.level_db = level_db;
-                                    ch.muted = muted;
-                                    ch.pan = pan;
-                                }
-                            });
+                        let now = js_sys::Date::now();
+                        if now - last_channel_time.get() >= 50.0 {
+                            last_channel_time.set(now);
+                            if !touched.get(&track_index).copied().unwrap_or(false) {
+                                set_channels.update(|chs| {
+                                    if let Some(ch) =
+                                        chs.iter_mut().find(|c| c.track_index == track_index)
+                                    {
+                                        ch.level_db = level_db;
+                                        ch.muted = muted;
+                                        ch.pan = pan;
+                                    }
+                                });
+                            }
                         }
                     }
                     iem_core::ServerMsg::GlobalVolumeUpdate { level_db, muted } => {
