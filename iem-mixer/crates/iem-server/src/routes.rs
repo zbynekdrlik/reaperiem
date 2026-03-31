@@ -133,11 +133,14 @@ async fn get_vapid_key(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> impl IntoResponse {
     let config = state.config.read().await;
+    if config.vapid_private_key.is_empty() {
+        return (StatusCode::OK, Json(serde_json::json!({ "key": null })));
+    }
     match iem_core::config::Config::vapid_public_key_base64url(&config.vapid_private_key) {
         Ok(pub_key) => (StatusCode::OK, Json(serde_json::json!({ "key": pub_key }))),
         Err(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": "VAPID key not configured" })),
+            Json(serde_json::json!({ "error": "invalid VAPID key" })),
         ),
     }
 }
