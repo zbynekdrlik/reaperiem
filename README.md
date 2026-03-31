@@ -6,6 +6,18 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.123.0 (2026-03-31)
+
+- **Feature**: Engineer talk button — push-to-talk to speak to band members via IEM from phone/laptop (#123)
+- **Feature**: OIEM Receive VST3 plugin — receives talkback audio on ENGINEER mic track, mixes with Dante mic
+- **Feature**: Red pulsing page overlay when Talk is active — vibration on engineer, visual on all devices
+- **Feature**: "ENGINEER SPEAKING" banner on band member devices when engineer talks
+- **Feature**: SOS alert now shows red pulsing page overlay on engineer devices
+- **Feature**: One-at-a-time talkback lock — only one engineer can talk at once
+- **Fix**: OIEM port migrated from 6980 to 7980 (avoids VB-Matrix/VBAN range conflict)
+- **Fix**: Mute All button shrunk to icon-only for better toolbar layout
+- **Closed**: #123 (engineer talk button)
+
 ### v1.122.0 (2026-03-30)
 
 - **Feature**: Solo exclusive mode — clicking solo on a new track desolos the previous one instead of appending (#131)
