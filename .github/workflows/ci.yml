@@ -521,7 +521,10 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    timeout-minutes: 10
+    timeout-minutes: 15
+    concurrency:
+      group: iem-lan-runner
+      cancel-in-progress: false
     needs:
       [test-integrity, lint, test, build-wasm, build-tauri, build-vban, e2e]
     if: github.event_name == 'push'

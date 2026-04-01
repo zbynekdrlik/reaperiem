@@ -10,6 +10,10 @@ jobs:
   backup:
     name: Backup REAPER & Mixer Data
     runs-on: [self-hosted, iem-lan]
+    timeout-minutes: 10
+    concurrency:
+      group: iem-lan-runner
+      cancel-in-progress: false
     steps:
       - name: Backup REAPER project, snapshots, and presets
         shell: powershell
