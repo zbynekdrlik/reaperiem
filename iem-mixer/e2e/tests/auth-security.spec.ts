@@ -187,7 +187,7 @@ test.describe("Cross-member access prevention (#77)", () => {
     expect(body.engineer).toBe(true);
   });
 
-  test("engineer token expires in 24 hours (same as members)", async ({
+  test("engineer token expires in 7 days (same as members)", async ({
     page,
   }) => {
     await page.goto("/");
@@ -198,7 +198,7 @@ test.describe("Cross-member access prevention (#77)", () => {
     });
     expect(engResp.status()).toBe(200);
     const engBody = await engResp.json();
-    expect(engBody.expires_in).toBe(86400); // 24 hours
+    expect(engBody.expires_in).toBe(604800); // 7 days
 
     // Login as member
     const membersResp = await page.request.get("/api/members");

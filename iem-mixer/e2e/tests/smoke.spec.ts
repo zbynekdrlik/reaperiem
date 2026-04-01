@@ -404,7 +404,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
     expect(token).toBeNull();
   });
 
-  test("engineer token has 24h expiry", async ({ request }) => {
+  test("engineer token has 7-day expiry", async ({ request }) => {
     // Login with engineer PIN (1177)
     const response = await request.post("/api/auth", {
       data: { member: "petronela", pin: "1177" },
@@ -413,10 +413,10 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
 
     const data = await response.json();
     expect(data.engineer).toBe(true);
-    expect(data.expires_in).toBe(24 * 60 * 60); // 24 hours in seconds
+    expect(data.expires_in).toBe(7 * 24 * 60 * 60); // 7 days in seconds
   });
 
-  test("member token has 24h expiry", async ({ request }) => {
+  test("member token has 7-day expiry", async ({ request }) => {
     // Login with default member PIN (7711)
     const response = await request.post("/api/auth", {
       data: { member: "petronela", pin: "7711" },
@@ -425,7 +425,7 @@ test.describe("Auth & Token Expiry - Issue #38", () => {
 
     const data = await response.json();
     expect(data.engineer).toBe(false);
-    expect(data.expires_in).toBe(24 * 60 * 60); // 24 hours in seconds
+    expect(data.expires_in).toBe(7 * 24 * 60 * 60); // 7 days in seconds
   });
 });
 
