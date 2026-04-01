@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.127.0 (2026-04-01)
+
+- **Fix**: Push subscription POST now awaited directly (was silently dropped by nested spawn_local)
+- **Fix**: Old push subscription unsubscribed before resubscribing (required when VAPID key changes)
+- **Fix**: Deploy no longer overwrites config.yaml — preserves VAPID key and JWT secret across deploys
+- **Fix**: base64url decode corrected for Latin-1 atob output (chars not bytes)
+- **Fix**: CDN-Cache-Control no-store for sw.js prevents Cloudflare caching stale service worker
+
 ### v1.126.0 (2026-04-01)
 
 - **Fix**: CI deploy jobs no longer get cancelled — cross-workflow runner concurrency group serializes self-hosted runner usage
