@@ -1,6 +1,6 @@
 [package]
 name = "iem-core"
-version = "1.124.0"
+version = "1.125.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Core types and configuration for IEM mixer"
@@ -14,7 +14,12 @@ thiserror = "2.0"
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 # Constant-time comparison for PIN verification (prevents timing attacks)
 subtle = "2"
+# VAPID key generation (Web Push) — optional, not needed on WASM
+p256 = { version = "0.13", features = ["pkcs8", "ecdsa"], optional = true }
+rand_core = { version = "0.6", features = ["getrandom"], optional = true }
+base64 = { version = "0.22", optional = true }
 
 [features]
 default = ["config"]
 config = ["dep:serde_yaml"]
+vapid = ["dep:p256", "dep:rand_core", "dep:base64"]

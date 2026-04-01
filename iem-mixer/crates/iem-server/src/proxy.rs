@@ -1183,6 +1183,31 @@ async fn handle_ws(
                                         from_name: String::new(),
                                     },
                                 ));
+                                // Send Web Push to all engineer devices (fire-and-forget) (#133)
+                                {
+                                    let push_store = state.push_store.clone();
+                                    let http_client = state.http_client.clone();
+                                    let vapid_key =
+                                        state.config.read().await.vapid_private_key.clone();
+                                    let push_name = display_name.clone();
+                                    let push_member = member_id.clone();
+                                    if !vapid_key.is_empty() {
+                                        tokio::spawn(async move {
+                                            let payload = serde_json::json!({
+                                                "type": "SOS",
+                                                "name": push_name,
+                                                "member": push_member,
+                                            });
+                                            crate::push::send_push_to_engineers(
+                                                &http_client,
+                                                &vapid_key,
+                                                &push_store,
+                                                payload.to_string().as_bytes(),
+                                            )
+                                            .await;
+                                        });
+                                    }
+                                }
                                 continue;
                             }
 

@@ -59,6 +59,10 @@ pub struct Config {
     #[serde(default = "default_jwt_secret")]
     pub jwt_secret: String,
 
+    /// VAPID private key for Web Push (base64url-encoded P-256 scalar, 32 bytes)
+    #[serde(default)]
+    pub vapid_private_key: String,
+
     /// Enable HTTPS (for PWA installability on phones)
     #[serde(default)]
     pub tls: bool,
@@ -122,6 +126,7 @@ impl Default for Config {
             pins: HashMap::new(),
             engineer_pin: None,
             jwt_secret: default_jwt_secret(),
+            vapid_private_key: String::new(),
             tls: false,
             https_port: default_https_port(),
             tls_cert: default_tls_cert(),
@@ -171,6 +176,47 @@ impl Config {
                 "INFO: Auto-generated JWT signing key and saved to config file. \
                  Tokens will now persist across restarts."
             );
+        }
+
+        // Auto-generate VAPID key pair for Web Push if not set
+        #[cfg(feature = "vapid")]
+        if self.vapid_private_key.is_empty() {
+            let sk = p256::SecretKey::random(&mut rand_core::OsRng);
+            use base64::Engine;
+            self.vapid_private_key =
+                base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sk.to_bytes());
+
+            if let Some(path) = config_path {
+                let key = "vapid_private_key";
+                let new_line = format!("{}: \"{}\"", key, self.vapid_private_key);
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    let updated = if content.contains(&format!("{}:", key)) {
+                        content
+                            .lines()
+                            .map(|line| {
+                                if line.trim_start().starts_with(&format!("{}:", key)) {
+                                    new_line.as_str()
+                                } else {
+                                    line
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                            + "\n"
+                    } else {
+                        let mut result = content;
+                        if !result.ends_with('\n') {
+                            result.push('\n');
+                        }
+                        result.push_str(&new_line);
+                        result.push('\n');
+                        result
+                    };
+                    let _ = std::fs::write(path, updated);
+                }
+            }
+
+            eprintln!("INFO: Auto-generated VAPID key pair for Web Push notifications.");
         }
     }
 
@@ -250,6 +296,21 @@ impl Config {
         }
 
         PinValidation::Invalid
+    }
+
+    /// Derive the VAPID public key (base64url, uncompressed P-256 point) from the private key.
+    #[cfg(feature = "vapid")]
+    pub fn vapid_public_key_base64url(private_key_b64: &str) -> Result<String, ConfigError> {
+        use base64::Engine;
+        use p256::elliptic_curve::sec1::ToEncodedPoint;
+        let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .decode(private_key_b64)
+            .map_err(|e| ConfigError::Io(format!("invalid VAPID key base64: {}", e)))?;
+        let sk = p256::SecretKey::from_slice(&raw)
+            .map_err(|e| ConfigError::Io(format!("invalid VAPID P-256 key: {}", e)))?;
+        let pk = sk.public_key();
+        let point = pk.to_encoded_point(false);
+        Ok(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(point.as_bytes()))
     }
 }
 

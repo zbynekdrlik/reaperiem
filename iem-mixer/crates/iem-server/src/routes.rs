@@ -96,6 +96,9 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             "/api/talkback/diagnostics",
             get(talkback_diagnostics_handler),
         )
+        // Web Push notification subscription (#133)
+        .route("/api/push/vapid-key", get(get_vapid_key))
+        .route("/api/push/subscribe", post(push_subscribe))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -123,6 +126,78 @@ async fn get_members(
 struct MemberInfo {
     id: String,
     name: String,
+}
+
+/// Return the VAPID public key for browser push subscription (#133).
+async fn get_vapid_key(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    if config.vapid_private_key.is_empty() {
+        return (StatusCode::OK, Json(serde_json::json!({ "key": null })));
+    }
+    match iem_core::config::Config::vapid_public_key_base64url(&config.vapid_private_key) {
+        Ok(pub_key) => (StatusCode::OK, Json(serde_json::json!({ "key": pub_key }))),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": "invalid VAPID key" })),
+        ),
+    }
+}
+
+/// Store a push subscription (engineer-only) (#133).
+async fn push_subscribe(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    // Verify engineer token
+    let config = state.config.read().await;
+    let claims = match auth::extract_claims(
+        headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer "))
+            .unwrap_or(""),
+        &config.jwt_secret,
+    ) {
+        Some(c) if c.engineer => c,
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "error": "engineer access required" })),
+            );
+        }
+    };
+    drop(config);
+    // Suppress unused variable warning (claims used only for engineer check)
+    let _ = claims;
+
+    // Parse subscription
+    let endpoint = body["endpoint"].as_str().unwrap_or("").to_string();
+    let p256dh = body["keys"]["p256dh"].as_str().unwrap_or("").to_string();
+    let auth_key = body["keys"]["auth"].as_str().unwrap_or("").to_string();
+
+    if endpoint.is_empty() || p256dh.is_empty() || auth_key.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "missing endpoint, p256dh, or auth" })),
+        );
+    }
+
+    let sub = crate::push_store::PushSubscription {
+        endpoint,
+        p256dh,
+        auth: auth_key,
+    };
+    let mut store = state.push_store.write().await;
+    match store.add(sub) {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "ok": true }))),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": format!("save failed: {}", e) })),
+        ),
+    }
 }
 
 /// Detect network mode from request headers.
@@ -446,12 +521,17 @@ fn serve_embedded_file(path: &str) -> Response {
             "no-cache, must-revalidate"
         };
 
-        return Response::builder()
+        let mut resp = Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, mime)
-            .header(header::CACHE_CONTROL, cache_control)
-            .body(Body::from(file.data.into_owned()))
-            .unwrap();
+            .header(header::CACHE_CONTROL, cache_control);
+
+        // Service worker must never be cached by CDN — stale sw.js breaks push notifications
+        if path == "sw.js" {
+            resp = resp.header("CDN-Cache-Control", "no-store");
+        }
+
+        return resp.body(Body::from(file.data.into_owned())).unwrap();
     }
 
     // Try with .html extension

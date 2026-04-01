@@ -15,6 +15,8 @@ pub mod poller;
 pub mod preset_routes;
 pub mod preset_store;
 pub mod proxy;
+pub mod push;
+pub mod push_store;
 pub mod routes;
 pub mod snapshot_routes;
 pub mod snapshot_store;
@@ -80,6 +82,8 @@ pub struct AppState {
     pub preset_store: Arc<preset_store::PresetStore>,
     /// Channel customization storage (pin/hide preferences)
     pub customization_store: Arc<customization_store::CustomizationStore>,
+    /// Push subscription storage for Web Push notifications (#133)
+    pub push_store: Arc<RwLock<push_store::PushStore>>,
     /// Band members discovered from REAPER (source of truth)
     pub discovered_members: Arc<RwLock<Vec<DiscoveredMember>>>,
     /// Listen mode target (Idle / Member).
@@ -173,6 +177,7 @@ impl AppState {
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
             preset_store: Arc::new(preset_store::PresetStore::new(config_dir)),
             customization_store: Arc::new(customization_store::CustomizationStore::new(config_dir)),
+            push_store: Arc::new(RwLock::new(push_store::PushStore::load(config_dir))),
             discovered_members: Arc::new(RwLock::new(Vec::new())),
             engineer_listen_target: Arc::new(RwLock::new(ListenTarget::Idle)),
             #[cfg(feature = "audio")]

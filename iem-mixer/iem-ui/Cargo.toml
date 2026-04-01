@@ -1,6 +1,6 @@
 [package]
 name = "iem-ui"
-version = "1.124.0"
+version = "1.125.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Leptos WASM frontend for IEM mixer"
@@ -71,6 +71,13 @@ web-sys = { version = "0.3", features = [
     "MediaStream",
     "MediaStreamConstraints",
     "MediaStreamTrack",
+    # Web Push subscription API (#133)
+    "ServiceWorkerContainer",
+    "ServiceWorkerRegistration",
+    "PushManager",
+    "PushSubscription",
+    "PushSubscriptionOptionsInit",
+    "PushSubscriptionJson",
 ] }
 js-sys = "0.3"
 
