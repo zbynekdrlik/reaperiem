@@ -473,6 +473,26 @@ fn subscribe_to_push() {
             }
         };
 
+        // Unsubscribe any existing push subscription first (required when VAPID key changes,
+        // otherwise Chrome rejects subscribe() with a different applicationServerKey)
+        if let Ok(existing_promise) = push_manager.get_subscription() {
+            if let Ok(existing_val) = wasm_bindgen_futures::JsFuture::from(existing_promise).await {
+                if !existing_val.is_null() && !existing_val.is_undefined() {
+                    if let Ok(existing_sub) = existing_val.dyn_into::<web_sys::PushSubscription>() {
+                        let _ = wasm_bindgen_futures::JsFuture::from(
+                            existing_sub.unsubscribe().unwrap_or_else(|_| {
+                                js_sys::Promise::resolve(&wasm_bindgen::JsValue::TRUE)
+                            }),
+                        )
+                        .await;
+                        web_sys::console::log_1(
+                            &"[push] unsubscribed old push subscription".into(),
+                        );
+                    }
+                }
+            }
+        }
+
         // Decode base64url VAPID key to Uint8Array
         let key_bytes = match base64url_decode(&vapid_key) {
             Some(b) => b,
@@ -530,34 +550,29 @@ fn subscribe_to_push() {
             Err(_) => return,
         };
 
-        let _ = gloo_net::http::Request::post("/api/push/subscribe")
+        let req = match gloo_net::http::Request::post("/api/push/subscribe")
             .header("Authorization", &format!("Bearer {}", token))
             .json(&body)
-            .map_err(|e| {
+        {
+            Ok(r) => r,
+            Err(e) => {
                 web_sys::console::warn_1(&format!("[push] serialize error: {:?}", e).into());
-            })
-            .ok()
-            .map(|req| {
-                wasm_bindgen_futures::spawn_local(async move {
-                    match req.send().await {
-                        Ok(r) if r.ok() => {
-                            web_sys::console::log_1(
-                                &"[push] engineer subscribed to Web Push".into(),
-                            );
-                        }
-                        Ok(r) => {
-                            web_sys::console::warn_1(
-                                &format!("[push] subscribe POST failed: {}", r.status()).into(),
-                            );
-                        }
-                        Err(e) => {
-                            web_sys::console::warn_1(
-                                &format!("[push] subscribe POST error: {:?}", e).into(),
-                            );
-                        }
-                    }
-                });
-            });
+                return;
+            }
+        };
+        match req.send().await {
+            Ok(r) if r.ok() => {
+                web_sys::console::log_1(&"[push] engineer subscribed to Web Push".into());
+            }
+            Ok(r) => {
+                web_sys::console::warn_1(
+                    &format!("[push] subscribe POST failed: {}", r.status()).into(),
+                );
+            }
+            Err(e) => {
+                web_sys::console::warn_1(&format!("[push] subscribe POST error: {:?}", e).into());
+            }
+        }
     });
 }
 

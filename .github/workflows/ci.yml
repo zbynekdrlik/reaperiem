@@ -648,17 +648,18 @@ jobs:
           }
           Write-Host "Installed: $exePath"
 
-          # Deploy config
+          # Deploy config (only if not present — never overwrite, preserves
+          # auto-generated secrets like jwt_secret and vapid_private_key)
           $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
           if (-not (Test-Path $configDir)) {
             New-Item -ItemType Directory -Path $configDir -Force | Out-Null
           }
-          Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
           if (-not (Test-Path "$configDir\config.yaml")) {
-            Write-Host "::error::Config copy failed"
-            exit 1
+            Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
+            Write-Host "Config: deployed fresh config.yaml"
+          } else {
+            Write-Host "Config: $configDir\config.yaml already exists, preserving secrets"
           }
-          Write-Host "Config: $configDir\config.yaml"
 
           # Deploy TLS certificates
           $tlsCert = "$env:TLS_CERT_PEM"
