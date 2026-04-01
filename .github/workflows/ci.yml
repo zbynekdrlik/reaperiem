@@ -1103,11 +1103,12 @@ jobs:
           Write-Host "Dynamic registration result: $result"
 
       - name: Deploy WASM to REAPER www root
-        shell: cmd
+        shell: powershell
         run: |
-          robocopy wasm-dist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer" /E /IS /IT /R:5 /W:2
-          if %ERRORLEVEL% GEQ 8 (echo ERROR: Failed to deploy WASM to REAPER www root && exit /b 1)
-          echo WASM deployed to REAPER www root
+          $exitCode = (Start-Process -FilePath "robocopy" -ArgumentList 'wasm-dist "C:\Program Files\REAPER (x64)\Plugins\reaper_www_root\iem-mixer" /E /IS /IT /R:5 /W:2' -Wait -PassThru -NoNewWindow).ExitCode
+          Write-Host "Robocopy exit code: $exitCode"
+          if ($exitCode -ge 8) { Write-Error "Robocopy failed with exit code $exitCode"; exit 1 }
+          Write-Host "WASM deployed to REAPER www root"
 
       - name: Verify WASM deployment
         shell: cmd
