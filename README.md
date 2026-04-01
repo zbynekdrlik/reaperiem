@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.126.0 (2026-04-01)
+
+- **Fix**: CI deploy jobs no longer get cancelled — cross-workflow runner concurrency group serializes self-hosted runner usage
+- **Fix**: Nightly backup timeout added (10 min) to prevent runner monopolization
+
 ### v1.125.0 (2026-03-31)
 
 - **Feature**: Web Push notifications for SOS alert — engineer gets notified even when app is closed or screen is off (#133)
