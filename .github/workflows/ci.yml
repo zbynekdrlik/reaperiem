@@ -413,7 +413,7 @@ jobs:
   build-tauri:
     name: Build Tauri (Windows)
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     needs: [test, build-wasm]
     steps:
       - uses: actions/checkout@v4

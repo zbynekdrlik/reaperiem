@@ -4,6 +4,8 @@ use gloo_storage::{LocalStorage, Storage};
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 
 fn default_true() -> bool {
     true
@@ -59,9 +61,16 @@ pub fn SettingsModal(
     /// Whether the current user is an engineer (shows Audio section)
     #[prop(default = false)]
     is_engineer: bool,
+    /// Whether the member has a profile photo (#16)
+    #[prop(default = false.into())]
+    has_photo: Signal<bool>,
+    /// Callback to update has_photo state after upload/delete (#16)
+    #[prop(optional)]
+    set_has_photo: Option<WriteSignal<bool>>,
 ) -> impl IntoView {
     // StoredValue is Copy + Send + Sync — closures inside view! can use it freely
     let member_id = StoredValue::new(member_id);
+    let file_input_ref = NodeRef::<leptos::html::Input>::new();
 
     // Listen boost signal (engineer-only, loaded from settings)
     let initial_boost = if is_engineer {
@@ -82,6 +91,120 @@ pub fn SettingsModal(
                         "\u{00D7}"
                     </button>
                     <h2>"Settings"</h2>
+
+                    // Profile Photo section (#16)
+                    <div class="settings-section">
+                        <div class="settings-section-title">"Profile Photo"</div>
+                        <div class="photo-upload-row">
+                            <div class="photo-preview">
+                                {move || if has_photo.get() {
+                                    let url = format!("/api/members/{}/photo?t={}", member_id.get_value(), js_sys::Date::now() as u64);
+                                    view! { <img class="photo-preview-img" src=url /> }.into_any()
+                                } else {
+                                    let ch = member_id.get_value().chars().next().unwrap_or('?').to_uppercase().to_string();
+                                    view! { <span class="photo-preview-initial">{ch}</span> }.into_any()
+                                }}
+                            </div>
+                            <div class="photo-actions">
+                                <button class="settings-action-btn" on:click=move |_| {
+                                    if let Some(input) = file_input_ref.get() {
+                                        let _ = input.click();
+                                    }
+                                }>
+                                    "Change Photo"
+                                </button>
+                                <Show when=move || has_photo.get() fallback=|| ()>
+                                    <button class="settings-action-btn" on:click=move |_| {
+                                        let mid = member_id.get_value();
+                                        let set_hp = set_has_photo;
+                                        wasm_bindgen_futures::spawn_local(async move {
+                                            if crate::api::delete_photo(&mid).await.is_ok() {
+                                                if let Some(set) = set_hp {
+                                                    set.set(false);
+                                                }
+                                            }
+                                        });
+                                    }>
+                                        "Remove Photo"
+                                    </button>
+                                </Show>
+                            </div>
+                        </div>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            style="display: none"
+                            node_ref=file_input_ref
+                            on:change=move |_| {
+                                let Some(input) = file_input_ref.get() else { return };
+                                let Some(files) = input.files() else { return };
+                                if files.length() == 0 { return; }
+                                let Some(file) = files.get(0) else { return };
+
+                                let reader = web_sys::FileReader::new().unwrap();
+                                let reader_clone = reader.clone();
+                                let mid = member_id.get_value();
+                                let set_hp = set_has_photo;
+
+                                let onload = Closure::once(Box::new(move || {
+                                    let result = reader_clone.result().unwrap();
+                                    let data_url: String = result.as_string().unwrap();
+
+                                    let img = web_sys::HtmlImageElement::new().unwrap();
+                                    let img_clone = img.clone();
+                                    let onload_img = Closure::once(Box::new(move || {
+                                        let w = img_clone.natural_width() as f64;
+                                        let h = img_clone.natural_height() as f64;
+
+                                        let doc = web_sys::window().unwrap().document().unwrap();
+                                        let canvas: web_sys::HtmlCanvasElement = doc
+                                            .create_element("canvas").unwrap()
+                                            .unchecked_into();
+                                        canvas.set_width(128);
+                                        canvas.set_height(128);
+                                        let ctx: web_sys::CanvasRenderingContext2d = canvas
+                                            .get_context("2d").unwrap().unwrap()
+                                            .unchecked_into();
+
+                                        // Center-crop: use shorter dimension as crop size
+                                        let crop = w.min(h);
+                                        let sx = (w - crop) / 2.0;
+                                        let sy = (h - crop) / 2.0;
+
+                                        ctx.draw_image_with_html_image_element_and_sw_and_sh_and_dx_and_dy_and_dw_and_dh(
+                                            &img_clone, sx, sy, crop, crop, 0.0, 0.0, 128.0, 128.0,
+                                        ).unwrap();
+
+                                        let jpeg_url = canvas
+                                            .to_data_url_with_type_and_encoder_options("image/jpeg", &wasm_bindgen::JsValue::from(0.85))
+                                            .unwrap();
+
+                                        // Strip "data:image/jpeg;base64," prefix
+                                        let base64 = jpeg_url.split(',').nth(1).unwrap_or("").to_string();
+
+                                        wasm_bindgen_futures::spawn_local(async move {
+                                            if crate::api::upload_photo(&mid, &base64).await.is_ok() {
+                                                if let Some(set) = set_hp {
+                                                    set.set(true);
+                                                }
+                                            }
+                                        });
+                                    }) as Box<dyn FnOnce()>);
+
+                                    img.set_onload(Some(onload_img.as_ref().unchecked_ref()));
+                                    onload_img.forget();
+                                    img.set_src(&data_url);
+                                }) as Box<dyn FnOnce()>);
+
+                                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                                onload.forget();
+                                reader.read_as_data_url(&file).unwrap();
+
+                                // Reset input so same file can be re-selected
+                                input.set_value("");
+                            }
+                        />
+                    </div>
 
                     <div class="settings-section">
                         <div class="settings-section-title">"Preferences"</div>

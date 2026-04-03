@@ -1,6 +1,6 @@
 [package]
 name = "iem-ui"
-version = "1.128.0"
+version = "1.130.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Leptos WASM frontend for IEM mixer"
@@ -78,6 +78,15 @@ web-sys = { version = "0.3", features = [
     "PushSubscription",
     "PushSubscriptionOptionsInit",
     "PushSubscriptionJson",
+    # File upload and canvas for photo resize (#16)
+    "File",
+    "FileList",
+    "FileReader",
+    "Blob",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "HtmlImageElement",
+    "Url",
 ] }
 js-sys = "0.3"
 

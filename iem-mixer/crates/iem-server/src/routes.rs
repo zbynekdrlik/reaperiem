@@ -6,7 +6,7 @@ use axum::{
     extract::Path,
     http::{Method, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{any, get, post, put},
+    routing::{any, delete, get, post, put},
 };
 use serde::{Deserialize, Serialize};
 
@@ -83,6 +83,10 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             "/api/mixer/{member_id}/customization",
             put(put_customization),
         )
+        // Member photo (profile picture) (#16)
+        .route("/api/members/{member_id}/photo", get(get_photo))
+        .route("/api/members/{member_id}/photo", post(post_photo))
+        .route("/api/members/{member_id}/photo", delete(delete_photo))
         // Raw REAPER proxy
         .route("/api/reaper/{*path}", any(reaper_proxy))
         // Audio WebSocket (engineer-only audio streaming) — must be before /ws/{member_id}
@@ -117,6 +121,7 @@ async fn get_members(
         .map(|m| MemberInfo {
             id: m.id(),
             name: m.name.clone(),
+            has_photo: state.photo_store.exists(&m.id()),
         })
         .collect();
     axum::Json(members)
@@ -126,6 +131,7 @@ async fn get_members(
 struct MemberInfo {
     id: String,
     name: String,
+    has_photo: bool,
 }
 
 /// Return the VAPID public key for browser push subscription (#133).
@@ -327,6 +333,90 @@ async fn put_customization(
             ))
         }
     }
+}
+
+#[derive(Deserialize)]
+struct PhotoUpload {
+    photo: String, // base64-encoded JPEG
+}
+
+/// Get a member's profile photo (no auth — landing page needs it)
+async fn get_photo(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+) -> Result<Response, StatusCode> {
+    match state.photo_store.load(&member_id) {
+        Some(data) => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "image/jpeg")
+            .header(header::CACHE_CONTROL, "public, max-age=3600")
+            .body(Body::from(data))
+            .unwrap()),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+/// Upload a member's profile photo (auth: own or engineer)
+async fn post_photo(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
+    Json(payload): Json<PhotoUpload>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
+
+    use base64::Engine;
+    let data = base64::engine::general_purpose::STANDARD
+        .decode(&payload.photo)
+        .map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(iem_core::ApiError::new("INVALID_DATA", "Invalid base64")),
+            )
+        })?;
+
+    if data.len() > 256 * 1024 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(iem_core::ApiError::new("TOO_LARGE", "Photo exceeds 256 KB")),
+        ));
+    }
+
+    state.photo_store.save(&member_id, &data).map_err(|e| {
+        tracing::error!("Failed to save photo: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(iem_core::ApiError::new("IO_ERROR", "Failed to save photo")),
+        )
+    })?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+/// Delete a member's profile photo (auth: own or engineer)
+async fn delete_photo(
+    State(state): State<AppState>,
+    Path(member_id): Path<String>,
+    headers: axum::http::HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<iem_core::ApiError>)> {
+    let config = state.config.read().await;
+    crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
+    drop(config);
+
+    state.photo_store.delete(&member_id).map_err(|e| {
+        tracing::error!("Failed to delete photo: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(iem_core::ApiError::new(
+                "IO_ERROR",
+                "Failed to delete photo",
+            )),
+        )
+    })?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 /// Audio WebSocket handler — delegates to proxy::ws_audio when audio feature is enabled

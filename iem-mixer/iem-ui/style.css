@@ -1349,6 +1349,13 @@ body {
   margin-bottom: 12px;
 }
 
+.member-card .avatar .avatar-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .member-card .name {
   font-size: 1rem;
   font-weight: 500;
@@ -2375,4 +2382,42 @@ body.talk-live-overlay {
     box-shadow: inset 0 0 60px rgba(244, 67, 54, 0.5);
     border: 3px solid rgba(244, 67, 54, 0.8);
   }
+}
+
+/* Profile Photo in Settings Modal (#16) */
+.photo-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+}
+
+.photo-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.photo-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-preview-initial {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: white;
+}
+
+.photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
