@@ -206,19 +206,24 @@ test.describe("Member Photos — Issue #16", () => {
     // Wait for WASM to hydrate and render member grid
     await page.waitForSelector(".member-card", { timeout: 15000 });
 
+    // Debug: check what /api/members returns in the browser
+    const membersCheck = await page.evaluate(async () => {
+      const resp = await fetch("/api/members");
+      return resp.json();
+    });
+    console.log("Members from browser fetch:", JSON.stringify(membersCheck));
+
     // Wait for avatar photo to appear (WASM needs to fetch /api/members and render)
     try {
       await page.waitForSelector(".avatar-photo", { timeout: 10000 });
     } catch {
-      // Debug: dump the avatar HTML to understand what rendered
-      const avatarHtml = await page.evaluate(() => {
-        const avatars = document.querySelectorAll(".avatar");
-        return Array.from(avatars).map((a) => a.innerHTML).join("\n");
+      // Debug: dump the full page HTML around avatars
+      const debugInfo = await page.evaluate(() => {
+        const cards = document.querySelectorAll(".member-card");
+        return Array.from(cards).map((c) => c.outerHTML).join("\n---\n");
       });
-      console.log("Avatar HTML:", avatarHtml);
-      throw new Error(
-        `No .avatar-photo found after 10s. Avatar HTML: ${avatarHtml}`,
-      );
+      console.log("Member card HTML:", debugInfo);
+      throw new Error(`No .avatar-photo found. See debug output above.`);
     }
 
     const avatarPhotos = page.locator(".avatar-photo");
