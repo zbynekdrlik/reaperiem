@@ -6,6 +6,18 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.129.0 (2026-04-03)
+
+- **Fix**: Tauri build timeout increased to 30 min (cold cargo cache on windows-latest exceeds 20 min)
+- **Chore**: Gitignore brainstorm artifacts and debug screenshots from repo
+
+### v1.128.0 (2026-04-01)
+
+- **Feature**: Pre-WASM app shell — instant loading screen with spinner before ~10s WASM download
+- **Feature**: Service worker cache-first for content-hashed WASM/JS assets (instant repeat loads)
+- **Feature**: Token expiry extended from 24 hours to 7 days (PIN entry once a week)
+- **Fix**: Robocopy exit code handling in WASM deploy step (exit 3 is success on Windows)
+
 ### v1.127.0 (2026-04-01)
 
 - **Fix**: Push subscription POST now awaited directly (was silently dropped by nested spawn_local)
