@@ -19,6 +19,8 @@ const NETWORK_TIMEOUT_MS: i32 = 5000;
 pub struct MemberInfo {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub has_photo: bool,
 }
 
 /// Re-export Channel from iem_core to avoid duplicate type
@@ -222,6 +224,40 @@ pub async fn change_pin(old_pin: &str, new_pin: &str, member: &str) -> Result<()
         Err("Wrong current PIN".to_string())
     } else if resp.status() == 400 {
         Err("PIN must be exactly 4 digits".to_string())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Upload a member's profile photo (base64 JPEG)
+pub async fn upload_photo(member_id: &str, base64_jpeg: &str) -> Result<(), String> {
+    let auth = crate::auth::get_auth().ok_or("Not logged in")?;
+    let url = format!("/api/members/{}/photo", member_id);
+    let resp = Request::post(&url)
+        .header("Authorization", &format!("Bearer {}", auth.token))
+        .json(&serde_json::json!({ "photo": base64_jpeg }))
+        .map_err(|e| format!("Request error: {e}"))?
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Delete a member's profile photo
+pub async fn delete_photo(member_id: &str) -> Result<(), String> {
+    let auth = crate::auth::get_auth().ok_or("Not logged in")?;
+    let url = format!("/api/members/{}/photo", member_id);
+    let resp = Request::delete(&url)
+        .header("Authorization", &format!("Bearer {}", auth.token))
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {e}"))?;
+    if resp.ok() {
+        Ok(())
     } else {
         Err(format!("Server error: {}", resp.status()))
     }

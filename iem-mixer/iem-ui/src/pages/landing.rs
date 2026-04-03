@@ -2,6 +2,7 @@
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
+use wasm_bindgen::JsCast;
 
 use crate::api::{MemberInfo, get_members_with_timeout};
 use crate::auth::{get_auth, is_token_expired};
@@ -148,9 +149,35 @@ fn MemberGrid(members: Vec<MemberInfo>) -> impl IntoView {
                 {members.into_iter().map(|member| {
                     let initial = member.name.chars().next().unwrap_or('?').to_uppercase().to_string();
                     let href = format!("/{}", member.id);
+                    let has_photo = member.has_photo;
+                    let photo_url = format!("/api/members/{}/photo", member.id);
+                    let initial_fallback = initial.clone();
                     view! {
                         <a href=href class="member-card">
-                            <div class="avatar">{initial}</div>
+                            <div class="avatar">
+                                {if has_photo {
+                                    let fb = initial_fallback.clone();
+                                    view! {
+                                        <img
+                                            class="avatar-photo"
+                                            src=photo_url
+                                            alt=fb.clone()
+                                            on:error=move |e| {
+                                                // Fallback: hide broken img, show initial text
+                                                if let Some(el) = e.target() {
+                                                    let el: web_sys::HtmlElement = el.unchecked_into();
+                                                    el.set_hidden(true);
+                                                    if let Some(parent) = el.parent_element() {
+                                                        parent.set_text_content(Some(&fb));
+                                                    }
+                                                }
+                                            }
+                                        />
+                                    }.into_any()
+                                } else {
+                                    view! { {initial} }.into_any()
+                                }}
+                            </div>
                             <div class="name">{member.name}</div>
                         </a>
                     }
