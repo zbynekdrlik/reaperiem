@@ -1,7 +1,0 @@
-{"type":"server-started","port":54629,"host":"0.0.0.0","url_host":"10.77.9.21","url":"http://10.77.9.21:54629","screen_dir":"/home/newlevel/devel/reaperiem/.superpowers/brainstorm/283576-1774867200/content","state_dir":"/home/newlevel/devel/reaperiem/.superpowers/brainstorm/283576-1774867200/state"}
-{"type":"screen-added","file":"/home/newlevel/devel/reaperiem/.superpowers/brainstorm/283576-1774867200/content/talk-button-ui.html"}
-{"source":"user-event","type":"click","text":"A\n    \n      Toolbar Button (beside Listen)\n      Talk button sits next to the existing Listen button in the bottom toolbar. Consistent with current layout.\n      \n        Engineer Toolbar\n        \n          Mute All\n          ▶ Listen\n          🎙 Talk\n        \n        Hold to talk • Release to stop","choice":"a","id":null,"timestamp":1774867281472}
-{"source":"user-event","type":"click","text":"A\n    \n      Toolbar Button (beside Listen)\n      Talk button sits next to the existing Listen button in the bottom toolbar. Consistent with current layout.\n      \n        Engineer Toolbar\n        \n          Mute All\n          ▶ Listen\n          🎙 Talk\n        \n        Hold to talk • Release to stop","choice":"a","id":null,"timestamp":1774867285774}
-{"type":"screen-added","file":"/home/newlevel/devel/reaperiem/.superpowers/brainstorm/283576-1774867200/content/talk-button-ui-v2.html"}
-{"type":"screen-added","file":"/home/newlevel/devel/reaperiem/.superpowers/brainstorm/283576-1774867200/content/waiting.html"}
-{"type":"server-stopped","reason":"idle timeout"}

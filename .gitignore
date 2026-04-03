@@ -37,6 +37,14 @@ Thumbs.db
 .claude/plans/
 .claude/command-history.log
 
+# Superpowers brainstorm artifacts
+.superpowers/brainstorm/
+
+# Debug screenshots
+*.png
+!web/**/*.png
+!iem-mixer/**/*.png
+
 # Playwright test artifacts
 .playwright-mcp/
 test-results/
