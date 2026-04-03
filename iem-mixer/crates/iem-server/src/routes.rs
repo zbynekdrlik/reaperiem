@@ -409,7 +409,10 @@ async fn delete_photo(
         tracing::error!("Failed to delete photo: {}", e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(iem_core::ApiError::new("IO_ERROR", "Failed to delete photo")),
+            Json(iem_core::ApiError::new(
+                "IO_ERROR",
+                "Failed to delete photo",
+            )),
         )
     })?;
 

@@ -645,6 +645,19 @@ pub fn MixerPage() -> impl IntoView {
     let (pin_modal_visible, set_pin_modal_visible) = signal(false);
     let (settings_modal_visible, set_settings_modal_visible) = signal(false);
     let (snapshot_modal_visible, set_snapshot_modal_visible) = signal(false);
+    let (has_photo, set_has_photo) = signal(false);
+
+    // Check if member has photo on mount (#16)
+    {
+        let mid = member_id();
+        wasm_bindgen_futures::spawn_local(async move {
+            if let Ok(members) = crate::api::get_members().await {
+                if let Some(m) = members.iter().find(|m| m.id == mid) {
+                    set_has_photo.set(m.has_photo);
+                }
+            }
+        });
+    }
 
     // Load user settings from localStorage
     let user_settings = UserSettings::load(&member_id());
@@ -1327,6 +1340,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_double_tap_fader=set_double_tap_fader
                 member_id=member_id()
                 is_engineer=is_engineer_own_mixer
+                has_photo=has_photo.into()
+                set_has_photo=set_has_photo
             />
 
             <PinChangeModal
