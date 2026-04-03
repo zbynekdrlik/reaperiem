@@ -1,22 +1,21 @@
 /**
- * PWA Service Worker Tests — verify SW registers and does NOT cache assets.
+ * PWA Service Worker Tests — verify SW registers and caches hashed assets.
  *
- * The service worker exists solely for PWA installation (manifest, add-to-homescreen,
- * fullscreen mode). All asset caching is delegated to the browser's HTTP cache
- * combined with Trunk's content-hashed filenames.
+ * The service worker caches content-hashed WASM/JS files (cache-first strategy)
+ * for instant repeat loads. Only files matching /[a-f0-9]{16,}\.(js|wasm)$/ are
+ * cached. index.html and unhashed files are NEVER cached in SW.
  *
- * Previous cache-first SW strategy caused blank pages after every deploy because
+ * Previous cache-ALL strategy caused blank pages after every deploy because
  * old WASM/JS assets were served from SW cache but didn't match new HTML references.
+ * Current approach only caches immutable hashed files — safe across deploys.
  */
 
 import { test, expect } from "@playwright/test";
 
 const BASE_URL = process.env.E2E_BASE_URL || "http://localhost:8080";
 
-test.describe("Service Worker — PWA without caching", () => {
-  test("service worker registers and caches are empty after activation", async ({
-    page,
-  }) => {
+test.describe("Service Worker — PWA with hashed asset caching", () => {
+  test("service worker registers and activates", async ({ page }) => {
     // Navigate to the app to trigger SW registration
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
@@ -54,29 +53,40 @@ test.describe("Service Worker — PWA without caching", () => {
     }
 
     expect(swRegistered).toBe("active");
-
-    // Verify no caches exist (SW should have purged all caches on activate)
-    const cacheNames = await page.evaluate(async () => {
-      return await caches.keys();
-    });
-
-    expect(cacheNames).toHaveLength(0);
   });
 
-  test("assets load from network, not service worker cache", async ({
+  test("hashed WASM/JS assets are cached after navigation", async ({
     page,
   }) => {
     // Navigate to app
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
-    // Make a second navigation to ensure SW is active and could intercept
+    // Reload to ensure SW is active and can intercept fetches
     await page.reload({ waitUntil: "networkidle" });
 
-    // Verify caches are still empty after navigation
-    const cacheNames = await page.evaluate(async () => {
-      return await caches.keys();
+    // Verify the iem-assets-v1 cache exists with hashed files
+    const cacheInfo = await page.evaluate(async () => {
+      const names = await caches.keys();
+      if (!names.includes("iem-assets-v1")) return { exists: false, keys: [] };
+      const cache = await caches.open("iem-assets-v1");
+      const requests = await cache.keys();
+      return {
+        exists: true,
+        keys: requests.map((r) => new URL(r.url).pathname),
+      };
     });
 
-    expect(cacheNames).toHaveLength(0);
+    expect(cacheInfo.exists).toBe(true);
+    // Should have cached at least the WASM and JS loader files
+    const hashedFiles = cacheInfo.keys.filter(
+      (k: string) => /[a-f0-9]{16,}\.(js|wasm)$/.test(k),
+    );
+    expect(hashedFiles.length).toBeGreaterThanOrEqual(1);
+
+    // Verify unhashed files are NOT in cache
+    const unhashedFiles = cacheInfo.keys.filter(
+      (k: string) => !(/[a-f0-9]{16,}\.(js|wasm)$/.test(k)),
+    );
+    expect(unhashedFiles).toHaveLength(0);
   });
 });

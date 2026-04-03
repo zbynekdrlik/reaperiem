@@ -41,10 +41,10 @@ pub struct LoginResponse {
     pub expires_in: u64,
 }
 
-/// Token expiration for members (24 hours)
-const MEMBER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
-/// Token expiration for engineers (24 hours — same as members)
-const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 24 * 60 * 60;
+/// Token expiration for members (7 days)
+const MEMBER_TOKEN_EXPIRY_SECS: u64 = 7 * 24 * 60 * 60;
+/// Token expiration for engineers (7 days — same as members)
+const ENGINEER_TOKEN_EXPIRY_SECS: u64 = 7 * 24 * 60 * 60;
 
 /// Handle login and return JWT
 pub async fn login(
@@ -393,62 +393,62 @@ mod tests {
     }
 
     #[test]
-    fn test_member_token_expiry_24h() {
+    fn test_member_token_expiry_7d() {
         let config = test_config();
         let result = issue_token(&config, "petka", false);
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
 
-        // Member tokens should have 24h expiry
+        // Member tokens should have 7-day expiry
         assert!(!response.engineer);
-        assert_eq!(response.expires_in, 24 * 60 * 60);
+        assert_eq!(response.expires_in, 7 * 24 * 60 * 60);
 
         // Verify the token claims
         let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
         assert_eq!(claims.sub, "petka");
         assert!(!claims.engineer);
 
-        // Verify expiry is approximately 24h from now (within 5 sec tolerance)
+        // Verify expiry is approximately 7 days from now (within 5 sec tolerance)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let expected_exp = now + 24 * 60 * 60;
+        let expected_exp = now + 7 * 24 * 60 * 60;
         assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
     }
 
     #[test]
-    fn test_engineer_token_expiry_24h() {
+    fn test_engineer_token_expiry_7d() {
         let config = test_config();
         let result = issue_token(&config, "engineer", true);
 
         assert!(result.is_ok());
         let response = result.unwrap().0;
 
-        // Engineer tokens should have 24h expiry (same as members)
+        // Engineer tokens should have 7-day expiry
         assert!(response.engineer);
-        assert_eq!(response.expires_in, 24 * 60 * 60);
+        assert_eq!(response.expires_in, 7 * 24 * 60 * 60);
 
         // Verify the token claims
         let claims = extract_claims(&response.token, &config.jwt_secret).unwrap();
         assert_eq!(claims.sub, "engineer");
         assert!(claims.engineer);
 
-        // Verify expiry is approximately 24h from now (within 5 sec tolerance)
+        // Verify expiry is approximately 7 days from now (within 5 sec tolerance)
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        let expected_exp = now + 24 * 60 * 60;
+        let expected_exp = now + 7 * 24 * 60 * 60;
         assert!((claims.exp as i64 - expected_exp as i64).abs() < 5);
     }
 
     #[test]
     fn test_token_expiry_constants() {
-        // Verify expiry constants are correct — both 24 hours
-        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
-        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 24 * 60 * 60);
+        // Verify expiry constants are correct — both 7 days
+        assert_eq!(MEMBER_TOKEN_EXPIRY_SECS, 7 * 24 * 60 * 60);
+        assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, 7 * 24 * 60 * 60);
 
         // Both roles should have the same expiry
         assert_eq!(ENGINEER_TOKEN_EXPIRY_SECS, MEMBER_TOKEN_EXPIRY_SECS);

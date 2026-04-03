@@ -1,18 +1,53 @@
-// IEM Mixer Service Worker — PWA shell only, no asset caching.
-// Asset caching is handled by the browser's HTTP cache + Trunk content hashes.
-// DO NOT add fetch caching here — it caused blank pages on deploy (2026-03-19).
+// IEM Mixer Service Worker — PWA shell + hashed asset caching.
+// Only content-hashed files (WASM/JS from Trunk) are cached.
+// index.html and unhashed files are NEVER cached in SW (caused blank pages 2026-03-19).
+
+const CACHE_NAME = 'iem-assets-v1';
+// Trunk outputs files like: iem-ui-c72f48fccb666eb9.js, iem-ui-c72f48fccb666eb9_bg.wasm
+const HASH_RE = /[a-f0-9]{16,}\.(js|wasm)$/;
 
 self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  // Purge ALL caches from previous versions to fix stale asset issues
+  // Delete all caches except current version
   event.waitUntil(
     caches
       .keys()
-      .then((names) => Promise.all(names.map((name) => caches.delete(name))))
+      .then((names) =>
+        Promise.all(
+          names
+            .filter((name) => name !== CACHE_NAME)
+            .map((name) => caches.delete(name))
+        )
+      )
       .then(() => self.clients.claim()),
+  );
+});
+
+// Cache-first for content-hashed assets (immutable by definition).
+// All other requests (index.html, API, unhashed files) go straight to network.
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+
+  // Only cache same-origin GET requests for hashed files
+  if (url.origin !== self.location.origin) return;
+  if (event.request.method !== "GET") return;
+  if (!HASH_RE.test(url.pathname)) return;
+
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            cache.put(event.request, response.clone());
+          }
+          return response;
+        });
+      })
+    )
   );
 });
 
