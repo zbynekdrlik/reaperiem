@@ -206,7 +206,21 @@ test.describe("Member Photos — Issue #16", () => {
     // Wait for WASM to hydrate and render member grid
     await page.waitForSelector(".member-card", { timeout: 15000 });
 
-    // Check that at least one avatar has a photo img
+    // Wait for avatar photo to appear (WASM needs to fetch /api/members and render)
+    try {
+      await page.waitForSelector(".avatar-photo", { timeout: 10000 });
+    } catch {
+      // Debug: dump the avatar HTML to understand what rendered
+      const avatarHtml = await page.evaluate(() => {
+        const avatars = document.querySelectorAll(".avatar");
+        return Array.from(avatars).map((a) => a.innerHTML).join("\n");
+      });
+      console.log("Avatar HTML:", avatarHtml);
+      throw new Error(
+        `No .avatar-photo found after 10s. Avatar HTML: ${avatarHtml}`,
+      );
+    }
+
     const avatarPhotos = page.locator(".avatar-photo");
     const count = await avatarPhotos.count();
     expect(count).toBeGreaterThanOrEqual(1);
