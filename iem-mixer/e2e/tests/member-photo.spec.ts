@@ -195,7 +195,12 @@ test.describe("Member Photos — Issue #16", () => {
       data: { photo: TINY_JPEG },
     });
 
-    // Load landing page
+    // Load landing page (clear auth to prevent auto-redirect to mixer)
+    await page.goto(BASE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      localStorage.removeItem("iem_token");
+      sessionStorage.removeItem("iem_redirected");
+    });
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
     // Wait for WASM to hydrate and render member grid
