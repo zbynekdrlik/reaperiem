@@ -99,13 +99,9 @@ fn connect_websocket(
     set_stems_bus_idx: WriteSignal<Option<usize>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
-    // Limiter signals (#72)
-    set_limiter_threshold: WriteSignal<f32>,
-    set_limiter_ceiling: WriteSignal<f32>,
-    set_limiter_release: WriteSignal<f32>,
-    set_limiter_threshold_norm: WriteSignal<f32>,
-    set_limiter_ceiling_norm: WriteSignal<f32>,
-    set_limiter_release_norm: WriteSignal<f32>,
+    // Limiter signals (#72) — single "max level" control
+    set_limiter_limit_db: WriteSignal<f32>,
+    set_limiter_limit_norm: WriteSignal<f32>,
     set_limiter_enabled: WriteSignal<bool>,
     set_limiter_loading: WriteSignal<bool>,
     set_alert_data: WriteSignal<Option<(String, String)>>,
@@ -366,20 +362,12 @@ fn connect_websocket(
                     iem_core::ServerMsg::LimiterParams {
                         track_index: _,
                         track_name: _,
-                        threshold_db,
-                        ceiling_db,
-                        release_ms,
-                        threshold_norm,
-                        ceiling_norm,
-                        release_norm,
+                        limit_db,
+                        limit_norm,
                         enabled,
                     } => {
-                        set_limiter_threshold.set(threshold_db);
-                        set_limiter_ceiling.set(ceiling_db);
-                        set_limiter_release.set(release_ms);
-                        set_limiter_threshold_norm.set(threshold_norm);
-                        set_limiter_ceiling_norm.set(ceiling_norm);
-                        set_limiter_release_norm.set(release_norm);
+                        set_limiter_limit_db.set(limit_db);
+                        set_limiter_limit_norm.set(limit_norm);
                         set_limiter_enabled.set(enabled);
                         set_limiter_loading.set(false);
                     }
@@ -716,14 +704,10 @@ pub fn MixerPage() -> impl IntoView {
     let (eq_bands, set_eq_bands) = signal(Vec::<EqBandState>::new());
     let (eq_loading, set_eq_loading) = signal(false);
 
-    // Limiter modal state (#72)
+    // Limiter modal state (#72) — single "max level" control
     let (limiter_open, set_limiter_open) = signal(Option::<(usize, String)>::None);
-    let (limiter_threshold, set_limiter_threshold) = signal(-12.0_f32);
-    let (limiter_ceiling, set_limiter_ceiling) = signal(-6.0_f32);
-    let (limiter_release, set_limiter_release) = signal(50.0_f32);
-    let (limiter_threshold_norm, set_limiter_threshold_norm) = signal(0.6_f32);
-    let (limiter_ceiling_norm, set_limiter_ceiling_norm) = signal(0.7_f32);
-    let (limiter_release_norm, set_limiter_release_norm) = signal(0.1_f32);
+    let (limiter_limit_db, set_limiter_limit_db) = signal(-6.0_f32);
+    let (limiter_limit_norm, set_limiter_limit_norm) = signal(0.0_f32);
     let (limiter_enabled, set_limiter_enabled) = signal(true);
     let (limiter_loading, set_limiter_loading) = signal(false);
 
@@ -816,12 +800,8 @@ pub fn MixerPage() -> impl IntoView {
             set_stems_bus_idx,
             set_eq_bands,
             set_eq_loading,
-            set_limiter_threshold,
-            set_limiter_ceiling,
-            set_limiter_release,
-            set_limiter_threshold_norm,
-            set_limiter_ceiling_norm,
-            set_limiter_release_norm,
+            set_limiter_limit_db,
+            set_limiter_limit_norm,
             set_limiter_enabled,
             set_limiter_loading,
             set_alert_data,
@@ -896,12 +876,8 @@ pub fn MixerPage() -> impl IntoView {
                 set_stems_bus_idx,
                 set_eq_bands,
                 set_eq_loading,
-                set_limiter_threshold,
-                set_limiter_ceiling,
-                set_limiter_release,
-                set_limiter_threshold_norm,
-                set_limiter_ceiling_norm,
-                set_limiter_release_norm,
+                set_limiter_limit_db,
+                set_limiter_limit_norm,
                 set_limiter_enabled,
                 set_limiter_loading,
                 set_alert_data,
@@ -1464,12 +1440,8 @@ pub fn MixerPage() -> impl IntoView {
                     view! {
                         <LimiterModal
                             track_name=track_name
-                            threshold_db=limiter_threshold
-                            ceiling_db=limiter_ceiling
-                            release_ms=limiter_release
-                            threshold_norm=limiter_threshold_norm
-                            ceiling_norm=limiter_ceiling_norm
-                            release_norm=limiter_release_norm
+                            limit_db=limiter_limit_db
+                            limit_norm=limiter_limit_norm
                             enabled=limiter_enabled
                             loading=limiter_loading
                             on_param_change=Callback::new(move |(param, value): (String, f32)| {

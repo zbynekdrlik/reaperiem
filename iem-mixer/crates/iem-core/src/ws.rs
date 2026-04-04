@@ -91,7 +91,7 @@ pub enum ClientMsg {
     TalkStop,
     /// Request limiter parameters for a track (loads from REAPER on-demand) (#72)
     GetLimiterParams { track_index: usize },
-    /// Set a single limiter parameter (normalized values for ReaLimit) (#72)
+    /// Set limiter max level (normalized 0-1, maps to -6 to 0 dB) (#72)
     SetLimiterParam {
         track_index: usize,
         param: String,
@@ -177,17 +177,14 @@ pub enum ServerMsg {
     TalkReleased,
     /// Engineer is talking — broadcast to all band members for red overlay (#123)
     EngineerTalking { active: bool },
-    /// Limiter parameters for a track (sent on-demand in response to GetLimiterParams) (#72)
+    /// Limiter parameters for a track — single "limit" control (#72)
     LimiterParams {
         track_index: usize,
         track_name: String,
-        threshold_db: f32,
-        ceiling_db: f32,
-        release_ms: f32,
-        /// Normalized slider values for frontend (0-1 range)
-        threshold_norm: f32,
-        ceiling_norm: f32,
-        release_norm: f32,
+        /// Max output level in dB (-6 to 0)
+        limit_db: f32,
+        /// Normalized slider position (0-1)
+        limit_norm: f32,
         enabled: bool,
     },
 }
@@ -812,7 +809,7 @@ mod tests {
     fn test_client_msg_set_limiter_param_serialization() {
         let msg = ClientMsg::SetLimiterParam {
             track_index: 23,
-            param: "threshold".to_string(),
+            param: "limit".to_string(),
             value: 0.6,
         };
         let json = serde_json::to_string(&msg).unwrap();
@@ -839,18 +836,14 @@ mod tests {
         let msg = ServerMsg::LimiterParams {
             track_index: 23,
             track_name: "PETRONELA inear".to_string(),
-            threshold_db: -12.0,
-            ceiling_db: -6.0,
-            release_ms: 50.0,
-            threshold_norm: 0.6,
-            ceiling_norm: 0.7,
-            release_norm: 0.1,
+            limit_db: -6.0,
+            limit_norm: 0.0,
             enabled: true,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("LimiterParams"));
         assert!(json.contains("PETRONELA inear"));
-        assert!(json.contains("-12"));
+        assert!(json.contains("-6"));
         let back: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, back);
     }

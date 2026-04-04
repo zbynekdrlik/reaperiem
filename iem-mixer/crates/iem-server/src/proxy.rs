@@ -2311,19 +2311,15 @@ pub async fn handle_get_limiter_params(
 
 /// Parse limiter EXTSTATE response into ServerMsg
 fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_core::ServerMsg> {
-    // Format: "OK:track=N,name=TRACKNAME,fx=IDX|threshold=V,threshold_n=N,threshold_i=I,ceiling=V,ceiling_n=N,ceiling_i=I,release=V,release_n=N,release_i=I,enabled=E"
+    // Format: "OK:track=N,name=TRACKNAME,fx=IDX|limit=V,limit_n=N,enabled=E"
     // Or: "NO_LIMITER:TRACKNAME"
     if value.starts_with("NO_LIMITER:") {
         let track_name = value.strip_prefix("NO_LIMITER:").unwrap_or("").to_string();
         return Some(iem_core::ServerMsg::LimiterParams {
             track_index,
             track_name,
-            threshold_db: 0.0,
-            ceiling_db: 0.0,
-            release_ms: 0.0,
-            threshold_norm: 0.0,
-            ceiling_norm: 0.0,
-            release_norm: 0.0,
+            limit_db: 0.0,
+            limit_norm: 0.0,
             enabled: false,
         });
     }
@@ -2355,12 +2351,8 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
     Some(iem_core::ServerMsg::LimiterParams {
         track_index,
         track_name,
-        threshold_db: get_field("threshold="),
-        ceiling_db: get_field("ceiling="),
-        release_ms: get_field("release="),
-        threshold_norm: get_field("threshold_n="),
-        ceiling_norm: get_field("ceiling_n="),
-        release_norm: get_field("release_n="),
+        limit_db: get_field("limit="),
+        limit_norm: get_field("limit_n="),
         enabled: get_field("enabled=") >= 0.5,
     })
 }

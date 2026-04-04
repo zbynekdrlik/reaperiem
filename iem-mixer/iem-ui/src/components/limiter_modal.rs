@@ -1,20 +1,16 @@
-//! Limiter modal — ReaLimit controls for IEM output bus (#72)
+//! Limiter modal — single "Max Level" control for IEM output bus (#72)
 
 use leptos::prelude::*;
 
-/// Limiter modal for controlling ReaLimit on a member's output bus
+/// Limiter modal for controlling max output level on a member's output bus
 #[component]
 pub fn LimiterModal(
     /// Track name for the header
     track_name: String,
-    /// Parameter values from server (display)
-    threshold_db: ReadSignal<f32>,
-    ceiling_db: ReadSignal<f32>,
-    release_ms: ReadSignal<f32>,
-    /// Normalized values for slider positioning (0-1)
-    threshold_norm: ReadSignal<f32>,
-    ceiling_norm: ReadSignal<f32>,
-    release_norm: ReadSignal<f32>,
+    /// Max level in dB (-6 to 0)
+    limit_db: ReadSignal<f32>,
+    /// Normalized slider position (0-1)
+    limit_norm: ReadSignal<f32>,
     /// Whether limiter FX is enabled (not bypassed)
     enabled: ReadSignal<bool>,
     /// Whether data is loading
@@ -46,27 +42,11 @@ pub fn LimiterModal(
                         view! {
                             <div class="limiter-params">
                                 <LimiterSlider
-                                    label="THRESH"
-                                    value_db=threshold_db
-                                    value_norm=threshold_norm
+                                    label="MAX LEVEL"
+                                    value_db=limit_db
+                                    value_norm=limit_norm
                                     suffix="dB"
-                                    param_name="threshold"
-                                    on_change=on_param_change
-                                />
-                                <LimiterSlider
-                                    label="CEIL"
-                                    value_db=ceiling_db
-                                    value_norm=ceiling_norm
-                                    suffix="dB"
-                                    param_name="ceiling"
-                                    on_change=on_param_change
-                                />
-                                <LimiterSlider
-                                    label="REL"
-                                    value_db=release_ms
-                                    value_norm=release_norm
-                                    suffix="ms"
-                                    param_name="release"
+                                    param_name="limit"
                                     on_change=on_param_change
                                 />
                                 <div class="limiter-toggle-row">
@@ -102,12 +82,10 @@ pub fn LimiterModal(
                                     <button
                                         class="limiter-reset-btn"
                                         on:click=move |_| {
-                                            on_param_change_reset.run(("threshold".to_string(), 0.6));
-                                            on_param_change_reset.run(("ceiling".to_string(), 0.7));
-                                            on_param_change_reset.run(("release".to_string(), 0.1));
+                                            on_param_change_reset.run(("limit".to_string(), 0.0));
                                         }
                                     >
-                                        "Reset to defaults"
+                                        "Reset to default (-6 dB)"
                                     </button>
                                 </div>
                             </div>
@@ -123,7 +101,7 @@ pub fn LimiterModal(
 /// Individual slider for a limiter parameter
 #[component]
 fn LimiterSlider(
-    /// Label shown to the left (e.g. "THRESH")
+    /// Label shown to the left (e.g. "MAX LEVEL")
     label: &'static str,
     /// Display value (dB or ms)
     value_db: ReadSignal<f32>,
