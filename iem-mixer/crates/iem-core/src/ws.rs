@@ -814,7 +814,7 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("SetLimiterParam"));
-        assert!(json.contains("threshold"));
+        assert!(json.contains("limit"));
         let back: ClientMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, back);
     }
