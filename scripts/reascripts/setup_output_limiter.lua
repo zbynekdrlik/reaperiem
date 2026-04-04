@@ -92,13 +92,16 @@ local function setup_limiter()
                     -- Rename for consistent identification
                     reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "renamed_name", "LIMITER")
 
-                    -- Set defaults (JS limiter uses direct values, not normalized)
-                    -- p0: Threshold = -12.0 dB
+                    -- Set defaults (JS limiter uses direct dB/ms values)
+                    -- CRITICAL: threshold MUST equal ceiling for transparent limiting.
+                    -- If threshold < ceiling, the limiter applies makeup gain (ceiling/threshold),
+                    -- which BOOSTS the signal — unacceptable for a safety limiter.
+                    -- p0: Threshold = -6.0 dB (safety limit level)
                     -- p1: Release = 50.0 ms
-                    -- p3: Ceiling = -0.1 dB (just below 0 to catch intersample peaks)
-                    reaper.TrackFX_SetParam(track, fx_idx, 0, -12.0)  -- Threshold
+                    -- p3: Ceiling = -6.0 dB (must equal threshold for unity gain)
+                    reaper.TrackFX_SetParam(track, fx_idx, 0, -6.0)   -- Threshold
                     reaper.TrackFX_SetParam(track, fx_idx, 1, 50.0)   -- Release
-                    reaper.TrackFX_SetParam(track, fx_idx, 3, -0.1)   -- Ceiling
+                    reaper.TrackFX_SetParam(track, fx_idx, 3, -6.0)   -- Ceiling = Threshold
 
                     inserted = inserted + 1
                     table.insert(inserted_names, name)
