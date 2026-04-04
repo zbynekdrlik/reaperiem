@@ -1482,7 +1482,7 @@ jobs:
           $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
           Write-Host "Registration result: $regResult"
 
-          if ($regResult -match "OK:1\|(.+)") {
+          if ($regResult -match "setup_output_limiter=(\d+)") {
             $actionId = $matches[1]
             Write-Host "Using dynamic action ID: $actionId"
           } else {
