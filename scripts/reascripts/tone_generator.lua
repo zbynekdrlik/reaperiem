@@ -49,13 +49,16 @@ if action == "start" then
     -- Enable the FX
     reaper.TrackFX_SetEnabled(track, fx_idx, true)
 
+    -- Unmute the track so audio flows through FX chain to VBAN sender
+    reaper.SetMediaTrackInfo_Value(track, "B_MUTE", 0)
+
     -- Configure: 440 Hz, -12 dB level
     -- JS: Tone Generator parameters: slider1=frequency, slider2=volume(dB)
     reaper.TrackFX_SetParam(track, fx_idx, 0, 440.0)  -- Frequency
     reaper.TrackFX_SetParam(track, fx_idx, 1, 0.25)    -- Volume (0.25 = -12dB normalized)
 
     reaper.SetExtState("reaperiem", "tone_gen_result",
-      "OK:inserted:fx_idx=" .. fx_idx .. ":track=" .. track_num, false)
+      "OK:inserted:fx_idx=" .. fx_idx .. ":track=" .. track_num .. ":unmuted=yes", false)
   else
     reaper.SetExtState("reaperiem", "tone_gen_result", "ERROR:insert_failed", false)
   end
@@ -72,10 +75,13 @@ elseif action == "stop" then
     end
   end
 
+  -- Re-mute the engineer track (restore normal state)
+  reaper.SetMediaTrackInfo_Value(track, "B_MUTE", 1)
+
   if removed then
-    reaper.SetExtState("reaperiem", "tone_gen_result", "OK:removed", false)
+    reaper.SetExtState("reaperiem", "tone_gen_result", "OK:removed:remuted=yes", false)
   else
-    reaper.SetExtState("reaperiem", "tone_gen_result", "OK:not_found", false)
+    reaper.SetExtState("reaperiem", "tone_gen_result", "OK:not_found:remuted=yes", false)
   end
 end
 
