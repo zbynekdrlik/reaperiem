@@ -89,6 +89,16 @@ pub enum ClientMsg {
     TalkStart,
     /// Engineer releases talkback lock (#123)
     TalkStop,
+    /// Request limiter parameters for a track (loads from REAPER on-demand) (#72)
+    GetLimiterParams { track_index: usize },
+    /// Set limiter max level (normalized 0-1, maps to -6 to 0 dB) (#72)
+    SetLimiterParam {
+        track_index: usize,
+        param: String,
+        value: f32,
+    },
+    /// Enable/disable limiter (FX bypass toggle) (#72)
+    SetLimiterEnabled { track_index: usize, enabled: bool },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -167,6 +177,16 @@ pub enum ServerMsg {
     TalkReleased,
     /// Engineer is talking — broadcast to all band members for red overlay (#123)
     EngineerTalking { active: bool },
+    /// Limiter parameters for a track — single "limit" control (#72)
+    LimiterParams {
+        track_index: usize,
+        track_name: String,
+        /// Max output level in dB (-6 to 0)
+        limit_db: f32,
+        /// Normalized slider position (0-1)
+        limit_norm: f32,
+        enabled: bool,
+    },
 }
 
 #[cfg(test)]
@@ -773,5 +793,58 @@ mod tests {
         assert!(json.contains("\"event\":\"TalkReleased\""));
         let decoded: ServerMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, decoded);
+    }
+
+    #[test]
+    fn test_client_msg_get_limiter_params_serialization() {
+        let msg = ClientMsg::GetLimiterParams { track_index: 23 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("GetLimiterParams"));
+        assert!(json.contains("23"));
+        let back: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_client_msg_set_limiter_param_serialization() {
+        let msg = ClientMsg::SetLimiterParam {
+            track_index: 23,
+            param: "limit".to_string(),
+            value: 0.6,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("SetLimiterParam"));
+        assert!(json.contains("limit"));
+        let back: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_client_msg_set_limiter_enabled_serialization() {
+        let msg = ClientMsg::SetLimiterEnabled {
+            track_index: 23,
+            enabled: false,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("SetLimiterEnabled"));
+        let back: ClientMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_server_msg_limiter_params_serialization() {
+        let msg = ServerMsg::LimiterParams {
+            track_index: 23,
+            track_name: "PETRONELA inear".to_string(),
+            limit_db: -6.0,
+            limit_norm: 0.0,
+            enabled: true,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("LimiterParams"));
+        assert!(json.contains("PETRONELA inear"));
+        assert!(json.contains("-6"));
+        let back: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
     }
 }

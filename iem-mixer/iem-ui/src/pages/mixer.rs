@@ -12,6 +12,7 @@ use crate::components::alert_toast::AlertToast;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::eq_modal::{EQModal, EqBandState};
 use crate::components::fader::Fader;
+use crate::components::limiter_modal::LimiterModal;
 use crate::components::meter::Meter;
 use crate::components::pan::PanKnob;
 use crate::components::pin_change_modal::PinChangeModal;
@@ -98,6 +99,11 @@ fn connect_websocket(
     set_stems_bus_idx: WriteSignal<Option<usize>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
+    // Limiter signals (#72) — single "max level" control
+    set_limiter_limit_db: WriteSignal<f32>,
+    set_limiter_limit_norm: WriteSignal<f32>,
+    set_limiter_enabled: WriteSignal<bool>,
+    set_limiter_loading: WriteSignal<bool>,
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
@@ -352,6 +358,18 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::EqParamsMulti { .. } => {
                         // Handled by preset modal (future integration)
+                    }
+                    iem_core::ServerMsg::LimiterParams {
+                        track_index: _,
+                        track_name: _,
+                        limit_db,
+                        limit_norm,
+                        enabled,
+                    } => {
+                        set_limiter_limit_db.set(limit_db);
+                        set_limiter_limit_norm.set(limit_norm);
+                        set_limiter_enabled.set(enabled);
+                        set_limiter_loading.set(false);
                     }
                 }
             }
@@ -686,6 +704,13 @@ pub fn MixerPage() -> impl IntoView {
     let (eq_bands, set_eq_bands) = signal(Vec::<EqBandState>::new());
     let (eq_loading, set_eq_loading) = signal(false);
 
+    // Limiter modal state (#72) — single "max level" control
+    let (limiter_open, set_limiter_open) = signal(Option::<(usize, String)>::None);
+    let (limiter_limit_db, set_limiter_limit_db) = signal(-6.0_f32);
+    let (limiter_limit_norm, set_limiter_limit_norm) = signal(0.0_f32);
+    let (limiter_enabled, set_limiter_enabled) = signal(true);
+    let (limiter_loading, set_limiter_loading) = signal(false);
+
     // Channel customization (pin/hide) — loaded from server via WS
     let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
     let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
@@ -775,6 +800,10 @@ pub fn MixerPage() -> impl IntoView {
             set_stems_bus_idx,
             set_eq_bands,
             set_eq_loading,
+            set_limiter_limit_db,
+            set_limiter_limit_norm,
+            set_limiter_enabled,
+            set_limiter_loading,
             set_alert_data,
             alert_data,
             set_alert_active,
@@ -847,6 +876,10 @@ pub fn MixerPage() -> impl IntoView {
                 set_stems_bus_idx,
                 set_eq_bands,
                 set_eq_loading,
+                set_limiter_limit_db,
+                set_limiter_limit_norm,
+                set_limiter_enabled,
+                set_limiter_loading,
                 set_alert_data,
                 alert_data,
                 set_alert_active,
@@ -1234,6 +1267,9 @@ pub fn MixerPage() -> impl IntoView {
                                 set_eq_open=set_eq_open
                                 set_eq_bands=set_eq_bands
                                 set_eq_loading=set_eq_loading
+                                is_engineer=is_engineer
+                                set_limiter_open=set_limiter_open
+                                set_limiter_loading=set_limiter_loading
                             />
                         </Show>
                         <Show
@@ -1395,6 +1431,53 @@ pub fn MixerPage() -> impl IntoView {
                     }
                 }}
             </Show>
+
+            // Limiter Modal (#72)
+            <Show when=move || limiter_open.get().is_some() fallback=|| ()>
+                {move || {
+                    let (_track_idx, track_name) = limiter_open.get().unwrap();
+                    let ws_for_lim = ws;
+                    view! {
+                        <LimiterModal
+                            track_name=track_name
+                            limit_db=limiter_limit_db
+                            limit_norm=limiter_limit_norm
+                            enabled=limiter_enabled
+                            loading=limiter_loading
+                            on_param_change=Callback::new(move |(param, value): (String, f32)| {
+                                if let Some((ti, _)) = limiter_open.get_untracked() {
+                                    // Optimistic local update (no server echo)
+                                    set_limiter_limit_norm.set(value);
+                                    set_limiter_limit_db.set(value * 6.0 - 6.0);
+                                    ws_send(ws_for_lim, &iem_core::ClientMsg::SetLimiterParam {
+                                        track_index: ti,
+                                        param,
+                                        value,
+                                    });
+                                }
+                            })
+                            on_enabled_change=Callback::new(move |en: bool| {
+                                if let Some((ti, _)) = limiter_open.get_untracked() {
+                                    ws_send(ws_for_lim, &iem_core::ClientMsg::SetLimiterEnabled {
+                                        track_index: ti,
+                                        enabled: en,
+                                    });
+                                    set_limiter_enabled.set(en);
+                                }
+                            })
+                            on_close=Callback::new(move |_: ()| {
+                                let cb = Closure::once_into_js(move || {
+                                    set_limiter_open.set(None);
+                                });
+                                web_sys::window()
+                                    .unwrap()
+                                    .set_timeout_with_callback(cb.as_ref().unchecked_ref())
+                                    .unwrap();
+                            })
+                        />
+                    }
+                }}
+            </Show>
         </div>
     }
 }
@@ -1414,6 +1497,9 @@ fn GlobalVolumeFader(
     set_eq_open: WriteSignal<Option<(usize, String)>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
+    is_engineer: bool,
+    set_limiter_open: WriteSignal<Option<(usize, String)>>,
+    set_limiter_loading: WriteSignal<bool>,
 ) -> impl IntoView {
     let (is_fader_active, set_is_fader_active) = signal(false);
 
@@ -1586,11 +1672,10 @@ fn GlobalVolumeFader(
                 />
             </div>
 
-            <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
-
             <div class="pan-container"></div>
 
-            <div class="channel-btns">
+            <div class="channel-btns global-vol-btns">
+                <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
                 <button
                     class="eq-btn-small"
                     on:click=move |_| {
@@ -1607,6 +1692,23 @@ fn GlobalVolumeFader(
                 >
                     "EQ"
                 </button>
+                {is_engineer.then(|| view! {
+                    <button
+                        class="limiter-btn-small"
+                        on:click=move |_| {
+                            if let Some(idx) = output_track_idx.get() {
+                                set_limiter_loading.set(true);
+                                set_limiter_open.set(Some((idx, "IEM VOL".to_string())));
+                                ws_send(
+                                    ws,
+                                    &iem_core::ClientMsg::GetLimiterParams { track_index: idx },
+                                );
+                            }
+                        }
+                    >
+                        "LIM"
+                    </button>
+                })}
                 <button
                     class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                     on:click=on_mute_click

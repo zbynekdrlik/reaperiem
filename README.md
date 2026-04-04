@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.130.0 (2026-04-04)
+
+- **Feature**: Member profile photos — upload from Settings modal, displayed as circular avatars on landing page (#16)
+- **Feature**: Client-side photo resize (128×128 center-crop JPEG) — no size restrictions for users
+- **Feature**: Photo API with auth (members own photo, engineers any member)
+
 ### v1.129.0 (2026-04-03)
 
 - **Fix**: Tauri build timeout increased to 30 min (cold cargo cache on windows-latest exceeds 20 min)

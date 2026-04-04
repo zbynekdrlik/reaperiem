@@ -1074,6 +1074,27 @@ jobs:
           } else {
             Write-Host "setup_talkback.lua already registered"
           }
+          # Register setup_output_limiter.lua
+          if ($content -notmatch "RS_REAPERIEM_SETUP_LIMITER") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SETUP_LIMITER "Custom: Setup output limiter on inear tracks" reaperiem\setup_output_limiter.lua'
+            Write-Host "Registered setup_output_limiter.lua"
+          } else {
+            Write-Host "setup_output_limiter.lua already registered"
+          }
+          # Register read_limiter_params.lua
+          if ($content -notmatch "RS_REAPERIEM_READ_LIMITER") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_READ_LIMITER "Custom: Read limiter params from track" reaperiem\read_limiter_params.lua'
+            Write-Host "Registered read_limiter_params.lua"
+          } else {
+            Write-Host "read_limiter_params.lua already registered"
+          }
+          # Register set_limiter_param.lua
+          if ($content -notmatch "RS_REAPERIEM_SET_LIMITER") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_SET_LIMITER "Custom: Set limiter param on track" reaperiem\set_limiter_param.lua'
+            Write-Host "Registered set_limiter_param.lua"
+          } else {
+            Write-Host "set_limiter_param.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -1097,7 +1118,7 @@ jobs:
           }
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
           Start-Sleep -Seconds 3
           $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
           Write-Host "Dynamic registration result: $result"
@@ -1450,6 +1471,37 @@ jobs:
             exit 1
           }
 
+      - name: Setup output limiter on inear tracks
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 2
+
+          # Register and get dynamic action ID
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_output_limiter.lua" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+          $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing).Content
+          Write-Host "Registration result: $regResult"
+
+          if ($regResult -match "setup_output_limiter=(\d+)") {
+            $actionId = $matches[1]
+            Write-Host "Using dynamic action ID: $actionId"
+          } else {
+            Write-Host "::error::Failed to register setup_output_limiter.lua dynamically: $regResult"
+            exit 1
+          }
+
+          # Trigger setup
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/$actionId" -UseBasicParsing | Out-Null
+          Start-Sleep -Seconds 3
+
+          $response = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/limiter_setup_result" -UseBasicParsing).Content
+          Write-Host "Limiter setup result: $response"
+
+          if ($response -match "ERROR") {
+            Write-Host "::error::setup_output_limiter.lua failed: $response"
+            exit 1
+          }
+
       - name: Setup and verify VBAN IEM on engineer track
         shell: powershell
         run: |
@@ -1478,7 +1530,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"

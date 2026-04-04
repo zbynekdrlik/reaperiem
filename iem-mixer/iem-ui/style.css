@@ -963,6 +963,16 @@ body {
   display: contents;
 }
 
+/* Override for global volume / stems faders: flex row spanning right side */
+.channel-btns.global-vol-btns {
+  display: flex;
+  gap: 4px;
+  grid-column: solo / -1;
+  grid-row: 1;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 /* ================================================================
    Bottom Toolbar
    ================================================================ */
@@ -2420,4 +2430,218 @@ body.talk-live-overlay {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Limiter Modal (#72) */
+.limiter-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.limiter-modal {
+  width: 100%;
+  height: 100%;
+  max-width: 500px;
+  max-height: 100dvh;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.limiter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.limiter-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.limiter-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.4em;
+  padding: 8px;
+  cursor: pointer;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.limiter-close-btn:active {
+  color: var(--text-primary);
+}
+
+.limiter-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 1em;
+  flex: 1;
+}
+
+.limiter-params {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.limiter-param-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.limiter-param-label {
+  font-size: 0.78em;
+  color: var(--text-muted);
+  width: 48px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.limiter-slider-track {
+  flex: 1;
+  height: 6px;
+  background: var(--fader-track-bg);
+  border-radius: 3px;
+  position: relative;
+  min-height: var(--touch-min);
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.limiter-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  background: #ff6b6b;
+  border-radius: 3px 0 0 3px;
+  pointer-events: none;
+}
+
+.limiter-slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  border: 2px solid white;
+  pointer-events: none;
+  transition: transform 0.1s ease;
+}
+
+.limiter-slider-track.activating .limiter-slider-thumb {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.limiter-slider-track.active .limiter-slider-thumb {
+  transform: translate(-50%, -50%) scale(1.3);
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.5);
+}
+
+.limiter-param-value {
+  font-size: 0.78em;
+  color: var(--text-secondary);
+  width: 60px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.limiter-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.limiter-toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 0.85em;
+  cursor: pointer;
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+}
+
+.limiter-toggle-btn.on {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4caf50;
+}
+
+.limiter-toggle-btn.off {
+  background: rgba(255, 107, 107, 0.2);
+  color: #ff6b6b;
+}
+
+.limiter-warning {
+  color: #ff6b6b;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+.limiter-reset-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--text-muted);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.85em;
+}
+
+.limiter-reset-btn:active {
+  background: var(--bg-secondary);
+}
+
+.limiter-btn-small {
+  width: 42px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.6em;
+  cursor: pointer;
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  transition: background 0.15s;
+}
+
+.limiter-btn-small:active {
+  background: rgba(255, 107, 107, 0.35);
 }

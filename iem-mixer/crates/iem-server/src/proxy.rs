@@ -1140,6 +1140,56 @@ async fn handle_ws(
                                 continue;
                             }
 
+                            // Handle Limiter commands (async EXTSTATE + ReaScript flow) (#72)
+                            if let iem_core::ClientMsg::GetLimiterParams { track_index } = cmd {
+                                let state_clone = state.clone();
+                                let member_clone = member_id.clone();
+                                tokio::spawn(async move {
+                                    if let Some(lim_msg) =
+                                        handle_get_limiter_params(&state_clone, track_index).await
+                                    {
+                                        let _ = state_clone.event_tx.send((member_clone, lim_msg));
+                                    }
+                                });
+                                continue;
+                            }
+                            if let iem_core::ClientMsg::SetLimiterParam {
+                                track_index,
+                                ref param,
+                                value,
+                            } = cmd
+                            {
+                                let state_clone = state.clone();
+                                let param_clone = param.clone();
+                                tokio::spawn(async move {
+                                    handle_set_limiter_param(
+                                        &state_clone,
+                                        track_index,
+                                        &param_clone,
+                                        value,
+                                    )
+                                    .await;
+                                });
+                                continue;
+                            }
+                            if let iem_core::ClientMsg::SetLimiterEnabled {
+                                track_index,
+                                enabled,
+                            } = cmd
+                            {
+                                let state_clone = state.clone();
+                                tokio::spawn(async move {
+                                    handle_set_limiter_param(
+                                        &state_clone,
+                                        track_index,
+                                        "enabled",
+                                        if enabled { 1.0 } else { 0.0 },
+                                    )
+                                    .await;
+                                });
+                                continue;
+                            }
+
                             // Handle band member alert to engineer (#125)
                             if let ClientMsg::CallEngineer = cmd {
                                 // No-op if alert already active for this member
@@ -1671,6 +1721,11 @@ async fn apply_command_to_cache(
             // EQ commands are handled in WS handler before apply_command_to_cache is called
             return Err("EQ commands should not reach apply_command_to_cache".to_string());
         }
+        iem_core::ClientMsg::GetLimiterParams { .. }
+        | iem_core::ClientMsg::SetLimiterParam { .. }
+        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+            return Err("Limiter commands handled before apply_command_to_cache".to_string());
+        }
     }
 
     let (url, track_index, broadcast) = match cmd {
@@ -1825,6 +1880,11 @@ async fn apply_command_to_cache(
         | iem_core::ClientMsg::SetEqBand { .. }
         | iem_core::ClientMsg::GetEqParamsMulti { .. } => {
             unreachable!("EQ commands handled before apply_command_to_cache")
+        }
+        iem_core::ClientMsg::GetLimiterParams { .. }
+        | iem_core::ClientMsg::SetLimiterParam { .. }
+        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+            unreachable!("Limiter commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
             let mute_val: u8 = if *muted { 1 } else { 0 };
@@ -2188,6 +2248,156 @@ async fn handle_set_eq_band(
             tracing::error!(track_index, band, param, result, "EQ: set_eq_param failed");
         } else {
             tracing::debug!(track_index, band, param, result, "EQ: param set OK");
+        }
+    }
+}
+
+// =============================================================================
+// Limiter handlers (EXTSTATE + ReaScript async flow) (#72)
+// =============================================================================
+
+/// Read limiter parameters from REAPER via EXTSTATE + ReaScript
+pub async fn handle_get_limiter_params(
+    state: &AppState,
+    track_index: usize,
+) -> Option<iem_core::ServerMsg> {
+    let _read_lock = state.limiter_read_lock.lock().await;
+
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    // Set EXTSTATE with track index
+    let set_url = reaper_api::set_extstate(
+        &reaper_url,
+        "reaperiem",
+        "limiter_read_track",
+        &track_index.to_string(),
+    );
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            "Limiter: failed to set limiter_read_track EXTSTATE"
+        );
+        return None;
+    }
+
+    // Trigger read_limiter_params.lua action
+    let action_url = reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_READ_LIMITER");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            "Limiter: failed to trigger READ_LIMITER action"
+        );
+        return None;
+    }
+
+    // Wait for script execution
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    // Read result from EXTSTATE
+    let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "limiter_params");
+    let resp = state.http_client.get(&get_url).send().await.ok()?;
+    let text = resp.text().await.ok()?;
+
+    let value = text.split('\t').nth(3)?;
+    if value.is_empty() || value.starts_with("ERROR") {
+        tracing::warn!(track_index, value, "Limiter: read failed");
+        return None;
+    }
+
+    parse_limiter_params_response(track_index, value)
+}
+
+/// Parse limiter EXTSTATE response into ServerMsg
+fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_core::ServerMsg> {
+    // Format: "OK:track=N,name=TRACKNAME,fx=IDX|limit=V,limit_n=N,enabled=E"
+    // Or: "NO_LIMITER:TRACKNAME"
+    if value.starts_with("NO_LIMITER:") {
+        let track_name = value.strip_prefix("NO_LIMITER:").unwrap_or("").to_string();
+        return Some(iem_core::ServerMsg::LimiterParams {
+            track_index,
+            track_name,
+            limit_db: 0.0,
+            limit_norm: 0.0,
+            enabled: false,
+        });
+    }
+
+    if !value.starts_with("OK:") {
+        return None;
+    }
+
+    let parts: Vec<&str> = value.splitn(2, '|').collect();
+    let header = parts[0];
+    let params = if parts.len() > 1 { parts[1] } else { "" };
+
+    let track_name = header
+        .split(',')
+        .find(|s| s.starts_with("name="))
+        .and_then(|s| s.strip_prefix("name="))
+        .unwrap_or("")
+        .to_string();
+
+    let get_field = |prefix: &str| -> f32 {
+        params
+            .split(',')
+            .find(|s| s.trim().starts_with(prefix))
+            .and_then(|s| s.trim().strip_prefix(prefix))
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .unwrap_or(0.0)
+    };
+
+    Some(iem_core::ServerMsg::LimiterParams {
+        track_index,
+        track_name,
+        limit_db: get_field("limit="),
+        limit_norm: get_field("limit_n="),
+        enabled: get_field("enabled=") >= 0.5,
+    })
+}
+
+/// Set a single limiter parameter in REAPER via EXTSTATE + ReaScript
+async fn handle_set_limiter_param(state: &AppState, track_index: usize, param: &str, value: f32) {
+    let _lock = state.limiter_write_lock.lock().await;
+
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    let set_value = format!("track={}|param={}|value={:.6}", track_index, param, value);
+    let set_url = reaper_api::set_extstate(&reaper_url, "reaperiem", "limiter_set", &set_value);
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            param,
+            "Limiter: failed to set limiter_set EXTSTATE"
+        );
+        return;
+    }
+
+    let action_url = reaper_api::trigger_action(&reaper_url, "_RS_REAPERIEM_SET_LIMITER");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            param,
+            "Limiter: failed to trigger SET_LIMITER action"
+        );
+        return;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Read result for logging
+    let get_url = reaper_api::get_extstate(&reaper_url, "reaperiem", "limiter_set_result");
+    if let Ok(resp) = state.http_client.get(&get_url).send().await
+        && let Ok(text) = resp.text().await
+        && let Some(result) = text.split('\t').nth(3)
+    {
+        if result.starts_with("ERROR") {
+            tracing::error!(track_index, param, result, "Limiter: set param failed");
+        } else {
+            tracing::debug!(track_index, param, result, "Limiter: param set OK");
         }
     }
 }
