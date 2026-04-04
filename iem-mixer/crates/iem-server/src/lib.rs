@@ -112,6 +112,10 @@ pub struct AppState {
     /// uses a shared EXTSTATE slot, so concurrent reads would clobber.
     /// Note: this does NOT protect reads vs writes (they use different keys).
     pub eq_read_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Mutex to serialize limiter EXTSTATE writes (#72)
+    pub limiter_write_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Mutex to serialize limiter EXTSTATE reads (#72)
+    pub limiter_read_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Global IEM output volume state for a member
@@ -198,6 +202,8 @@ impl AppState {
             },
             eq_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
+            limiter_write_lock: Arc::new(tokio::sync::Mutex::new(())),
+            limiter_read_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 }
