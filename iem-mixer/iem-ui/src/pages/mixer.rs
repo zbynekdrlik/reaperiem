@@ -1446,6 +1446,9 @@ pub fn MixerPage() -> impl IntoView {
                             loading=limiter_loading
                             on_param_change=Callback::new(move |(param, value): (String, f32)| {
                                 if let Some((ti, _)) = limiter_open.get_untracked() {
+                                    // Optimistic local update (no server echo)
+                                    set_limiter_limit_norm.set(value);
+                                    set_limiter_limit_db.set(value * 6.0 - 6.0);
                                     ws_send(ws_for_lim, &iem_core::ClientMsg::SetLimiterParam {
                                         track_index: ti,
                                         param,
