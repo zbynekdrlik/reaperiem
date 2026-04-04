@@ -144,30 +144,29 @@ Same as above but sets the FX bypass state via `TrackFX_SetEnabled()`.
 
 ## Frontend UI
 
-### Limiter Status Indicator (mixer header bar)
+### Limiter Button (dedicated, like EQ buttons)
 
-- **Shield icon** on the mixer page header, next to existing controls
-- **Green** = limiter active and healthy
-- **Red/warning** = limiter bypassed or missing (should almost never happen)
-- Visible to ALL users (members and engineers)
-- Tapping the shield opens the limiter panel (engineers only)
+A dedicated **"LIMIT" button** on the mixer page, placed in the output/master section area (below the channel strips or in a fixed bottom bar). Similar to how each channel strip has an "EQ" button, the limiter button controls the current member's output bus.
 
-### Limiter Panel (engineer-only)
+- **Engineer view:** Button is interactive — tapping opens the Limiter Modal
+- **Member view:** Button is hidden (members don't need to see or interact with the limiter)
 
-A compact panel (not a full modal — simpler than EQ) with:
+### Limiter Modal (engineer-only)
 
-- **Ceiling slider:** -20 to 0 dB (the hard maximum)
-- **Threshold slider:** -30 to 0 dB (where limiting starts)
+A modal dialog (follows the same pattern as `EQModal`) containing:
+
+- **Ceiling slider:** -20 to 0 dB (the hard maximum output level)
+- **Threshold slider:** -30 to 0 dB (where limiting begins)
 - **Release slider:** 1–500 ms
 - **Enable/disable toggle** with prominent warning when disabled
-- **Gain reduction indicator:** Shows real-time GR when the limiter is actively working (read from REAPER via the existing poller or on-demand)
+- **Gain reduction indicator:** Shows real-time GR when the limiter is actively working (read from REAPER on-demand when modal is open)
 - **Reset to defaults** button
+- **Track name** displayed at top (e.g., "PETRONELA inear — Limiter")
 
 ### Access Control
 
-- **Engineers:** Full control — can adjust all parameters on any member's output
-- **Members:** Read-only — see the shield icon (green = protected), cannot modify settings
-- The limiter is a safety device. Members shouldn't be able to weaken their own hearing protection.
+- **Engineers:** See the LIMIT button, can open modal and adjust all parameters on any member's output
+- **Members:** Button is hidden — limiter is a safety device that shouldn't be user-adjustable
 
 ---
 
@@ -223,7 +222,7 @@ ReaLimit FX state persists in the REAPER project file (.RPP). Once inserted and 
 | `scripts/reascripts/set_limiter_param.lua` | **New** — Set limiter param via EXTSTATE |
 | `iem-mixer/crates/iem-core/src/ws.rs` | Modify — Add limiter WS message types |
 | `iem-mixer/crates/iem-server/src/proxy.rs` | Modify — Add limiter handlers |
-| `iem-mixer/iem-ui/src/components/limiter_panel.rs` | **New** — Limiter UI component |
+| `iem-mixer/iem-ui/src/components/limiter_modal.rs` | **New** — Limiter modal component (follows EQModal pattern) |
 | `iem-mixer/iem-ui/src/pages/mixer.rs` | Modify — Wire limiter panel + shield icon |
 | `iem-mixer/iem-ui/style.css` | Modify — Limiter panel styles |
 | `iem-mixer/e2e/tests/limiter.spec.ts` | **New** — E2E tests |
