@@ -191,7 +191,16 @@ fn LimiterSlider(
                 <div class="limiter-slider-thumb" style=move || format!("left:{}%", pct()) />
             </div>
             <span class="limiter-param-value">
-                {move || format!("{:.1} {}", value_db.get(), suffix)}
+                {move || {
+                    // When dragging, compute dB from local norm (range: -6 to 0 dB)
+                    // When idle, use server value
+                    let db = if is_active.get() {
+                        local_norm.get() * 6.0 - 6.0
+                    } else {
+                        value_db.get()
+                    };
+                    format!("{:.1} {}", db, suffix)
+                }}
             </span>
         </div>
     }

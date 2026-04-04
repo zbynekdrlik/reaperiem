@@ -72,9 +72,9 @@ local function set_limiter()
         return
     end
 
-    -- Convert normalized 0-1 → -24 to 0 dB (clamped to ceiling range -6 to 0)
-    local limit_db = value * 24 - 24
-    -- Clamp to valid range: ceiling is -6 to 0, threshold is -30 to 0
+    -- Convert normalized 0-1 → -6 to 0 dB
+    -- Must match read_limiter_params.lua normalization: norm = (dB + 6) / 6
+    local limit_db = value * 6 - 6
     limit_db = math.max(-6, math.min(0, limit_db))
 
     -- Set BOTH threshold and ceiling to the same value = unity gain
