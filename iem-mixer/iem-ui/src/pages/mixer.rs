@@ -1672,11 +1672,10 @@ fn GlobalVolumeFader(
                 />
             </div>
 
-            <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
-
             <div class="pan-container"></div>
 
             <div class="channel-btns global-vol-btns">
+                <div class="db-display" data-value=move || level.get()>{move || format_db(level.get())}</div>
                 <button
                     class="eq-btn-small"
                     on:click=move |_| {
