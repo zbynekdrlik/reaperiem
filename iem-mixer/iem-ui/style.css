@@ -963,11 +963,12 @@ body {
   display: contents;
 }
 
-/* Override for global volume / stems faders: flex row spanning solo+mute+db areas */
+/* Override for global volume / stems faders: flex row in solo+mute columns */
 .channel-btns.global-vol-btns {
   display: flex;
   gap: 4px;
-  grid-area: solo / solo / solo / pan;
+  grid-column: solo / db;
+  grid-row: 1;
   align-items: center;
   justify-content: flex-end;
 }
