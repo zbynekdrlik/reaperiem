@@ -46,7 +46,7 @@ ReaLimit is REAPER's built-in brickwall limiter. It has a small parameter set:
 | **Release** | 1–500 ms | 50 ms | How quickly the limiter stops reducing gain after a peak |
 | **Enabled** | on/off | on | FX bypass toggle |
 
-**Fixed (not user-adjustable):** Attack is effectively 0 ms (brickwall behavior). Lookahead is enabled if available. These are not exposed in the UI to prevent members or engineers from accidentally weakening protection.
+**Fixed (not user-adjustable):** Attack is effectively 0 ms (brickwall behavior). **Lookahead is disabled** — it adds latency (1-5 ms) which is unacceptable for live IEM monitoring where performers need real-time audio feedback. ReaLimit's instant attack is sufficient without lookahead. These settings are not exposed in the UI to prevent members or engineers from accidentally weakening protection.
 
 **Parameter discovery:** The setup ReaScript will enumerate ReaLimit's parameters by name using `TrackFX_GetParamName()` and map them to indices dynamically, rather than hardcoding indices. This is the same approach used for ReaEQ.
 
