@@ -1673,7 +1673,7 @@ fn GlobalVolumeFader(
 
             <div class="pan-container"></div>
 
-            <div class="channel-btns">
+            <div class="channel-btns global-vol-btns">
                 <button
                     class="eq-btn-small"
                     on:click=move |_| {

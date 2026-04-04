@@ -2342,9 +2342,9 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
     let get_field = |prefix: &str| -> f32 {
         params
             .split(',')
-            .find(|s| s.starts_with(prefix))
-            .and_then(|s| s.strip_prefix(prefix))
-            .and_then(|v| v.parse::<f32>().ok())
+            .find(|s| s.trim().starts_with(prefix))
+            .and_then(|s| s.trim().strip_prefix(prefix))
+            .and_then(|v| v.trim().parse::<f32>().ok())
             .unwrap_or(0.0)
     };
 
