@@ -1472,7 +1472,6 @@ jobs:
           }
 
       - name: Setup output limiter on inear tracks
-        if: steps.deploy-app.outcome == 'success'
         shell: powershell
         run: |
           Start-Sleep -Seconds 2

@@ -38,13 +38,6 @@ local function find_param_idx(track, fx_idx, name_pattern)
     return -1
 end
 
--- Convert a real value to normalized 0-1 using parameter range
-local function to_normalized(track, fx_idx, param_idx, real_value)
-    local _, minval, maxval = reaper.TrackFX_GetParamEx(track, fx_idx, param_idx)
-    if maxval == minval then return 0.5 end
-    return (real_value - minval) / (maxval - minval)
-end
-
 local function setup_limiter()
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
@@ -84,18 +77,19 @@ local function setup_limiter()
                     end
                     local release_idx = find_param_idx(track, fx_idx, "release")
 
-                    -- Set defaults: Threshold = -12 dB, Ceiling = -6 dB, Release = 50 ms
+                    -- Set defaults using hardcoded normalized values
+                    -- (discovered empirically from ReaLimit parameter mapping):
+                    --   Threshold: norm = (dB + 60) / 72   → -12 dB = 0.6667
+                    --   Ceiling:   norm = (dB + 24) / 24   → -6 dB  = 0.75
+                    --   Release:   non-linear inverse       → 50 ms  = 0.006
                     if thresh_idx >= 0 then
-                        local norm = to_normalized(track, fx_idx, thresh_idx, -12.0)
-                        reaper.TrackFX_SetParam(track, fx_idx, thresh_idx, norm)
+                        reaper.TrackFX_SetParam(track, fx_idx, thresh_idx, 0.6667)
                     end
                     if ceil_idx >= 0 then
-                        local norm = to_normalized(track, fx_idx, ceil_idx, -6.0)
-                        reaper.TrackFX_SetParam(track, fx_idx, ceil_idx, norm)
+                        reaper.TrackFX_SetParam(track, fx_idx, ceil_idx, 0.75)
                     end
                     if release_idx >= 0 then
-                        local norm = to_normalized(track, fx_idx, release_idx, 50.0)
-                        reaper.TrackFX_SetParam(track, fx_idx, release_idx, norm)
+                        reaper.TrackFX_SetParam(track, fx_idx, release_idx, 0.006)
                     end
 
                     inserted = inserted + 1
