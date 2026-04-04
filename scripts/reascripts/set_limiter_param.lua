@@ -65,36 +65,29 @@ local function set_limiter()
         return
     end
 
-    -- Convert normalized slider value (0-1) to real parameter value
-    -- and set the appropriate parameter index
-    local param_idx
-    local real_value
-    if param_name == "threshold" then
-        -- norm 0-1 → -60 to 0 dB
-        param_idx = 0
-        real_value = value * 60 - 60
-    elseif param_name == "ceiling" then
-        -- norm 0-1 → -24 to 0 dB
-        param_idx = 3
-        real_value = value * 24 - 24
-    elseif param_name == "release" then
-        -- norm 0-1 → 1 to 500 ms
-        param_idx = 1
-        real_value = value * 499 + 1
-    else
-        reaper.SetExtState(section, "limiter_set_result", "ERROR:unknown_param:" .. param_name, false)
+    -- Only "limit" param is supported (sets both threshold AND ceiling to same value)
+    -- This ensures volume = ceiling/threshold = 1.0 (unity gain, no boost)
+    if param_name ~= "limit" then
+        reaper.SetExtState(section, "limiter_set_result", "ERROR:unknown_param:" .. param_name .. ":use_limit", false)
         return
     end
 
-    -- JS limiter takes direct values (dB, ms), not normalized
-    reaper.TrackFX_SetParam(track, lim_idx, param_idx, real_value)
+    -- Convert normalized 0-1 → -24 to 0 dB (clamped to ceiling range -6 to 0)
+    local limit_db = value * 24 - 24
+    -- Clamp to valid range: ceiling is -6 to 0, threshold is -30 to 0
+    limit_db = math.max(-6, math.min(0, limit_db))
+
+    -- Set BOTH threshold and ceiling to the same value = unity gain
+    reaper.TrackFX_SetParam(track, lim_idx, 0, limit_db)  -- Threshold (p0)
+    reaper.TrackFX_SetParam(track, lim_idx, 3, limit_db)  -- Ceiling (p3)
 
     -- Read back for confirmation
-    local actual = reaper.TrackFX_GetParam(track, lim_idx, param_idx)
+    local actual_thresh = reaper.TrackFX_GetParam(track, lim_idx, 0)
+    local actual_ceil = reaper.TrackFX_GetParam(track, lim_idx, 3)
 
     reaper.SetExtState(section, "limiter_set_result",
-        string.format("OK:track=%d,param=%s,value=%.6f,formatted=%.2f",
-            track_idx, param_name, value, actual), false)
+        string.format("OK:track=%d,param=limit,value=%.6f,threshold=%.2f,ceiling=%.2f",
+            track_idx, value, actual_thresh, actual_ceil), false)
 end
 
 local ok, err = pcall(set_limiter)

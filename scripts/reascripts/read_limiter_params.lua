@@ -45,29 +45,20 @@ local function read_limiter()
         return
     end
 
-    -- JS limiter params are direct values (dB, ms), not normalized 0-1
-    -- p0=Threshold(dB), p1=Release(ms), p3=Ceiling(dB)
-    local threshold = reaper.TrackFX_GetParam(track, lim_idx, 0)
-    local release = reaper.TrackFX_GetParam(track, lim_idx, 1)
+    -- Read the limit level (ceiling = threshold, both should be equal for unity gain)
+    -- We read ceiling as the authoritative limit value
     local ceiling = reaper.TrackFX_GetParam(track, lim_idx, 3)
 
-    -- For the frontend slider positioning, compute normalized values
-    -- Threshold range: -60 to 0 dB → norm = (dB + 60) / 60
-    -- Ceiling range: -24 to 0 dB → norm = (dB + 24) / 24
-    -- Release range: 1 to 500 ms → norm = (ms - 1) / 499
-    local thresh_norm = math.max(0, math.min(1, (threshold + 60) / 60))
-    local ceil_norm = math.max(0, math.min(1, (ceiling + 24) / 24))
-    local release_norm = math.max(0, math.min(1, (release - 1) / 499))
+    -- Normalized: -6 to 0 dB range → norm = (dB + 6) / 6
+    local limit_norm = math.max(0, math.min(1, (ceiling + 6) / 6))
 
     -- Check FX enabled state (bypass)
     local enabled = reaper.TrackFX_GetEnabled(track, lim_idx) and "1" or "0"
 
     local result = string.format(
-        "OK:track=%d,name=%s,fx=%d|threshold=%.2f,threshold_n=%.6f,ceiling=%.2f,ceiling_n=%.6f,release=%.1f,release_n=%.6f,enabled=%s",
+        "OK:track=%d,name=%s,fx=%d|limit=%.2f,limit_n=%.6f,enabled=%s",
         track_idx, tname, lim_idx,
-        threshold, thresh_norm,
-        ceiling, ceil_norm,
-        release, release_norm,
+        ceiling, limit_norm,
         enabled
     )
 
