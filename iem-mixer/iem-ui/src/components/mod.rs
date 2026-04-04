@@ -6,6 +6,7 @@ pub mod audio_player;
 pub mod category_tabs;
 pub mod eq_modal;
 pub mod fader;
+pub mod limiter_modal;
 pub mod meter;
 pub mod pan;
 pub mod pin_change_modal;
