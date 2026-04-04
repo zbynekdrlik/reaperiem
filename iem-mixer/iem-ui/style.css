@@ -2561,6 +2561,10 @@ body.talk-live-overlay {
   transition: transform 0.1s ease;
 }
 
+.limiter-slider-track.activating .limiter-slider-thumb {
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
 .limiter-slider-track.active .limiter-slider-thumb {
   transform: translate(-50%, -50%) scale(1.3);
   box-shadow: 0 0 8px rgba(255, 107, 107, 0.5);
