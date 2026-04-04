@@ -1,38 +1,44 @@
--- Setup Output Limiter
--- Inserts ReaLimit as the last FX on all output (inear) tracks.
--- Idempotent: skips tracks that already have ReaLimit.
+-- Setup Output Limiter (Zero-Latency)
+-- Inserts JS:loser/MGA_JSLimiterST on all output (inear) tracks.
+-- Uses JS limiter instead of ReaLimit to avoid 960-sample lookahead latency.
+-- Inserts BEFORE any VBAN sender (VBAN must be last in chain).
+-- Removes any existing ReaLimit (migration from v1.131.0 initial deploy).
+-- Idempotent: skips tracks that already have the JS limiter.
+--
+-- JS limiter params (direct values, not normalized):
+--   p0: Threshold (dB)  — default -12.0
+--   p1: Release (ms)    — default 50.0
+--   p3: Ceiling (dB)    — default -0.1
 --
 -- Action ID: _RS_REAPERIEM_SETUP_LIMITER
 -- Result written to EXTSTATE: reaperiem/limiter_setup_result
 
 local section = "reaperiem"
+local LIMITER_FX = "loser/MGA_JSLimiterST"
 
 local function needs_limiter(name)
     return name:lower():match("inear")
 end
 
-local function is_limiter(fx_name)
-    return fx_name:match("ReaLimit") or fx_name:match("^LIMITER$") or fx_name:match("^LIMITER ")
+local function is_js_limiter(fx_name)
+    return fx_name:match("MGA_JSLimiter")
 end
 
-local function has_limiter(track)
+local function is_any_limiter(fx_name)
+    return fx_name:match("ReaLimit") or fx_name:match("MGA_JSLimiter")
+        or fx_name:match("^LIMITER$") or fx_name:match("^LIMITER ")
+end
+
+local function is_vban(fx_name)
+    return fx_name:match("VBAN")
+end
+
+local function find_fx(track, check_fn)
     local fx_count = reaper.TrackFX_GetCount(track)
     for i = 0, fx_count - 1 do
         local _, fx_name = reaper.TrackFX_GetFXName(track, i)
-        if is_limiter(fx_name) then
-            return true, i
-        end
-    end
-    return false, -1
-end
-
--- Find parameter index by name substring match
-local function find_param_idx(track, fx_idx, name_pattern)
-    local num_params = reaper.TrackFX_GetNumParams(track, fx_idx)
-    for p = 0, num_params - 1 do
-        local _, pname = reaper.TrackFX_GetParamName(track, fx_idx, p)
-        if pname:lower():match(name_pattern) then
-            return p
+        if check_fn(fx_name) then
+            return i
         end
     end
     return -1
@@ -45,6 +51,7 @@ local function setup_limiter()
     local count = reaper.CountTracks(0)
     local inserted = 0
     local skipped = 0
+    local migrated = 0
     local inserted_names = {}
     local skipped_names = {}
     local errors = {}
@@ -54,48 +61,49 @@ local function setup_limiter()
         local _, name = reaper.GetTrackName(track)
 
         if needs_limiter(name) then
-            local has, _ = has_limiter(track)
-            if has then
+            -- Step 1: Remove any old limiter (ReaLimit or renamed "LIMITER")
+            local old_idx = find_fx(track, is_any_limiter)
+            while old_idx >= 0 do
+                reaper.TrackFX_Delete(track, old_idx)
+                migrated = migrated + 1
+                old_idx = find_fx(track, is_any_limiter)
+            end
+
+            -- Step 2: Check if JS limiter already exists (by exact plugin name)
+            local existing = find_fx(track, is_js_limiter)
+            if existing >= 0 then
                 skipped = skipped + 1
                 table.insert(skipped_names, name)
             else
-                -- Insert ReaLimit as the LAST FX on the track
+                -- Step 3: Find insert position (before VBAN sender if present)
                 local fx_count = reaper.TrackFX_GetCount(track)
-                local fx_idx = reaper.TrackFX_AddByName(track, "ReaLimit", false, -1000 - fx_count)
+                local vban_idx = find_fx(track, is_vban)
+                local insert_pos
+                if vban_idx >= 0 then
+                    -- Insert before VBAN sender
+                    insert_pos = vban_idx
+                else
+                    -- Insert at end
+                    insert_pos = fx_count
+                end
+
+                local fx_idx = reaper.TrackFX_AddByName(track, LIMITER_FX, false, -1000 - insert_pos)
                 if fx_idx >= 0 then
                     -- Rename for consistent identification
                     reaper.TrackFX_SetNamedConfigParm(track, fx_idx, "renamed_name", "LIMITER")
 
-                    -- Discover parameter indices by name
-                    local thresh_idx = find_param_idx(track, fx_idx, "thresh")
-                    local ceil_idx = find_param_idx(track, fx_idx, "ceil")
-                    if ceil_idx < 0 then
-                        ceil_idx = find_param_idx(track, fx_idx, "output")
-                    end
-                    if ceil_idx < 0 then
-                        ceil_idx = find_param_idx(track, fx_idx, "limit")
-                    end
-                    local release_idx = find_param_idx(track, fx_idx, "release")
-
-                    -- Set defaults using hardcoded normalized values
-                    -- (discovered empirically from ReaLimit parameter mapping):
-                    --   Threshold: norm = (dB + 60) / 72   → -12 dB = 0.6667
-                    --   Ceiling:   norm = (dB + 24) / 24   → -6 dB  = 0.75
-                    --   Release:   non-linear inverse       → 50 ms  = 0.006
-                    if thresh_idx >= 0 then
-                        reaper.TrackFX_SetParam(track, fx_idx, thresh_idx, 0.6667)
-                    end
-                    if ceil_idx >= 0 then
-                        reaper.TrackFX_SetParam(track, fx_idx, ceil_idx, 0.75)
-                    end
-                    if release_idx >= 0 then
-                        reaper.TrackFX_SetParam(track, fx_idx, release_idx, 0.006)
-                    end
+                    -- Set defaults (JS limiter uses direct values, not normalized)
+                    -- p0: Threshold = -12.0 dB
+                    -- p1: Release = 50.0 ms
+                    -- p3: Ceiling = -0.1 dB (just below 0 to catch intersample peaks)
+                    reaper.TrackFX_SetParam(track, fx_idx, 0, -12.0)  -- Threshold
+                    reaper.TrackFX_SetParam(track, fx_idx, 1, 50.0)   -- Release
+                    reaper.TrackFX_SetParam(track, fx_idx, 3, -0.1)   -- Ceiling
 
                     inserted = inserted + 1
                     table.insert(inserted_names, name)
                 else
-                    table.insert(errors, "Failed to insert ReaLimit on: " .. name)
+                    table.insert(errors, "Failed to insert JS limiter on: " .. name)
                 end
             end
         end
@@ -106,7 +114,7 @@ local function setup_limiter()
     reaper.UpdateArrange()
     reaper.Undo_EndBlock("Setup Output Limiter", -1)
 
-    local result = string.format("OK:inserted=%d,skipped=%d", inserted, skipped)
+    local result = string.format("OK:inserted=%d,skipped=%d,migrated=%d", inserted, skipped, migrated)
     if #inserted_names > 0 then
         result = result .. ",inserted_tracks=" .. table.concat(inserted_names, ";")
     end

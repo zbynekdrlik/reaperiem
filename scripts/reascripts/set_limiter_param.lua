@@ -1,8 +1,15 @@
--- Set Limiter Parameter
--- Sets a single ReaLimit parameter on a track.
+-- Set Limiter Parameter (Zero-Latency JS Limiter)
+-- Sets a single JS:loser/MGA_JSLimiterST parameter on a track.
 -- Parameters passed via EXTSTATE: reaperiem/limiter_set
 --   Format: "track=N|param=P|value=V"
---   param: "threshold", "ceiling", "release" (normalized 0-1), or "enabled" (0/1)
+--   param: "threshold" (dB), "ceiling" (dB), "release" (ms), or "enabled" (0/1)
+--   value: For threshold/ceiling/release, this is NORMALIZED 0-1 from the frontend.
+--          The script converts to real values using known ranges.
+--
+-- JS limiter param indices:
+--   p0: Threshold (dB)  range: -60 to 0
+--   p1: Release (ms)    range: 1 to 500
+--   p3: Ceiling (dB)    range: -24 to 0
 --
 -- Action ID: _RS_REAPERIEM_SET_LIMITER
 -- Result written to EXTSTATE: reaperiem/limiter_set_result
@@ -13,19 +20,8 @@ local function find_limiter(track)
     local fx_count = reaper.TrackFX_GetCount(track)
     for i = 0, fx_count - 1 do
         local _, fx_name = reaper.TrackFX_GetFXName(track, i)
-        if fx_name:match("ReaLimit") or fx_name:match("^LIMITER$") or fx_name:match("^LIMITER ") then
+        if fx_name:match("MGA_JSLimiter") or fx_name:match("^LIMITER$") or fx_name:match("^LIMITER ") then
             return i
-        end
-    end
-    return -1
-end
-
-local function find_param_idx(track, fx_idx, name_pattern)
-    local num_params = reaper.TrackFX_GetNumParams(track, fx_idx)
-    for p = 0, num_params - 1 do
-        local _, pname = reaper.TrackFX_GetParamName(track, fx_idx, p)
-        if pname:lower():match(name_pattern) then
-            return p
         end
     end
     return -1
@@ -69,42 +65,36 @@ local function set_limiter()
         return
     end
 
-    -- Map param name to search pattern
-    local search_pattern
-    if param_name == "threshold" then search_pattern = "thresh"
-    elseif param_name == "ceiling" then search_pattern = "ceil"
-    elseif param_name == "release" then search_pattern = "release"
+    -- Convert normalized slider value (0-1) to real parameter value
+    -- and set the appropriate parameter index
+    local param_idx
+    local real_value
+    if param_name == "threshold" then
+        -- norm 0-1 → -60 to 0 dB
+        param_idx = 0
+        real_value = value * 60 - 60
+    elseif param_name == "ceiling" then
+        -- norm 0-1 → -24 to 0 dB
+        param_idx = 3
+        real_value = value * 24 - 24
+    elseif param_name == "release" then
+        -- norm 0-1 → 1 to 500 ms
+        param_idx = 1
+        real_value = value * 499 + 1
     else
-        if param_name == "output" then search_pattern = "output"
-        elseif param_name == "limit" then search_pattern = "limit"
-        else
-            reaper.SetExtState(section, "limiter_set_result", "ERROR:unknown_param:" .. param_name, false)
-            return
-        end
-    end
-
-    local param_idx = find_param_idx(track, lim_idx, search_pattern)
-    if param_idx < 0 and param_name == "ceiling" then
-        param_idx = find_param_idx(track, lim_idx, "output")
-    end
-    if param_idx < 0 and param_name == "ceiling" then
-        param_idx = find_param_idx(track, lim_idx, "limit")
-    end
-
-    if param_idx < 0 then
-        reaper.SetExtState(section, "limiter_set_result", "ERROR:param_not_found:" .. param_name, false)
+        reaper.SetExtState(section, "limiter_set_result", "ERROR:unknown_param:" .. param_name, false)
         return
     end
 
-    -- Set the parameter (normalized 0-1)
-    reaper.TrackFX_SetParam(track, lim_idx, param_idx, value)
+    -- JS limiter takes direct values (dB, ms), not normalized
+    reaper.TrackFX_SetParam(track, lim_idx, param_idx, real_value)
 
-    -- Read back formatted value for confirmation
-    local _, fmt = reaper.TrackFX_GetFormattedParamValue(track, lim_idx, param_idx)
+    -- Read back for confirmation
+    local actual = reaper.TrackFX_GetParam(track, lim_idx, param_idx)
 
     reaper.SetExtState(section, "limiter_set_result",
-        string.format("OK:track=%d,param=%s,value=%.6f,formatted=%s",
-            track_idx, param_name, value, fmt), false)
+        string.format("OK:track=%d,param=%s,value=%.6f,formatted=%.2f",
+            track_idx, param_name, value, actual), false)
 end
 
 local ok, err = pcall(set_limiter)
