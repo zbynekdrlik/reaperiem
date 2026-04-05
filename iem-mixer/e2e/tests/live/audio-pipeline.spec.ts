@@ -256,11 +256,7 @@ test.describe("Audio Pipeline (OIEM UDP → WebSocket)", () => {
       body: JSON.stringify({ member: "petronela", pin: "7711" }),
     });
 
-    if (!resp.ok) {
-      // Member might not exist in CI — skip gracefully
-      console.log("[ASSUME SKIP] petronela member not available");
-      return;
-    }
+    expect(resp.ok).toBe(true);
 
     const data = await resp.json();
     const wsUrl = `${BASE_URL.replace("http", "ws")}/ws/audio?token=${data.token}`;
@@ -351,12 +347,7 @@ test.describe("Audio Pipeline (OIEM UDP → WebSocket)", () => {
 
     ws.close();
 
-    if (opusFrames.length < 5) {
-      console.log(
-        `[ASSUME SKIP] Only ${opusFrames.length} real Opus frames received — REAPER likely not running`,
-      );
-      return;
-    }
+    expect(opusFrames.length).toBeGreaterThanOrEqual(5);
 
     // Validate Opus TOC byte structure on each frame
     // Opus TOC byte: config(5 bits) | stereo(1 bit) | frame_count_code(2 bits)

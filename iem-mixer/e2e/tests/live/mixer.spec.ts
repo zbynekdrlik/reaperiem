@@ -2218,24 +2218,11 @@ test.describe("Solo sync", () => {
     await loginAs(page2, "petronela");
     await page2.goto("/petronela");
 
-    if (!(await waitForMixer(page1))) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
-    if (!(await waitForMixer(page2))) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    await waitForMixer(page1);
+    await waitForMixer(page2);
 
     const soloBtn1 = page1.locator(".solo-btn").first();
-    if ((await soloBtn1.count()) === 0) {
-      console.log("[ASSUME SKIP] No solo buttons found");
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    expect(await soloBtn1.count()).toBeGreaterThan(0);
 
     await soloBtn1.click({ force: true });
 
@@ -2263,10 +2250,7 @@ test.describe("Solo sync", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) {
-      await ctx.close();
-      return;
-    }
+    await waitForMixer(page);
 
     const channelBtns = await page
       .waitForSelector(".channel-btns", { timeout: 3000 })

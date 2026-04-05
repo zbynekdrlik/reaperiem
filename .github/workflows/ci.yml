@@ -133,7 +133,7 @@ jobs:
         run: |
           echo "Checking for banned skip patterns in E2E tests..."
           FOUND=0
-          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer"; do
+          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer" "ASSUME SKIP"; do
             HITS=$(grep -rn "$pattern" iem-mixer/e2e/tests/ 2>/dev/null || true)
             if [ -n "$HITS" ]; then
               echo "BANNED pattern found: $pattern"

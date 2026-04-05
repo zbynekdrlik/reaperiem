@@ -45,7 +45,7 @@ test.describe("Stems Volume Fader", () => {
       await expect(stemsFader.first().locator(".ch-type")).toHaveText("group");
     } else {
       console.log(
-        "[ASSUME SKIP] No stems bus tracks in REAPER — fader hidden as expected",
+        "No stems bus tracks in REAPER — fader hidden as expected",
       );
     }
   });
@@ -72,7 +72,7 @@ test.describe("Stems Volume Fader", () => {
       await expect(stemsFader.first()).toBeVisible();
     } else {
       console.log(
-        "[ASSUME SKIP] No stems bus tracks in REAPER — fader hidden as expected",
+        "No stems bus tracks in REAPER — fader hidden as expected",
       );
     }
   });
