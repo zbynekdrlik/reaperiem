@@ -1,34 +1,19 @@
 import { test, expect } from "@playwright/test";
 
-// Precondition check: logs explicitly and returns false when condition is not met.
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 test.describe("Issue #106 - PIN Keyboard Input", () => {
   test("can enter PIN digits using keyboard number keys", async ({ page }) => {
     // Navigate to login page for a member
     const membersRes = await page.request.get("/api/members");
-    if (!assume(membersRes.ok(), "Server not available")) return;
+    expect(membersRes.ok()).toBe(true);
     const members = await membersRes.json();
-    if (!assume(members.length > 0, "No members configured")) return;
+    expect(members.length).toBeGreaterThan(0);
 
     const member = members[0].id;
     await page.goto(`/login?member=${member}&next=/${member}`);
 
     // Wait for numpad to render (WASM hydration)
     const numpad = page.locator(".numpad");
-    const numpadLoaded = await numpad
-      .waitFor({ state: "visible", timeout: 10000 })
-      .catch(() => null);
-    if (
-      !assume(numpadLoaded, "Numpad must be visible (requires WASM hydration)")
-    )
-      return;
+    await expect(numpad).toBeVisible({ timeout: 10000 });
 
     // Type 2 digits via keyboard
     await page.keyboard.press("7");
@@ -50,21 +35,15 @@ test.describe("Issue #106 - PIN Keyboard Input", () => {
 
   test("keyboard ignores non-digit keys", async ({ page }) => {
     const membersRes = await page.request.get("/api/members");
-    if (!assume(membersRes.ok(), "Server not available")) return;
+    expect(membersRes.ok()).toBe(true);
     const members = await membersRes.json();
-    if (!assume(members.length > 0, "No members configured")) return;
+    expect(members.length).toBeGreaterThan(0);
 
     const member = members[0].id;
     await page.goto(`/login?member=${member}&next=/${member}`);
 
     const numpad = page.locator(".numpad");
-    const numpadLoaded = await numpad
-      .waitFor({ state: "visible", timeout: 10000 })
-      .catch(() => null);
-    if (
-      !assume(numpadLoaded, "Numpad must be visible (requires WASM hydration)")
-    )
-      return;
+    await expect(numpad).toBeVisible({ timeout: 10000 });
 
     // Press non-digit keys — should not enter any digits
     await page.keyboard.press("a");
@@ -78,21 +57,15 @@ test.describe("Issue #106 - PIN Keyboard Input", () => {
 
   test("Delete key clears PIN", async ({ page }) => {
     const membersRes = await page.request.get("/api/members");
-    if (!assume(membersRes.ok(), "Server not available")) return;
+    expect(membersRes.ok()).toBe(true);
     const members = await membersRes.json();
-    if (!assume(members.length > 0, "No members configured")) return;
+    expect(members.length).toBeGreaterThan(0);
 
     const member = members[0].id;
     await page.goto(`/login?member=${member}&next=/${member}`);
 
     const numpad = page.locator(".numpad");
-    const numpadLoaded = await numpad
-      .waitFor({ state: "visible", timeout: 10000 })
-      .catch(() => null);
-    if (
-      !assume(numpadLoaded, "Numpad must be visible (requires WASM hydration)")
-    )
-      return;
+    await expect(numpad).toBeVisible({ timeout: 10000 });
 
     // Enter 3 digits then Delete to clear
     await page.keyboard.press("1");
@@ -108,21 +81,15 @@ test.describe("Issue #106 - PIN Keyboard Input", () => {
 
   test("full keyboard PIN entry triggers auto-submit", async ({ page }) => {
     const membersRes = await page.request.get("/api/members");
-    if (!assume(membersRes.ok(), "Server not available")) return;
+    expect(membersRes.ok()).toBe(true);
     const members = await membersRes.json();
-    if (!assume(members.length > 0, "No members configured")) return;
+    expect(members.length).toBeGreaterThan(0);
 
     const member = members[0].id;
     await page.goto(`/login?member=${member}&next=/${member}`);
 
     const numpad = page.locator(".numpad");
-    const numpadLoaded = await numpad
-      .waitFor({ state: "visible", timeout: 10000 })
-      .catch(() => null);
-    if (
-      !assume(numpadLoaded, "Numpad must be visible (requires WASM hydration)")
-    )
-      return;
+    await expect(numpad).toBeVisible({ timeout: 10000 });
 
     // Type 4 digits (default PIN 7711) — should auto-submit and redirect
     await page.keyboard.press("7");
