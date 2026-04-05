@@ -129,6 +129,24 @@ jobs:
           fi
           echo "No continue-on-error found - all steps are hard gates"
 
+      - name: Ban assume()/skip patterns in E2E tests
+        run: |
+          echo "Checking for banned skip patterns in E2E tests..."
+          FOUND=0
+          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer" "ASSUME SKIP"; do
+            HITS=$(grep -rn "$pattern" iem-mixer/e2e/tests/ 2>/dev/null || true)
+            if [ -n "$HITS" ]; then
+              echo "BANNED pattern found: $pattern"
+              echo "$HITS"
+              FOUND=1
+            fi
+          done
+          if [ "$FOUND" = "1" ]; then
+            echo "::error::E2E tests contain banned assume/skip patterns. Tests must use expect() and fail loudly."
+            exit 1
+          fi
+          echo "OK: No assume/skip patterns found in E2E tests"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -1998,3 +2016,11 @@ jobs:
               Start-Sleep -Seconds $retryDelay
             }
           }
+
+      # POST-DEPLOY E2E DISABLED — tests modify real band member mixes (#142)
+      # Re-enable after rewriting tests to use engineer-only writes.
+      # See: https://github.com/zbynekdrlik/reaperiem/issues/142
+      # - name: Setup Node.js for post-deploy E2E
+      # - name: Install Playwright for post-deploy E2E
+      # - name: Run post-deploy E2E tests
+      # - name: Upload post-deploy E2E results on failure

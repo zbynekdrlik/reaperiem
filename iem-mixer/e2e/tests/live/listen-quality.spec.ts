@@ -20,21 +20,8 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-// Wait for mixer page to load
-async function waitForMixer(page: Page): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, "Mixer must load (requires REAPER connection)");
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Listen Stream Quality (#113)", () => {
@@ -44,7 +31,7 @@ test.describe("Listen Stream Quality (#113)", () => {
     // Load audio_player.js via the app
     await loginAs(page, "engineer");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Access getStreamStats from window global
     const stats = await page.evaluate(() => {
@@ -53,7 +40,7 @@ test.describe("Listen Stream Quality (#113)", () => {
         : null;
     });
 
-    if (!assume(stats, "getStreamStats must be exposed on window")) return;
+    expect(stats).toBeTruthy();
 
     expect(stats).toHaveProperty("dropouts");
     expect(stats).toHaveProperty("frames");
@@ -69,7 +56,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   }) => {
     await loginAs(page, "engineer");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Stats should not be visible before listening
     const statsBefore = await page
@@ -84,12 +71,7 @@ test.describe("Listen Stream Quality (#113)", () => {
     await listenBtn.click();
 
     // Wait for listening state (needs REAPER audio pipeline)
-    const listening = await page
-      .waitForSelector(".toolbar-btn-listen.listening", { timeout: 5000 })
-      .catch(() => null);
-
-    if (!assume(listening, "Listen must connect (requires audio pipeline)"))
-      return;
+    await expect(page.locator(".toolbar-btn-listen.listening")).toBeVisible({ timeout: 5000 });
 
     // Stream stats should now be visible
     const statsEl = page.locator('[data-testid="stream-stats"]');
@@ -108,7 +90,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   test("dropout counter increments on frame gaps", async ({ page }) => {
     await loginAs(page, "engineer");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Simulate dropout detection by calling feedOpusFrame with gaps
     // We need to init the audio player first (requires user gesture context)
@@ -116,7 +98,7 @@ test.describe("Listen Stream Quality (#113)", () => {
       return typeof (window as any).AudioDecoder !== "undefined";
     });
 
-    if (!assume(canTest, "WebCodecs AudioDecoder must be available")) return;
+    expect(canTest).toBeTruthy();
 
     // Use page.evaluate to simulate frame timing gaps
     const result = await page.evaluate(async () => {
@@ -133,8 +115,7 @@ test.describe("Listen Stream Quality (#113)", () => {
     });
 
     // Verify initial state
-    if (!assume(!("error" in result), "Stream stats must be accessible"))
-      return;
+    expect(!("error" in result)).toBeTruthy();
     expect(result.beforeDropouts).toBe(0);
     expect(result.beforeQuality).toBe("good");
   });
@@ -142,7 +123,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   test("jitter buffer depth starts at 150ms", async ({ page }) => {
     await loginAs(page, "engineer");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const stats = await page.evaluate(() => {
       const getStats = (window as any).__iem_stream_stats;
@@ -150,7 +131,7 @@ test.describe("Listen Stream Quality (#113)", () => {
       return getStats();
     });
 
-    if (!assume(stats, "getStreamStats must be available")) return;
+    expect(stats).toBeTruthy();
 
     // When not listening, bufferMs is 0 (no context)
     expect(stats.bufferMs).toBe(0);

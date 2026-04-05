@@ -20,24 +20,8 @@ async function loginAs(page: Page, member: string) {
   }
 }
 
-// Precondition check: logs explicitly and returns false when condition is not met.
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-// Helper to wait for mixer page to load with graceful skip in CI
-async function waitForMixer(
-  page: Page,
-  message = "Mixer must load (requires REAPER connection)",
-): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, message);
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Global Volume Persistence", () => {
@@ -49,21 +33,16 @@ test.describe("Global Volume Persistence", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Step 2: Find global volume fader and get current value
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(globalLoaded, "global volume fader must load for this test"))
-      return;
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Get the db-display element with data-value
     const dbDisplay = globalVol.locator(".db-display");
     const initialValue = await dbDisplay.getAttribute("data-value");
-    if (!assume(initialValue !== null, "global volume must have data-value"))
-      return;
+    expect(initialValue).not.toBeNull();
 
     const initialDb = parseFloat(initialValue);
     console.log(`Initial global volume: ${initialDb} dB`);
@@ -71,7 +50,7 @@ test.describe("Global Volume Persistence", () => {
     // Step 3: Set IEM VOL to a different value (-10dB) by dragging fader
     const fader = globalVol.locator(".fader-track");
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
+    expect(box).toBeTruthy();
 
     // Calculate fader position for -10dB
     // Range: -60dB to +12dB = 72dB total
@@ -96,7 +75,7 @@ test.describe("Global Volume Persistence", () => {
 
     // Read the value after drag
     const afterDragValue = await dbDisplay.getAttribute("data-value");
-    if (!assume(afterDragValue !== null, "value must exist after drag")) return;
+    expect(afterDragValue).not.toBeNull();
     const afterDragDb = parseFloat(afterDragValue);
     console.log(`After drag global volume: ${afterDragDb} dB`);
 
@@ -110,16 +89,13 @@ test.describe("Global Volume Persistence", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    if (!(await waitForMixer(page, "Mixer must load after reload"))) return;
+    await waitForMixer(page);
 
     // Wait for WebSocket to reconnect and receive initial state
     const globalVolReloaded = page.locator(
       '[data-testid="global-volume-fader"]',
     );
-    const reloadedLoaded = await globalVolReloaded
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(reloadedLoaded, "global volume must load after reload")) return;
+    await expect(globalVolReloaded).toBeVisible({ timeout: 5000 });
 
     // Give time for WebSocket to deliver initial state
     await page.waitForTimeout(1000);
@@ -127,7 +103,7 @@ test.describe("Global Volume Persistence", () => {
     // Step 5: Verify IEM VOL persisted (should NOT be 0dB, should be ~-10dB)
     const dbDisplayReloaded = globalVolReloaded.locator(".db-display");
     const persistedValue = await dbDisplayReloaded.getAttribute("data-value");
-    if (!assume(persistedValue !== null, "persisted value must exist")) return;
+    expect(persistedValue).not.toBeNull();
     const persistedDb = parseFloat(persistedValue);
     console.log(`After reload global volume: ${persistedDb} dB`);
 
@@ -143,18 +119,14 @@ test.describe("Global Volume Persistence", () => {
     await loginAs(page, "ani");
     await page.goto("/ani");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(globalLoaded, "global volume fader must load for ANI")) return;
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     const dbDisplay = globalVol.locator(".db-display");
     const initialValue = await dbDisplay.getAttribute("data-value");
-    if (!assume(initialValue !== null, "global volume must have data-value"))
-      return;
+    expect(initialValue).not.toBeNull();
 
     const initialDb = parseFloat(initialValue);
     console.log(`[ANI] Initial global volume: ${initialDb} dB`);
@@ -162,7 +134,7 @@ test.describe("Global Volume Persistence", () => {
     // Set to a different value (-15dB for ANI to differentiate)
     const fader = globalVol.locator(".fader-track");
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
+    expect(box).toBeTruthy();
 
     const targetPct = (-15 - -60) / (12 - -60); // 45/72 = 0.625
 
@@ -178,7 +150,7 @@ test.describe("Global Volume Persistence", () => {
     await page.waitForTimeout(500);
 
     const afterDragValue = await dbDisplay.getAttribute("data-value");
-    if (!assume(afterDragValue !== null, "value must exist after drag")) return;
+    expect(afterDragValue).not.toBeNull();
     const afterDragDb = parseFloat(afterDragValue);
     console.log(`[ANI] After drag global volume: ${afterDragDb} dB`);
 
@@ -190,7 +162,7 @@ test.describe("Global Volume Persistence", () => {
     await loginAs(page, "ani");
     await page.goto("/ani");
 
-    if (!(await waitForMixer(page, "Mixer must load after reload"))) return;
+    await waitForMixer(page);
 
     const globalVolReloaded = page.locator(
       '[data-testid="global-volume-fader"]',
@@ -200,7 +172,7 @@ test.describe("Global Volume Persistence", () => {
 
     const dbDisplayReloaded = globalVolReloaded.locator(".db-display");
     const persistedValue = await dbDisplayReloaded.getAttribute("data-value");
-    if (!assume(persistedValue !== null, "persisted value must exist")) return;
+    expect(persistedValue).not.toBeNull();
     const persistedDb = parseFloat(persistedValue);
     console.log(`[ANI] After reload global volume: ${persistedDb} dB`);
 
@@ -217,13 +189,10 @@ test.describe("Global Volume Persistence", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (!assume(globalLoaded, "global volume fader must load")) return;
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Wait for WebSocket to connect and receive initial state
     // If working correctly, value should be populated within 1s
@@ -231,8 +200,7 @@ test.describe("Global Volume Persistence", () => {
 
     const dbDisplay = globalVol.locator(".db-display");
     const value = await dbDisplay.getAttribute("data-value");
-    if (!assume(value !== null, "global volume must have value after connect"))
-      return;
+    expect(value).not.toBeNull();
 
     const db = parseFloat(value);
     console.log(`Global volume after connect: ${db} dB`);

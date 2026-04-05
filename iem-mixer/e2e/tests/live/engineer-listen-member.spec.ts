@@ -20,21 +20,9 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 // Wait for mixer page to load
-async function waitForMixer(page: Page): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, "Mixer must load (requires REAPER connection)");
+async function waitForMixer(page: Page): Promise<void> {
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Engineer Listen on Member Mixes (#99)", () => {
@@ -42,17 +30,14 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, "engineer", "1177");
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Listen button should be visible on member's mixer page
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -65,12 +50,9 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
     await expect(listenBtn).toBeVisible({ timeout: 5000 });
@@ -82,21 +64,17 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, "engineer", "1177");
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
 
     // Intercept the WebSocket to verify ListenStart includes member_id
     const wsMessages: string[] = [];
@@ -142,17 +120,14 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Listen button should NOT be present for regular members
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -163,19 +138,16 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, "engineer", "1177");
 
     // On member page: Listen visible, Mute All NOT visible
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator(".toolbar-btn-listen")).toBeVisible({
       timeout: 5000,
@@ -184,11 +156,9 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // On engineer page: both Listen and Mute All visible
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator(".toolbar-btn-listen")).toBeVisible({
       timeout: 5000,
@@ -203,14 +173,12 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test verifies the REAPER side: sends to ENGINEER are muted for isolation
     const reaperCheck = await request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const targetMember = members[0];
     const memberId = targetMember.id;
@@ -237,10 +205,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
         }
       }
     }
-    if (!assume(engineerTrackIdx >= 0, "ENGINEER inear track must exist"))
-      return;
-    if (!assume(memberInears.length >= 2, "Need 2+ member inear tracks"))
-      return;
+    expect(engineerTrackIdx).toBeGreaterThanOrEqual(0);
+    expect(memberInears.length).toBeGreaterThanOrEqual(2);
 
     // Find send indices to ENGINEER
     const memberSends: { name: string; trackIdx: number; sendIdx: number }[] =
@@ -260,10 +226,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
         }
       }
     }
-    if (
-      !assume(memberSends.length >= 2, "Need 2+ members with sends to ENGINEER")
-    )
-      return;
+    expect(memberSends.length).toBeGreaterThanOrEqual(2);
 
     // Record original mute states
     const originalMutes: Record<string, boolean> = {};
@@ -280,7 +243,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const authResp = await request.post("/api/auth", {
       data: { member: "engineer", pin: "1177" },
     });
-    if (!assume(authResp.status() === 200, "Auth must succeed")) return;
+    expect(authResp.status()).toBe(200);
     const authData = await authResp.json();
 
     const { WebSocket: WsClient } = await import("ws");
@@ -353,20 +316,12 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test verifies that mute states are restored after listen cycle
     const reaperCheck = await request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
-    if (
-      !assume(
-        members.length >= 2,
-        "Need at least 2 members for mute preservation test",
-      )
-    )
-      return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     // Find member inear tracks and their sends to ENGINEER
     const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
@@ -392,12 +347,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
         }
       }
     }
-    if (!assume(engineerTrackIdx >= 0, "ENGINEER inear track must exist"))
-      return;
-    if (
-      !assume(memberInears.length >= 2, "Need at least 2 member inear tracks")
-    )
-      return;
+    expect(engineerTrackIdx).toBeGreaterThanOrEqual(0);
+    expect(memberInears.length).toBeGreaterThanOrEqual(2);
 
     // Find send indices from member inear tracks to ENGINEER inear
     const memberSends: { name: string; trackIdx: number; sendIdx: number }[] =
@@ -417,13 +368,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
         }
       }
     }
-    if (
-      !assume(
-        memberSends.length >= 2,
-        "Need at least 2 members with sends to ENGINEER",
-      )
-    )
-      return;
+    expect(memberSends.length).toBeGreaterThanOrEqual(2);
 
     // Record original mute states
     const originalMutes: Record<string, boolean> = {};
@@ -447,7 +392,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const authResp = await request.post("/api/auth", {
       data: { member: "engineer", pin: "1177" },
     });
-    if (!assume(authResp.status() === 200, "Auth must succeed")) return;
+    expect(authResp.status()).toBe(200);
     const authData = await authResp.json();
 
     const { WebSocket: WsClient } = await import("ws");
@@ -522,24 +467,18 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test requires REAPER with active audio — live only
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
 
     // Click Listen — should produce audio within 3 seconds (no mute toggle needed)
     await listenBtn.click();
@@ -573,23 +512,17 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Wait for channels to load (mix channels appear in engineer's mixer)
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(channelsLoaded, "Channel strips must render")) return;
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
@@ -600,13 +533,11 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       }));
     });
 
-    if (!assume(initialMuteStates.length > 0, "Need mute buttons to test"))
-      return;
+    expect(initialMuteStates.length).toBeGreaterThan(0);
 
     // Click Listen button
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
     await listenBtn.click();
 
     // Wait for listen to activate and poller to run a few cycles
@@ -657,21 +588,17 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, "engineer", "1177");
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
 
     // Click Listen to start
     await listenBtn.click();
@@ -679,17 +606,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Verify it started (button text changes from "Listen")
     const textAfterStart = await listenBtn.textContent();
-    const started =
-      textAfterStart?.includes("Reconnecting") ||
-      textAfterStart?.includes(member.charAt(0).toUpperCase());
-    // It should have moved away from idle "Listen" state
-    if (
-      !assume(
-        textAfterStart && !textAfterStart.includes("Listen\n"),
-        `Listen should have started, got: "${textAfterStart}"`,
-      )
-    )
-      return;
+    expect(textAfterStart && !textAfterStart.includes("Listen\n")).toBeTruthy();
 
     // Click Listen again to stop
     await listenBtn.click();
@@ -722,21 +639,15 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(channelsLoaded, "Channel strips must render")) return;
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
@@ -747,12 +658,10 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       }));
     });
 
-    if (!assume(initialMuteStates.length > 0, "Need mute buttons to test"))
-      return;
+    expect(initialMuteStates.length).toBeGreaterThan(0);
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
 
     // Rapidly toggle listen on/off 3 times (200ms between each click)
     for (let i = 0; i < 6; i++) {
@@ -783,35 +692,23 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
   test("Mute All works correctly after listen cycle", async ({ page }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable for Mute All"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(channelsLoaded, "Channel strips must render")) return;
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible();
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
-    if (
-      !assume(await muteAllBtn.isVisible(), "Mute All button must be visible")
-    )
-      return;
+    await expect(muteAllBtn).toBeVisible();
 
     // Start listen → stop listen
     await listenBtn.click();
@@ -832,7 +729,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       }));
     });
 
-    if (!assume(muteStates.length > 0, "Need mute buttons to verify")) return;
+    expect(muteStates.length).toBeGreaterThan(0);
 
     // Every mute button should have the muted class (class "on" = muted)
     for (let i = 0; i < muteStates.length; i++) {

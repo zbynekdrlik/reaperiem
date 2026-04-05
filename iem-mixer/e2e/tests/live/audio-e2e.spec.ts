@@ -142,13 +142,8 @@ test.describe("Browser Audio Playback", () => {
     await expect(listenBtn).toBeVisible();
     const btnText = await listenBtn.textContent();
 
-    // Skip if browser doesn't support WebCodecs
-    if (btnText?.includes("Unsupported")) {
-      console.log(
-        "[ASSUME SKIP] Browser does not support WebCodecs AudioDecoder",
-      );
-      return;
-    }
+    // WebCodecs must be supported in Chromium
+    expect(btnText).not.toContain("Unsupported");
 
     // Collect console errors AND uncaught exceptions during playback
     const consoleErrors: string[] = [];
@@ -193,19 +188,8 @@ test.describe("Browser Audio Playback", () => {
     const afterClick = await listenBtn.textContent();
     console.log(`Listen button state after click: "${afterClick}"`);
 
-    if (afterClick?.includes("No Source")) {
-      console.log(
-        "[ASSUME SKIP] No audio source available (REAPER may not be running)",
-      );
-      // Still check: no decoder errors or uncaught exceptions
-      const audioErrors = consoleErrors.filter((e) => e.includes("[audio]"));
-      expect(audioErrors).toHaveLength(0);
-      expect(pageErrors).toHaveLength(0);
-
-      // Click again to stop
-      await listenBtn.click();
-      return;
-    }
+    // Audio source must be available (REAPER running)
+    expect(afterClick).not.toContain("No Source");
 
     const isListening = await listenBtn.evaluate((el) =>
       el.classList.contains("listening"),

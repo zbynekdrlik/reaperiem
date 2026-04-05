@@ -20,21 +20,9 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 // Wait for mixer page to load
-async function waitForMixer(page: Page): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, "Mixer must load (requires REAPER connection)");
+async function waitForMixer(page: Page): Promise<void> {
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Engineer Mute All (#88)", () => {
@@ -42,12 +30,9 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
     await expect(muteAllBtn).toBeVisible({ timeout: 5000 });
@@ -59,17 +44,14 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
     await expect(muteAllBtn).toHaveCount(0);
@@ -80,8 +62,7 @@ test.describe("Engineer Mute All (#88)", () => {
     const loginResp = await request.post("/api/auth", {
       data: { member: "engineer", pin: "1177" },
     });
-    if (!assume(loginResp.status() === 200, "Engineer login must succeed"))
-      return;
+    expect(loginResp.status()).toBe(200);
     const { token } = await loginResp.json();
 
     // Call batch mute_all
@@ -89,10 +70,7 @@ test.describe("Engineer Mute All (#88)", () => {
       headers: { Authorization: `Bearer ${token}` },
       data: { operation: "mute_all" },
     });
-    if (
-      !assume(batchResp.ok(), "Batch mute_all must succeed (requires REAPER)")
-    )
-      return;
+    expect(batchResp.ok()).toBeTruthy();
 
     expect(batchResp.status()).toBe(200);
 
@@ -100,7 +78,7 @@ test.describe("Engineer Mute All (#88)", () => {
     const mixerResp = await request.get("/api/mixer/engineer", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(mixerResp.ok(), "Mixer state query must succeed")) return;
+    expect(mixerResp.ok()).toBeTruthy();
 
     const data = await mixerResp.json();
     // ALL channels (input + mix) must be muted
@@ -113,18 +91,12 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
-    if (
-      !assume(await muteAllBtn.isVisible(), "Mute All button must be visible")
-    )
-      return;
+    await expect(muteAllBtn).toBeVisible();
 
     const requestPromise = page.waitForRequest(
       (req) =>
@@ -146,16 +118,13 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     await loginAs(page, "engineer", "1177");
     await page.goto(`/${members[0].id}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // No Mute All on member's mixer
     await expect(page.locator(".toolbar-btn-mute-all")).toHaveCount(0);
@@ -171,12 +140,9 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Mute All visible
     await expect(page.locator(".toolbar-btn-mute-all")).toBeVisible();
@@ -194,8 +160,7 @@ test.describe("Engineer Mute All (#88)", () => {
     const loginResp = await request.post("/api/auth", {
       data: { member: "engineer", pin: "1177" },
     });
-    if (!assume(loginResp.status() === 200, "Engineer login must succeed"))
-      return;
+    expect(loginResp.status()).toBe(200);
     const { token } = await loginResp.json();
 
     // Mute all first
@@ -203,19 +168,16 @@ test.describe("Engineer Mute All (#88)", () => {
       headers: { Authorization: `Bearer ${token}` },
       data: { operation: "mute_all" },
     });
-    if (
-      !assume(batchResp.ok(), "Batch mute_all must succeed (requires REAPER)")
-    )
-      return;
+    expect(batchResp.ok()).toBeTruthy();
 
     // Get mixer state to find a track to unmute
     const mixerResp = await request.get("/api/mixer/engineer", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(mixerResp.ok(), "Mixer state query must succeed")) return;
+    expect(mixerResp.ok()).toBeTruthy();
     const data = await mixerResp.json();
 
-    if (!assume(data.channels.length > 0, "Need at least 1 channel")) return;
+    expect(data.channels.length).toBeGreaterThan(0);
 
     const firstTrack = data.channels[0].track_index;
 
@@ -227,14 +189,13 @@ test.describe("Engineer Mute All (#88)", () => {
         data: { muted: false },
       },
     );
-    if (!assume(unmuteResp.ok(), "Unmute must succeed (requires REAPER)"))
-      return;
+    expect(unmuteResp.ok()).toBeTruthy();
 
     // Verify: first channel unmuted, rest still muted
     const verifyResp = await request.get("/api/mixer/engineer", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(verifyResp.ok(), "Verify mixer state must succeed")) return;
+    expect(verifyResp.ok()).toBeTruthy();
     const verifyData = await verifyResp.json();
 
     const firstChannel = verifyData.channels.find(

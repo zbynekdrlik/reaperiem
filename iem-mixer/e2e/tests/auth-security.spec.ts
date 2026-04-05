@@ -31,15 +31,6 @@ async function loginAs(page: Page, member: string) {
   );
 }
 
-// Guard: early return when precondition not met (avoids banned test.skip)
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 test.describe("Cross-member access prevention (#77)", () => {
   test("member cannot access another member's mixer API", async ({ page }) => {
     await page.goto("/");
@@ -47,7 +38,7 @@ test.describe("Cross-member access prevention (#77)", () => {
     // Login as first available member
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -68,7 +59,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     const auth = await getToken(page, member);
@@ -88,7 +79,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
 
@@ -102,7 +93,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -124,7 +115,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -144,7 +135,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
 
@@ -203,7 +194,7 @@ test.describe("Cross-member access prevention (#77)", () => {
     // Login as member
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const memberResp = await page.request.post("/api/auth", {
       data: { member: members[0].id, pin: "7711" },
@@ -220,7 +211,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const memberA = members[0].id;
     const memberB = members[1].id;
@@ -266,7 +257,7 @@ test.describe("Cross-member access prevention (#77)", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 2, "Need at least 2 members")) return;
+    expect(members.length).toBeGreaterThanOrEqual(2);
 
     const memberA = members[0].id;
     const memberB = members[1].id;

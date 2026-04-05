@@ -28,13 +28,6 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
 
 async function getAuthToken(
   request: APIRequestContext,
@@ -158,17 +151,14 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
-    if (!assume(token, "Auth must succeed")) return;
+    expect(token).toBeTruthy();
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
-      return;
+    expect(info && info.memberSends.length).toBeGreaterThanOrEqual(2);
 
     // Record all send mute states before listen
     const beforeMutes: Record<string, boolean> = {};
@@ -223,17 +213,14 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
-    if (!assume(token, "Auth must succeed")) return;
+    expect(token).toBeTruthy();
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
-      return;
+    expect(info && info.memberSends.length).toBeGreaterThanOrEqual(2);
 
     const target = info!.memberSends[0];
     const memberId = target.name.toLowerCase();
@@ -304,30 +291,24 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
-    if (!assume(token, "Auth must succeed")) return;
+    expect(token).toBeTruthy();
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
-      return;
+    expect(info && info.memberSends.length).toBeGreaterThanOrEqual(2);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(mixerLoaded, "Mixer must load")) return;
+    await expect(page.locator(".app.mixer").first()).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 
     const initialStates = await getUiMuteStates(page);
-    if (!assume(initialStates.length >= 2, "Need mix channels")) return;
+    expect(initialStates.length).toBeGreaterThanOrEqual(2);
     console.log("INITIAL:", JSON.stringify(initialStates));
 
     const ws = await createAudioWs(WS_URL, token!);
@@ -361,17 +342,14 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
-    if (!assume(token, "Auth must succeed")) return;
+    expect(token).toBeTruthy();
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
-      return;
+    expect(info && info.memberSends.length).toBeGreaterThanOrEqual(2);
 
     // Pre-mute first member's send to verify it's preserved through listen cycle
     const muteTarget = info!.memberSends[0];
@@ -434,30 +412,24 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
 
   test("Rapid listen toggles preserve mute state", async ({ page }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable at iem.lan:8080"))
-      return;
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
-    if (!assume(token, "Auth must succeed")) return;
+    expect(token).toBeTruthy();
 
     const info = await findMemberSendsToEngineer(page.request);
-    if (!assume(info && info.memberSends.length >= 2, "Need 2+ member sends"))
-      return;
+    expect(info && info.memberSends.length).toBeGreaterThanOrEqual(2);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer", { timeout: 10000 })
-      .catch(() => null);
-    if (!assume(mixerLoaded, "Mixer must load")) return;
+    await expect(page.locator(".app.mixer").first()).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 
     const initialStates = await getUiMuteStates(page);
-    if (!assume(initialStates.length >= 2, "Need mix channels")) return;
+    expect(initialStates.length).toBeGreaterThanOrEqual(2);
 
     const ws = await createAudioWs(WS_URL, token!);
     try {

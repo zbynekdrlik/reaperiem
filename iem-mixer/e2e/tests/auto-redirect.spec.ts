@@ -15,15 +15,6 @@ async function getToken(
   return null;
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 test.describe("Auto-redirect authenticated users (#84)", () => {
   test("valid token + fresh session → redirects to member mixer", async ({
     page,
@@ -32,11 +23,11 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     const auth = await getToken(page, member);
-    if (!assume(auth, "Need valid auth token")) return;
+    expect(auth).not.toBeNull();
 
     // Set auth in localStorage (simulating a returning user)
     await page.evaluate(
@@ -48,7 +39,7 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
         // Ensure no sessionStorage flag (fresh session)
         sessionStorage.removeItem("iem_redirected");
       },
-      { token: auth.token, member: auth.member, engineer: auth.engineer },
+      { token: auth!.token, member: auth!.member, engineer: auth!.engineer },
     );
 
     // Navigate to landing page — should auto-redirect to /{member}
@@ -65,7 +56,7 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
 
@@ -130,11 +121,11 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     const auth = await getToken(page, member);
-    if (!assume(auth, "Need valid auth token")) return;
+    expect(auth).not.toBeNull();
 
     // Set auth in localStorage
     await page.evaluate(
@@ -145,7 +136,7 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
         );
         sessionStorage.removeItem("iem_redirected");
       },
-      { token: auth.token, member: auth.member, engineer: auth.engineer },
+      { token: auth!.token, member: auth!.member, engineer: auth!.engineer },
     );
 
     // Navigate to landing → should auto-redirect
@@ -187,12 +178,12 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     const auth = await getToken(page, member, "1177"); // Engineer PIN
-    if (!assume(auth, "Need valid engineer auth token")) return;
-    if (!assume(auth.engineer, "Token must be engineer")) return;
+    expect(auth).not.toBeNull();
+    expect(auth!.engineer).toBe(true);
 
     // Set engineer auth in localStorage
     await page.evaluate(
@@ -203,13 +194,13 @@ test.describe("Auto-redirect authenticated users (#84)", () => {
         );
         sessionStorage.removeItem("iem_redirected");
       },
-      { token: auth.token, member: auth.member, engineer: auth.engineer },
+      { token: auth!.token, member: auth!.member, engineer: auth!.engineer },
     );
 
     // Navigate to landing page — should redirect to /{auth.member}
     // Engineer token's member field may differ from the requested member
     await page.goto("/");
-    await page.waitForURL(`**/${auth.member}`, { timeout: 10000 });
-    expect(page.url()).toContain(`/${auth.member}`);
+    await page.waitForURL(`**/${auth!.member}`, { timeout: 10000 });
+    expect(page.url()).toContain(`/${auth!.member}`);
   });
 });
