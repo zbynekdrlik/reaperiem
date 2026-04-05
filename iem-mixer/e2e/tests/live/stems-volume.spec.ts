@@ -1,9 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
-async function loginAs(page: Page, member: string) {
+async function loginAs(page: Page, member: string, pin: string = "7711") {
   const response = await page.request.post("/api/auth", {
-    data: { member, pin: "7711" },
+    data: { member, pin },
   });
 
   if (response.status() === 200) {
@@ -28,8 +28,8 @@ test.describe("Stems Volume Fader", () => {
   test("stems fader visible on Main tab when stems bus exists", async ({
     page,
   }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await waitForMixer(page);
 
@@ -53,8 +53,8 @@ test.describe("Stems Volume Fader", () => {
   test("stems fader visible on Stems tab when stems bus exists", async ({
     page,
   }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await waitForMixer(page);
 
@@ -78,8 +78,8 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("stems fader NOT visible on Mics tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await waitForMixer(page);
 
@@ -95,8 +95,8 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("stems fader NOT visible on Tech tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await waitForMixer(page);
 
@@ -112,8 +112,8 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("global volume fader always visible on Main tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await waitForMixer(page);
 
