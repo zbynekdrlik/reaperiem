@@ -41,7 +41,7 @@ test.describe("Issue #110 - Preset Input Accepts Digits and Backspace", () => {
     await page.goto(`/${member}`);
 
     // Wait for mixer to load
-    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 
     // Click Presets button in toolbar
     const presetsBtn = page.locator(".toolbar-btn", { hasText: "Presets" });

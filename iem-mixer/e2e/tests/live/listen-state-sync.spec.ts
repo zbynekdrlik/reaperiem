@@ -303,7 +303,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    await expect(page.locator(".app.mixer")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".app.mixer").first()).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 
@@ -424,7 +424,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    await expect(page.locator(".app.mixer")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".app.mixer").first()).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 

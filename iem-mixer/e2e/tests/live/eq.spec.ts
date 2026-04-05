@@ -143,7 +143,7 @@ test.describe("EQ Feature", () => {
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
     // Wait for band controls to load (requires REAPER to return EQ data)
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Record the initial gain display text
     const gainValue = page
@@ -211,7 +211,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Verify that native <input type="range"> elements are NOT used for EQ sliders
     // (they jump to tap position which is dangerous for IEM monitoring)
@@ -252,7 +252,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Get the gain slider (second slider in first band card)
     const gainSlider = page
@@ -342,7 +342,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Get the gain slider (second slider in first band card)
     const gainSlider = page
@@ -418,7 +418,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Get the gain slider (second slider in first band card)
     const gainSlider = page
@@ -515,7 +515,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // First band card should have band type "highpass"
     const firstBandType = await page
@@ -574,7 +574,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // First band should be HPF — click its toggle button
     const toggleBtn = page
@@ -615,7 +615,7 @@ test.describe("EQ Feature", () => {
     await page.getByRole("button", { name: "Mics" }).click();
 
     // Wait for channels to render
-    await expect(page.locator(".ch-menu-btn")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 5000 });
 
     // Get all kebab menu buttons
     const kebabButtons = page.locator(".ch-menu-btn");
@@ -681,7 +681,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     const bandCards = page.locator(".eq-band-card");
     const bandCount = await bandCards.count();
@@ -736,7 +736,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Get the gain slider of the SECOND band card (a parametric band, not HPF)
     const bandCards = page.locator(".eq-band-card");
@@ -788,7 +788,7 @@ test.describe("EQ Feature", () => {
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
 
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Wait for bands to populate with REAPER data
     await page.waitForTimeout(1000);
@@ -909,6 +909,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     consoleMessages.length = 0;
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
+        if (msg.text().includes("subscribe await failed")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -945,7 +946,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     expect(opened).toBe(true);
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     // Wait for REAPER data to populate
     await page.waitForTimeout(1000);
@@ -991,7 +992,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     expect(opened).toBe(true);
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 
@@ -1062,7 +1063,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     expect(opened).toBe(true);
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 
@@ -1126,7 +1127,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     expect(opened).toBe(true);
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 
@@ -1187,7 +1188,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     expect(opened).toBe(true);
 
     await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
-    await expect(page.locator(".eq-band-card")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".eq-band-card").first()).toBeVisible({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 

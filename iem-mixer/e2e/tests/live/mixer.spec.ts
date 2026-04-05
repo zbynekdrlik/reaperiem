@@ -485,7 +485,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petronela");
     // Don't use long waits - check what's available
-    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 5000 });
 
     // Check for mute button without long wait
     const muteBtn = page.locator(".mute-btn").first();
@@ -507,7 +507,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     // Wait for channels to load
     try {
-      await page.waitForSelector(".channel-btns", { timeout: 10000 });
+      await page.locator(".channel-btns").first().waitFor({ state: "visible", timeout: 10000 });
       // Solo button should exist in the channel buttons
       const soloBtn = page.locator(".solo-btn").first();
       // Solo button MUST exist in the new version
@@ -658,10 +658,10 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petronela");
     // Don't use long waits - check what's available
-    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 5000 });
 
     // Try to find and click solo button with short timeout
-    await expect(page.locator(".channel-btns")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(".channel-btns").first()).toBeVisible({ timeout: 3000 });
 
     const soloBtn = page.locator(".solo-btn").first();
     const count = await soloBtn.count().catch(() => 0);
@@ -769,7 +769,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(stemsTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
 
     // Get all channel names in order
     const channelNames = await page
@@ -814,7 +814,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(mainTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
 
     // Member's mic fader MUST be visible (the "Me" fader)
     // Input track name is "PETKA mic" (physical mic label, not renamed)
@@ -945,7 +945,7 @@ test.describe("Main Tab and Global Volume", () => {
     await waitForMixer(page);
 
     // Wait for channels to load
-    await expect(page.locator(".pan-slider")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".pan-slider").first()).toBeVisible({ timeout: 5000 });
 
     // Pan sliders with default center position should have "centered" class
     const panSliders = page.locator(".pan-slider");
@@ -980,7 +980,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(techTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
 
     // Check HAND tracks are in Tech tab
     const channels = page.locator(".channel .ch-name");
@@ -1949,7 +1949,7 @@ test.describe("v1.50.0 Muted channel readability", () => {
     await waitForMixer(page);
 
     // Wait for channels to render
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
     const firstChannel = page.locator(".channel").first();
     const classes = await firstChannel.getAttribute("class");
     expect(classes).not.toContain("disconnected");
@@ -2006,7 +2006,7 @@ test.describe("Main tab channel ordering", () => {
     await waitForMixer(page);
 
     // Wait for channel strips to render
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
     const channels = page.locator(".channel:not(.global-volume)");
     const count = await channels.count();
     expect(count).toBeGreaterThanOrEqual(1);
@@ -2039,7 +2039,7 @@ test.describe("Main tab channel ordering", () => {
     await micsTab.click();
 
     // Wait for channels to appear
-    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
     const initialChannels = await page.locator(".channel").count();
     expect(initialChannels).toBeGreaterThan(0);
 
@@ -2133,7 +2133,7 @@ test.describe("Solo sync", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    await expect(page.locator(".channel-btns")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(".channel-btns").first()).toBeVisible({ timeout: 3000 });
 
     const soloBtns = page.locator(".solo-btn");
     const count = await soloBtns.count();

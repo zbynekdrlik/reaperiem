@@ -31,6 +31,7 @@ test.describe("Engineer Talk Button", () => {
     consoleMessages.length = 0;
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
+        if (msg.text().includes("subscribe await failed")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });

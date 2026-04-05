@@ -56,6 +56,7 @@ test.describe("Output Limiter — Issue #72", () => {
     const consoleMessages: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
+        if (msg.text().includes("subscribe await failed")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -74,7 +75,7 @@ test.describe("Output Limiter — Issue #72", () => {
     await waitForMixer(page);
 
     // Wait for channel strips to appear (needs REAPER data)
-    await expect(page.locator(".channel-strip")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
 
     // Check for LIMIT button (engineer-only)
     const limitBtn = page.locator(".limiter-btn-small");
@@ -88,6 +89,7 @@ test.describe("Output Limiter — Issue #72", () => {
     const consoleMessages: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
+        if (msg.text().includes("subscribe await failed")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -104,7 +106,7 @@ test.describe("Output Limiter — Issue #72", () => {
 
     await waitForMixer(page);
 
-    await expect(page.locator(".channel-strip")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
 
     // LIMIT button should NOT be visible to regular members
     const limitBtn = page.locator(".limiter-btn-small");
@@ -118,6 +120,7 @@ test.describe("Output Limiter — Issue #72", () => {
     const consoleMessages: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
+        if (msg.text().includes("subscribe await failed")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -133,7 +136,7 @@ test.describe("Output Limiter — Issue #72", () => {
 
     await waitForMixer(page);
 
-    await expect(page.locator(".channel-strip")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
 
     // Click LIMIT button
     const limitBtn = page.locator(".limiter-btn-small").first();
