@@ -129,6 +129,24 @@ jobs:
           fi
           echo "No continue-on-error found - all steps are hard gates"
 
+      - name: Ban assume()/skip patterns in E2E tests
+        run: |
+          echo "Checking for banned skip patterns in E2E tests..."
+          FOUND=0
+          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer"; do
+            HITS=$(grep -rn "$pattern" iem-mixer/e2e/tests/ 2>/dev/null || true)
+            if [ -n "$HITS" ]; then
+              echo "BANNED pattern found: $pattern"
+              echo "$HITS"
+              FOUND=1
+            fi
+          done
+          if [ "$FOUND" = "1" ]; then
+            echo "::error::E2E tests contain banned assume/skip patterns. Tests must use expect() and fail loudly."
+            exit 1
+          fi
+          echo "OK: No assume/skip patterns found in E2E tests"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -1998,3 +2016,30 @@ jobs:
               Start-Sleep -Seconds $retryDelay
             }
           }
+
+      - name: Setup Node.js for post-deploy E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright for post-deploy E2E
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run post-deploy E2E tests
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: npx playwright test --config=playwright.live.config.ts --reporter=list
+        env:
+          E2E_BASE_URL: http://localhost
+
+      - name: Upload post-deploy E2E results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-deploy-e2e-results
+          path: iem-mixer/e2e/test-results/
+          retention-days: 7
