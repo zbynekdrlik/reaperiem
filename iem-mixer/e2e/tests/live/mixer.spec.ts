@@ -1,10 +1,10 @@
 import { test, expect, Page } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
-async function loginAs(page: Page, member: string) {
+async function loginAs(page: Page, member: string, pin: string = "7711") {
   // First, call the login API to get a token
   const response = await page.request.post("/api/auth", {
-    data: { member, pin: "7711" }, // Default member PIN
+    data: { member, pin },
   });
 
   if (response.status() === 200) {
@@ -42,7 +42,7 @@ test.describe("Branding", () => {
 test.describe("Mixer Features - Must All Pass", () => {
   test("member route redirects or serves content", async ({ page }) => {
     // Member routes should either redirect to login or show mixer
-    const response = await page.goto("/petronela");
+    const response = await page.goto("/engineer");
     expect(response?.status()).toBe(200);
   });
 
@@ -144,9 +144,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader exists and is interactive", async ({ page }) => {
     // Login first - need to navigate to a page first for localStorage
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
 
     // Wait for app to initialize - gracefully skip if REAPER not available
     await waitForMixer(page);
@@ -170,9 +170,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // This test catches the v1.3.0 bug where fader-track had 0 width
     // because absolutely-positioned children don't contribute to parent size
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -204,9 +204,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // CRITICAL SAFETY: Clicking anywhere on fader must NOT cause absolute jump.
     // All movement is relative-only with 150ms activation delay.
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -239,9 +239,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader hold-and-drag activates then moves", async ({ page }) => {
     // Verifies 150ms activation delay + relative drag movement
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -293,9 +293,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // This catches the v1.4.x bug where component remounting caused is_activated
     // to reset to false after the first movement, stopping further drag.
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -361,9 +361,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("fader handle is visible with proper width", async ({ page }) => {
     // Verifies the handle thumb is wide enough to be a visible grab target
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -381,9 +381,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Verifies row order: controls (label, dB, mute) in Row 1, fader in Row 2
     // This catches the v1.2.0 bug where fader was on top and finger covered dB
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -401,8 +401,8 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
   test("dB display text is not clipped", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -419,8 +419,8 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
   test("kebab menu button is left of channel name", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -436,8 +436,8 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
   test("kebab menu closes when clicking outside", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -462,9 +462,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // position: relative. Without it, the overlay escapes to the nearest
     // positioned ancestor and covers the entire page instead of just the channel.
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -481,9 +481,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // Login first
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     // Don't use long waits - check what's available
     await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 5000 });
 
@@ -500,9 +500,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("solo button exists (S button next to M)", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Wait for channels to load
@@ -522,9 +522,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("reset button does NOT exist (removed for safety)", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Reset button must NOT be present - use exact text match
@@ -538,9 +538,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     // CRITICAL: This test catches the snap-back bug where the fader jumps
     // to a stale position after release due to server echo broadcasts.
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -597,9 +597,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   }) => {
     // Tests that rapid back-and-forth movement doesn't cause UI stutter
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -654,9 +654,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
   test("solo button triggers state change when clicked", async ({ page }) => {
     // Login first
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     // Don't use long waits - check what's available
     await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 5000 });
 
@@ -687,9 +687,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Main tab should be active by default
@@ -705,9 +705,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Global Volume fader is draggable", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
@@ -722,9 +722,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Global Mute button toggles", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
@@ -739,9 +739,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Switching to Mics tab shows all mics", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -758,9 +758,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -785,9 +785,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Switching to Tech tab shows tech channels", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
@@ -804,9 +804,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Main tab should be active by default
@@ -831,9 +831,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
@@ -877,9 +877,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("version is displayed in mixer header", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Version block in header must exist
@@ -897,9 +897,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("status dot shows connection state", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Status dot must exist in header
@@ -917,9 +917,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("disconnected banner uses amber style (not red)", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Old red warning must NOT exist
@@ -939,9 +939,9 @@ test.describe("Main Tab and Global Volume", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Wait for channels to load
@@ -969,9 +969,9 @@ test.describe("Main Tab and Global Volume", () => {
 
   test("Tech tab shows HAND tracks (not in Mics)", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
+    await loginAs(page, "engineer", "1177");
 
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Switch to Tech tab
@@ -1072,8 +1072,8 @@ test.describe("v1.17.0 PIN Authentication", () => {
 
   test("settings gear icon visible in mixer header", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const settingsBtn = page.locator(".settings-btn");
@@ -1087,8 +1087,8 @@ test.describe("v1.17.0 PIN Authentication", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Open settings modal
@@ -1168,8 +1168,8 @@ test.describe("v1.17.0 PIN Authentication", () => {
       // Payload with exp = 1000 (long expired)
       const payload = btoa(
         JSON.stringify({
-          sub: "petronela",
-          engineer: false,
+          sub: "engineer",
+          engineer: true,
           exp: 1000,
           iat: 900,
         }),
@@ -1182,18 +1182,18 @@ test.describe("v1.17.0 PIN Authentication", () => {
         "iem_token",
         JSON.stringify({
           token: fakeToken,
-          member: "petronela",
-          engineer: false,
+          member: "engineer",
+          engineer: true,
         }),
       );
     });
 
     // Navigate to mixer page — should redirect to login since token is expired
-    await page.goto("/petronela");
+    await page.goto("/engineer");
     await page.waitForURL(/\/login/, { timeout: 5000 });
     const url = page.url();
     expect(url).toContain("/login");
-    expect(url).toContain("member=petronela");
+    expect(url).toContain("member=engineer");
   });
 });
 
@@ -1202,8 +1202,8 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const panSlider = page.locator(".pan-slider").first();
@@ -1240,8 +1240,8 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
 
   test("status dot has pulse animation when connected", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const dot = page.locator(".status-dot");
@@ -1264,8 +1264,8 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
 
   test("version date text has readable contrast", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const versionDate = page.locator(".header-version-date");
@@ -1288,8 +1288,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("stereo meter bars visible above fader", async ({ page }) => {
     // v1.19.0: Meter redesigned as stereo (L+R) with gradient and peak hold
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -1323,8 +1323,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // v1.19.0: Ballistics handled in Rust at 30fps, no CSS transition
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
@@ -1342,8 +1342,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // Issue #33: Double-click should smoothly animate the fader to 0dB
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -1386,8 +1386,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("fader touch interrupts animation", async ({ page }) => {
     // Issue #33: Touching fader during animation should stop it immediately
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
@@ -1420,8 +1420,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   test("channel grid has 3 rows (controls, meter, fader)", async ({ page }) => {
     // Verify the CSS grid has 3 row areas
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
@@ -1442,8 +1442,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     // This test injects a fake Meters WebSocket message with non-zero values
     // and asserts that the animation timer processes them into width > 0%.
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Skip the first 2 .meter-fill elements (IEM VOL master L/R) and target
@@ -1505,8 +1505,8 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
   }) => {
     // v1.19.0: Stereo meters with REAPER meter floor (-1500 cb) = silence
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
@@ -1546,8 +1546,8 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     // Bug: meters were multiplied by vol_linear * pan_law, making quiet
     // inputs with boosted sends appear as "full signal". Fix: show raw only.
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Wait for channels and WS to connect
@@ -1618,8 +1618,8 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     // Bug: muted channels returned 0.0 for meter. Fix: meters show raw
     // input level regardless of mute state.
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").nth(2);
@@ -1701,8 +1701,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     // which overflows on real mobile devices where 100vw > visible viewport.
     // Fix: use `width: 100%; max-width: 340px;` for device-agnostic sizing.
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     // Wait for toolbar - requires REAPER connection for full mixer UI
     await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
@@ -1741,8 +1741,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     // REGRESSION TEST: Without min-width: 0, flex items cannot shrink
     // below their content size, causing overflow on narrow screens.
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
@@ -1775,8 +1775,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
@@ -1812,8 +1812,8 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.setViewportSize({ width: 375, height: 667 });
 
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
 
     await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
@@ -1944,8 +1944,8 @@ test.describe("v1.50.0 Muted channel readability", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Wait for channels to render
@@ -2029,8 +2029,8 @@ test.describe("Main tab channel ordering", () => {
   test("hide works on muted channel (#78)", async ({ page }) => {
     // Login and navigate to mixer
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     // Switch to Mics tab (NOT Main — Main doesn't filter hidden channels)
@@ -2097,10 +2097,10 @@ test.describe("Solo sync", () => {
     // Navigate first so localStorage is accessible (not about:blank)
     await page1.goto("/");
     await page2.goto("/");
-    await loginAs(page1, "petronela");
-    await page1.goto("/petronela");
-    await loginAs(page2, "petronela");
-    await page2.goto("/petronela");
+    await loginAs(page1, "engineer", "1177");
+    await page1.goto("/engineer");
+    await loginAs(page2, "engineer", "1177");
+    await page2.goto("/engineer");
 
     await waitForMixer(page1);
     await waitForMixer(page2);
@@ -2129,8 +2129,8 @@ test.describe("Solo sync", () => {
     const page = await ctx.newPage();
 
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
     await waitForMixer(page);
 
     await expect(page.locator(".channel-btns").first()).toBeVisible({ timeout: 3000 });
