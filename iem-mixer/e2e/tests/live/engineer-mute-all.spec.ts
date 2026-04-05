@@ -20,7 +20,8 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-async function waitForMixer(page: Page) {
+// Wait for mixer page to load
+async function waitForMixer(page: Page): Promise<void> {
   await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
@@ -31,10 +32,7 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
     await expect(muteAllBtn).toBeVisible({ timeout: 5000 });
@@ -53,10 +51,7 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
     await expect(muteAllBtn).toHaveCount(0);
@@ -75,7 +70,22 @@ test.describe("Engineer Mute All (#88)", () => {
       headers: { Authorization: `Bearer ${token}` },
       data: { operation: "mute_all" },
     });
-    expect(batchResp.ok()).toBe(true);
+    expect(batchResp.ok()).toBeTruthy();
+
+    expect(batchResp.status()).toBe(200);
+
+    // Verify all channels are muted by querying mixer state
+    const mixerResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(mixerResp.ok()).toBeTruthy();
+
+    const data = await mixerResp.json();
+    // ALL channels (input + mix) must be muted
+    for (const ch of data.channels) {
+      expect(ch.muted).toBe(true);
+    }
+  });
 
   test("clicking Mute All button fires batch API call", async ({ page }) => {
     await page.goto("/");
@@ -83,13 +93,24 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
-    await expect(muteAllBtn).toBeVisible({ timeout: 5000 });
+    await expect(muteAllBtn).toBeVisible();
+
+    const requestPromise = page.waitForRequest(
+      (req) =>
+        req.url().includes("/api/mixer/engineer/batch") &&
+        req.method() === "POST",
+      { timeout: 5000 },
+    );
+
+    await muteAllBtn.click();
+
+    const request = await requestPromise;
+    const body = request.postDataJSON();
+    expect(body.operation).toBe("mute_all");
+  });
 
   test("Mute All hidden + Listen shown when engineer views member mixer", async ({
     page,
@@ -103,10 +124,7 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto(`/${members[0].id}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // No Mute All on member's mixer
     await expect(page.locator(".toolbar-btn-mute-all")).toHaveCount(0);
@@ -124,10 +142,7 @@ test.describe("Engineer Mute All (#88)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Mute All visible
     await expect(page.locator(".toolbar-btn-mute-all")).toBeVisible();
@@ -153,6 +168,46 @@ test.describe("Engineer Mute All (#88)", () => {
       headers: { Authorization: `Bearer ${token}` },
       data: { operation: "mute_all" },
     });
-    expect(batchResp.ok()).toBe(true);
+    expect(batchResp.ok()).toBeTruthy();
+
+    // Get mixer state to find a track to unmute
+    const mixerResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(mixerResp.ok()).toBeTruthy();
+    const data = await mixerResp.json();
+
+    expect(data.channels.length).toBeGreaterThan(0);
+
+    const firstTrack = data.channels[0].track_index;
+
+    // Unmute the first channel
+    const unmuteResp = await request.post(
+      `/api/mixer/engineer/track/${firstTrack}/mute`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        data: { muted: false },
+      },
+    );
+    expect(unmuteResp.ok()).toBeTruthy();
+
+    // Verify: first channel unmuted, rest still muted
+    const verifyResp = await request.get("/api/mixer/engineer", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(verifyResp.ok()).toBeTruthy();
+    const verifyData = await verifyResp.json();
+
+    const firstChannel = verifyData.channels.find(
+      (c: { track_index: number }) => c.track_index === firstTrack,
+    );
+    expect(firstChannel.muted).toBe(false);
+
+    // At least some other channels should still be muted
+    const stillMuted = verifyData.channels.filter(
+      (c: { track_index: number; muted: boolean }) =>
+        c.track_index !== firstTrack && c.muted,
+    );
+    expect(stillMuted.length).toBeGreaterThan(0);
   });
 });

@@ -20,7 +20,8 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-async function waitForMixer(page: Page) {
+// Wait for mixer page to load
+async function waitForMixer(page: Page): Promise<void> {
   await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
@@ -36,10 +37,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Listen button should be visible on member's mixer page
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -54,10 +52,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
     await expect(listenBtn).toBeVisible({ timeout: 5000 });
@@ -76,13 +71,10 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
 
     // Intercept the WebSocket to verify ListenStart includes member_id
     const wsMessages: string[] = [];
@@ -135,10 +127,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Listen button should NOT be present for regular members
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -158,10 +147,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator(".toolbar-btn-listen")).toBeVisible({
       timeout: 5000,
@@ -172,9 +158,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator(".toolbar-btn-listen")).toBeVisible({
       timeout: 5000,
@@ -191,7 +175,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+    expect(reaperCheck?.ok()).toBeTruthy();
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
@@ -245,6 +229,89 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     }
     expect(memberSends.length).toBeGreaterThanOrEqual(2);
 
+    // Record original mute states
+    const originalMutes: Record<string, boolean> = {};
+    for (const ms of memberSends) {
+      const resp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+      );
+      const text = await resp.text();
+      const parts = text.split("\t");
+      originalMutes[ms.name] = (parseInt(parts[3] || "0") & 8) !== 0;
+    }
+
+    // Authenticate and send ListenStart via audio WS
+    const authResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(authResp.status()).toBe(200);
+    const authData = await authResp.json();
+
+    const { WebSocket: WsClient } = await import("ws");
+    const ws = new WsClient(
+      `ws://10.77.9.231/ws/audio?token=${authData.token}`,
+    );
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", () => resolve());
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WS timeout")), 5000);
+    });
+
+    try {
+      ws.send(JSON.stringify({ cmd: "ListenStart", member_id: memberId }));
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // Verify: target member's send unmuted, all others muted
+      const targetSend = memberSends.find(
+        (ms) => ms.name.toLowerCase() === memberId,
+      );
+      if (targetSend) {
+        const resp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${targetSend.trackIdx}/SEND/${targetSend.sendIdx}`,
+        );
+        const text = await resp.text();
+        const parts = text.split("\t");
+        const muted = (parseInt(parts[3] || "0") & 8) !== 0;
+        expect(
+          muted,
+          `${targetSend.name} send should be unmuted during listen`,
+        ).toBe(false);
+      }
+
+      for (const ms of memberSends) {
+        if (ms.name.toLowerCase() === memberId) continue;
+        const resp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+        );
+        const text = await resp.text();
+        const parts = text.split("\t");
+        const muted = (parseInt(parts[3] || "0") & 8) !== 0;
+        expect(muted, `${ms.name} send should be muted during listen`).toBe(
+          true,
+        );
+      }
+
+      // ListenStop — restore mute states
+      ws.send(JSON.stringify({ cmd: "ListenStop" }));
+      await new Promise((r) => setTimeout(r, 2000));
+
+      for (const ms of memberSends) {
+        const resp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+        );
+        const text = await resp.text();
+        const parts = text.split("\t");
+        const muted = (parseInt(parts[3] || "0") & 8) !== 0;
+        expect(
+          muted,
+          `${ms.name} mute should be restored after stop (expected ${originalMutes[ms.name]})`,
+        ).toBe(originalMutes[ms.name]);
+      }
+    } finally {
+      ws.close();
+    }
+  });
+
   test("Listen restores pre-muted states after stop (mute preservation)", async ({
     request,
   }) => {
@@ -252,11 +319,150 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+    expect(reaperCheck?.ok()).toBeTruthy();
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
     expect(members.length).toBeGreaterThanOrEqual(2);
+
+    // Find member inear tracks and their sends to ENGINEER
+    const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+    const tracksText = await tracksResp.text();
+    const lines = tracksText.split("\n");
+
+    let engineerTrackIdx = -1;
+    const memberInears: { name: string; trackIdx: number }[] = [];
+    for (const line of lines) {
+      const parts = line.split("\t");
+      if (parts[0] === "TRACK" && parts.length > 2) {
+        const idx = parseInt(parts[1]);
+        const name = parts[2];
+        if (name.toUpperCase().match(/^ENGINEER\s+INEAR$/)) {
+          engineerTrackIdx = idx;
+        }
+        const memberMatch = name.match(/^(\S+)\s+inear$/i);
+        if (memberMatch && !memberMatch[1].toUpperCase().match(/^ENGINEER$/)) {
+          memberInears.push({
+            name: memberMatch[1].toUpperCase(),
+            trackIdx: idx,
+          });
+        }
+      }
+    }
+    expect(engineerTrackIdx).toBeGreaterThanOrEqual(0);
+    expect(memberInears.length).toBeGreaterThanOrEqual(2);
+
+    // Find send indices from member inear tracks to ENGINEER inear
+    const memberSends: { name: string; trackIdx: number; sendIdx: number }[] =
+      [];
+    for (const m of memberInears) {
+      for (let s = 0; s < 10; s++) {
+        const sendResp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${m.trackIdx}/SEND/${s}`,
+        );
+        const sendText = await sendResp.text();
+        const sendParts = sendText.split("\t");
+        if (sendParts[0] !== "SEND") break;
+        const destTrack = parseInt(sendParts[6]);
+        if (destTrack === engineerTrackIdx) {
+          memberSends.push({ ...m, sendIdx: s });
+          break;
+        }
+      }
+    }
+    expect(memberSends.length).toBeGreaterThanOrEqual(2);
+
+    // Record original mute states
+    const originalMutes: Record<string, boolean> = {};
+    for (const ms of memberSends) {
+      const resp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+      );
+      const text = await resp.text();
+      const parts = text.split("\t");
+      const muteFlag = parseInt(parts[3] || "0");
+      originalMutes[ms.name] = (muteFlag & 8) !== 0;
+    }
+
+    // Pre-mute first member to verify it's preserved through listen cycle
+    const muteTarget = memberSends[0];
+    await request.get(
+      `http://iem.lan:8080/_/SET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}/MUTE/1`,
+    );
+    await new Promise((r) => setTimeout(r, 500));
+
+    const authResp = await request.post("/api/auth", {
+      data: { member: "engineer", pin: "1177" },
+    });
+    expect(authResp.status()).toBe(200);
+    const authData = await authResp.json();
+
+    const { WebSocket: WsClient } = await import("ws");
+    const ws = new WsClient(
+      `ws://10.77.9.231/ws/audio?token=${authData.token}`,
+    );
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", () => resolve());
+      ws.on("error", reject);
+      setTimeout(() => reject(new Error("WS timeout")), 5000);
+    });
+
+    try {
+      // Listen on second member — this mutes all except target
+      ws.send(
+        JSON.stringify({
+          cmd: "ListenStart",
+          member_id: memberSends[1].name.toLowerCase(),
+        }),
+      );
+      await new Promise((r) => setTimeout(r, 3000));
+
+      // During listen: target (memberSends[1]) unmuted, others muted
+      for (const ms of memberSends) {
+        const resp = await request.get(
+          `http://iem.lan:8080/_/GET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}`,
+        );
+        const text = await resp.text();
+        const parts = text.split("\t");
+        const muteFlag = parseInt(parts[3] || "0");
+        const muted = (muteFlag & 8) !== 0;
+        if (ms.name === memberSends[1].name) {
+          expect(
+            muted,
+            `${ms.name} (target) should be unmuted during listen`,
+          ).toBe(false);
+        } else {
+          expect(
+            muted,
+            `${ms.name} (non-target) should be muted during listen`,
+          ).toBe(true);
+        }
+      }
+
+      ws.send(JSON.stringify({ cmd: "ListenStop" }));
+      await new Promise((r) => setTimeout(r, 2000));
+
+      // After listen: pre-muted member still muted (restored from saved state)
+      const afterResp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${muteTarget.trackIdx}/SEND/${muteTarget.sendIdx}`,
+      );
+      const afterText = await afterResp.text();
+      const afterParts = afterText.split("\t");
+      const afterMuteFlag = parseInt(afterParts[3] || "0");
+      expect(
+        (afterMuteFlag & 8) !== 0,
+        `${muteTarget.name} should still be muted after listen cycle (was pre-muted)`,
+      ).toBe(true);
+    } finally {
+      ws.close();
+      // Restore original mute states
+      for (const ms of memberSends) {
+        await request.get(
+          `http://iem.lan:8080/_/SET/TRACK/${ms.trackIdx}/SEND/${ms.sendIdx}/MUTE/${originalMutes[ms.name] ? 1 : 0}`,
+        );
+      }
+    }
+  });
 
   test("Listen produces audio output within 3 seconds on engineer page", async ({
     page,
@@ -265,20 +471,17 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const reaperCheck = await page.request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+    expect(reaperCheck?.ok()).toBeTruthy();
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
 
     // Click Listen — should produce audio within 3 seconds (no mute toggle needed)
     await listenBtn.click();
@@ -319,16 +522,10 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Wait for channels to load (mix channels appear in engineer's mixer)
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
@@ -343,7 +540,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Click Listen button
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
     await listenBtn.click();
 
     // Wait for listen to activate and poller to run a few cycles
@@ -401,13 +598,10 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
 
     // Click Listen to start
     await listenBtn.click();
@@ -415,11 +609,33 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Verify it started (button text changes from "Listen")
     const textAfterStart = await listenBtn.textContent();
-    const started =
-      textAfterStart?.includes("Reconnecting") ||
-      textAfterStart?.includes(member.charAt(0).toUpperCase());
-    // It should have moved away from idle "Listen" state
-    expect(started).toBeTruthy();
+    expect(textAfterStart && !textAfterStart.includes("Listen\n")).toBeTruthy();
+
+    // Click Listen again to stop
+    await listenBtn.click();
+    await page.waitForTimeout(1000);
+
+    // Should be in Idle state now
+    const textAfterStop = await listenBtn.textContent();
+    expect(
+      textAfterStop,
+      "Button should show 'Listen' (idle) after clicking stop",
+    ).toContain("Listen");
+
+    // Wait 5 seconds and verify it STAYS stopped (no auto-reconnect)
+    await page.waitForTimeout(5000);
+    const textAfterWait = await listenBtn.textContent();
+    expect(
+      textAfterWait,
+      "Button should STILL show 'Listen' (idle) after 5s — must not auto-reconnect",
+    ).toContain("Listen");
+
+    // Verify it's not in Reconnecting state
+    const btnClass = await listenBtn.getAttribute("class");
+    expect(
+      btnClass,
+      "Button should not have 'reconnecting' class",
+    ).not.toContain("reconnecting");
   });
 
   test("Rapid listen toggle does not corrupt mute state", async ({ page }) => {
@@ -432,15 +648,9 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Capture initial mute button states
     const initialMuteStates = await page.evaluate(() => {
@@ -454,7 +664,7 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     expect(initialMuteStates.length).toBeGreaterThan(0);
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
 
     // Rapidly toggle listen on/off 3 times (200ms between each click)
     for (let i = 0; i < 6; i++) {
@@ -487,26 +697,50 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     const reaperCheck = await page.request
       .get("http://iem.lan:8080/_/NTRACK")
       .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+    expect(reaperCheck?.ok()).toBeTruthy();
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 10000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    await expect(listenBtn).toBeVisible({ timeout: 5000 });
+    await expect(listenBtn).toBeVisible();
 
     const muteAllBtn = page.locator(".toolbar-btn-mute-all");
-    await expect(muteAllBtn).toBeVisible({ timeout: 5000 });
+    await expect(muteAllBtn).toBeVisible();
+
+    // Start listen → stop listen
+    await listenBtn.click();
+    await page.waitForTimeout(1000);
+    await listenBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Click Mute All
+    await muteAllBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Assert all mix channel mute buttons show muted state
+    const muteStates = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(".channel .mute-btn");
+      return Array.from(buttons).map((btn) => ({
+        text: btn.textContent?.trim() || "",
+        classes: btn.className,
+      }));
+    });
+
+    expect(muteStates.length).toBeGreaterThan(0);
+
+    // Every mute button should have the muted class (class "on" = muted)
+    for (let i = 0; i < muteStates.length; i++) {
+      expect(
+        muteStates[i].classes,
+        `Mute button ${i} (${muteStates[i].text}) should show muted after Mute All`,
+      ).toContain(" on");
+    }
+  });
 });

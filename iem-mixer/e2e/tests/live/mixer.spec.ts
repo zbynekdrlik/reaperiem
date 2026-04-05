@@ -22,8 +22,8 @@ async function loginAs(page: Page, member: string) {
   }
 }
 
-
-async function waitForMixer(page: Page) {
+// Helper to wait for mixer page to load
+async function waitForMixer(page: Page): Promise<void> {
   await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
@@ -32,13 +32,9 @@ test.describe("Branding", () => {
     // Wait for network to settle - WASM app needs time to load and hydrate
     await page.goto("/", { waitUntil: "networkidle" });
 
-    const headerLoaded = await page
-      .waitForSelector(".header h1", { timeout: 10000 })
-      .catch(() => null);
-    expect(headerLoaded).toBeTruthy();
-
-    // Verify header text
+    // Wait for header to be visible
     const header = page.locator(".header h1");
+    await expect(header).toBeVisible({ timeout: 10000 });
     await expect(header).toHaveText("NEWLEVEL IEM MIXER");
   });
 });
@@ -1673,7 +1669,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
       return 0; // Will read width after animation tick
     });
 
-    expect(firstWidth !== -1).toBeTruthy();
+    expect(firstWidth).not.toBe(-1);
 
     // Wait for animation tick to process
     await page.waitForTimeout(200);
@@ -1980,7 +1976,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     const mixerResp = await request.get("/api/mixer/engineer", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(mixerResp.ok()).toBe(true);
+    expect(mixerResp.ok()).toBeTruthy();
 
     const data = await mixerResp.json();
     const mixChannels = data.channels.filter(
@@ -2007,7 +2003,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     const mixerResp = await request.get("/api/mixer/stevo", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(mixerResp.ok()).toBe(true);
+    expect(mixerResp.ok()).toBeTruthy();
 
     const data = await mixerResp.json();
     const mixChannels = data.channels.filter(
@@ -2068,11 +2064,11 @@ test.describe("v1.50.0 Muted channel readability", () => {
     await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
     const firstChannel = page.locator(".channel").first();
     const classes = await firstChannel.getAttribute("class");
-    expect(!classes?.includes("disconnected")).toBe(true);
+    expect(classes).not.toContain("disconnected");
 
     // Mute the first channel
     const muteBtn = firstChannel.locator(".mute-btn");
-    expect((await muteBtn.count())).toBeGreaterThan(0);
+    expect(await muteBtn.count()).toBeGreaterThan(0);
     await muteBtn.click({ force: true });
     await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
 
@@ -2164,11 +2160,11 @@ test.describe("Main tab channel ordering", () => {
 
     // Skip if channel is disconnected (no REAPER in CI)
     const classes = await firstChannel.getAttribute("class");
-    expect(!classes?.includes("disconnected")).toBe(true);
+    expect(classes).not.toContain("disconnected");
 
     // Mute the channel
     const muteBtn = firstChannel.locator(".mute-btn");
-    expect((await muteBtn.count())).toBeGreaterThan(0);
+    expect(await muteBtn.count()).toBeGreaterThan(0);
     await muteBtn.click({ force: true });
 
     // Verify the channel has the muted class
@@ -2227,10 +2223,7 @@ test.describe("Solo sync", () => {
     await soloBtn1.click({ force: true });
 
     // Wait for solo to activate on page1 (requires working WS + server)
-    await expect(soloBtn1)
-      .toHaveClass(/on/, { timeout: 3000 })
-      .catch(() => null);
-    expect((await soloBtn1.getAttribute("class"))?.includes("on")).toBe(true);
+    await expect(soloBtn1).toHaveClass(/on/, { timeout: 3000 });
 
     // Verify page2 sees the solo state
     const soloBtn2 = page2.locator(".solo-btn").first();
@@ -2274,7 +2267,7 @@ test.describe("Solo sync", () => {
 
     // Check if solo activated (needs REAPER connection for WebSocket)
     const btn1Class = await btn1.getAttribute("class");
-    expect(btn1Class?.includes("on")).toBe(true);
+    expect(btn1Class).toContain("on");
 
     // btn1 = on, btn2 = off
     await expect(btn1).toHaveClass(/on/);
