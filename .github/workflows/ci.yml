@@ -540,7 +540,7 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: iem-lan-runner
       cancel-in-progress: false
