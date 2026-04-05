@@ -20,25 +20,8 @@ async function loginAs(page: Page, member: string) {
   }
 }
 
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-async function waitForMixer(
-  page: Page,
-  message = "Mixer must load (requires REAPER connection)",
-): Promise<boolean> {
-  try {
-    await page.waitForSelector(".channels-grid", { timeout: 5000 });
-    return true;
-  } catch {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Stems Volume Fader", () => {
@@ -48,7 +31,7 @@ test.describe("Stems Volume Fader", () => {
     await loginAs(page, "petka");
     await page.goto("/petka");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Check if stems bus tracks exist in REAPER
     const stemsFader = page.locator('[data-testid="stems-volume-fader"]');
@@ -73,7 +56,7 @@ test.describe("Stems Volume Fader", () => {
     await loginAs(page, "petka");
     await page.goto("/petka");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Click Stems tab
     const stemsTab = page.locator("text=Stems");
@@ -98,7 +81,7 @@ test.describe("Stems Volume Fader", () => {
     await loginAs(page, "petka");
     await page.goto("/petka");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Click Mics tab
     const micsTab = page.locator("text=Mics");
@@ -115,7 +98,7 @@ test.describe("Stems Volume Fader", () => {
     await loginAs(page, "petka");
     await page.goto("/petka");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Click Tech tab
     const techTab = page.locator("text=Tech");
@@ -132,7 +115,7 @@ test.describe("Stems Volume Fader", () => {
     await loginAs(page, "petka");
     await page.goto("/petka");
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Global volume should always be on Main tab regardless of stems
     const globalFader = page.locator('[data-testid="global-volume-fader"]');

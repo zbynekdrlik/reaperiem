@@ -22,15 +22,6 @@ async function getEngineerToken(
   return getToken(page, "engineer", "1177");
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 test.describe("Elevated member access (Petronela hardcoded)", () => {
   test("petronela gets mix channels in mixer state (requires REAPER)", async ({
     page,
@@ -41,10 +32,10 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
     const reaperCheck = await page.request
       .get("/api/reaper/NTRACK")
       .catch(() => null);
-    if (!assume(reaperCheck?.ok(), "REAPER must be reachable")) return;
+    expect(reaperCheck?.ok()).toBe(true);
 
     const engAuth = await getEngineerToken(page);
-    if (!assume(engAuth, "Engineer login failed")) return;
+    expect(engAuth).toBeTruthy();
 
     // Wait for background discovery to complete
     await page.waitForTimeout(5000);
@@ -76,10 +67,10 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
     const nonPetronela = members.find(
       (m: { id: string }) => m.id !== "engineer" && m.id !== "petronela",
     );
-    if (!assume(nonPetronela, "No non-petronela member found")) return;
+    expect(nonPetronela).toBeTruthy();
 
     const engAuth = await getEngineerToken(page);
-    if (!assume(engAuth, "Engineer login failed")) return;
+    expect(engAuth).toBeTruthy();
 
     const mixerResp = await page.request.get(`/api/mixer/${nonPetronela.id}`, {
       headers: { Authorization: `Bearer ${engAuth!.token}` },
@@ -99,7 +90,7 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
     await page.goto("/");
 
     const engAuth = await getEngineerToken(page);
-    if (!assume(engAuth, "Engineer login failed")) return;
+    expect(engAuth).toBeTruthy();
 
     // The elevated endpoint is gone — response should not contain valid elevated JSON
     const resp = await page.request.get("/api/members/petronela/elevated", {

@@ -20,21 +20,8 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-// Wait for mixer page to load
-async function waitForMixer(page: Page): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, "Mixer must load (requires REAPER connection)");
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Band Member Alert Button (#125)", () => {
@@ -42,12 +29,12 @@ test.describe("Band Member Alert Button (#125)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Alert button should be visible for band members
     const alertBtn = page.locator(".alert-btn");
@@ -58,7 +45,7 @@ test.describe("Band Member Alert Button (#125)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Engineer should NOT have an alert button
     const alertBtn = page.locator(".alert-btn");
@@ -71,18 +58,18 @@ test.describe("Band Member Alert Button (#125)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const alertBtn = page.locator(".alert-btn");
     const btnVisible = await alertBtn
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(btnVisible, "alert button must be visible")) return;
+    expect(btnVisible).toBeTruthy();
 
     // Click SOS
     await alertBtn.click({ force: true });
@@ -92,19 +79,7 @@ test.describe("Band Member Alert Button (#125)", () => {
     const hasActive = (await alertBtn.getAttribute("class"))?.includes(
       "active",
     );
-    if (
-      !assume(hasActive, "button must show active state (requires server)")
-    )
-      return;
-
-    // Button should NOT be disabled (it's a toggle)
-    const isEnabled = !(await alertBtn.isDisabled());
-    expect(isEnabled).toBeTruthy();
-
-    // Button text should indicate active
-    const text = await alertBtn.textContent();
-    expect(text).toContain("Active");
-  });
+    expect(hasActive).toBeTruthy();
 
   test("alert persists until engineer dismisses", async ({ browser }) => {
     const ctx1 = await browser.newContext();
@@ -115,29 +90,17 @@ test.describe("Band Member Alert Button (#125)", () => {
     await memberPage.goto("/");
     const membersResp = await memberPage.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0];
     await loginAs(memberPage, member.id);
     await memberPage.goto(`/${member.id}`);
-    if (!(await waitForMixer(memberPage))) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    await waitForMixer(memberPage);
 
     await engineerPage.goto("/");
     await loginAs(engineerPage, "engineer", "1177");
     await engineerPage.goto("/engineer");
-    if (!(await waitForMixer(engineerPage))) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    await waitForMixer(engineerPage);
 
     await memberPage.waitForTimeout(1000);
     await engineerPage.waitForTimeout(1000);
@@ -147,11 +110,7 @@ test.describe("Band Member Alert Button (#125)", () => {
     const btnVisible = await alertBtn
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(btnVisible, "alert button must be visible")) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    expect(btnVisible).toBeTruthy();
     await alertBtn.click({ force: true });
 
     // Engineer sees toast

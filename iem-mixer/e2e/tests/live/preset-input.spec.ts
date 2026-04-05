@@ -22,24 +22,15 @@ async function loginAs(page: Page, member: string) {
   }
 }
 
-// Precondition check: logs explicitly and returns false when condition is not met.
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
 test.describe("Issue #110 - Preset Input Accepts Digits and Backspace", () => {
   test("preset name input accepts digits and backspace after login", async ({
     page,
   }) => {
     // Check server is available
     const membersRes = await page.request.get("/api/members");
-    if (!assume(membersRes.ok(), "Server not available")) return;
+    expect(membersRes.ok()).toBe(true);
     const members = await membersRes.json();
-    if (!assume(members.length > 0, "No members configured")) return;
+    expect(members.length).toBeGreaterThan(0);
 
     const member = members[0].id;
 
@@ -53,15 +44,14 @@ test.describe("Issue #110 - Preset Input Accepts Digits and Backspace", () => {
     const mixerLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(mixerLoaded, "Mixer must load (requires REAPER connection)"))
-      return;
+    expect(mixerLoaded).toBeTruthy();
 
     // Click Presets button in toolbar
     const presetsBtn = page.locator(".toolbar-btn", { hasText: "Presets" });
     const presetsBtnVisible = await presetsBtn
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(presetsBtnVisible, "Presets button must be visible")) return;
+    expect(presetsBtnVisible).toBeTruthy();
     await presetsBtn.click();
 
     // Wait for preset modal and input to appear
@@ -69,7 +59,7 @@ test.describe("Issue #110 - Preset Input Accepts Digits and Backspace", () => {
     const inputVisible = await presetInput
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(inputVisible, "Preset input must be visible")) return;
+    expect(inputVisible).toBeTruthy();
 
     // Focus the input and type "Mix 123"
     await presetInput.click();

@@ -47,24 +47,8 @@ async function loginAsMember(page: Page, member: string) {
   }
 }
 
-// Precondition check: gracefully skip when condition is not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-// Wait for mixer page to load (requires REAPER connection)
-async function waitForMixer(
-  page: Page,
-  message = "Mixer must load (requires REAPER connection)",
-): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, message);
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Output Limiter — Issue #72", () => {
@@ -79,7 +63,7 @@ test.describe("Output Limiter — Issue #72", () => {
     // Get first member
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length > 0, "Need at least one member")) return;
+    expect(members.length).toBeGreaterThan(0);
     const member = members[0];
 
     // Login as engineer and navigate
@@ -87,14 +71,13 @@ test.describe("Output Limiter — Issue #72", () => {
     await loginAsEngineer(page, member.id);
     await page.goto(`/${member.id}`);
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channel strips to appear (needs REAPER data)
     const hasChannels = await page
       .waitForSelector(".channel-strip", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(hasChannels, "Need channel strips (REAPER must be connected)"))
-      return;
+    expect(hasChannels).toBeTruthy();
 
     // Check for LIMIT button (engineer-only)
     const limitBtn = page.locator(".limiter-btn-small");
@@ -114,7 +97,7 @@ test.describe("Output Limiter — Issue #72", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length > 0, "Need at least one member")) return;
+    expect(members.length).toBeGreaterThan(0);
     const member = members[0];
 
     // Login as regular member
@@ -122,13 +105,12 @@ test.describe("Output Limiter — Issue #72", () => {
     await loginAsMember(page, member.id);
     await page.goto(`/${member.id}`);
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const hasChannels = await page
       .waitForSelector(".channel-strip", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(hasChannels, "Need channel strips (REAPER must be connected)"))
-      return;
+    expect(hasChannels).toBeTruthy();
 
     // LIMIT button should NOT be visible to regular members
     const limitBtn = page.locator(".limiter-btn-small");
@@ -148,20 +130,19 @@ test.describe("Output Limiter — Issue #72", () => {
 
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length > 0, "Need at least one member")) return;
+    expect(members.length).toBeGreaterThan(0);
     const member = members[0];
 
     await page.goto("/");
     await loginAsEngineer(page, member.id);
     await page.goto(`/${member.id}`);
 
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const hasChannels = await page
       .waitForSelector(".channel-strip", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(hasChannels, "Need channel strips (REAPER must be connected)"))
-      return;
+    expect(hasChannels).toBeTruthy();
 
     // Click LIMIT button
     const limitBtn = page.locator(".limiter-btn-small").first();

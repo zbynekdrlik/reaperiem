@@ -20,21 +20,8 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
   }
 }
 
-// Guard: early return when precondition not met
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
-
-// Wait for mixer page to load
-async function waitForMixer(page: Page): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, "Mixer must load (requires REAPER connection)");
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Audio Listen Button (#90)", () => {
@@ -42,12 +29,12 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    expect(toolbarLoaded).toBeTruthy();
 
     const listenBtn = page.locator(".toolbar-btn-listen");
     await expect(listenBtn).toBeVisible({ timeout: 5000 });
@@ -60,17 +47,17 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    expect(toolbarLoaded).toBeTruthy();
 
     // Listen button should NOT be present for regular members
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -96,16 +83,15 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (!assume(toolbarLoaded, "Toolbar must render")) return;
+    expect(toolbarLoaded).toBeTruthy();
 
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!assume(await listenBtn.isVisible(), "Listen button must be visible"))
-      return;
+    await expect(listenBtn).toBeVisible({ timeout: 5000 });
 
     // Click the Listen button — this should open a WebSocket to /ws/audio
     await listenBtn.click();
@@ -142,7 +128,7 @@ test.describe("Listen Boost Settings (#101)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Open settings modal
     await page.locator(".settings-btn").click();
@@ -164,7 +150,7 @@ test.describe("Listen Boost Settings (#101)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     await page.locator(".settings-btn").click();
     await expect(
@@ -199,7 +185,7 @@ test.describe("Listen Boost Settings (#101)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     await page.locator(".settings-btn").click();
     await expect(
@@ -226,7 +212,7 @@ test.describe("Listen Boost Settings (#101)", () => {
 
     // Reload and verify persistence
     await page.reload();
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     await page.locator(".settings-btn").click();
     await expect(
@@ -241,12 +227,12 @@ test.describe("Listen Boost Settings (#101)", () => {
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
-    if (!assume(members.length >= 1, "Need at least 1 member")) return;
+    expect(members.length).toBeGreaterThanOrEqual(1);
 
     const member = members[0].id;
     await loginAs(page, member);
     await page.goto(`/${member}`);
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Open settings modal
     await page.locator(".settings-btn").click();
@@ -266,7 +252,7 @@ test.describe("Listen Boost Settings (#101)", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     await page.locator(".settings-btn").click();
     await expect(

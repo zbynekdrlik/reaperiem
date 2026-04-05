@@ -22,27 +22,9 @@ async function loginAs(page: Page, member: string) {
   }
 }
 
-// Precondition check: logs explicitly and returns false when condition is not met.
-// Unlike silent `if (!x) return`, this makes the skip visible in test output.
-// Unlike expect(), this doesn't fail the test in CI where REAPER is not connected.
-function assume(condition: unknown, message: string): condition is true {
-  if (!condition) {
-    console.log(`[ASSUME SKIP] ${message}`);
-    return false;
-  }
-  return true;
-}
 
-// Helper to wait for mixer page to load with graceful skip in CI
-// Returns true if mixer loaded, false if should skip (REAPER not connected)
-async function waitForMixer(
-  page: Page,
-  message = "Mixer must load (requires REAPER connection)",
-): Promise<boolean> {
-  const mixerLoaded = await page
-    .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-    .catch(() => null);
-  return assume(mixerLoaded, message);
+async function waitForMixer(page: Page) {
+  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Branding", () => {
@@ -50,18 +32,10 @@ test.describe("Branding", () => {
     // Wait for network to settle - WASM app needs time to load and hydrate
     await page.goto("/", { waitUntil: "networkidle" });
 
-    // In CI without REAPER, WASM app may not mount properly
-    // Use assume() pattern for graceful skip
     const headerLoaded = await page
       .waitForSelector(".header h1", { timeout: 10000 })
       .catch(() => null);
-    if (
-      !assume(
-        headerLoaded,
-        "Landing page header must be visible (requires WASM hydration)",
-      )
-    )
-      return;
+    expect(headerLoaded).toBeTruthy();
 
     // Verify header text
     const header = page.locator(".header h1");
@@ -179,7 +153,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/petronela");
 
     // Wait for app to initialize - gracefully skip if REAPER not available
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Look for custom div fader (fill-bar, not native input)
     const fader = page.locator(".fader-track").first();
@@ -203,13 +177,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // CRITICAL: Fader track must have real width (not collapsed to 0)
     const box = await fader.boundingBox();
@@ -240,17 +214,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Get initial fill width
     const fillBefore = await fader
@@ -278,17 +252,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Mouse down at center of fader
     await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
@@ -335,17 +309,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Mouse down at 20% of fader (left side)
     await page.mouse.move(box!.x + box!.width * 0.2, box!.y + box!.height / 2);
@@ -406,13 +380,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const handle = fader.locator(".fader-handle");
     await expect(handle).toBeAttached();
@@ -429,13 +403,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // dB display must be ABOVE the fader (lower Y value = higher on screen)
     const dbBox = await channel.locator(".db-display").boundingBox();
@@ -451,13 +425,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const dbDisplay = channel.locator(".db-display");
     await expect(dbDisplay).toBeVisible();
@@ -472,13 +446,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const menuBox = await channel.locator(".ch-menu-btn").boundingBox();
     const labelBox = await channel.locator(".ch-label").boundingBox();
@@ -492,13 +466,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // Open the kebab menu
     await channel.locator(".ch-menu-btn").click();
@@ -522,13 +496,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // Channel MUST have position: relative for ::after overlay to work
     const position = await channel.evaluate(
@@ -548,7 +522,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
       .catch(() => null);
-    if (!assume(appLoaded, "mixer page must load for this test")) return;
+    expect(appLoaded).toBeTruthy();
 
     // Check for mute button without long wait
     const muteBtn = page.locator(".mute-btn").first();
@@ -566,7 +540,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channels to load
     try {
@@ -588,7 +562,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Reset button must NOT be present - use exact text match
     // Note: "Presets" contains "reset" as substring, so use exact match
@@ -604,17 +578,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Mouse down at 20% and wait for activation
     await page.mouse.move(box!.x + box!.width * 0.2, box!.y + box!.height / 2);
@@ -666,17 +640,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Mouse down and activate
     await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
@@ -730,14 +704,13 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     const appLoaded = await page
       .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
       .catch(() => null);
-    if (!assume(appLoaded, "mixer page must load for this test")) return;
+    expect(appLoaded).toBeTruthy();
 
     // Try to find and click solo button with short timeout
     const channelBtns = await page
       .waitForSelector(".channel-btns", { timeout: 3000 })
       .catch(() => null);
-    if (!assume(channelBtns, "channel buttons must load (requires REAPER)"))
-      return;
+    expect(channelBtns).toBeTruthy();
 
     const soloBtn = page.locator(".solo-btn").first();
     const count = await soloBtn.count().catch(() => 0);
@@ -766,7 +739,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Main tab should be active by default
     const mainTab = page.locator(".category-tab.main");
@@ -788,14 +761,13 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(globalLoaded, "global volume channel must load for this test"))
-      return;
+    expect(globalLoaded).toBeTruthy();
 
     // Check that fader exists within global volume
     const fader = globalVol.locator(".fader-track");
@@ -809,14 +781,13 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(globalLoaded, "global volume channel must load for this test"))
-      return;
+    expect(globalLoaded).toBeTruthy();
 
     // Mute button should exist in global volume
     const muteBtn = globalVol.locator(".mute-btn");
@@ -830,7 +801,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const micsTab = page.locator(".category-tab.mics");
@@ -849,7 +820,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const stemsTab = page.locator(".category-tab.stems");
@@ -860,10 +831,7 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (
-      !assume(channelsLoaded, "channels must load in stems tab for this test")
-    )
-      return;
+    expect(channelsLoaded).toBeTruthy();
 
     // Get all channel names in order
     const channelNames = await page
@@ -882,7 +850,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Use dispatchEvent to bypass overlay and trigger WASM event listeners
     const techTab = page.locator(".category-tab.tech");
@@ -901,7 +869,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Main tab should be active by default
     const mainTab = page.locator(".category-tab.main");
@@ -911,8 +879,7 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelsLoaded, "channels must load on main tab for this test"))
-      return;
+    expect(channelsLoaded).toBeTruthy();
 
     // Member's mic fader MUST be visible (the "Me" fader)
     // Input track name is "PETKA mic" (physical mic label, not renamed)
@@ -921,8 +888,7 @@ test.describe("Main Tab and Global Volume", () => {
       .locator(".channel .ch-name")
       .filter({ hasText: /PETKA/i });
     const meFaderCount = await meFader.count();
-    if (!assume(meFaderCount > 0, "PETKA channel must load for this test"))
-      return;
+    expect(meFaderCount).toBeGreaterThan(0);
     await expect(meFader).toHaveCount(1);
   });
 
@@ -933,18 +899,17 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
     const globalLoaded = await globalVol
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(globalLoaded, "global volume channel must load for this test"))
-      return;
+    expect(globalLoaded).toBeTruthy();
 
     const fader = globalVol.locator(".fader-track");
     const box = await fader.boundingBox();
-    if (!assume(box, "global volume fader bounding box must exist")) return;
+    expect(box).toBeTruthy();
 
     // Mouse down at center, wait for activation
     await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
@@ -983,7 +948,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Version block in header must exist
     const versionBlock = page.locator(".header-version");
@@ -1003,7 +968,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Status dot must exist in header
     const dot = page.locator(".status-dot");
@@ -1023,7 +988,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Old red warning must NOT exist
     const oldWarning = page.locator(".disconnected-warning");
@@ -1045,13 +1010,13 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channels to load
     const channelsLoaded = await page
       .waitForSelector(".pan-slider", { timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelsLoaded, "pan sliders must load for this test")) return;
+    expect(channelsLoaded).toBeTruthy();
 
     // Pan sliders with default center position should have "centered" class
     const panSliders = page.locator(".pan-slider");
@@ -1078,7 +1043,7 @@ test.describe("Main Tab and Global Volume", () => {
     await loginAs(page, "petronela");
 
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Switch to Tech tab
     const techTab = page.locator(".category-tab.tech");
@@ -1089,8 +1054,7 @@ test.describe("Main Tab and Global Volume", () => {
     const channelsLoaded = await page
       .waitForSelector(".channel", { timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelsLoaded, "channels must load in tech tab for this test"))
-      return;
+    expect(channelsLoaded).toBeTruthy();
 
     // Check HAND tracks are in Tech tab
     const channels = page.locator(".channel .ch-name");
@@ -1184,7 +1148,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const settingsBtn = page.locator(".settings-btn");
     await expect(settingsBtn).toBeVisible({ timeout: 5000 });
@@ -1199,7 +1163,7 @@ test.describe("v1.17.0 PIN Authentication", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Open settings modal
     const settingsBtn = page.locator(".settings-btn");
@@ -1314,13 +1278,13 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const panSlider = page.locator(".pan-slider").first();
     const loaded = await panSlider
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(loaded, "pan slider must load for this test")) return;
+    expect(loaded).toBeTruthy();
 
     // Read initial value before double-click
     const valueBefore = parseInt(await panSlider.inputValue());
@@ -1355,7 +1319,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const dot = page.locator(".status-dot");
     await expect(dot).toBeVisible({ timeout: 5000 });
@@ -1379,7 +1343,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const versionDate = page.locator(".header-version-date");
     await expect(versionDate).toBeVisible({ timeout: 5000 });
@@ -1403,13 +1367,13 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // Stereo meter container must exist
     const meter = channel.locator(".meter-stereo");
@@ -1441,14 +1405,13 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!assume(loaded, "meter fill element must be attached for this test"))
-      return;
+    expect(loaded).toBeTruthy();
 
     // Meter fill should use gradient background, not solid color
     const bg = await meterFill.evaluate(
@@ -1464,17 +1427,17 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Record fill width before double-click
     const fillBefore = await fader
@@ -1511,17 +1474,17 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
     const channelLoaded = await fader
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     const box = await fader.boundingBox();
-    if (!assume(box, "fader bounding box must exist")) return;
-    if (!assume(box!.width > 50, "fader must have usable width")) return;
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThan(50);
 
     // Double-click to start animation
     await fader.dblclick({ force: true });
@@ -1548,13 +1511,13 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
     const channelLoaded = await channel
       .waitFor({ state: "visible", timeout: 5000 })
       .catch(() => null);
-    if (!assume(channelLoaded, "channel must load for this test")) return;
+    expect(channelLoaded).toBeTruthy();
 
     // Grid template should have 3 rows
     const gridRows = await channel.evaluate(
@@ -1573,7 +1536,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Skip the first 2 .meter-fill elements (IEM VOL master L/R) and target
     // a channel Meter component's fill. IEM VOL meters use output_track_index
@@ -1582,13 +1545,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (
-      !assume(
-        loaded !== null,
-        "dynamic meter-fill element must render for regression test",
-      )
-    )
-      return;
+    expect(loaded).not.toBeNull();
 
     // Wait for WS to connect (poller sends first State within ~150ms)
     await page.waitForTimeout(500);
@@ -1611,8 +1568,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
       return true;
     });
 
-    if (!assume(injected, "__iem_ws must be exposed for meter injection test"))
-      return;
+    expect(injected).toBeTruthy();
 
     // Poll until a channel meter fill shows signal (skip first 2 = IEM VOL master).
     // waitForFunction resolves on truthy return; return null to keep polling,
@@ -1646,14 +1602,13 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!assume(loaded, "meter fill element must be attached for this test"))
-      return;
+    expect(loaded).toBeTruthy();
 
     // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
     await page.waitForTimeout(500);
@@ -1691,14 +1646,14 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channels and WS to connect
     const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!assume(loaded !== null, "meter-fill element must render")) return;
+    expect(loaded).not.toBeNull();
 
     await page.waitForTimeout(500);
 
@@ -1718,7 +1673,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
       return 0; // Will read width after animation tick
     });
 
-    if (!assume(firstWidth !== -1, "__iem_ws must be exposed")) return;
+    expect(firstWidth !== -1).toBeTruthy();
 
     // Wait for animation tick to process
     await page.waitForTimeout(200);
@@ -1753,8 +1708,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     });
 
     // Both widths should be non-zero and equal (same raw input = same meter)
-    if (!assume(widthBefore > 0, "meter must show signal for 0.5 input"))
-      return;
+    expect(widthBefore).toBeGreaterThan(0);
     // Allow 2% tolerance for floating point precision and timing variations
     expect(Math.abs(widthAfter - widthBefore)).toBeLessThanOrEqual(2);
   });
@@ -1767,13 +1721,13 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").nth(2);
     const loaded = await meterFill
       .waitFor({ state: "attached", timeout: 5000 })
       .catch(() => null);
-    if (!assume(loaded !== null, "meter-fill element must render")) return;
+    expect(loaded).not.toBeNull();
 
     await page.waitForTimeout(500);
 
@@ -1812,7 +1766,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
       return true;
     });
 
-    if (!assume(injected, "__iem_ws must be exposed for injection")) return;
+    expect(injected).toBeTruthy();
 
     // Wait for animation tick
     await page.waitForTimeout(300);
@@ -1843,8 +1797,6 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
 
 test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
   // These tests verify the CSS fix for mobile overflow.
-  // In CI without REAPER, the toolbar won't render - tests exit via assume().
-  // On production with REAPER, tests run with real assertions.
 
   test("modal uses percentage-based width (not viewport units)", async ({
     page,
@@ -1860,13 +1812,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (
-      !assume(
-        toolbarLoaded,
-        "Toolbar must be visible (requires REAPER connection)",
-      )
-    )
-      return;
+    expect(toolbarLoaded).toBeTruthy();
 
     // Open presets modal - Presets button MUST be visible
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1908,13 +1854,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (
-      !assume(
-        toolbarLoaded,
-        "Toolbar must be visible (requires REAPER connection)",
-      )
-    )
-      return;
+    expect(toolbarLoaded).toBeTruthy();
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1951,13 +1891,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (
-      !assume(
-        toolbarLoaded,
-        "Toolbar must be visible (requires REAPER connection)",
-      )
-    )
-      return;
+    expect(toolbarLoaded).toBeTruthy();
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1997,13 +1931,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     const toolbarLoaded = await page
       .waitForSelector(".toolbar", { timeout: 10000 })
       .catch(() => null);
-    if (
-      !assume(
-        toolbarLoaded,
-        "Toolbar must be visible (requires REAPER connection)",
-      )
-    )
-      return;
+    expect(toolbarLoaded).toBeTruthy();
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -2052,7 +1980,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     const mixerResp = await request.get("/api/mixer/engineer", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(mixerResp.ok(), "Engineer mixer endpoint must respond")) return;
+    expect(mixerResp.ok()).toBe(true);
 
     const data = await mixerResp.json();
     const mixChannels = data.channels.filter(
@@ -2079,7 +2007,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     const mixerResp = await request.get("/api/mixer/stevo", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!assume(mixerResp.ok(), "Stevo mixer endpoint must respond")) return;
+    expect(mixerResp.ok()).toBe(true);
 
     const data = await mixerResp.json();
     const mixChannels = data.channels.filter(
@@ -2094,8 +2022,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     const loginResp = await page.request.post("/api/auth", {
       data: { member: "engineer", pin: "1177" },
     });
-    if (!assume(loginResp.status() === 200, "Engineer login must succeed"))
-      return;
+    expect(loginResp.status()).toBe(200);
     const data = await loginResp.json();
     await page.evaluate(
       ({ token, member, engineer }) => {
@@ -2107,7 +2034,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
       { token: data.token, member: data.member, engineer: data.engineer },
     );
     await page.goto("/engineer");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Engineer should see the Mixes tab
     const mixesTab = page.locator(".category-tab.mixes");
@@ -2120,7 +2047,7 @@ test.describe("v1.49.0 Engineer Mixes Tab", () => {
     await page.goto("/");
     await loginAs(page, "stevo");
     await page.goto("/stevo");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Regular member should NOT see Mixes tab (hidden via CSS display:none)
     const mixesTab = page.locator(".category-tab.mixes");
@@ -2135,23 +2062,17 @@ test.describe("v1.50.0 Muted channel readability", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channels to render
     await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
     const firstChannel = page.locator(".channel").first();
     const classes = await firstChannel.getAttribute("class");
-    if (
-      !assume(
-        !classes?.includes("disconnected"),
-        "Channel must be connected to REAPER for mute test",
-      )
-    )
-      return;
+    expect(!classes?.includes("disconnected")).toBe(true);
 
     // Mute the first channel
     const muteBtn = firstChannel.locator(".mute-btn");
-    if (!assume((await muteBtn.count()) > 0, "Mute button must exist")) return;
+    expect((await muteBtn.count())).toBeGreaterThan(0);
     await muteBtn.click({ force: true });
     await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
 
@@ -2198,13 +2119,13 @@ test.describe("Main tab channel ordering", () => {
     await page.goto("/");
     await loginAs(page, "ani");
     await page.goto("/ani");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Wait for channel strips to render
     await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
     const channels = page.locator(".channel:not(.global-volume)");
     const count = await channels.count();
-    if (!assume(count >= 1, "At least one channel strip must exist")) return;
+    expect(count).toBeGreaterThanOrEqual(1);
 
     // First non-global-volume channel should be the member's own input
     const firstName = await channels.first().locator(".ch-name").textContent();
@@ -2215,7 +2136,7 @@ test.describe("Main tab channel ordering", () => {
     await page.goto("/");
     await loginAs(page, "ani");
     await page.goto("/ani");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     const myMicLabel = page.locator(".main-section-label");
     await expect(myMicLabel).toHaveCount(0);
@@ -2226,7 +2147,7 @@ test.describe("Main tab channel ordering", () => {
     await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
-    if (!(await waitForMixer(page))) return;
+    await waitForMixer(page);
 
     // Switch to Mics tab (NOT Main — Main doesn't filter hidden channels)
     const micsTab = page.locator(".category-tab.mics");
@@ -2236,25 +2157,18 @@ test.describe("Main tab channel ordering", () => {
     // Wait for channels to appear
     await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
     const initialChannels = await page.locator(".channel").count();
-    if (!assume(initialChannels > 0, "Need at least one channel on Mics tab"))
-      return;
+    expect(initialChannels).toBeGreaterThan(0);
 
     // Get the first channel
     const firstChannel = page.locator(".channel").first();
 
     // Skip if channel is disconnected (no REAPER in CI)
     const classes = await firstChannel.getAttribute("class");
-    if (
-      !assume(
-        !classes?.includes("disconnected"),
-        "Channel must be connected to REAPER for mute test",
-      )
-    )
-      return;
+    expect(!classes?.includes("disconnected")).toBe(true);
 
     // Mute the channel
     const muteBtn = firstChannel.locator(".mute-btn");
-    if (!assume((await muteBtn.count()) > 0, "Mute button must exist")) return;
+    expect((await muteBtn.count())).toBeGreaterThan(0);
     await muteBtn.click({ force: true });
 
     // Verify the channel has the muted class
@@ -2329,16 +2243,7 @@ test.describe("Solo sync", () => {
     await expect(soloBtn1)
       .toHaveClass(/on/, { timeout: 3000 })
       .catch(() => null);
-    if (
-      !assume(
-        (await soloBtn1.getAttribute("class"))?.includes("on"),
-        "Solo must activate on page1 (requires server connection)",
-      )
-    ) {
-      await ctx1.close();
-      await ctx2.close();
-      return;
-    }
+    expect((await soloBtn1.getAttribute("class"))?.includes("on")).toBe(true);
 
     // Verify page2 sees the solo state
     const soloBtn2 = page2.locator(".solo-btn").first();
@@ -2366,17 +2271,11 @@ test.describe("Solo sync", () => {
     const channelBtns = await page
       .waitForSelector(".channel-btns", { timeout: 3000 })
       .catch(() => null);
-    if (!assume(channelBtns, "channel buttons must load (requires REAPER)")) {
-      await ctx.close();
-      return;
-    }
+    expect(channelBtns).toBeTruthy();
 
     const soloBtns = page.locator(".solo-btn");
     const count = await soloBtns.count();
-    if (!assume(count >= 2, "need at least 2 solo buttons for exclusive test")) {
-      await ctx.close();
-      return;
-    }
+    expect(count).toBeGreaterThanOrEqual(2);
 
     const btn1 = soloBtns.nth(0);
     const btn2 = soloBtns.nth(1);
@@ -2391,10 +2290,7 @@ test.describe("Solo sync", () => {
 
     // Check if solo activated (needs REAPER connection for WebSocket)
     const btn1Class = await btn1.getAttribute("class");
-    if (!assume(btn1Class?.includes("on"), "solo must activate (requires server)")) {
-      await ctx.close();
-      return;
-    }
+    expect(btn1Class?.includes("on")).toBe(true);
 
     // btn1 = on, btn2 = off
     await expect(btn1).toHaveClass(/on/);
