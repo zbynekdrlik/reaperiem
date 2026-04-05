@@ -147,6 +147,31 @@ jobs:
           fi
           echo "OK: No assume/skip patterns found in E2E tests"
 
+      - name: Ban unsafe member writes in live E2E tests
+        run: |
+          echo "Checking live E2E tests for unsafe member-login writes..."
+          FAIL=0
+          for file in iem-mixer/e2e/tests/live/*.spec.ts; do
+            [ -f "$file" ] || continue
+            basename=$(basename "$file")
+            # Skip files that legitimately have member read-only tests + engineer write tests
+            case "$basename" in
+              alert.spec.ts|smoke-live.spec.ts|preset-input.spec.ts|mixer.spec.ts) continue ;;
+            esac
+            # Check if file has both member login AND fader/mute write operations
+            for member in petronela ani stevo petka; do
+              if grep -q "loginAs.*\"$member\"" "$file" 2>/dev/null; then
+                WRITES=$(grep -c "mouse\.down\|mouse\.move.*mouse\.up\|\.dblclick(" "$file" 2>/dev/null || echo 0)
+                if [ "$WRITES" -gt 0 ]; then
+                  echo "::error::$basename has $member login AND $WRITES write operations — must use engineer login"
+                  FAIL=1
+                fi
+              fi
+            done
+          done
+          if [ "$FAIL" = "1" ]; then exit 1; fi
+          echo "OK: All live E2E write tests use engineer login"
+
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================
@@ -540,7 +565,7 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: iem-lan-runner
       cancel-in-progress: false
@@ -2023,10 +2048,53 @@ jobs:
             }
           }
 
-      # POST-DEPLOY E2E DISABLED — tests modify real band member mixes (#142)
-      # Re-enable after rewriting tests to use engineer-only writes.
-      # See: https://github.com/zbynekdrlik/reaperiem/issues/142
-      # - name: Setup Node.js for post-deploy E2E
-      # - name: Install Playwright for post-deploy E2E
-      # - name: Run post-deploy E2E tests
-      # - name: Upload post-deploy E2E results on failure
+      - name: Setup Node.js for post-deploy E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright for post-deploy E2E
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Save REAPER project before E2E
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Write-Host "REAPER project saved (action 40026)"
+          } catch {
+            Write-Host "::warning::Failed to save REAPER project: $_"
+          }
+          Start-Sleep -Seconds 2
+
+      - name: Run post-deploy E2E tests
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: npx playwright test --config=playwright.live.config.ts --reporter=list
+        env:
+          E2E_BASE_URL: http://localhost
+
+      - name: Restore REAPER project after E2E
+        if: always()
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_REVERT_PROJECT" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
+            $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/revert_result" -UseBasicParsing).Content
+            Write-Host "REAPER project reverted: $result"
+          } catch {
+            Write-Host "::warning::Failed to revert REAPER project: $_"
+          }
+
+      - name: Upload post-deploy E2E results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-e2e-results
+          path: iem-mixer/e2e/test-results/
+          retention-days: 7
