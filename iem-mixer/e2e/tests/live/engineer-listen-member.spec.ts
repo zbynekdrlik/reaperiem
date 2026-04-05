@@ -173,9 +173,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test verifies the REAPER side: sends to ENGINEER are muted for isolation
     const reaperCheck = await request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBeTruthy();
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
@@ -317,9 +316,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test verifies that mute states are restored after listen cycle
     const reaperCheck = await request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBeTruthy();
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const membersResp = await request.get("/api/members");
     const members = await membersResp.json();
@@ -469,9 +467,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
   }) => {
     // This test requires REAPER with active audio — live only
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBeTruthy();
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
@@ -695,9 +692,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
   test("Mute All works correctly after listen cycle", async ({ page }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBeTruthy();
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     await page.goto("/");
     await loginAs(page, "engineer", "1177");

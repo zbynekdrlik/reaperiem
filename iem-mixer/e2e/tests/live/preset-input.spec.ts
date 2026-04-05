@@ -41,25 +41,16 @@ test.describe("Issue #110 - Preset Input Accepts Digits and Backspace", () => {
     await page.goto(`/${member}`);
 
     // Wait for mixer to load
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer, .mixer-header", { timeout: 10000 })
-      .catch(() => null);
-    expect(mixerLoaded).toBeTruthy();
+    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
 
     // Click Presets button in toolbar
     const presetsBtn = page.locator(".toolbar-btn", { hasText: "Presets" });
-    const presetsBtnVisible = await presetsBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(presetsBtnVisible).toBeTruthy();
+    await expect(presetsBtn).toBeVisible({ timeout: 5000 });
     await presetsBtn.click();
 
     // Wait for preset modal and input to appear
     const presetInput = page.locator("input.preset-input");
-    const inputVisible = await presetInput
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(inputVisible).toBeTruthy();
+    await expect(presetInput).toBeVisible({ timeout: 5000 });
 
     // Focus the input and type "Mix 123"
     await presetInput.click();

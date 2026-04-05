@@ -151,9 +151,8 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
     expect(token).toBeTruthy();
@@ -214,9 +213,8 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
     expect(token).toBeTruthy();
@@ -293,9 +291,8 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
     expect(token).toBeTruthy();
@@ -306,10 +303,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer", { timeout: 10000 })
-      .catch(() => null);
-    expect(mixerLoaded).toBeTruthy();
+    await expect(page.locator(".app.mixer")).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 
@@ -348,9 +342,8 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     page,
   }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
     expect(token).toBeTruthy();
@@ -419,9 +412,8 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
 
   test("Rapid listen toggles preserve mute state", async ({ page }) => {
     const reaperCheck = await page.request
-      .get("http://iem.lan:8080/_/NTRACK")
-      .catch(() => null);
-    expect(reaperCheck?.ok()).toBe(true);
+      .get("http://iem.lan:8080/_/NTRACK");
+    expect(reaperCheck.ok()).toBe(true);
 
     const token = await getAuthToken(page.request);
     expect(token).toBeTruthy();
@@ -432,10 +424,7 @@ test.describe("Listen State Sync — LIVE system via WebSocket", () => {
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    const mixerLoaded = await page
-      .waitForSelector(".app.mixer", { timeout: 10000 })
-      .catch(() => null);
-    expect(mixerLoaded).toBeTruthy();
+    await expect(page.locator(".app.mixer")).toBeVisible({ timeout: 10000 });
     await page.click(".category-tab.mixes");
     await page.waitForTimeout(3000);
 

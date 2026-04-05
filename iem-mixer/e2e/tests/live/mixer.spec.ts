@@ -176,10 +176,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     // CRITICAL: Fader track must have real width (not collapsed to 0)
     const box = await fader.boundingBox();
@@ -213,10 +210,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -251,10 +245,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -308,10 +299,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -379,10 +367,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const handle = fader.locator(".fader-handle");
     await expect(handle).toBeAttached();
@@ -402,10 +387,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     // dB display must be ABOVE the fader (lower Y value = higher on screen)
     const dbBox = await channel.locator(".db-display").boundingBox();
@@ -424,10 +406,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     const dbDisplay = channel.locator(".db-display");
     await expect(dbDisplay).toBeVisible();
@@ -445,10 +424,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     const menuBox = await channel.locator(".ch-menu-btn").boundingBox();
     const labelBox = await channel.locator(".ch-label").boundingBox();
@@ -465,10 +441,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     // Open the kebab menu
     await channel.locator(".ch-menu-btn").click();
@@ -495,10 +468,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     // Channel MUST have position: relative for ::after overlay to work
     const position = await channel.evaluate(
@@ -515,10 +485,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petronela");
     // Don't use long waits - check what's available
-    const appLoaded = await page
-      .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
-      .catch(() => null);
-    expect(appLoaded).toBeTruthy();
+    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 5000 });
 
     // Check for mute button without long wait
     const muteBtn = page.locator(".mute-btn").first();
@@ -577,10 +544,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -639,10 +603,7 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -697,16 +658,10 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
 
     await page.goto("/petronela");
     // Don't use long waits - check what's available
-    const appLoaded = await page
-      .waitForSelector(".app.mixer, .mixer-header", { timeout: 5000 })
-      .catch(() => null);
-    expect(appLoaded).toBeTruthy();
+    await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 5000 });
 
     // Try to find and click solo button with short timeout
-    const channelBtns = await page
-      .waitForSelector(".channel-btns", { timeout: 3000 })
-      .catch(() => null);
-    expect(channelBtns).toBeTruthy();
+    await expect(page.locator(".channel-btns")).toBeVisible({ timeout: 3000 });
 
     const soloBtn = page.locator(".solo-btn").first();
     const count = await soloBtn.count().catch(() => 0);
@@ -744,12 +699,8 @@ test.describe("Main Tab and Global Volume", () => {
 
     // Global Volume channel should be present with "IEM VOL" label
     const globalVol = page.locator(".channel.global-volume");
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    if (globalLoaded) {
-      await expect(globalVol.locator(".ch-name")).toContainText("IEM VOL");
-    }
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
+    await expect(globalVol.locator(".ch-name")).toContainText("IEM VOL");
   });
 
   test("Global Volume fader is draggable", async ({ page }) => {
@@ -760,10 +711,7 @@ test.describe("Main Tab and Global Volume", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Check that fader exists within global volume
     const fader = globalVol.locator(".fader-track");
@@ -780,10 +728,7 @@ test.describe("Main Tab and Global Volume", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Mute button should exist in global volume
     const muteBtn = globalVol.locator(".mute-btn");
@@ -824,10 +769,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(stemsTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 5000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
 
     // Get all channel names in order
     const channelNames = await page
@@ -872,10 +814,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(mainTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 5000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
 
     // Member's mic fader MUST be visible (the "Me" fader)
     // Input track name is "PETKA mic" (physical mic label, not renamed)
@@ -898,10 +837,7 @@ test.describe("Main Tab and Global Volume", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator(".channel.global-volume");
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     const fader = globalVol.locator(".fader-track");
     const box = await fader.boundingBox();
@@ -1009,10 +945,7 @@ test.describe("Main Tab and Global Volume", () => {
     await waitForMixer(page);
 
     // Wait for channels to load
-    const channelsLoaded = await page
-      .waitForSelector(".pan-slider", { timeout: 5000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".pan-slider")).toBeVisible({ timeout: 5000 });
 
     // Pan sliders with default center position should have "centered" class
     const panSliders = page.locator(".pan-slider");
@@ -1047,10 +980,7 @@ test.describe("Main Tab and Global Volume", () => {
     await expect(techTab).toHaveClass(/active/);
 
     // Wait for channels to appear
-    const channelsLoaded = await page
-      .waitForSelector(".channel", { timeout: 5000 })
-      .catch(() => null);
-    expect(channelsLoaded).toBeTruthy();
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
 
     // Check HAND tracks are in Tech tab
     const channels = page.locator(".channel .ch-name");
@@ -1277,10 +1207,7 @@ test.describe("v1.16.0 Hotfix Regression Tests", () => {
     await waitForMixer(page);
 
     const panSlider = page.locator(".pan-slider").first();
-    const loaded = await panSlider
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).toBeTruthy();
+    await expect(panSlider).toBeVisible({ timeout: 5000 });
 
     // Read initial value before double-click
     const valueBefore = parseInt(await panSlider.inputValue());
@@ -1366,10 +1293,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     // Stereo meter container must exist
     const meter = channel.locator(".meter-stereo");
@@ -1404,10 +1328,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
-    const loaded = await meterFill
-      .waitFor({ state: "attached", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).toBeTruthy();
+    await expect(meterFill).toBeAttached({ timeout: 5000 });
 
     // Meter fill should use gradient background, not solid color
     const bg = await meterFill.evaluate(
@@ -1426,10 +1347,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -1473,10 +1391,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const fader = page.locator(".fader-track").first();
-    const channelLoaded = await fader
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(fader).toBeVisible({ timeout: 5000 });
 
     const box = await fader.boundingBox();
     expect(box).toBeTruthy();
@@ -1510,10 +1425,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const channel = page.locator(".channel").first();
-    const channelLoaded = await channel
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(channelLoaded).toBeTruthy();
+    await expect(channel).toBeVisible({ timeout: 5000 });
 
     // Grid template should have 3 rows
     const gridRows = await channel.evaluate(
@@ -1538,10 +1450,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     // a channel Meter component's fill. IEM VOL meters use output_track_index
     // which may not be present in injected data below.
     const meterFill = page.locator(".meter-fill").nth(2);
-    const loaded = await meterFill
-      .waitFor({ state: "attached", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).not.toBeNull();
+    await expect(meterFill).toBeAttached({ timeout: 5000 });
 
     // Wait for WS to connect (poller sends first State within ~150ms)
     await page.waitForTimeout(500);
@@ -1601,10 +1510,7 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").first();
-    const loaded = await meterFill
-      .waitFor({ state: "attached", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).toBeTruthy();
+    await expect(meterFill).toBeAttached({ timeout: 5000 });
 
     // Wait a bit for meter data to arrive via WebSocket (2 poll cycles)
     await page.waitForTimeout(500);
@@ -1646,10 +1552,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
 
     // Wait for channels and WS to connect
     const meterFill = page.locator(".meter-fill").nth(2);
-    const loaded = await meterFill
-      .waitFor({ state: "attached", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).not.toBeNull();
+    await expect(meterFill).toBeAttached({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 
@@ -1720,10 +1623,7 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await waitForMixer(page);
 
     const meterFill = page.locator(".meter-fill").nth(2);
-    const loaded = await meterFill
-      .waitFor({ state: "attached", timeout: 5000 })
-      .catch(() => null);
-    expect(loaded).not.toBeNull();
+    await expect(meterFill).toBeAttached({ timeout: 5000 });
 
     await page.waitForTimeout(500);
 
@@ -1805,10 +1705,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await page.goto("/petronela");
 
     // Wait for toolbar - requires REAPER connection for full mixer UI
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Open presets modal - Presets button MUST be visible
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1847,10 +1744,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1884,10 +1778,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -1924,10 +1815,7 @@ test.describe("v1.28.1 Preset Modal Mobile Fix", () => {
     await loginAs(page, "petronela");
     await page.goto("/petronela");
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Open presets modal
     const presetsBtn = page.locator("button", { hasText: "Presets" });
@@ -2061,7 +1949,7 @@ test.describe("v1.50.0 Muted channel readability", () => {
     await waitForMixer(page);
 
     // Wait for channels to render
-    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
     const firstChannel = page.locator(".channel").first();
     const classes = await firstChannel.getAttribute("class");
     expect(classes).not.toContain("disconnected");
@@ -2118,7 +2006,7 @@ test.describe("Main tab channel ordering", () => {
     await waitForMixer(page);
 
     // Wait for channel strips to render
-    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
     const channels = page.locator(".channel:not(.global-volume)");
     const count = await channels.count();
     expect(count).toBeGreaterThanOrEqual(1);
@@ -2151,7 +2039,7 @@ test.describe("Main tab channel ordering", () => {
     await micsTab.click();
 
     // Wait for channels to appear
-    await page.waitForSelector(".channel", { timeout: 5000 }).catch(() => null);
+    await expect(page.locator(".channel")).toBeVisible({ timeout: 5000 });
     const initialChannels = await page.locator(".channel").count();
     expect(initialChannels).toBeGreaterThan(0);
 
@@ -2245,10 +2133,7 @@ test.describe("Solo sync", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    const channelBtns = await page
-      .waitForSelector(".channel-btns", { timeout: 3000 })
-      .catch(() => null);
-    expect(channelBtns).toBeTruthy();
+    await expect(page.locator(".channel-btns")).toBeVisible({ timeout: 3000 });
 
     const soloBtns = page.locator(".solo-btn");
     const count = await soloBtns.count();

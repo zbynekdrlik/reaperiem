@@ -71,11 +71,7 @@ test.describe("Listen Stream Quality (#113)", () => {
     await listenBtn.click();
 
     // Wait for listening state (needs REAPER audio pipeline)
-    const listening = await page
-      .waitForSelector(".toolbar-btn-listen.listening", { timeout: 5000 })
-      .catch(() => null);
-
-    expect(listening).toBeTruthy();
+    await expect(page.locator(".toolbar-btn-listen.listening")).toBeVisible({ timeout: 5000 });
 
     // Stream stats should now be visible
     const statsEl = page.locator('[data-testid="stream-stats"]');

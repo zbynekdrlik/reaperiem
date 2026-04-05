@@ -66,10 +66,7 @@ test.describe("Band Member Alert Button (#125)", () => {
     await waitForMixer(page);
 
     const alertBtn = page.locator(".alert-btn");
-    const btnVisible = await alertBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(btnVisible).toBeTruthy();
+    await expect(alertBtn).toBeVisible({ timeout: 5000 });
 
     // Click SOS
     await alertBtn.click({ force: true });
@@ -108,10 +105,7 @@ test.describe("Band Member Alert Button (#125)", () => {
 
     // Member clicks SOS
     const alertBtn = memberPage.locator(".alert-btn");
-    const btnVisible = await alertBtn
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(btnVisible).toBeTruthy();
+    await expect(alertBtn).toBeVisible({ timeout: 5000 });
     await alertBtn.click({ force: true });
 
     // Engineer sees toast

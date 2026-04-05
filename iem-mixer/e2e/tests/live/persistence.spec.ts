@@ -37,10 +37,7 @@ test.describe("Global Volume Persistence", () => {
 
     // Step 2: Find global volume fader and get current value
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Get the db-display element with data-value
     const dbDisplay = globalVol.locator(".db-display");
@@ -98,10 +95,7 @@ test.describe("Global Volume Persistence", () => {
     const globalVolReloaded = page.locator(
       '[data-testid="global-volume-fader"]',
     );
-    const reloadedLoaded = await globalVolReloaded
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(reloadedLoaded).toBeTruthy();
+    await expect(globalVolReloaded).toBeVisible({ timeout: 5000 });
 
     // Give time for WebSocket to deliver initial state
     await page.waitForTimeout(1000);
@@ -128,10 +122,7 @@ test.describe("Global Volume Persistence", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     const dbDisplay = globalVol.locator(".db-display");
     const initialValue = await dbDisplay.getAttribute("data-value");
@@ -201,10 +192,7 @@ test.describe("Global Volume Persistence", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    const globalLoaded = await globalVol
-      .waitFor({ state: "visible", timeout: 5000 })
-      .catch(() => null);
-    expect(globalLoaded).toBeTruthy();
+    await expect(globalVol).toBeVisible({ timeout: 5000 });
 
     // Wait for WebSocket to connect and receive initial state
     // If working correctly, value should be populated within 1s

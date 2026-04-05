@@ -31,10 +31,7 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
     await expect(listenBtn).toBeVisible({ timeout: 5000 });
@@ -54,10 +51,7 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto(`/${member}`);
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     // Listen button should NOT be present for regular members
     const listenBtn = page.locator(".toolbar-btn-listen");
@@ -85,10 +79,7 @@ test.describe("Audio Listen Button (#90)", () => {
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    const toolbarLoaded = await page
-      .waitForSelector(".toolbar", { timeout: 10000 })
-      .catch(() => null);
-    expect(toolbarLoaded).toBeTruthy();
+    await expect(page.locator(".toolbar")).toBeVisible({ timeout: 10000 });
 
     const listenBtn = page.locator(".toolbar-btn-listen");
     await expect(listenBtn).toBeVisible({ timeout: 5000 });
