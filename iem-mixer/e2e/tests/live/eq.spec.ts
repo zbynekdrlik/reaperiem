@@ -877,29 +877,34 @@ test.describe("EQ value sync - ENGINEER track", () => {
 
     // Check REAPER is reachable
     const reaperEq = await readReaperEq(32);
-    expect(reaperEq && reaperEq.startsWith().toBeTruthy();
+    expect(reaperEq && reaperEq.startsWith("b")).toBeTruthy();
+  });
 
   test("gain slider at 50% shows ~+6dB not +12dB", async ({ page }) => {
     await waitForMixer(page);
 
     const reaperEq = await readReaperEq(32);
-    expect(reaperEq && reaperEq.startsWith().toBeTruthy();
+    expect(reaperEq && reaperEq.startsWith("b")).toBeTruthy();
+  });
 
   test("reset button moves sliders visually", async ({ page }) => {
     await waitForMixer(page);
 
     const reaperEq = await readReaperEq(32);
-    expect(reaperEq && reaperEq.startsWith().toBeTruthy();
+    expect(reaperEq && reaperEq.startsWith("b")).toBeTruthy();
+  });
 
   test("reset button resets REAPER values", async ({ page }) => {
     await waitForMixer(page);
 
     const reaperEq = await readReaperEq(32);
-    expect(reaperEq && reaperEq.startsWith().toBeTruthy();
+    expect(reaperEq && reaperEq.startsWith("b")).toBeTruthy();
+  });
 
   test("gain change on disabled band keeps it disabled", async ({ page }) => {
     await waitForMixer(page);
 
     const reaperEq = await readReaperEq(32);
-    expect(reaperEq && reaperEq.startsWith().toBeTruthy();
+    expect(reaperEq && reaperEq.startsWith("b")).toBeTruthy();
+  });
 });

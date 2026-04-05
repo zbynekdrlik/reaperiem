@@ -419,7 +419,8 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
       textAfterStart?.includes("Reconnecting") ||
       textAfterStart?.includes(member.charAt(0).toUpperCase());
     // It should have moved away from idle "Listen" state
-    expect(textAfterStart && !textAfterStart.includes().toBeTruthy();
+    expect(started).toBeTruthy();
+  });
 
   test("Rapid listen toggle does not corrupt mute state", async ({ page }) => {
     await page.goto("/");

@@ -154,4 +154,5 @@ test.describe("Engineer Mute All (#88)", () => {
       data: { operation: "mute_all" },
     });
     expect(batchResp.ok()).toBe(true);
+  });
 });

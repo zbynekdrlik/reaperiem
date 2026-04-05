@@ -80,6 +80,7 @@ test.describe("Band Member Alert Button (#125)", () => {
       "active",
     );
     expect(hasActive).toBeTruthy();
+  });
 
   test("alert persists until engineer dismisses", async ({ browser }) => {
     const ctx1 = await browser.newContext();
