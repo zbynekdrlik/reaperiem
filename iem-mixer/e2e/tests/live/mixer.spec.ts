@@ -24,7 +24,7 @@ async function loginAs(page: Page, member: string) {
 
 // Helper to wait for mixer page to load
 async function waitForMixer(page: Page): Promise<void> {
-  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Branding", () => {

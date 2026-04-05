@@ -21,7 +21,7 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
 }
 
 async function waitForMixer(page: Page) {
-  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Audio Listen Button (#90)", () => {

@@ -22,7 +22,7 @@ async function loginAs(page: Page, member: string, pin: string = "7711") {
 
 // Wait for mixer page to load
 async function waitForMixer(page: Page): Promise<void> {
-  await expect(page.locator(".app.mixer, .mixer-header")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".app.mixer, .mixer-header").first()).toBeVisible({ timeout: 10000 });
 }
 
 test.describe("Engineer Mute All (#88)", () => {
