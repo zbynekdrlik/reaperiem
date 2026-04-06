@@ -90,8 +90,12 @@ test.describe("EQ Feature", () => {
     const btnCount = await menuBtns.count();
     let foundEq = false;
     for (let i = 0; i < btnCount; i++) {
-      await menuBtns.nth(i).click({ force: true });
+      // Ensure previous popup is closed
+      await page.locator(".ch-menu-backdrop").click().catch(() => {});
       await page.waitForTimeout(300);
+      await menuBtns.nth(i).click({ force: true });
+      // Wait for popup to render
+      await page.waitForTimeout(500);
       const eqVisible = await page
         .locator(".ch-menu-popup")
         .locator("button", { hasText: "EQ" })
@@ -99,13 +103,9 @@ test.describe("EQ Feature", () => {
         .catch(() => false);
       if (eqVisible) {
         foundEq = true;
-        // Close menu
         await page.locator(".ch-menu-backdrop").click().catch(() => {});
         break;
       }
-      // Close menu before trying next channel
-      await page.locator(".ch-menu-backdrop").click().catch(() => {});
-      await page.waitForTimeout(200);
     }
     expect(foundEq).toBe(true);
   });
@@ -684,8 +684,11 @@ test.describe("EQ Feature", () => {
     let foundEq = false;
     let foundNoEq = false;
     for (let i = 0; i < btnCount && !(foundEq && foundNoEq); i++) {
-      await menuBtns.nth(i).click({ force: true });
+      // Ensure previous popup is closed
+      await page.locator(".ch-menu-backdrop").click().catch(() => {});
       await page.waitForTimeout(300);
+      await menuBtns.nth(i).click({ force: true });
+      await page.waitForTimeout(500);
       const eqVisible = await page
         .locator(".ch-menu-popup")
         .locator("button", { hasText: "EQ" })
@@ -693,8 +696,6 @@ test.describe("EQ Feature", () => {
         .catch(() => false);
       if (eqVisible) foundEq = true;
       else foundNoEq = true;
-      await page.locator(".ch-menu-backdrop").click().catch(() => {});
-      await page.waitForTimeout(200);
     }
 
     // At least one channel should have EQ (own track)
