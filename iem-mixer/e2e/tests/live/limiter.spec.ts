@@ -57,6 +57,7 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -90,6 +91,7 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -121,6 +123,7 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
