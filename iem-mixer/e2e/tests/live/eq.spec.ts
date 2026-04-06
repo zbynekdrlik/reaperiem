@@ -687,8 +687,9 @@ test.describe("EQ Feature", () => {
     await page.waitForTimeout(500);
     await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 10000 });
 
-    // Check first channel on Mics tab — should NOT have EQ (other member)
-    const micsKebab = page.locator(".ch-menu-btn").first();
+    // Check LAST channel on Mics tab — should NOT have EQ (other member)
+    // First channel may be PETRONELA's own (which has EQ)
+    const micsKebab = page.locator(".ch-menu-btn").last();
     await micsKebab.click({ force: true });
     await page.waitForTimeout(500);
     const eqOnOther = await page
