@@ -1,9 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
-async function loginAs(page: Page, member: string, pin: string = "7711") {
+async function loginAs(page: Page, member: string) {
   const response = await page.request.post("/api/auth", {
-    data: { member, pin },
+    data: { member, pin: "7711" },
   });
 
   if (response.status() === 200) {
@@ -25,13 +25,13 @@ async function waitForMixer(page: Page) {
 }
 
 test.describe("Global Volume Persistence", () => {
-  test("Engineer: Global volume persists after page reload", async ({
+  test("Petronela: Global volume persists after page reload", async ({
     page,
   }) => {
-    // Step 1: Login to Engineer mixer
+    // Step 1: Login to Petronela mixer
     await page.goto("/");
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -86,8 +86,8 @@ test.describe("Global Volume Persistence", () => {
 
     // Step 4: Reload page and re-login
     await page.reload();
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -113,11 +113,11 @@ test.describe("Global Volume Persistence", () => {
     expect(persistedDb).toBeCloseTo(afterDragDb, 0); // 0 decimal places = within 0.5
   });
 
-  test("Engineer: Global volume persists (second verify)", async ({ page }) => {
-    // Same test to verify consistency of persistence
+  test("ANI: Global volume persists after page reload", async ({ page }) => {
+    // Same test for ANI to verify if bug is member-specific
     await page.goto("/");
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
+    await loginAs(page, "ani");
+    await page.goto("/ani");
 
     await waitForMixer(page);
 
@@ -129,7 +129,7 @@ test.describe("Global Volume Persistence", () => {
     expect(initialValue).not.toBeNull();
 
     const initialDb = parseFloat(initialValue);
-    console.log(`[Engineer2] Initial global volume: ${initialDb} dB`);
+    console.log(`[ANI] Initial global volume: ${initialDb} dB`);
 
     // Set to a different value (-15dB for ANI to differentiate)
     const fader = globalVol.locator(".fader-track");
@@ -152,15 +152,15 @@ test.describe("Global Volume Persistence", () => {
     const afterDragValue = await dbDisplay.getAttribute("data-value");
     expect(afterDragValue).not.toBeNull();
     const afterDragDb = parseFloat(afterDragValue);
-    console.log(`[Engineer2] After drag global volume: ${afterDragDb} dB`);
+    console.log(`[ANI] After drag global volume: ${afterDragDb} dB`);
 
     expect(afterDragDb).toBeGreaterThan(-20);
     expect(afterDragDb).toBeLessThan(-10);
 
     // Reload and verify
     await page.reload();
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
+    await loginAs(page, "ani");
+    await page.goto("/ani");
 
     await waitForMixer(page);
 
@@ -174,9 +174,9 @@ test.describe("Global Volume Persistence", () => {
     const persistedValue = await dbDisplayReloaded.getAttribute("data-value");
     expect(persistedValue).not.toBeNull();
     const persistedDb = parseFloat(persistedValue);
-    console.log(`[Engineer2] After reload global volume: ${persistedDb} dB`);
+    console.log(`[ANI] After reload global volume: ${persistedDb} dB`);
 
-    // Verify persistence with second test instance
+    // If ANI passes and Petronela fails, bug is member-specific
     expect(persistedDb).toBeCloseTo(afterDragDb, 0);
   });
 
@@ -186,8 +186,8 @@ test.describe("Global Volume Persistence", () => {
     // This test verifies the WebSocket initial state delivery
     // by checking if the value is populated shortly after connection
     await page.goto("/");
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 

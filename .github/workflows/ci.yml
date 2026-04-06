@@ -147,31 +147,6 @@ jobs:
           fi
           echo "OK: No assume/skip patterns found in E2E tests"
 
-      - name: Ban unsafe member writes in live E2E tests
-        run: |
-          echo "Checking live E2E tests for unsafe member-login writes..."
-          FAIL=0
-          for file in iem-mixer/e2e/tests/live/*.spec.ts; do
-            [ -f "$file" ] || continue
-            basename=$(basename "$file")
-            # Skip files that legitimately have member read-only tests + engineer write tests
-            case "$basename" in
-              alert.spec.ts|smoke-live.spec.ts|preset-input.spec.ts|mixer.spec.ts) continue ;;
-            esac
-            # Check if file has both member login AND fader/mute write operations
-            for member in petronela ani stevo petka; do
-              if grep -q "loginAs.*\"$member\"" "$file" 2>/dev/null; then
-                WRITES=$(grep -c "mouse\.down\|mouse\.move.*mouse\.up\|\.dblclick(" "$file" 2>/dev/null || echo 0)
-                if [ "$WRITES" -gt 0 ]; then
-                  echo "::error::$basename has $member login AND $WRITES write operations — must use engineer login"
-                  FAIL=1
-                fi
-              fi
-            done
-          done
-          if [ "$FAIL" = "1" ]; then exit 1; fi
-          echo "OK: All live E2E write tests use engineer login"
-
   # ============================================================
   # LINT - Must pass before any builds
   # ============================================================

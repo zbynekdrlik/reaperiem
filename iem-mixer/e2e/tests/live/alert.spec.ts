@@ -1,13 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
 
-/**
- * Alert Button Tests — PRODUCTION SAFE
- *
- * SOS alert is WebSocket-only (CallEngineer). No REAPER writes.
- * Push notifications go to engineer devices only, not band members.
- * Member login is required because engineer cannot see the alert button.
- */
-
 // Helper to login and set auth in localStorage
 async function loginAs(page: Page, member: string, pin: string = "7711") {
   const response = await page.request.post("/api/auth", {
