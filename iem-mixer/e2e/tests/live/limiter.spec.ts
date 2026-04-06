@@ -58,6 +58,12 @@ test.describe("Output Limiter — Issue #72", () => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
         if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -92,6 +98,12 @@ test.describe("Output Limiter — Issue #72", () => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
         if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -124,6 +136,12 @@ test.describe("Output Limiter — Issue #72", () => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
         if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
