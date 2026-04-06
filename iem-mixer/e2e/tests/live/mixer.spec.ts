@@ -2068,13 +2068,14 @@ test.describe("Main tab channel ordering", () => {
     const classes = await firstChannel.getAttribute("class");
     expect(classes).not.toContain("disconnected");
 
-    // Mute the channel — WebSocket roundtrip to REAPER takes time on live system
+    // Ensure channel is muted — it may already be muted on production
     const muteBtn = firstChannel.locator(".mute-btn");
     expect(await muteBtn.count()).toBeGreaterThan(0);
-    await muteBtn.click({ force: true });
-
-    // Verify the channel has the muted class (live REAPER roundtrip: click → WS → REAPER → poller → broadcast)
-    await expect(firstChannel).toHaveClass(/muted/, { timeout: 10000 });
+    const currentClasses = await firstChannel.getAttribute("class");
+    if (!currentClasses?.includes("muted")) {
+      await muteBtn.click({ force: true });
+      await expect(firstChannel).toHaveClass(/muted/, { timeout: 10000 });
+    }
 
     // Open kebab menu on the muted channel
     const kebabBtn = firstChannel.locator(".ch-menu-btn");

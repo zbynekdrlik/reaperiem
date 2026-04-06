@@ -78,23 +78,17 @@ test.describe("EQ Feature", () => {
   test("kebab menu has EQ option", async ({ page }) => {
     await waitForMixer(page);
 
-    // Navigate to Mics tab where PETRONELA's own mic channel is guaranteed
-    const micsTab = page.getByRole("button", { name: "Mics" });
-    await expect(micsTab).toBeVisible({ timeout: 5000 });
-    await micsTab.click();
+    // PETRONELA's own channel is on Main tab (pinned), not Mics tab
+    // Find her channel directly and check for EQ in kebab
     await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 5000 });
 
-    // Scan all channels for one that has an EQ option in its kebab menu
-    // (channel names may differ on the live system)
     const menuBtns = page.locator(".ch-menu-btn");
     const btnCount = await menuBtns.count();
     let foundEq = false;
     for (let i = 0; i < btnCount; i++) {
-      // Ensure previous popup is closed
       await page.locator(".ch-menu-backdrop").click().catch(() => {});
       await page.waitForTimeout(300);
       await menuBtns.nth(i).click({ force: true });
-      // Wait for popup to render
       await page.waitForTimeout(500);
       const eqVisible = await page
         .locator(".ch-menu-popup")
@@ -666,42 +660,39 @@ test.describe("EQ Feature", () => {
 
     await waitForMixer(page);
 
-    // Navigate to Mics tab to see multiple members' tracks
+    // Step 1: Check Main tab for PETRONELA's own channel (has EQ)
+    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 5000 });
+    const mainKebab = page.locator(".ch-menu-btn").first();
+    await mainKebab.click({ force: true });
+    await page.waitForTimeout(500);
+    const eqOnOwn = await page
+      .locator(".ch-menu-popup")
+      .locator("button", { hasText: "EQ" })
+      .isVisible()
+      .catch(() => false);
+    await page.locator(".ch-menu-backdrop").click().catch(() => {});
+    await page.waitForTimeout(300);
+
+    // Step 2: Navigate to Mics tab for other members' channels (no EQ)
     const micsTab = page.getByRole("button", { name: "Mics" });
     await expect(micsTab).toBeVisible({ timeout: 5000 });
     await micsTab.click();
-
-    // Wait for channels to render
     await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 5000 });
 
-    // Scan all channels to find which ones have EQ in their kebab menu.
-    // Petronela should have EQ on at least one own channel, and at least one
-    // other member's channel should NOT have EQ.
-    const menuBtns = page.locator(".ch-menu-btn");
-    const btnCount = await menuBtns.count();
-    expect(btnCount).toBeGreaterThanOrEqual(2);
+    // Check first channel on Mics tab — should NOT have EQ (other member)
+    const micsKebab = page.locator(".ch-menu-btn").first();
+    await micsKebab.click({ force: true });
+    await page.waitForTimeout(500);
+    const eqOnOther = await page
+      .locator(".ch-menu-popup")
+      .locator("button", { hasText: "EQ" })
+      .isVisible()
+      .catch(() => false);
+    await page.locator(".ch-menu-backdrop").click().catch(() => {});
 
-    let foundEq = false;
-    let foundNoEq = false;
-    for (let i = 0; i < btnCount && !(foundEq && foundNoEq); i++) {
-      // Ensure previous popup is closed
-      await page.locator(".ch-menu-backdrop").click().catch(() => {});
-      await page.waitForTimeout(300);
-      await menuBtns.nth(i).click({ force: true });
-      await page.waitForTimeout(500);
-      const eqVisible = await page
-        .locator(".ch-menu-popup")
-        .locator("button", { hasText: "EQ" })
-        .isVisible()
-        .catch(() => false);
-      if (eqVisible) foundEq = true;
-      else foundNoEq = true;
-    }
-
-    // At least one channel should have EQ (own track)
-    expect(foundEq).toBe(true);
-    // At least one channel should NOT have EQ (other member's track)
-    expect(foundNoEq).toBe(true);
+    // Own channel has EQ, other member's doesn't
+    expect(eqOnOwn).toBe(true);
+    expect(eqOnOther).toBe(false);
   });
 
   test("Each band toggle sends correct REAPER band index (not all band=0)", async ({
