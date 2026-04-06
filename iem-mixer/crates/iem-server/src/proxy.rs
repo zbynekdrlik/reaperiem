@@ -28,7 +28,7 @@ pub async fn proxy_reaper(
     body: Body,
 ) -> Result<Response, (StatusCode, Json<ApiError>)> {
     let config = state.config.read().await;
-    let reaper_url = format!("{}/{}", config.reaper_url, path);
+    let reaper_url = format!("{}/_/{}", config.reaper_url, path);
     drop(config);
 
     tracing::debug!(url = %reaper_url, method = %method, "Proxying to REAPER");

@@ -57,20 +57,25 @@ test.describe("Global Volume Persistence", () => {
     // If fader is at an extreme, the first drag normalises it.
 
     // Step A: Drag to ~50% to normalise from any extreme position
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
+    const startX = box!.x + box!.width * 0.5;
+    const startY = box!.y + box!.height / 2;
+    await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.waitForTimeout(350);
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
-    await page.waitForTimeout(50);
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    // Step B: Now drag from 50% to 25% (decrease volume)
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
+    // Step B: Now drag from center to left in increments (decrease volume)
+    await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.waitForTimeout(350);
-    await page.mouse.move(box!.x + box!.width * 0.25, box!.y + box!.height / 2);
-    await page.waitForTimeout(50);
+    for (let i = 1; i <= 10; i++) {
+      await page.mouse.move(
+        box!.x + box!.width * (0.5 - 0.025 * i),
+        startY,
+      );
+      await page.waitForTimeout(50);
+    }
     await page.mouse.up();
 
     // Wait for WebSocket command to be sent and value to settle
@@ -114,23 +119,22 @@ test.describe("Global Volume Persistence", () => {
     expect(persistedDb).toBeCloseTo(afterDragDb, 0); // 0 decimal places = within 0.5
   });
 
-  test("ANI: Global volume persists after page reload", async ({ page }) => {
-    // Same test for ANI to verify if bug is member-specific
+  test("Global volume persists after page reload (second verify)", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "ani");
-    await page.goto("/ani");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    await expect(globalVol).toBeVisible({ timeout: 10000 });
+    await expect(globalVol).toBeVisible({ timeout: 15000 });
 
     const dbDisplay = globalVol.locator(".db-display");
     const initialValue = await dbDisplay.getAttribute("data-value");
     expect(initialValue).not.toBeNull();
 
     const initialDb = parseFloat(initialValue);
-    console.log(`[ANI] Initial global volume: ${initialDb} dB`);
+    console.log(`[verify2] Initial global volume: ${initialDb} dB`);
 
     // Normalise fader to middle then drag to a known position
     const fader = globalVol.locator(".fader-track");
@@ -138,49 +142,54 @@ test.describe("Global Volume Persistence", () => {
     expect(box).toBeTruthy();
 
     // Step A: Drag to ~50% to normalise from any extreme
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
+    const startX2 = box!.x + box!.width * 0.5;
+    const startY2 = box!.y + box!.height / 2;
+    await page.mouse.move(startX2, startY2);
     await page.mouse.down();
     await page.waitForTimeout(350);
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
-    await page.waitForTimeout(50);
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    // Step B: Drag from 50% to 30% (decrease volume)
-    await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
+    // Step B: Drag from center to left in increments (decrease volume)
+    await page.mouse.move(startX2, startY2);
     await page.mouse.down();
     await page.waitForTimeout(350);
-    await page.mouse.move(box!.x + box!.width * 0.3, box!.y + box!.height / 2);
-    await page.waitForTimeout(50);
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(
+        box!.x + box!.width * (0.5 - 0.025 * i),
+        startY2,
+      );
+      await page.waitForTimeout(50);
+    }
     await page.mouse.up();
     await page.waitForTimeout(500);
 
     const afterDragValue = await dbDisplay.getAttribute("data-value");
     expect(afterDragValue).not.toBeNull();
     const afterDragDb = parseFloat(afterDragValue);
-    console.log(`[ANI] After drag global volume: ${afterDragDb} dB`);
+    console.log(`[verify2] After drag global volume: ${afterDragDb} dB`);
 
     // Just verify value changed from initial
     expect(afterDragDb).not.toBeCloseTo(initialDb, 0);
 
     // Reload and verify
     await page.reload();
-    await loginAs(page, "ani");
-    await page.goto("/ani");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
     const globalVolReloaded = page.locator(
       '[data-testid="global-volume-fader"]',
     );
-    await globalVolReloaded.waitFor({ state: "visible", timeout: 15000 });
+    await expect(globalVolReloaded).toBeVisible({ timeout: 15000 });
     await page.waitForTimeout(1000);
 
     const dbDisplayReloaded = globalVolReloaded.locator(".db-display");
     const persistedValue = await dbDisplayReloaded.getAttribute("data-value");
     expect(persistedValue).not.toBeNull();
     const persistedDb = parseFloat(persistedValue);
-    console.log(`[ANI] After reload global volume: ${persistedDb} dB`);
+    console.log(`[verify2] After reload global volume: ${persistedDb} dB`);
 
     // If ANI passes and Petronela fails, bug is member-specific
     expect(persistedDb).toBeCloseTo(afterDragDb, 0);

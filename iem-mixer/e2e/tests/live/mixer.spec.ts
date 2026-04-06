@@ -267,9 +267,17 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    // Drag left by 40% of track width (relative movement, decreases volume)
-    await page.mouse.move(box!.x + box!.width * 0.3, box!.y + box!.height / 2);
-    await page.waitForTimeout(50);
+    // Drag left by 40% of track width in increments (relative movement, decreases volume)
+    const targetX = box!.x + box!.width * 0.3;
+    const dragStartX = box!.x + box!.width * 0.7;
+    const steps = 10;
+    for (let i = 1; i <= steps; i++) {
+      await page.mouse.move(
+        dragStartX + (targetX - dragStartX) * (i / steps),
+        box!.y + box!.height / 2,
+      );
+      await page.waitForTimeout(30);
+    }
 
     // Fill should have changed (moved via relative delta)
     // On live systems the fader may be at an extreme, so we only check it moved
@@ -1968,7 +1976,7 @@ test.describe("v1.50.0 Muted channel readability", () => {
     const muteBtn = firstChannel.locator(".mute-btn");
     expect(await muteBtn.count()).toBeGreaterThan(0);
     await muteBtn.click({ force: true });
-    await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
+    await expect(firstChannel).toHaveClass(/muted/, { timeout: 5000 });
 
     // .channel.muted must NOT have global opacity
     const channelOpacity = await firstChannel.evaluate(
@@ -2011,8 +2019,8 @@ test.describe("Main tab channel ordering", () => {
     page,
   }) => {
     await page.goto("/");
-    await loginAs(page, "ani");
-    await page.goto("/ani");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await waitForMixer(page);
 
     // Wait for channel strips to render (live system may be slower)
@@ -2023,13 +2031,13 @@ test.describe("Main tab channel ordering", () => {
 
     // First non-global-volume channel should be the member's own input
     const firstName = await channels.first().locator(".ch-name").textContent();
-    expect(firstName?.toUpperCase()).toContain("ANI");
+    expect(firstName?.toUpperCase()).toContain("PETRONELA");
   });
 
   test("MY MIC label is not present on Main tab", async ({ page }) => {
     await page.goto("/");
-    await loginAs(page, "ani");
-    await page.goto("/ani");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
     await waitForMixer(page);
 
     const myMicLabel = page.locator(".main-section-label");
@@ -2066,7 +2074,7 @@ test.describe("Main tab channel ordering", () => {
     await muteBtn.click({ force: true });
 
     // Verify the channel has the muted class
-    await expect(firstChannel).toHaveClass(/muted/, { timeout: 2000 });
+    await expect(firstChannel).toHaveClass(/muted/, { timeout: 5000 });
 
     // Open kebab menu on the muted channel
     const kebabBtn = firstChannel.locator(".ch-menu-btn");

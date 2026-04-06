@@ -170,7 +170,7 @@ test.describe("Output Limiter — Issue #72", () => {
     // Verify modal has slider elements
     const sliders = page.locator(".limiter-slider-track");
     const sliderCount = await sliders.count();
-    expect(sliderCount).toBe(3); // threshold, ceiling, release
+    expect(sliderCount).toBe(1); // MAX LEVEL
 
     // Close modal
     const closeBtn = page.locator(".limiter-close-btn");

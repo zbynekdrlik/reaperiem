@@ -73,7 +73,7 @@ test.describe("Band Member Alert Button (#125)", () => {
 
     // Button should show active state (not disabled, has "active" class)
     // Poll until active class appears — WebSocket round-trip takes time on live system
-    await expect(alertBtn).toHaveClass(/active/, { timeout: 10000 });
+    await expect(alertBtn).toHaveClass(/active/, { timeout: 15000 });
   });
 
   test("alert persists until engineer dismisses", async ({ browser }) => {

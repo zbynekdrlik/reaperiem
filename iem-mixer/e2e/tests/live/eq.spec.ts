@@ -63,7 +63,7 @@ async function openKebabMenu(
 
 // Helper to click the EQ option in an already-open kebab menu.
 async function clickEqOption(page: Page): Promise<void> {
-  const eqOption = page.locator(".ch-menu-popup >> text=EQ >> visible=true");
+  const eqOption = page.locator(".ch-menu-popup").locator("button", { hasText: "EQ" });
   await expect(eqOption).toBeVisible({ timeout: 3000 });
   await eqOption.click();
 }
@@ -94,7 +94,7 @@ test.describe("EQ Feature", () => {
       await page.waitForTimeout(300);
       const eqVisible = await page
         .locator(".ch-menu-popup")
-        .getByText("EQ", { exact: true })
+        .locator("button", { hasText: "EQ" })
         .isVisible()
         .catch(() => false);
       if (eqVisible) {
@@ -688,7 +688,7 @@ test.describe("EQ Feature", () => {
       await page.waitForTimeout(300);
       const eqVisible = await page
         .locator(".ch-menu-popup")
-        .getByText("EQ", { exact: true })
+        .locator("button", { hasText: "EQ" })
         .isVisible()
         .catch(() => false);
       if (eqVisible) foundEq = true;
@@ -946,9 +946,7 @@ async function openEqForChannel(
       if (!visible) continue;
       await menuBtn.click({ force: true });
       // Wait for and click EQ option
-      const eqOption = page.locator(
-        ".ch-menu-popup >> text=EQ >> visible=true",
-      );
+      const eqOption = page.locator(".ch-menu-popup").locator("button", { hasText: "EQ" });
       try {
         await eqOption.waitFor({ state: "visible", timeout: 3000 });
       } catch {
