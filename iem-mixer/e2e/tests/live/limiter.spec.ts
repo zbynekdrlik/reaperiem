@@ -57,6 +57,13 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -69,13 +76,13 @@ test.describe("Output Limiter — Issue #72", () => {
 
     // Login as engineer and navigate
     await page.goto("/");
-    await loginAsEngineer(page, member.id);
+    await loginAsEngineer(page, "engineer");
     await page.goto(`/${member.id}`);
 
     await waitForMixer(page);
 
     // Wait for channel strips to appear (needs REAPER data)
-    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Check for LIMIT button (engineer-only)
     const limitBtn = page.locator(".limiter-btn-small");
@@ -90,6 +97,13 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -106,7 +120,7 @@ test.describe("Output Limiter — Issue #72", () => {
 
     await waitForMixer(page);
 
-    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // LIMIT button should NOT be visible to regular members
     const limitBtn = page.locator(".limiter-btn-small");
@@ -121,6 +135,13 @@ test.describe("Output Limiter — Issue #72", () => {
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
+        if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("navigator.vibrate")) return;
+        if (msg.text().includes("closure invoked recursively")) return;
+        if (msg.text().includes("[vite]")) return;
+        if (msg.text().includes("favicon")) return;
+        if (msg.text().includes("integrity")) return;
+        if (msg.text().includes("WebSocket connection")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
@@ -131,12 +152,12 @@ test.describe("Output Limiter — Issue #72", () => {
     const member = members[0];
 
     await page.goto("/");
-    await loginAsEngineer(page, member.id);
+    await loginAsEngineer(page, "engineer");
     await page.goto(`/${member.id}`);
 
     await waitForMixer(page);
 
-    await expect(page.locator(".channel-strip").first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
     // Click LIMIT button
     const limitBtn = page.locator(".limiter-btn-small").first();

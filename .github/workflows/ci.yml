@@ -540,7 +540,7 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    timeout-minutes: 15
+    timeout-minutes: 25
     concurrency:
       group: iem-lan-runner
       cancel-in-progress: false
@@ -1113,6 +1113,12 @@ jobs:
           } else {
             Write-Host "set_limiter_param.lua already registered"
           }
+          if ($content -notmatch "REVERT_PROJECT") {
+            Add-Content $kbIni 'SCR 4 0 RS_REAPERIEM_REVERT_PROJECT "Custom: Revert project to last saved state" reaperiem\revert_project.lua'
+            Write-Host "Registered revert_project.lua"
+          } else {
+            Write-Host "revert_project.lua already registered"
+          }
 
       - name: Register scripts dynamically via meter_bridge
         shell: powershell
@@ -1136,7 +1142,7 @@ jobs:
           }
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua|revert_project.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
           Start-Sleep -Seconds 3
           $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
           Write-Host "Dynamic registration result: $result"
@@ -1548,7 +1554,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 3
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua|revert_project.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 5
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             Write-Host "Dynamic registration: $regResult"
@@ -2017,10 +2023,53 @@ jobs:
             }
           }
 
-      # POST-DEPLOY E2E DISABLED — tests modify real band member mixes (#142)
-      # Re-enable after rewriting tests to use engineer-only writes.
-      # See: https://github.com/zbynekdrlik/reaperiem/issues/142
-      # - name: Setup Node.js for post-deploy E2E
-      # - name: Install Playwright for post-deploy E2E
-      # - name: Run post-deploy E2E tests
-      # - name: Upload post-deploy E2E results on failure
+      - name: Setup Node.js for post-deploy E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Playwright for post-deploy E2E
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Save REAPER project before E2E
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Write-Host "REAPER project saved (action 40026)"
+          } catch {
+            Write-Host "::warning::Failed to save REAPER project: $_"
+          }
+          Start-Sleep -Seconds 2
+
+      - name: Run post-deploy E2E tests
+        shell: powershell
+        working-directory: iem-mixer/e2e
+        run: npx playwright test --config=playwright.live.config.ts --reporter=list
+        env:
+          E2E_BASE_URL: http://localhost
+
+      - name: Restore REAPER project after E2E
+        if: always()
+        shell: powershell
+        run: |
+          try {
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_REVERT_PROJECT" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 3
+            $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/revert_result" -UseBasicParsing).Content
+            Write-Host "REAPER project reverted: $result"
+          } catch {
+            Write-Host "::warning::Failed to revert REAPER project: $_"
+          }
+
+      - name: Upload post-deploy E2E results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-e2e-results
+          path: iem-mixer/e2e/test-results/
+          retention-days: 7

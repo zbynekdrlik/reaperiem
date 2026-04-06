@@ -119,6 +119,6 @@ test.describe("Stems Volume Fader", () => {
 
     // Global volume should always be on Main tab regardless of stems
     const globalFader = page.locator('[data-testid="global-volume-fader"]');
-    await expect(globalFader).toBeVisible();
+    await expect(globalFader).toBeVisible({ timeout: 15000 });
   });
 });

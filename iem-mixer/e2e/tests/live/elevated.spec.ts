@@ -29,8 +29,12 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
     await page.goto("/");
 
     // This test requires REAPER to be running (mix sends must exist)
-    const reaperCheck = await page.request
-      .get("/api/reaper/NTRACK");
+    // Retry up to 5 times with 3s delay — REAPER may be slow after deploy
+    let reaperCheck = await page.request.get("/api/reaper/NTRACK");
+    for (let attempt = 0; attempt < 4 && !reaperCheck.ok(); attempt++) {
+      await page.waitForTimeout(3000);
+      reaperCheck = await page.request.get("/api/reaper/NTRACK");
+    }
     expect(reaperCheck.ok()).toBe(true);
 
     const engAuth = await getEngineerToken(page);
