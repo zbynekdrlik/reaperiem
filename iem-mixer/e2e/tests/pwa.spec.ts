@@ -64,6 +64,9 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
     // Reload to ensure SW is active and can intercept fetches
     await page.reload({ waitUntil: "networkidle" });
 
+    // Wait for SW to populate cache (may take a moment after activation)
+    await page.waitForTimeout(2000);
+
     // Verify the iem-assets-v1 cache exists with hashed files
     const cacheInfo = await page.evaluate(async () => {
       const names = await caches.keys();
