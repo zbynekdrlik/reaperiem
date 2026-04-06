@@ -680,10 +680,12 @@ test.describe("EQ Feature", () => {
     await page.waitForTimeout(300);
 
     // Step 2: Navigate to Mics tab for other members' channels (no EQ)
+    // Channel data is already loaded from WebSocket (Main tab channels visible)
     const micsTab = page.getByRole("button", { name: "Mics" });
     await expect(micsTab).toBeVisible({ timeout: 5000 });
     await micsTab.click();
-    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(500);
+    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 10000 });
 
     // Check first channel on Mics tab — should NOT have EQ (other member)
     const micsKebab = page.locator(".ch-menu-btn").first();

@@ -2052,13 +2052,14 @@ test.describe("Main tab channel ordering", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
+    // Wait for WebSocket to deliver channel data before switching tabs
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
     // Switch to Mics tab (NOT Main — Main doesn't filter hidden channels)
     const micsTab = page.locator(".category-tab.mics");
     if (!(await micsTab.count())) return;
     await micsTab.click();
-
-    // Wait for channels to appear (REAPER may be slow after many sequential test connections)
-    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(500);
     const initialChannels = await page.locator(".channel").count();
     expect(initialChannels).toBeGreaterThan(0);
 
@@ -2127,14 +2128,17 @@ test.describe("Solo sync", () => {
     await waitForMixer(page1);
     await waitForMixer(page2);
 
-    // Switch to Mics tab on both pages — Main tab may only show 1 channel
+    // Wait for WebSocket to deliver channel data (channels appear on Main tab first)
+    await expect(page1.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+    await expect(page2.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    // Now switch to Mics tab — channel data is already loaded
     const micsTab1 = page1.locator(".category-tab.mics");
     if ((await micsTab1.count()) > 0) await micsTab1.click();
     const micsTab2 = page2.locator(".category-tab.mics");
     if ((await micsTab2.count()) > 0) await micsTab2.click();
-
-    await expect(page1.locator(".channel").first()).toBeVisible({ timeout: 15000 });
-    await expect(page2.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+    await page1.waitForTimeout(500);
+    await page2.waitForTimeout(500);
 
     const soloBtn1 = page1.locator(".solo-btn").first();
     expect(await soloBtn1.count()).toBeGreaterThan(0);
@@ -2164,10 +2168,13 @@ test.describe("Solo sync", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    // Switch to Mics tab — Main tab may only show 1 channel with solo button
+    // Wait for WebSocket to deliver channel data before switching tabs
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    // Switch to Mics tab — channel data already loaded
     const micsTab = page.locator(".category-tab.mics");
     if ((await micsTab.count()) > 0) await micsTab.click();
-    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(500);
 
     const soloBtns = page.locator(".solo-btn");
     const count = await soloBtns.count();
