@@ -2104,6 +2104,19 @@ test.describe("Main tab channel ordering", () => {
       await hiddenTab.click();
       // At least one hidden channel should appear on the Hidden tab
       await expect(page.locator(".channel").first()).toBeVisible({ timeout: 3000 });
+
+      // CLEANUP: Unhide the channel to restore production state
+      // Hidden state persists server-side — not restored by REAPER project revert
+      const unhideKebab = page.locator(".ch-menu-btn").first();
+      if ((await unhideKebab.count()) > 0) {
+        await unhideKebab.click({ force: true });
+        await page.waitForTimeout(300);
+        const unhideBtn = page.locator(".ch-menu-popup").locator(".ch-menu-item", { hasText: "Unhide" });
+        if ((await unhideBtn.count()) > 0) {
+          await unhideBtn.click();
+          await page.waitForTimeout(500);
+        }
+      }
     }
   });
 });
