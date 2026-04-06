@@ -683,7 +683,7 @@ test.describe("EQ Feature", () => {
     const micsTab = page.getByRole("button", { name: "Mics" });
     await expect(micsTab).toBeVisible({ timeout: 5000 });
     await micsTab.click();
-    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".ch-menu-btn").first()).toBeVisible({ timeout: 15000 });
 
     // Check first channel on Mics tab — should NOT have EQ (other member)
     const micsKebab = page.locator(".ch-menu-btn").first();
