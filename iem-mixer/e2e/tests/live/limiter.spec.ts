@@ -70,7 +70,7 @@ test.describe("Output Limiter — Issue #72", () => {
 
     // Login as engineer and navigate
     await page.goto("/");
-    await loginAsEngineer(page, member.id);
+    await loginAsEngineer(page, "engineer");
     await page.goto(`/${member.id}`);
 
     await waitForMixer(page);
@@ -134,7 +134,7 @@ test.describe("Output Limiter — Issue #72", () => {
     const member = members[0];
 
     await page.goto("/");
-    await loginAsEngineer(page, member.id);
+    await loginAsEngineer(page, "engineer");
     await page.goto(`/${member.id}`);
 
     await waitForMixer(page);

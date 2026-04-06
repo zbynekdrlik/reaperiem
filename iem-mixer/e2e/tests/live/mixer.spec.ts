@@ -251,8 +251,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     expect(box).toBeTruthy();
     expect(box!.width).toBeGreaterThan(50);
 
-    // Mouse down at 30% of fader (left side, to maximize drag distance)
-    await page.mouse.move(box!.x + box!.width * 0.3, box!.y + box!.height / 2);
+    // Mouse down at 70% of fader (right side), then drag LEFT to decrease
+    // This works regardless of current fader value (always room to decrease)
+    await page.mouse.move(box!.x + box!.width * 0.7, box!.y + box!.height / 2);
     await page.mouse.down();
 
     // Wait for 150ms activation delay
@@ -266,16 +267,16 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    // Drag right by 50% of track width (relative movement)
-    await page.mouse.move(box!.x + box!.width * 0.8, box!.y + box!.height / 2);
+    // Drag left by 40% of track width (relative movement, decreases volume)
+    await page.mouse.move(box!.x + box!.width * 0.3, box!.y + box!.height / 2);
     await page.waitForTimeout(50);
 
-    // Fill should have grown (moved right via relative delta)
+    // Fill should have shrunk (moved left via relative delta)
     const fillAfterDrag = await fader
       .locator(".fader-fill")
       .evaluate((el) => el.getBoundingClientRect().width);
 
-    expect(fillAfterDrag).toBeGreaterThan(fillAtActivation);
+    expect(fillAfterDrag).toBeLessThan(fillAtActivation);
 
     // Release
     await page.mouse.up();
@@ -423,8 +424,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    const channel = page.locator(".channel").first();
-    await expect(channel).toBeVisible({ timeout: 5000 });
+    // Use non-global-volume channel (global-volume has no kebab menu)
+    const channel = page.locator(".channel:not(.global-volume)").first();
+    await expect(channel).toBeVisible({ timeout: 10000 });
 
     const menuBtn = channel.locator(".ch-menu-btn").first();
     await expect(menuBtn).toBeVisible({ timeout: 5000 });
@@ -442,8 +444,9 @@ test.describe("Mixer Controls - Real Functionality Tests", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    const channel = page.locator(".channel").first();
-    await expect(channel).toBeVisible({ timeout: 5000 });
+    // Use non-global-volume channel (global-volume has no kebab menu)
+    const channel = page.locator(".channel:not(.global-volume)").first();
+    await expect(channel).toBeVisible({ timeout: 10000 });
 
     // Open the kebab menu
     const menuBtn = channel.locator(".ch-menu-btn").first();

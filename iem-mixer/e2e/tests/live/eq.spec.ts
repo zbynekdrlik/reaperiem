@@ -1,9 +1,9 @@
 import { test, expect, Page } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
-async function loginAs(page: Page, member: string) {
+async function loginAs(page: Page, member: string, pin: string = "7711") {
   const response = await page.request.post("/api/auth", {
-    data: { member, pin: "7711" },
+    data: { member, pin },
   });
 
   if (response.status() === 200) {
@@ -976,7 +976,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     });
 
     await page.goto("/");
-    await loginAs(page, "engineer");
+    await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
   });
 
