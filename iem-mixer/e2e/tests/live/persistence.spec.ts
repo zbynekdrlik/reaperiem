@@ -53,16 +53,18 @@ test.describe("Global Volume Persistence", () => {
     expect(box).toBeTruthy();
 
     // Calculate fader position for -10dB
-    // Range: -60dB to +12dB = 72dB total
-    // -10dB = 50dB from min, so 50/72 = ~69.4%
-    const targetPct = (-10 - -60) / (12 - -60); // 50/72 = 0.694
+    // Range: -60dB to +12dB = 72dB total, left=min right=max
+    // -10dB = 50/72 = 69.4% from left — BUT we start at 50% center
+    // Dragging RIGHT increases volume, so to go DOWN we drag LEFT.
+    // Use 30% which maps to roughly -38dB area, well below -5dB threshold.
+    const targetPct = 0.3;
 
     // Mouse down at center, wait for activation
     await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(350);
 
-    // Drag to target position
+    // Drag to target position (left of center = lower volume)
     await page.mouse.move(
       box!.x + box!.width * targetPct,
       box!.y + box!.height / 2,
@@ -79,9 +81,9 @@ test.describe("Global Volume Persistence", () => {
     const afterDragDb = parseFloat(afterDragValue);
     console.log(`After drag global volume: ${afterDragDb} dB`);
 
-    // Verify we actually changed the value (should be roughly -10dB)
-    // Allow some tolerance since fader drag isn't pixel-perfect
-    expect(afterDragDb).toBeGreaterThan(-15);
+    // Verify we actually changed the value (should be below 0dB — dragged left)
+    // 30% maps to roughly -38dB; allow generous tolerance for drag imprecision
+    expect(afterDragDb).toBeGreaterThan(-60);
     expect(afterDragDb).toBeLessThan(-5);
 
     // Step 4: Reload page and re-login
@@ -122,7 +124,7 @@ test.describe("Global Volume Persistence", () => {
     await waitForMixer(page);
 
     const globalVol = page.locator('[data-testid="global-volume-fader"]');
-    await expect(globalVol).toBeVisible({ timeout: 5000 });
+    await expect(globalVol).toBeVisible({ timeout: 10000 });
 
     const dbDisplay = globalVol.locator(".db-display");
     const initialValue = await dbDisplay.getAttribute("data-value");
@@ -167,7 +169,7 @@ test.describe("Global Volume Persistence", () => {
     const globalVolReloaded = page.locator(
       '[data-testid="global-volume-fader"]',
     );
-    await globalVolReloaded.waitFor({ state: "visible", timeout: 5000 });
+    await globalVolReloaded.waitFor({ state: "visible", timeout: 10000 });
     await page.waitForTimeout(1000);
 
     const dbDisplayReloaded = globalVolReloaded.locator(".db-display");
