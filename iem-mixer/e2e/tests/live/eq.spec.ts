@@ -86,8 +86,11 @@ test.describe("EQ Feature", () => {
     const btnCount = await menuBtns.count();
     let foundEq = false;
     for (let i = 0; i < btnCount; i++) {
-      await page.locator(".ch-menu-backdrop").click().catch(() => {});
-      await page.waitForTimeout(300);
+      // Close any open popup (short timeout — backdrop may not exist)
+      if (await page.locator(".ch-menu-backdrop").count() > 0) {
+        await page.locator(".ch-menu-backdrop").click({ timeout: 1000 }).catch(() => {});
+        await page.waitForTimeout(200);
+      }
       await menuBtns.nth(i).click({ force: true });
       await page.waitForTimeout(500);
       const eqVisible = await page
@@ -97,9 +100,12 @@ test.describe("EQ Feature", () => {
         .catch(() => false);
       if (eqVisible) {
         foundEq = true;
-        await page.locator(".ch-menu-backdrop").click().catch(() => {});
         break;
       }
+    }
+    // Close popup if still open
+    if (await page.locator(".ch-menu-backdrop").count() > 0) {
+      await page.locator(".ch-menu-backdrop").click({ timeout: 1000 }).catch(() => {});
     }
     expect(foundEq).toBe(true);
   });
