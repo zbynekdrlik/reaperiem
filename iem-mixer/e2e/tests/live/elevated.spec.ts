@@ -28,17 +28,21 @@ test.describe("Elevated member access (Petronela hardcoded)", () => {
   }) => {
     await page.goto("/");
 
-    // This test requires REAPER to be running (mix sends must exist)
-    // Retry up to 5 times with 3s delay — REAPER may be slow after deploy
-    let reaperCheck = await page.request.get("/api/reaper/NTRACK");
-    for (let attempt = 0; attempt < 4 && !reaperCheck.ok(); attempt++) {
-      await page.waitForTimeout(3000);
-      reaperCheck = await page.request.get("/api/reaper/NTRACK");
-    }
-    expect(reaperCheck.ok()).toBe(true);
-
     const engAuth = await getEngineerToken(page);
     expect(engAuth).toBeTruthy();
+
+    // This test requires REAPER to be running (mix sends must exist)
+    // REAPER proxy requires engineer auth — retry up to 5 times with 3s delay
+    let reaperCheck = await page.request.get("/api/reaper/NTRACK", {
+      headers: { Authorization: `Bearer ${engAuth!.token}` },
+    });
+    for (let attempt = 0; attempt < 4 && !reaperCheck.ok(); attempt++) {
+      await page.waitForTimeout(3000);
+      reaperCheck = await page.request.get("/api/reaper/NTRACK", {
+        headers: { Authorization: `Bearer ${engAuth!.token}` },
+      });
+    }
+    expect(reaperCheck.ok()).toBe(true);
 
     // Wait for background discovery to complete
     await page.waitForTimeout(5000);

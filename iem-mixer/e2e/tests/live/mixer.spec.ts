@@ -1966,9 +1966,9 @@ test.describe("v1.50.0 Muted channel readability", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    // Wait for channels to render
-    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 5000 });
-    const firstChannel = page.locator(".channel").first();
+    // Wait for channels to render — use non-global-volume channel
+    const firstChannel = page.locator(".channel:not(.global-volume)").first();
+    await expect(firstChannel).toBeVisible({ timeout: 5000 });
     const classes = await firstChannel.getAttribute("class");
     expect(classes).not.toContain("disconnected");
 

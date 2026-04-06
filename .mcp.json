@@ -4,6 +4,13 @@
       "command": "/home/newlevel/devel/reaperiem/.venv/bin/python",
       "args": ["-m", "reaperiem_mcp.server"],
       "cwd": "/home/newlevel/devel/reaperiem/mcp"
+    },
+    "win-iem-snv": {
+      "type": "http",
+      "url": "http://iem.lan:8090/mcp",
+      "headers": {
+        "Authorization": "Bearer yenBZtLmXPq8v1Uko5TfYpbs9VJIMz03"
+      }
     }
   }
 }

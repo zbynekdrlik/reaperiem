@@ -550,16 +550,12 @@ sed -i 's/"version": "1.1.0"/"version": "1.2.0"/' iem-mixer/src-tauri/tauri.conf
 
 ## ⚠️ PROJECT-SPECIFIC TEST NOTES
 
-### Known Test Gaps
+### Test Architecture
 
-Existing tests are mostly rendering checks. Green CI does NOT guarantee features work. Write behavior tests, not just DOM checks.
-
-- E2E tests run without REAPER — most mixer functionality is assume()-skipped
-- No WebSocket message flow integration tests
-- No settings persistence tests (save → reload → verify)
-- Mute, pan, fader commands not verified against REAPER
-
-After every deploy, manually verify: fader → REAPER value changes, mute → channel mutes in REAPER.
+- **CI E2E tests** (GitHub runner): Page loads, UI rendering, basic interactions. MUST NOT use `assume()` or gracefully skip — if REAPER is needed for a test, that test belongs in the deploy E2E job, not the CI job.
+- **Deploy E2E tests** (self-hosted runner on iem.lan): Full REAPER integration — fader→REAPER, mute→REAPER, EQ→REAPER. These run AFTER deploy to iem.lan with real REAPER connection.
+- **All tests that need REAPER MUST run on the deploy runner, not skip on the CI runner.** A skipped test is a lie.
+- **CI test-integrity job MUST scan for `assume()`, `test.skip()`, and graceful-skip patterns and FAIL if any are found.**
 
 ### E2E Against Real System
 
