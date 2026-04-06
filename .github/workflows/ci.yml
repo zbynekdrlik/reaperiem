@@ -2067,20 +2067,16 @@ jobs:
           $bakPath = "$rppPath.e2e-bak"
           try {
             if (-not (Test-Path $bakPath)) {
-              Write-Host "::warning::No backup found at $bakPath — cannot restore"
+              Write-Host "::warning::No backup found at $bakPath - cannot restore"
               exit 0
             }
-            # Step 1: Save project to clear the dirty flag (prevents "Save before closing?" dialog)
-            # This saves the test-modified version temporarily — we overwrite it in Step 2
+            # Save project to clear dirty flag (prevents Save dialog on reload)
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
             Start-Sleep -Seconds 2
-
-            # Step 2: Overwrite the .RPP with the pre-E2E backup
+            # Overwrite RPP with pre-E2E backup
             Copy-Item -Path $bakPath -Destination $rppPath -Force
             Write-Host "Backup restored to $rppPath"
-
-            # Step 3: Tell REAPER to reload the project (no dialog — dirty flag was cleared in Step 1)
-            # Use dynamic action ID from meter_bridge registration
+            # Reload project via dynamic action ID
             $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
             $revertId = ""
             if ($regResult -match "revert_project=(\d+)") {
@@ -2092,10 +2088,8 @@ jobs:
               $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/revert_result" -UseBasicParsing -TimeoutSec 5).Content
               Write-Host "REAPER project reverted: $result"
             } else {
-              Write-Host "::warning::Could not find revert_project action ID in register_result"
+              Write-Host "::warning::Could not find revert_project action ID"
             }
-
-            # Cleanup backup
             Remove-Item -Path $bakPath -Force -ErrorAction SilentlyContinue
           } catch {
             Write-Host "::warning::Failed to restore REAPER project: $_"
