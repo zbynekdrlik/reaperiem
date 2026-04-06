@@ -55,7 +55,6 @@ test.describe("Global Volume Persistence", () => {
     // First drag to a known middle position to ensure room to move,
     // then drag to a target. Use 50% as start → 25% as target = decrease.
     // If fader is at an extreme, the first drag normalises it.
-    const initialDb = parseFloat(initialValue);
 
     // Step A: Drag to ~50% to normalise from any extreme position
     await page.mouse.move(box!.x + box!.width * 0.5, box!.y + box!.height / 2);
