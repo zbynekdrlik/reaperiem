@@ -45,6 +45,9 @@ Thumbs.db
 !web/**/*.png
 !iem-mixer/**/*.png
 
+# MCP server config (contains bearer tokens)
+.mcp.json
+
 # Playwright test artifacts
 .playwright-mcp/
 test-results/

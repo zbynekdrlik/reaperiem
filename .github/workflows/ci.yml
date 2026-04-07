@@ -2092,7 +2092,7 @@ jobs:
             }
             Remove-Item -Path $bakPath -Force -ErrorAction SilentlyContinue
           } catch {
-            Write-Host "::warning::Failed to restore REAPER project: $_"
+            Write-Host "::error::Failed to restore REAPER project: $_"
           }
 
       - name: Upload post-deploy E2E results on failure

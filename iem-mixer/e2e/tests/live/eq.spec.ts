@@ -1241,7 +1241,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
     }
   });
 
-  test("gain change on disabled band keeps it disabled", async ({ page }) => {
+  test("gain change on disabled band re-enables it (ReaEQ behavior)", async ({ page }) => {
     await waitForMixer(page);
 
     const reaperEq = await readReaperEq(32);
@@ -1294,9 +1294,10 @@ test.describe("EQ value sync - ENGINEER track", () => {
     const band0 = parseReaperBand(freshEq!, 0);
     expect(band0).toBeTruthy();
 
-    // Band enabled state after gain drag — REAPER may re-enable band on gain change
-    // Verify the state is consistent (either 0 or 1, not null/undefined)
-    expect(["0", "1"]).toContain(band0!["en"]);
+    // REAPER re-enables bands when gain is changed via the EQ plugin API.
+    // This is correct ReaEQ behavior — changing gain on a disabled band activates it.
+    // Verify the band is now enabled (REAPER auto-enabled it on gain change).
+    expect(band0!["en"]).toBe("1");
 
     // Cleanup: re-enable band and close
     const toggleAfter = targetBand.locator(".eq-band-toggle");

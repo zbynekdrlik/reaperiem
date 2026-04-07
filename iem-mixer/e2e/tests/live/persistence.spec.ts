@@ -119,10 +119,11 @@ test.describe("Global Volume Persistence", () => {
     expect(persistedDb).toBeCloseTo(afterDragDb, 0); // 0 decimal places = within 0.5
   });
 
-  test("Global volume persists after page reload (second verify)", async ({ page }) => {
+  test("Stevo: Global volume persists after page reload", async ({ page }) => {
+    // Uses stevo (different member than test 1) to verify cross-member persistence
     await page.goto("/");
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "stevo");
+    await page.goto("/stevo");
 
     await waitForMixer(page);
 
@@ -134,7 +135,7 @@ test.describe("Global Volume Persistence", () => {
     expect(initialValue).not.toBeNull();
 
     const initialDb = parseFloat(initialValue);
-    console.log(`[verify2] Initial global volume: ${initialDb} dB`);
+    console.log(`[STEVO] Initial global volume: ${initialDb} dB`);
 
     // Normalise fader to middle then drag to a known position
     const fader = globalVol.locator(".fader-track");
@@ -167,15 +168,15 @@ test.describe("Global Volume Persistence", () => {
     const afterDragValue = await dbDisplay.getAttribute("data-value");
     expect(afterDragValue).not.toBeNull();
     const afterDragDb = parseFloat(afterDragValue);
-    console.log(`[verify2] After drag global volume: ${afterDragDb} dB`);
+    console.log(`[STEVO] After drag global volume: ${afterDragDb} dB`);
 
     // Just verify value changed from initial
     expect(afterDragDb).not.toBeCloseTo(initialDb, 0);
 
     // Reload and verify
     await page.reload();
-    await loginAs(page, "petronela");
-    await page.goto("/petronela");
+    await loginAs(page, "stevo");
+    await page.goto("/stevo");
 
     await waitForMixer(page);
 
@@ -189,7 +190,7 @@ test.describe("Global Volume Persistence", () => {
     const persistedValue = await dbDisplayReloaded.getAttribute("data-value");
     expect(persistedValue).not.toBeNull();
     const persistedDb = parseFloat(persistedValue);
-    console.log(`[verify2] After reload global volume: ${persistedDb} dB`);
+    console.log(`[STEVO] After reload global volume: ${persistedDb} dB`);
 
     // If ANI passes and Petronela fails, bug is member-specific
     expect(persistedDb).toBeCloseTo(afterDragDb, 0);
