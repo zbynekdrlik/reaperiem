@@ -64,18 +64,22 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
     // Reload to ensure SW is active and can intercept fetches
     await page.reload({ waitUntil: "networkidle" });
 
-    // Poll for SW cache to be populated (SW may take several seconds to intercept and cache)
-    const cacheInfo = await page.waitForFunction(async () => {
-      const names = await caches.keys();
-      if (!names.includes("iem-assets-v1")) return null;
-      const cache = await caches.open("iem-assets-v1");
-      const requests = await cache.keys();
-      if (requests.length === 0) return null;
-      return {
-        exists: true,
-        keys: requests.map((r: Request) => new URL(r.url).pathname),
-      };
-    }, { timeout: 10000 }).then(h => h.jsonValue()).catch(() => ({ exists: false, keys: [] }));
+    // Poll for SW cache to be populated (SW may take several seconds after activation)
+    let cacheInfo = { exists: false, keys: [] as string[] };
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await page.waitForTimeout(1000);
+      cacheInfo = await page.evaluate(async () => {
+        const names = await caches.keys();
+        if (!names.includes("iem-assets-v1")) return { exists: false, keys: [] as string[] };
+        const cache = await caches.open("iem-assets-v1");
+        const requests = await cache.keys();
+        return {
+          exists: true,
+          keys: requests.map((r) => new URL(r.url).pathname),
+        };
+      });
+      if (cacheInfo.exists && cacheInfo.keys.length > 0) break;
+    }
 
     expect(cacheInfo.exists).toBe(true);
     // Should have cached at least the WASM and JS loader files
