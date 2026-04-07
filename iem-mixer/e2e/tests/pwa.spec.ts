@@ -64,20 +64,18 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
     // Reload to ensure SW is active and can intercept fetches
     await page.reload({ waitUntil: "networkidle" });
 
-    // Wait for SW to populate cache (may take a moment after activation)
-    await page.waitForTimeout(2000);
-
-    // Verify the iem-assets-v1 cache exists with hashed files
-    const cacheInfo = await page.evaluate(async () => {
+    // Poll for SW cache to be populated (SW may take several seconds to intercept and cache)
+    const cacheInfo = await page.waitForFunction(async () => {
       const names = await caches.keys();
-      if (!names.includes("iem-assets-v1")) return { exists: false, keys: [] };
+      if (!names.includes("iem-assets-v1")) return null;
       const cache = await caches.open("iem-assets-v1");
       const requests = await cache.keys();
+      if (requests.length === 0) return null;
       return {
         exists: true,
-        keys: requests.map((r) => new URL(r.url).pathname),
+        keys: requests.map((r: Request) => new URL(r.url).pathname),
       };
-    });
+    }, { timeout: 10000 }).then(h => h.jsonValue()).catch(() => ({ exists: false, keys: [] }));
 
     expect(cacheInfo.exists).toBe(true);
     // Should have cached at least the WASM and JS loader files
