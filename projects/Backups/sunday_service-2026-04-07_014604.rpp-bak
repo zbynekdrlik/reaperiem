@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1775480356 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1775519164 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -140,7 +140,7 @@
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
-        IQAAAAUAAAAEAAAAAQAAADCBNQn1lWRAAAAAAOTZCEAAAAAAAAAAQAEAAAAAAAAAAJamOqCZnG5AAAAAAOTZCEAAAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
+        IQAAAAUAAAAEAAAAAAAAADCBNQn1lWRAAAAAAOTZCEAAAAAAAAAAQAEAAAAAAAAAAJamOqCZnG5AAAAA4Dk/C0AAAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
         8D8AAAAAAADwPwEIAAAAAAAAAHfH++l3aKdAAAAAAAAA8D8AAAAAAADwPwEBAAAAAAAAAKWt3qUPUL9AAAAAAAAA8D8AAAAAAAAAQAEBAAAAAQAAAAAAAAAAAPA/AAAA
         AP0BAABcAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
@@ -1060,7 +1060,7 @@
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
-        IQAAAAUAAAAEAAAAAQAAAA9hXXhVDVRAAAAAAITkBkAAAAAAAAAAQAEAAAAAAQAAAAQEaDDZCWlAAAAAgB6jBUAAAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
+        IQAAAAUAAAAEAAAAAQAAAA9hXXhVDVRAAAAAAITkBkAAAAAAAAAAQAEAAAAAAQAAAAQEaDDZCWlAAAAAAIEj/D8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
         8D8AAAAAAADwPwEIAAAAAAAAAFGWRbb4i59AAAAAIDZY7D8AAACgR+HyPwEBAAAAAAAAADsQR1uB9rhAAAAAYB0A9T8AAAAAAAAAQAEBAAAAAQAAAAAAAAAAAPA/AAAA
         AP0BAABcAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
@@ -1086,7 +1086,7 @@
     AUTOMODE 0
     PANLAWFLAGS 3
     VOLPAN 0.031622775 0 -1 -1 1
-    MUTESOLO 0 0 1
+    MUTESOLO 1 0 1
     IPHASE 0
     PLAYOFFS 0 1
     ISBUS 0 0
@@ -1104,12 +1104,12 @@
     FX 1
     TRACKID {6561EBEC-611D-461D-9855-C99AF01DA123}
     PERF 0
-    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 0.724436 -1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.8317638 0.9333333 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.46773517 0.76 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.20179623 0.6 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.25118864 0.39999998 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.25118864 0.39999998 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 1 1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.1 -1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.002398353 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1152,7 +1152,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {62A82B94-D34C-4AA3-B968-8D96CC24C4EB}
+      FXID {AC45845A-A125-43E1-9780-BC7B95E2272C}
       WAK 0 0
     >
   >
@@ -1220,7 +1220,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {296BC186-CF7A-41ED-8FAE-9A3E8872D725}
+      FXID {10C6D9FA-982B-45C3-A03C-231A0B0464D2}
       WAK 0 0
     >
   >
@@ -1288,7 +1288,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {9B2C5D91-A92E-4038-8582-50C4207F3067}
+      FXID {F90C0020-715F-406F-B690-B3250C9264A5}
       WAK 0 0
     >
   >
@@ -1355,7 +1355,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A7221040-31D6-4E3C-82D1-0C6E70364F40}
+      FXID {5F2D8315-40C6-4361-989E-F6383B035623}
       WAK 0 0
     >
   >
@@ -1423,7 +1423,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {0D2064C3-C295-4FF0-8E33-DB84C05A2260}
+      FXID {6C766486-DC57-4303-884A-E1493C6715BB}
       WAK 0 0
     >
   >
@@ -1491,7 +1491,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {09E6A102-8EBC-4F72-AC85-91EA2A3EAEA3}
+      FXID {EDB838F7-EED1-4C8E-97CF-750FB5350642}
       WAK 0 0
     >
   >
@@ -1559,7 +1559,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {32BA6645-1F8E-4207-818E-74AC3DCC5112}
+      FXID {48303D48-200F-4DDC-A720-FDEA742D3720}
       WAK 0 0
     >
   >
@@ -1626,7 +1626,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {3BEB77F0-D96B-40BC-BC91-D38581B762D1}
+      FXID {05E66B49-C56E-4708-91B1-E533C16983D2}
       WAK 0 0
     >
   >
@@ -1694,7 +1694,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A198F4A7-08E7-4D66-99EC-50F07F87B7D9}
+      FXID {66A884B9-24D0-48D6-9A2B-D4B5578087DA}
       WAK 0 0
     >
   >
@@ -1704,7 +1704,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 3.981072 0 -1 -1 1
+    VOLPAN 0.1 0 -1 -1 1
     MUTESOLO 1 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1772,7 +1772,7 @@
         -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {BA8BA6E5-BD4B-4840-BF0D-56063EF0632D}
+      FXID {86CAF326-1601-4878-AD3A-4CC6089CADDB}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
@@ -1877,7 +1877,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 1 0 -1 -1 1
+    VOLPAN 1.2589254 0 -1 -1 1
     MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
