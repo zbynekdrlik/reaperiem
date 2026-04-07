@@ -2038,13 +2038,19 @@ jobs:
       - name: Save REAPER project before E2E
         shell: powershell
         run: |
+          $rppPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
+          $bakPath = "$rppPath.e2e-bak"
           try {
+            # Save project to disk (action 40026)
             Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
-            Write-Host "REAPER project saved (action 40026)"
+            Start-Sleep -Seconds 2
+            # Create backup of the saved .RPP file BEFORE E2E tests modify anything
+            Copy-Item -Path $rppPath -Destination $bakPath -Force
+            Write-Host "REAPER project saved and backed up to $bakPath"
           } catch {
-            Write-Host "::warning::Failed to save REAPER project: $_"
+            Write-Host "::error::Failed to save/backup REAPER project: $_"
+            exit 1
           }
-          Start-Sleep -Seconds 2
 
       - name: Run post-deploy E2E tests
         shell: powershell
@@ -2057,13 +2063,36 @@ jobs:
         if: always()
         shell: powershell
         run: |
+          $rppPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
+          $bakPath = "$rppPath.e2e-bak"
           try {
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_REVERT_PROJECT" -UseBasicParsing -TimeoutSec 5 | Out-Null
-            Start-Sleep -Seconds 3
-            $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/revert_result" -UseBasicParsing).Content
-            Write-Host "REAPER project reverted: $result"
+            if (-not (Test-Path $bakPath)) {
+              Write-Host "::warning::No backup found at $bakPath - cannot restore"
+              exit 0
+            }
+            # Save project to clear dirty flag (prevents Save dialog on reload)
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 2
+            # Overwrite RPP with pre-E2E backup
+            Copy-Item -Path $bakPath -Destination $rppPath -Force
+            Write-Host "Backup restored to $rppPath"
+            # Reload project via dynamic action ID
+            $regResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/register_result" -UseBasicParsing -TimeoutSec 5).Content
+            $revertId = ""
+            if ($regResult -match "revert_project=(\d+)") {
+              $revertId = $matches[1]
+            }
+            if ($revertId) {
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$revertId" -UseBasicParsing -TimeoutSec 10 | Out-Null
+              Start-Sleep -Seconds 5
+              $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/revert_result" -UseBasicParsing -TimeoutSec 5).Content
+              Write-Host "REAPER project reverted: $result"
+            } else {
+              Write-Host "::warning::Could not find revert_project action ID"
+            }
+            Remove-Item -Path $bakPath -Force -ErrorAction SilentlyContinue
           } catch {
-            Write-Host "::warning::Failed to revert REAPER project: $_"
+            Write-Host "::error::Failed to restore REAPER project: $_"
           }
 
       - name: Upload post-deploy E2E results on failure

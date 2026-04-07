@@ -28,8 +28,9 @@ test.describe("Stems Volume Fader", () => {
   test("stems fader visible on Main tab when stems bus exists", async ({
     page,
   }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -53,8 +54,9 @@ test.describe("Stems Volume Fader", () => {
   test("stems fader visible on Stems tab when stems bus exists", async ({
     page,
   }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -78,8 +80,9 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("stems fader NOT visible on Mics tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -95,8 +98,9 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("stems fader NOT visible on Tech tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
@@ -112,8 +116,9 @@ test.describe("Stems Volume Fader", () => {
   });
 
   test("global volume fader always visible on Main tab", async ({ page }) => {
-    await loginAs(page, "petka");
-    await page.goto("/petka");
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
