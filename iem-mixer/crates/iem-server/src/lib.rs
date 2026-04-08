@@ -10,6 +10,7 @@
 pub mod audio_stream;
 pub mod auth;
 pub mod backup_capture;
+pub mod backup_daemon;
 pub mod backup_restore;
 pub mod backup_routes;
 pub mod backup_store;
@@ -280,6 +281,9 @@ pub async fn start_server(
 
     // Spawn background REAPER poller
     poller::spawn_poller(state.clone());
+
+    // Spawn backup daemon (scheduled captures)
+    backup_daemon::spawn(state.clone());
 
     // Spawn audio listener (receives OIEM Opus packets from VST plugin)
     #[cfg(feature = "audio")]
