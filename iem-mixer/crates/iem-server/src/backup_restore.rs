@@ -342,12 +342,16 @@ pub async fn preview_restore(
     // Suppress unused-variable warning for index_to_name (kept for potential future use)
     let _ = index_to_name;
 
-    // Estimate restore time: EQ is slow (~0.24s per band × 4 params), rest is fast
+    // Estimate restore time (measured: ~30s base read time for send routing + comparison)
+    // Base: ~30s for reading all send routing + current values from REAPER
+    // EQ writes: ~0.24s per band (4 params × 0.06s each)
+    // Limiter writes: ~0.42s per track (2 params × 0.06s + 0.3s read)
+    // Send writes: ~0.2s each (3 HTTP calls)
     let eq_band_count: usize = changes
         .iter()
         .filter(|c| c.category == RestoreCategory::Eq)
         .count()
-        * 5; // ~5 bands per track
+        * 5;
     let limiter_count = changes
         .iter()
         .filter(|c| c.category == RestoreCategory::Limiter)
@@ -356,14 +360,10 @@ pub async fn preview_restore(
         .iter()
         .filter(|c| c.category == RestoreCategory::Send)
         .count();
-    // EQ: 4 params × 0.06s per param + 0.3s read per track
-    // Limiter: 2 params × 0.06s + 0.3s read per track
-    // Sends: ~0.01s each
-    // Add overhead for track map + routing queries (~3s)
-    let estimated_seconds = (eq_band_count as f32 * 0.24
+    let estimated_seconds = (30.0
+        + eq_band_count as f32 * 0.24
         + limiter_count as f32 * 0.42
-        + send_count as f32 * 0.01
-        + 3.0)
+        + send_count as f32 * 0.2)
         .ceil() as u32;
 
     Ok(RestorePreview {
