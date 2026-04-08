@@ -444,9 +444,11 @@ pub async fn apply_restore(
         };
 
         // Read current value and skip if unchanged
+        // Note: backup vol is in dB, REAPER API returns linear — convert for comparison
+        let backup_vol_linear = proxy::db_to_reaper_vol(send.vol as f32) as f64;
         let current = query_send_value(client, &reaper_url, src_idx as usize, send_idx).await;
         if let Some((cur_vol, cur_pan, cur_mute)) = current {
-            let vol_diff = (cur_vol - send.vol).abs() > 0.0001;
+            let vol_diff = (cur_vol - backup_vol_linear).abs() > 0.0001;
             let pan_diff = (cur_pan - send.pan).abs() > 0.001;
             let mute_diff = cur_mute != send.mute;
             if !vol_diff && !pan_diff && !mute_diff {
@@ -456,11 +458,11 @@ pub async fn apply_restore(
 
         let src = src_idx as usize;
 
-        // Only write values that differ
+        // Write using linear volume (REAPER API expects linear)
         let _ = client
             .get(format!(
                 "{}/_/SET/TRACK/{}/SEND/{}/VOL/{:.10}",
-                reaper_url, src, send_idx, send.vol
+                reaper_url, src, send_idx, backup_vol_linear
             ))
             .send()
             .await;
@@ -498,9 +500,11 @@ pub async fn apply_restore(
         };
 
         // Read current volume and skip if unchanged
+        // backup_vol_db is in dB, REAPER API returns/accepts linear
+        let backup_vol_linear = proxy::db_to_reaper_vol(backup_vol_db as f32) as f64;
         let current_vol = query_track_volume(client, &reaper_url, track_idx).await;
         if let Some(cur) = current_vol
-            && (cur - backup_vol_db).abs() < 0.0001
+            && (cur - backup_vol_linear).abs() < 0.0001
         {
             continue; // Already matches
         }
@@ -508,7 +512,7 @@ pub async fn apply_restore(
         let _ = client
             .get(format!(
                 "{}/_/SET/TRACK/{}/VOL/{:.10}",
-                reaper_url, track_idx, backup_vol_db
+                reaper_url, track_idx, backup_vol_linear
             ))
             .send()
             .await;
