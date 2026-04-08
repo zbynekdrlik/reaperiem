@@ -33,6 +33,11 @@ impl PinStore {
         self.pins.get(member_id).map(|s| s.as_str())
     }
 
+    /// Get all stored PINs (for backup)
+    pub fn all_pins(&self) -> HashMap<String, String> {
+        self.pins.clone()
+    }
+
     /// Set a new PIN for a member and persist to disk.
     /// Returns error if member_id contains invalid characters.
     pub fn set_pin(&mut self, member_id: &str, pin: &str) -> Result<(), std::io::Error> {

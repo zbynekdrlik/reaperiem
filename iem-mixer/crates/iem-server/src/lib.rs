@@ -9,6 +9,7 @@
 #[cfg(feature = "audio")]
 pub mod audio_stream;
 pub mod auth;
+pub mod backup_capture;
 pub mod backup_store;
 pub mod customization_store;
 pub mod photo_store;
