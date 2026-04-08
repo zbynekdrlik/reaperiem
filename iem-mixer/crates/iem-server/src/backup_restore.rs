@@ -445,7 +445,7 @@ pub async fn apply_restore(
         restored_count += 1;
     }
 
-    // --- Apply EQ bands ---
+    // --- Apply EQ bands (only if changed — EQ writes are slow: 60ms per param) ---
     for (track_name, bands) in &backup.eq {
         let track_idx = match track_map.get(track_name) {
             Some(i) => *i as usize,
@@ -459,23 +459,43 @@ pub async fn apply_restore(
             }
         };
 
+        // Read current EQ to skip unchanged bands
+        let live_eq = proxy::handle_get_eq_params(state, track_idx).await;
+        let live_bands = match live_eq {
+            Some(iem_core::ServerMsg::EqParams { bands: lb, .. }) => lb,
+            _ => Vec::new(),
+        };
+
+        let mut any_written = false;
         for band in bands {
-            let b = band.band;
-            // Apply each EQ parameter: freq_norm (fn), gain_norm (gn), bw_norm (bn), enabled (en)
-            for (param, value) in [
-                ("fn", band.freq_norm),
-                ("gn", band.gain_norm),
-                ("bn", band.bw_norm),
-                ("en", if band.enabled { 1.0f32 } else { 0.0f32 }),
-            ] {
-                apply_eq_param(state, &reaper_url, track_idx, b, param, value).await;
+            // Check if this band differs from live
+            let differs = live_bands.get(band.band as usize).map_or(true, |lb| {
+                (band.freq_norm - lb.freq_norm).abs() > 0.001
+                    || (band.gain_norm - lb.gain_norm).abs() > 0.001
+                    || (band.bw_norm - lb.bw_norm).abs() > 0.001
+                    || band.enabled != lb.enabled
+            });
+
+            if differs {
+                let b = band.band;
+                for (param, value) in [
+                    ("fn", band.freq_norm),
+                    ("gn", band.gain_norm),
+                    ("bn", band.bw_norm),
+                    ("en", if band.enabled { 1.0f32 } else { 0.0f32 }),
+                ] {
+                    apply_eq_param(state, &reaper_url, track_idx, b, param, value).await;
+                }
+                any_written = true;
             }
         }
 
-        restored_count += 1;
+        if any_written {
+            restored_count += 1;
+        }
     }
 
-    // --- Apply limiter params ---
+    // --- Apply limiter params (only if changed) ---
     for (track_name, lim) in &backup.limiter {
         let track_idx = match track_map.get(track_name) {
             Some(i) => *i as usize,
@@ -489,17 +509,34 @@ pub async fn apply_restore(
             }
         };
 
-        apply_limiter_param(state, &reaper_url, track_idx, "limit", lim.limit_norm).await;
-        apply_limiter_param(
-            state,
-            &reaper_url,
-            track_idx,
-            "enabled",
-            if lim.enabled { 1.0 } else { 0.0 },
-        )
-        .await;
+        // Read current limiter to skip unchanged
+        let live_lim = proxy::handle_get_limiter_params(state, track_idx).await;
+        let (live_limit_db, live_enabled) = match live_lim {
+            Some(iem_core::ServerMsg::LimiterParams {
+                limit_db, enabled, ..
+            }) => (limit_db, enabled),
+            _ => (0.0, false), // Can't read — apply anyway
+        };
 
-        restored_count += 1;
+        let limit_differs = (live_limit_db - lim.limit_db).abs() > 0.01;
+        let enabled_differs = live_enabled != lim.enabled;
+
+        if limit_differs {
+            apply_limiter_param(state, &reaper_url, track_idx, "limit", lim.limit_norm).await;
+        }
+        if enabled_differs {
+            apply_limiter_param(
+                state,
+                &reaper_url,
+                track_idx,
+                "enabled",
+                if lim.enabled { 1.0 } else { 0.0 },
+            )
+            .await;
+        }
+        if limit_differs || enabled_differs {
+            restored_count += 1;
+        }
     }
 
     // --- Apply customizations ---
