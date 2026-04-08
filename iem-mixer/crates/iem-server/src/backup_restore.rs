@@ -7,8 +7,7 @@
 use std::collections::HashMap;
 
 use iem_core::backup::{
-    LimiterBackup, MixerBackup, RestoreCategory, RestoreChange, RestorePreview, RestoreResult,
-    SkippedEntry,
+    MixerBackup, RestoreCategory, RestoreChange, RestorePreview, RestoreResult, SkippedEntry,
 };
 
 use crate::{AppState, proxy};

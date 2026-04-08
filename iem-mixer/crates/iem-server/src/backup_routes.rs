@@ -157,7 +157,7 @@ async fn trigger_capture(
         tracing::error!(error = %e, "backup save failed");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiError::new("SAVE_FAILED", &e.to_string())),
+            Json(ApiError::new("SAVE_FAILED", e.to_string())),
         )
     })?;
 

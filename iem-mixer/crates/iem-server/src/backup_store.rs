@@ -134,10 +134,8 @@ impl BackupStore {
             if stem.len() != 15 || !stem.contains('_') {
                 continue;
             }
-            if stem < cutoff_str.as_str() {
-                if std::fs::remove_file(&path).is_ok() {
-                    deleted += 1;
-                }
+            if stem < cutoff_str.as_str() && std::fs::remove_file(&path).is_ok() {
+                deleted += 1;
             }
         }
 
@@ -157,7 +155,7 @@ fn timestamp_to_filename(timestamp: &str) -> String {
     } else {
         timestamp
     };
-    ts.replace('-', "").replace(':', "").replace('T', "_") + ".json"
+    ts.replace(['-', ':'], "").replace('T', "_") + ".json"
 }
 
 #[cfg(test)]
