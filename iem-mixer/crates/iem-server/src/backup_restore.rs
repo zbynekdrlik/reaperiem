@@ -407,7 +407,7 @@ pub async fn apply_restore(
     let mut restored_count: usize = 0;
     let mut skipped: Vec<SkippedEntry> = Vec::new();
 
-    // --- Apply sends ---
+    // --- Apply sends (only changed values) ---
     for send in &backup.sends {
         let src_idx = match track_map.get(&send.src_name) {
             Some(i) => *i,
@@ -443,27 +443,42 @@ pub async fn apply_restore(
             }
         };
 
+        // Read current value and skip if unchanged
+        let current = query_send_value(client, &reaper_url, src_idx as usize, send_idx).await;
+        if let Some((cur_vol, cur_pan, cur_mute)) = current {
+            let vol_diff = (cur_vol - send.vol).abs() > 0.0001;
+            let pan_diff = (cur_pan - send.pan).abs() > 0.001;
+            let mute_diff = cur_mute != send.mute;
+            if !vol_diff && !pan_diff && !mute_diff {
+                continue; // Already matches — skip write
+            }
+        }
+
         let src = src_idx as usize;
-        let vol_linear = proxy::db_to_reaper_vol(send.vol as f32);
 
-        // Set volume
-        let vol_url = proxy::reaper_api::set_send_vol(&reaper_url, src, send_idx, vol_linear);
-        if let Err(e) = client.get(&vol_url).send().await {
-            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send vol");
-        }
-
-        // Set pan
-        let pan_url = proxy::reaper_api::set_send_pan(&reaper_url, src, send_idx, send.pan as f32);
-        if let Err(e) = client.get(&pan_url).send().await {
-            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send pan");
-        }
-
-        // Set mute: API takes 0 or 1 (not 0 or 8)
+        // Only write values that differ
+        let _ = client
+            .get(format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/VOL/{:.10}",
+                reaper_url, src, send_idx, send.vol
+            ))
+            .send()
+            .await;
+        let _ = client
+            .get(format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/PAN/{:.10}",
+                reaper_url, src, send_idx, send.pan
+            ))
+            .send()
+            .await;
         let mute_val: u8 = if send.mute { 1 } else { 0 };
-        let mute_url = proxy::reaper_api::set_send_mute(&reaper_url, src, send_idx, mute_val);
-        if let Err(e) = client.get(&mute_url).send().await {
-            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send mute");
-        }
+        let _ = client
+            .get(format!(
+                "{}/_/SET/TRACK/{}/SEND/{}/MUTE/{}",
+                reaper_url, src, send_idx, mute_val
+            ))
+            .send()
+            .await;
 
         restored_count += 1;
     }
@@ -482,17 +497,21 @@ pub async fn apply_restore(
             }
         };
 
-        let vol_linear = proxy::db_to_reaper_vol(backup_vol_db as f32);
-        let vol_url = proxy::reaper_api::set_track_vol(&reaper_url, track_idx, vol_linear);
-        if let Err(e) = client.get(&vol_url).send().await {
-            tracing::warn!(track = %track_name, error = %e, "apply_restore: failed to set track vol");
-            skipped.push(SkippedEntry {
-                category: RestoreCategory::TrackVolume,
-                description: track_name.clone(),
-                reason: format!("HTTP error setting track volume: {e}"),
-            });
-            continue;
+        // Read current volume and skip if unchanged
+        let current_vol = query_track_volume(client, &reaper_url, track_idx as u32).await;
+        if let Some(cur) = current_vol {
+            if (cur - backup_vol_db).abs() < 0.0001 {
+                continue; // Already matches
+            }
         }
+
+        let _ = client
+            .get(format!(
+                "{}/_/SET/TRACK/{}/VOL/{:.10}",
+                reaper_url, track_idx, backup_vol_db
+            ))
+            .send()
+            .await;
 
         restored_count += 1;
     }

@@ -189,10 +189,10 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
                     .enumerate()
                     .map(|(i, b)| EqBandBackup::from((i as u8, b)))
                     .collect();
-                let key = if track_name.is_empty() {
+                let key = if track_name.trim().is_empty() {
                     track.name.clone()
                 } else {
-                    track_name
+                    track_name.trim().to_string()
                 };
                 eq.insert(key, band_backups);
             }
@@ -222,10 +222,10 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
                 enabled,
                 ..
             }) => {
-                let key = if track_name.is_empty() {
+                let key = if track_name.trim().is_empty() {
                     track.name.clone()
                 } else {
-                    track_name
+                    track_name.trim().to_string()
                 };
                 limiter.insert(
                     key,
