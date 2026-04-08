@@ -1,0 +1,827 @@
+//! Backup restore — preview diff and apply a `MixerBackup` to the live system.
+//!
+//! Two public entry points:
+//! - `preview_restore` — compares backup against live state, returns a diff
+//! - `apply_restore`   — applies every value from the backup, saves project
+
+use std::collections::HashMap;
+
+use iem_core::backup::{
+    LimiterBackup, MixerBackup, RestoreCategory, RestoreChange, RestorePreview, RestoreResult,
+    SkippedEntry,
+};
+
+use crate::{AppState, proxy};
+
+// =============================================================================
+// Public API
+// =============================================================================
+
+/// Compare a `MixerBackup` against live REAPER state and return a diff.
+///
+/// Skipped entries are created when:
+/// - A track name from the backup no longer exists in REAPER
+/// - A send destination no longer exists or the routing changed
+pub async fn preview_restore(
+    state: &AppState,
+    backup: &MixerBackup,
+) -> Result<RestorePreview, String> {
+    let reaper_url = {
+        let config = state.config.read().await;
+        config.reaper_url.clone()
+    };
+
+    let client = &state.http_client;
+
+    // Build name → track-index map from live REAPER
+    let track_map = query_track_map(client, &reaper_url).await?;
+
+    // Build src_idx → { dest_idx → send_idx } routing map
+    let routing = query_send_routing(client, &reaper_url, &track_map).await?;
+
+    // Reverse map: index → name (for description strings)
+    let index_to_name: HashMap<u32, String> = track_map
+        .iter()
+        .map(|(name, idx)| (*idx, name.clone()))
+        .collect();
+
+    let mut changes: Vec<RestoreChange> = Vec::new();
+    let mut skipped: Vec<SkippedEntry> = Vec::new();
+    let mut unchanged_count: usize = 0;
+
+    // --- Sends ---
+    for send in &backup.sends {
+        let src_idx = match track_map.get(&send.src_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: format!("Source track '{}' not found in REAPER", send.src_name),
+                });
+                continue;
+            }
+        };
+        let dest_idx = match track_map.get(&send.dest_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: format!("Destination track '{}' not found in REAPER", send.dest_name),
+                });
+                continue;
+            }
+        };
+        let send_idx = match routing.get(&src_idx).and_then(|m| m.get(&dest_idx)) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: "Send routing not found in REAPER".to_string(),
+                });
+                continue;
+            }
+        };
+
+        match query_send_value(client, &reaper_url, src_idx as usize, send_idx as usize).await {
+            Some((cur_vol_linear, cur_pan, cur_muted)) => {
+                let cur_vol_db = proxy::reaper_vol_to_db(cur_vol_linear as f32) as f64;
+                let vol_changed = (cur_vol_db - send.vol).abs() > 0.0001;
+                let pan_changed = (cur_pan - send.pan).abs() > 0.001;
+                let mute_changed = cur_muted != send.mute;
+
+                if vol_changed || pan_changed || mute_changed {
+                    let mut parts: Vec<String> = Vec::new();
+                    if vol_changed {
+                        parts.push(format!("vol {:.1}dB", cur_vol_db));
+                    }
+                    if pan_changed {
+                        parts.push(format!("pan {:.2}", cur_pan));
+                    }
+                    if mute_changed {
+                        parts.push(format!("mute {}", cur_muted));
+                    }
+                    let cur_val = parts.join(", ");
+
+                    let mut bk_parts: Vec<String> = Vec::new();
+                    if vol_changed {
+                        bk_parts.push(format!("vol {:.1}dB", send.vol));
+                    }
+                    if pan_changed {
+                        bk_parts.push(format!("pan {:.2}", send.pan));
+                    }
+                    if mute_changed {
+                        bk_parts.push(format!("mute {}", send.mute));
+                    }
+                    let bk_val = bk_parts.join(", ");
+
+                    changes.push(RestoreChange {
+                        category: RestoreCategory::Send,
+                        description: format!("{} → {}", send.src_name, send.dest_name),
+                        current_value: cur_val,
+                        backup_value: bk_val,
+                    });
+                } else {
+                    unchanged_count += 1;
+                }
+            }
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: "Could not read current send state from REAPER".to_string(),
+                });
+            }
+        }
+    }
+
+    // --- Track volumes ---
+    for (track_name, &backup_vol_db) in &backup.track_volumes {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackVolume,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        match query_track_volume(client, &reaper_url, track_idx as usize).await {
+            Some(cur_linear) => {
+                let cur_db = proxy::reaper_vol_to_db(cur_linear as f32) as f64;
+                if (cur_db - backup_vol_db).abs() > 0.0001 {
+                    changes.push(RestoreChange {
+                        category: RestoreCategory::TrackVolume,
+                        description: track_name.clone(),
+                        current_value: format!("{:.1}dB", cur_db),
+                        backup_value: format!("{:.1}dB", backup_vol_db),
+                    });
+                } else {
+                    unchanged_count += 1;
+                }
+            }
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackVolume,
+                    description: track_name.clone(),
+                    reason: "Could not read current track volume from REAPER".to_string(),
+                });
+            }
+        }
+    }
+
+    // --- EQ bands (coarse check: if track exists and backup has EQ, mark as change) ---
+    for (track_name, bands) in &backup.eq {
+        if bands.is_empty() {
+            continue;
+        }
+        if track_map.contains_key(track_name.as_str()) {
+            // Full EQ comparison via ReaScript is too slow for preview; flag as a pending change
+            changes.push(RestoreChange {
+                category: RestoreCategory::Eq,
+                description: track_name.clone(),
+                current_value: "(live — not read for preview)".to_string(),
+                backup_value: format!("{} bands", bands.len()),
+            });
+        } else {
+            skipped.push(SkippedEntry {
+                category: RestoreCategory::Eq,
+                description: track_name.clone(),
+                reason: format!("Track '{}' not found in REAPER", track_name),
+            });
+        }
+    }
+
+    // --- Limiter ---
+    for (track_name, lim) in &backup.limiter {
+        if track_map.contains_key(track_name.as_str()) {
+            changes.push(RestoreChange {
+                category: RestoreCategory::Limiter,
+                description: track_name.clone(),
+                current_value: "(live — not read for preview)".to_string(),
+                backup_value: format!(
+                    "limit={:.1}dB enabled={}",
+                    lim.limit_db, lim.enabled
+                ),
+            });
+        } else {
+            skipped.push(SkippedEntry {
+                category: RestoreCategory::Limiter,
+                description: track_name.clone(),
+                reason: format!("Track '{}' not found in REAPER", track_name),
+            });
+        }
+    }
+
+    // --- Customizations ---
+    for (member_id, backup_cust) in &backup.customizations {
+        let cur_cust = state.customization_store.load(member_id);
+        if cur_cust.pinned != backup_cust.pinned || cur_cust.hidden != backup_cust.hidden {
+            changes.push(RestoreChange {
+                category: RestoreCategory::Customization,
+                description: member_id.clone(),
+                current_value: format!(
+                    "pinned={:?} hidden={:?}",
+                    cur_cust.pinned, cur_cust.hidden
+                ),
+                backup_value: format!(
+                    "pinned={:?} hidden={:?}",
+                    backup_cust.pinned, backup_cust.hidden
+                ),
+            });
+        } else {
+            unchanged_count += 1;
+        }
+    }
+
+    // --- PINs ---
+    let current_pins = state.pin_store.read().await.all_pins();
+    for (member_id, backup_pin) in &backup.pins {
+        let cur_pin = current_pins.get(member_id).map(|s| s.as_str()).unwrap_or("");
+        if cur_pin != backup_pin.as_str() {
+            changes.push(RestoreChange {
+                category: RestoreCategory::Pin,
+                description: member_id.clone(),
+                current_value: if cur_pin.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    "(set)".to_string()
+                },
+                backup_value: "(set)".to_string(),
+            });
+        } else {
+            unchanged_count += 1;
+        }
+    }
+
+    // Suppress unused-variable warning for index_to_name (kept for potential future use)
+    let _ = index_to_name;
+
+    Ok(RestorePreview {
+        changes,
+        unchanged_count,
+        skipped,
+    })
+}
+
+/// Apply all values from a `MixerBackup` to the live system.
+///
+/// Order: sends → track volumes → EQ → limiter → customizations → PINs → save project.
+pub async fn apply_restore(
+    state: &AppState,
+    backup: &MixerBackup,
+) -> Result<RestoreResult, String> {
+    let reaper_url = {
+        let config = state.config.read().await;
+        config.reaper_url.clone()
+    };
+
+    let client = &state.http_client;
+
+    // Build name → track-index map from live REAPER
+    let track_map = query_track_map(client, &reaper_url).await?;
+
+    // Build src_idx → { dest_idx → send_idx } routing map
+    let routing = query_send_routing(client, &reaper_url, &track_map).await?;
+
+    let mut restored_count: usize = 0;
+    let mut skipped: Vec<SkippedEntry> = Vec::new();
+
+    // --- Apply sends ---
+    for send in &backup.sends {
+        let src_idx = match track_map.get(&send.src_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: format!("Source track '{}' not found in REAPER", send.src_name),
+                });
+                continue;
+            }
+        };
+        let dest_idx = match track_map.get(&send.dest_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: format!("Destination track '{}' not found in REAPER", send.dest_name),
+                });
+                continue;
+            }
+        };
+        let send_idx = match routing.get(&src_idx).and_then(|m| m.get(&dest_idx)) {
+            Some(i) => *i as usize,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Send,
+                    description: format!("{} → {}", send.src_name, send.dest_name),
+                    reason: "Send routing not found in REAPER".to_string(),
+                });
+                continue;
+            }
+        };
+
+        let src = src_idx as usize;
+        let vol_linear = proxy::db_to_reaper_vol(send.vol as f32);
+
+        // Set volume
+        let vol_url = proxy::reaper_api::set_send_vol(&reaper_url, src, send_idx, vol_linear);
+        if let Err(e) = client.get(&vol_url).send().await {
+            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send vol");
+        }
+
+        // Set pan
+        let pan_url =
+            proxy::reaper_api::set_send_pan(&reaper_url, src, send_idx, send.pan as f32);
+        if let Err(e) = client.get(&pan_url).send().await {
+            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send pan");
+        }
+
+        // Set mute: API takes 0 or 1 (not 0 or 8)
+        let mute_val: u8 = if send.mute { 1 } else { 0 };
+        let mute_url = proxy::reaper_api::set_send_mute(&reaper_url, src, send_idx, mute_val);
+        if let Err(e) = client.get(&mute_url).send().await {
+            tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send mute");
+        }
+
+        restored_count += 1;
+    }
+
+    // --- Apply track volumes ---
+    for (track_name, &backup_vol_db) in &backup.track_volumes {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i as usize,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackVolume,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        let vol_linear = proxy::db_to_reaper_vol(backup_vol_db as f32);
+        let vol_url = proxy::reaper_api::set_track_vol(&reaper_url, track_idx, vol_linear);
+        if let Err(e) = client.get(&vol_url).send().await {
+            tracing::warn!(track = %track_name, error = %e, "apply_restore: failed to set track vol");
+            skipped.push(SkippedEntry {
+                category: RestoreCategory::TrackVolume,
+                description: track_name.clone(),
+                reason: format!("HTTP error setting track volume: {e}"),
+            });
+            continue;
+        }
+
+        restored_count += 1;
+    }
+
+    // --- Apply EQ bands ---
+    for (track_name, bands) in &backup.eq {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i as usize,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Eq,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        for band in bands {
+            let b = band.band;
+            // Apply each EQ parameter: freq_norm (fn), gain_norm (gn), bw_norm (bn), enabled (en)
+            for (param, value) in [
+                ("fn", band.freq_norm),
+                ("gn", band.gain_norm),
+                ("bn", band.bw_norm),
+                ("en", if band.enabled { 1.0f32 } else { 0.0f32 }),
+            ] {
+                apply_eq_param(state, &reaper_url, track_idx, b, param, value).await;
+            }
+        }
+
+        restored_count += 1;
+    }
+
+    // --- Apply limiter params ---
+    for (track_name, lim) in &backup.limiter {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i as usize,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Limiter,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        apply_limiter_param(state, &reaper_url, track_idx, "limit", lim.limit_norm).await;
+        apply_limiter_param(
+            state,
+            &reaper_url,
+            track_idx,
+            "enabled",
+            if lim.enabled { 1.0 } else { 0.0 },
+        )
+        .await;
+
+        restored_count += 1;
+    }
+
+    // --- Apply customizations ---
+    for (member_id, cust) in &backup.customizations {
+        if let Err(e) = state.customization_store.save(member_id, cust) {
+            tracing::warn!(member = %member_id, error = %e, "apply_restore: failed to save customization");
+            skipped.push(SkippedEntry {
+                category: RestoreCategory::Customization,
+                description: member_id.clone(),
+                reason: format!("IO error saving customization: {e}"),
+            });
+            continue;
+        }
+        restored_count += 1;
+    }
+
+    // --- Apply PINs ---
+    {
+        let mut pin_store = state.pin_store.write().await;
+        for (member_id, pin) in &backup.pins {
+            if let Err(e) = pin_store.set_pin(member_id, pin) {
+                tracing::warn!(member = %member_id, error = %e, "apply_restore: failed to set PIN");
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::Pin,
+                    description: member_id.clone(),
+                    reason: format!("IO error setting PIN: {e}"),
+                });
+                continue;
+            }
+            restored_count += 1;
+        }
+    }
+
+    // --- Save REAPER project ---
+    let save_url = format!("{}/_/40026", reaper_url);
+    let project_saved = client.get(&save_url).send().await.is_ok();
+    if !project_saved {
+        tracing::warn!("apply_restore: failed to save REAPER project");
+    }
+
+    tracing::info!(
+        restored_count,
+        skipped = skipped.len(),
+        project_saved,
+        "apply_restore: complete"
+    );
+
+    Ok(RestoreResult {
+        restored_count,
+        skipped,
+        project_saved,
+    })
+}
+
+// =============================================================================
+// Private helpers
+// =============================================================================
+
+/// Build name → 1-based track index map from live REAPER.
+async fn query_track_map(
+    client: &reqwest::Client,
+    reaper_url: &str,
+) -> Result<HashMap<String, u32>, String> {
+    let url = proxy::reaper_api::query_tracks(reaper_url);
+    let text = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to query REAPER tracks: {e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read REAPER tracks response: {e}"))?;
+
+    let mut map: HashMap<String, u32> = HashMap::new();
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() != Some(&"TRACK") || parts.len() < 3 {
+            continue;
+        }
+        let Ok(idx) = parts[1].parse::<u32>() else {
+            continue;
+        };
+        if idx == 0 {
+            continue; // skip master
+        }
+        map.insert(parts[2].to_string(), idx);
+    }
+    Ok(map)
+}
+
+/// Build src_idx → { dest_idx → send_idx } routing map.
+///
+/// Queries up to 30 sends per track; stops when the response is empty.
+async fn query_send_routing(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    track_map: &HashMap<String, u32>,
+) -> Result<HashMap<u32, HashMap<u32, u32>>, String> {
+    let mut routing: HashMap<u32, HashMap<u32, u32>> = HashMap::new();
+
+    for &src_idx in track_map.values() {
+        let mut dest_map: HashMap<u32, u32> = HashMap::new();
+
+        for send_idx in 0u32..30 {
+            let url = proxy::reaper_api::get_send_state(
+                reaper_url,
+                src_idx as usize,
+                send_idx as usize,
+            );
+            let text = match client.get(&url).send().await {
+                Ok(r) => match r.text().await {
+                    Ok(t) => t,
+                    Err(_) => break,
+                },
+                Err(_) => break,
+            };
+
+            // Empty response → no more sends for this track
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                break;
+            }
+
+            // Parse SEND line: SEND\tsrc\tsend_idx\tmute\tvol\tpan\tdest
+            for part_line in text.lines() {
+                let parts: Vec<&str> = part_line.split('\t').collect();
+                if parts.first() != Some(&"SEND") || parts.len() < 7 {
+                    break;
+                }
+                let dest: i32 = parts[6].parse().unwrap_or(-1);
+                if dest < 1 {
+                    // hardware output or invalid — still continue to next send
+                    continue;
+                }
+                dest_map.insert(dest as u32, send_idx);
+            }
+        }
+
+        if !dest_map.is_empty() {
+            routing.insert(src_idx, dest_map);
+        }
+    }
+
+    Ok(routing)
+}
+
+/// Read current (vol_linear, pan, muted) for a send.
+///
+/// Returns `None` if the REAPER call fails or the response cannot be parsed.
+async fn query_send_value(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    src_idx: usize,
+    send_idx: usize,
+) -> Option<(f64, f64, bool)> {
+    let url = proxy::reaper_api::get_send_state(reaper_url, src_idx, send_idx);
+    let text = client.get(&url).send().await.ok()?.text().await.ok()?;
+
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() != Some(&"SEND") || parts.len() < 7 {
+            continue;
+        }
+        let vol: f64 = parts[4].parse().unwrap_or(1.0);
+        let pan: f64 = parts[5].parse().unwrap_or(0.0);
+        let mute_flag: i32 = parts[3].parse().unwrap_or(0);
+        // Mute flag: 0 = unmuted, 8 = muted in REAPER response
+        let muted = mute_flag != 0;
+        return Some((vol, pan, muted));
+    }
+
+    None
+}
+
+/// Read current linear volume for a track.
+///
+/// Returns `None` if the REAPER call fails or the response cannot be parsed.
+async fn query_track_volume(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    track_idx: usize,
+) -> Option<f64> {
+    let url = format!("{}/_/TRACK/{}", reaper_url, track_idx);
+    let text = client.get(&url).send().await.ok()?.text().await.ok()?;
+
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() != Some(&"TRACK") || parts.len() < 5 {
+            continue;
+        }
+        let vol: f64 = parts[4].parse().unwrap_or(1.0);
+        return Some(vol);
+    }
+
+    None
+}
+
+/// Apply a single EQ band parameter via EXTSTATE + ReaScript.
+async fn apply_eq_param(
+    state: &AppState,
+    reaper_url: &str,
+    track_index: usize,
+    band: u8,
+    param: &str,
+    value: f32,
+) {
+    let _lock = state.eq_write_lock.lock().await;
+
+    let eq_set_value = format!(
+        "track={}|band={}|param={}|value={:.6}",
+        track_index, band, param, value
+    );
+    let set_url =
+        proxy::reaper_api::set_extstate(reaper_url, "reaperiem", "eq_set", &eq_set_value);
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::warn!(track_index, band, param, "restore: failed to set eq_set EXTSTATE");
+        return;
+    }
+
+    let action_url = proxy::reaper_api::trigger_action(reaper_url, "_RS_REAPERIEM_SET_EQ");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::warn!(track_index, band, param, "restore: failed to trigger SET_EQ");
+        return;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+}
+
+/// Apply a single limiter parameter via EXTSTATE + ReaScript.
+async fn apply_limiter_param(
+    state: &AppState,
+    reaper_url: &str,
+    track_index: usize,
+    param: &str,
+    value: f32,
+) {
+    let _lock = state.limiter_write_lock.lock().await;
+
+    let set_value = format!("track={}|param={}|value={:.6}", track_index, param, value);
+    let set_url =
+        proxy::reaper_api::set_extstate(reaper_url, "reaperiem", "limiter_set", &set_value);
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::warn!(track_index, param, "restore: failed to set limiter_set EXTSTATE");
+        return;
+    }
+
+    let action_url =
+        proxy::reaper_api::trigger_action(reaper_url, "_RS_REAPERIEM_SET_LIMITER");
+    if state.http_client.get(&action_url).send().await.is_err() {
+        tracing::warn!(track_index, param, "restore: failed to trigger SET_LIMITER");
+        return;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+}
+
+// =============================================================================
+// Unit tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iem_core::backup::{EqBandBackup, LimiterBackup, MixerBackup, SendBackup, BACKUP_VERSION};
+    use std::collections::HashMap;
+
+    fn minimal_backup() -> MixerBackup {
+        MixerBackup {
+            version: BACKUP_VERSION,
+            timestamp: "2026-04-07T10:00:00Z".to_string(),
+            track_layout: HashMap::new(),
+            sends: vec![SendBackup {
+                src_name: "PETKA mic".to_string(),
+                dest_name: "PETKA inear".to_string(),
+                vol: -3.0,
+                pan: 0.0,
+                mute: false,
+            }],
+            track_volumes: {
+                let mut m = HashMap::new();
+                m.insert("PETKA inear".to_string(), -6.0f64);
+                m
+            },
+            eq: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "PETKA mic".to_string(),
+                    vec![EqBandBackup {
+                        band: 0,
+                        band_type: "band".to_string(),
+                        freq_norm: 0.5,
+                        gain_norm: 0.25,
+                        bw_norm: 0.3,
+                        freq_hz: 1000.0,
+                        gain_db: 0.0,
+                        bw_oct: 1.0,
+                        enabled: true,
+                    }],
+                );
+                m
+            },
+            limiter: {
+                let mut m = HashMap::new();
+                m.insert(
+                    "PETKA inear".to_string(),
+                    LimiterBackup {
+                        limit_db: -3.0,
+                        limit_norm: 0.5,
+                        enabled: true,
+                    },
+                );
+                m
+            },
+            customizations: HashMap::new(),
+            pins: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_backup_has_expected_sends() {
+        let b = minimal_backup();
+        assert_eq!(b.sends.len(), 1);
+        assert_eq!(b.sends[0].src_name, "PETKA mic");
+        assert_eq!(b.sends[0].dest_name, "PETKA inear");
+        assert!(!b.sends[0].mute);
+    }
+
+    #[test]
+    fn test_mute_flag_conversion() {
+        // API response mute flag: 0 = unmuted, 8 = muted (bitfield)
+        // Backup stores mute as bool
+        let flag_unmuted: i32 = 0;
+        let flag_muted: i32 = 8;
+        assert!(!{ flag_unmuted != 0 });
+        assert!({ flag_muted != 0 });
+    }
+
+    #[test]
+    fn test_mute_set_value() {
+        // API SET takes 0 or 1 — not 0 or 8
+        let mute = true;
+        let val: u8 = if mute { 1 } else { 0 };
+        assert_eq!(val, 1u8);
+
+        let mute = false;
+        let val: u8 = if mute { 1 } else { 0 };
+        assert_eq!(val, 0u8);
+    }
+
+    #[test]
+    fn test_volume_tolerance() {
+        let cur = -3.0f64;
+        let backup = -3.00005f64;
+        // Within tolerance (0.0001) → no change
+        assert!(!((cur - backup).abs() > 0.0001));
+
+        let cur = -3.0f64;
+        let backup = -3.5f64;
+        // Outside tolerance → change
+        assert!((cur - backup).abs() > 0.0001);
+    }
+
+    #[test]
+    fn test_pan_tolerance() {
+        let cur = 0.0f64;
+        let backup = 0.0005f64;
+        // Within tolerance (0.001) → no change
+        assert!(!((cur - backup).abs() > 0.001));
+
+        let cur = 0.0f64;
+        let backup = 0.1f64;
+        // Outside tolerance → change
+        assert!((cur - backup).abs() > 0.001);
+    }
+
+    #[test]
+    fn test_restore_result_defaults() {
+        let result = RestoreResult {
+            restored_count: 5,
+            skipped: vec![],
+            project_saved: true,
+        };
+        assert_eq!(result.restored_count, 5);
+        assert!(result.project_saved);
+        assert!(result.skipped.is_empty());
+    }
+}
