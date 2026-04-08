@@ -4,6 +4,7 @@
 
 #[cfg(feature = "config")]
 pub mod config;
+pub mod backup;
 pub mod preset;
 pub mod snapshot;
 pub mod types;
@@ -11,6 +12,10 @@ pub mod ws;
 
 #[cfg(feature = "config")]
 pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
+pub use backup::{
+    BackupInfo, EqBandBackup, LimiterBackup, MixerBackup, RestoreCategory, RestoreChange,
+    RestorePreview, RestoreProgress, RestoreResult, SendBackup, SkippedEntry, BACKUP_VERSION,
+};
 pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
