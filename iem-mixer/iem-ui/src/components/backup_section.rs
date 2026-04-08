@@ -1,6 +1,7 @@
 //! Backup & Restore section for the Settings modal (engineer-only)
 
 use leptos::prelude::*;
+use wasm_bindgen_futures::spawn_local;
 
 /// Backup restore section shown in engineer Settings modal.
 /// Lists available backups, shows preview on click, allows restore.

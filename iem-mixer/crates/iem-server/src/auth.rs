@@ -389,6 +389,8 @@ mod tests {
             engineer_pin: Some("1177".to_string()),
             local_public_ip: None,
             vapid_private_key: String::new(),
+            backup_schedule: vec!["13:00".to_string(), "21:00".to_string()],
+            backup_retention_days: 60,
         }
     }
 
