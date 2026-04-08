@@ -141,13 +141,11 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
                     .cloned()
                     .unwrap_or_else(|| format!("track_{}", dest));
 
-                // Convert linear volume to dB
-                let vol_db = proxy::reaper_vol_to_db(vol) as f64;
-
+                // Store LINEAR volume directly (same as REAPER API returns/accepts)
                 sends.push(SendBackup {
                     src_name: track.name.clone(),
                     dest_name,
-                    vol: vol_db,
+                    vol: vol as f64,
                     pan: pan as f64,
                     mute,
                 });
@@ -166,8 +164,8 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
     for track in &tracks {
         let name_lower = track.name.to_lowercase();
         if name_lower.contains("inear") || name_lower.contains("stems") {
-            let db = proxy::reaper_vol_to_db(track.vol_linear) as f64;
-            track_volumes.insert(track.name.clone(), db);
+            // Store LINEAR volume directly (same as REAPER API)
+            track_volumes.insert(track.name.clone(), track.vol_linear as f64);
         }
     }
 

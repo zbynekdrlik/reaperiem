@@ -94,16 +94,16 @@ pub async fn preview_restore(
         };
 
         match query_send_value(client, &reaper_url, src_idx as usize, send_idx as usize).await {
-            Some((cur_vol_linear, cur_pan, cur_muted)) => {
-                let cur_vol_db = proxy::reaper_vol_to_db(cur_vol_linear as f32) as f64;
-                let vol_changed = (cur_vol_db - send.vol).abs() > 0.0001;
+            Some((cur_vol, cur_pan, cur_muted)) => {
+                // Both backup and live values are LINEAR — compare directly
+                let vol_changed = (cur_vol - send.vol).abs() > 0.0001;
                 let pan_changed = (cur_pan - send.pan).abs() > 0.001;
                 let mute_changed = cur_muted != send.mute;
 
                 if vol_changed || pan_changed || mute_changed {
                     let mut parts: Vec<String> = Vec::new();
                     if vol_changed {
-                        parts.push(format!("vol {:.1}dB", cur_vol_db));
+                        parts.push(format!("vol {:.4}", cur_vol));
                     }
                     if pan_changed {
                         parts.push(format!("pan {:.2}", cur_pan));
@@ -115,7 +115,7 @@ pub async fn preview_restore(
 
                     let mut bk_parts: Vec<String> = Vec::new();
                     if vol_changed {
-                        bk_parts.push(format!("vol {:.1}dB", send.vol));
+                        bk_parts.push(format!("vol {:.4}", send.vol));
                     }
                     if pan_changed {
                         bk_parts.push(format!("pan {:.2}", send.pan));
@@ -145,8 +145,8 @@ pub async fn preview_restore(
         }
     }
 
-    // --- Track volumes ---
-    for (track_name, &backup_vol_db) in &backup.track_volumes {
+    // --- Track volumes (both backup and live are LINEAR) ---
+    for (track_name, &backup_vol) in &backup.track_volumes {
         let track_idx = match track_map.get(track_name) {
             Some(i) => *i,
             None => {
@@ -160,14 +160,13 @@ pub async fn preview_restore(
         };
 
         match query_track_volume(client, &reaper_url, track_idx as usize).await {
-            Some(cur_linear) => {
-                let cur_db = proxy::reaper_vol_to_db(cur_linear as f32) as f64;
-                if (cur_db - backup_vol_db).abs() > 0.0001 {
+            Some(cur_vol) => {
+                if (cur_vol - backup_vol).abs() > 0.0001 {
                     changes.push(RestoreChange {
                         category: RestoreCategory::TrackVolume,
                         description: track_name.clone(),
-                        current_value: format!("{:.1}dB", cur_db),
-                        backup_value: format!("{:.1}dB", backup_vol_db),
+                        current_value: format!("{:.6}", cur_vol),
+                        backup_value: format!("{:.6}", backup_vol),
                     });
                 } else {
                     unchanged_count += 1;
@@ -444,11 +443,10 @@ pub async fn apply_restore(
         };
 
         // Read current value and skip if unchanged
-        // Note: backup vol is in dB, REAPER API returns linear — convert for comparison
-        let backup_vol_linear = proxy::db_to_reaper_vol(send.vol as f32) as f64;
+        // Both backup and live values are LINEAR — compare directly
         let current = query_send_value(client, &reaper_url, src_idx as usize, send_idx).await;
         if let Some((cur_vol, cur_pan, cur_mute)) = current {
-            let vol_diff = (cur_vol - backup_vol_linear).abs() > 0.0001;
+            let vol_diff = (cur_vol - send.vol).abs() > 0.0001;
             let pan_diff = (cur_pan - send.pan).abs() > 0.001;
             let mute_diff = cur_mute != send.mute;
             if !vol_diff && !pan_diff && !mute_diff {
@@ -458,11 +456,11 @@ pub async fn apply_restore(
 
         let src = src_idx as usize;
 
-        // Write using linear volume (REAPER API expects linear)
+        // Write LINEAR volume directly (same format as REAPER API)
         let _ = client
             .get(format!(
                 "{}/_/SET/TRACK/{}/SEND/{}/VOL/{:.10}",
-                reaper_url, src, send_idx, backup_vol_linear
+                reaper_url, src, send_idx, send.vol
             ))
             .send()
             .await;
@@ -486,7 +484,7 @@ pub async fn apply_restore(
     }
 
     // --- Apply track volumes ---
-    for (track_name, &backup_vol_db) in &backup.track_volumes {
+    for (track_name, &backup_vol) in &backup.track_volumes {
         let track_idx = match track_map.get(track_name) {
             Some(i) => *i as usize,
             None => {
@@ -500,11 +498,10 @@ pub async fn apply_restore(
         };
 
         // Read current volume and skip if unchanged
-        // backup_vol_db is in dB, REAPER API returns/accepts linear
-        let backup_vol_linear = proxy::db_to_reaper_vol(backup_vol_db as f32) as f64;
+        // Both backup and live values are LINEAR
         let current_vol = query_track_volume(client, &reaper_url, track_idx).await;
         if let Some(cur) = current_vol
-            && (cur - backup_vol_linear).abs() < 0.0001
+            && (cur - backup_vol).abs() < 0.0001
         {
             continue; // Already matches
         }
@@ -512,7 +509,7 @@ pub async fn apply_restore(
         let _ = client
             .get(format!(
                 "{}/_/SET/TRACK/{}/VOL/{:.10}",
-                reaper_url, track_idx, backup_vol_linear
+                reaper_url, track_idx, backup_vol
             ))
             .send()
             .await;
