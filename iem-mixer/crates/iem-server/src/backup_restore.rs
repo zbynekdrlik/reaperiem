@@ -32,11 +32,20 @@ pub async fn preview_restore(
 
     let client = &state.http_client;
 
-    // Build name → track-index map from live REAPER
-    let track_map = query_track_map(client, &reaper_url).await?;
+    // Build name → track-index map (with send counts for optimized routing)
+    let (track_map, send_counts) = query_track_map_with_sends(client, &reaper_url).await?;
 
-    // Build src_idx → { dest_idx → send_idx } routing map
-    let routing = query_send_routing(client, &reaper_url, &track_map).await?;
+    // Only build routing for source tracks that appear in the backup sends
+    let needed_src_names: std::collections::HashSet<String> =
+        backup.sends.iter().map(|s| s.src_name.clone()).collect();
+    let routing = query_send_routing_for(
+        client,
+        &reaper_url,
+        &track_map,
+        &send_counts,
+        &needed_src_names,
+    )
+    .await?;
 
     // Reverse map: index → name (for description strings)
     let index_to_name: HashMap<u32, String> = track_map
@@ -179,6 +188,15 @@ pub async fn preview_restore(
         if bands.is_empty() {
             continue;
         }
+        // Skip tracks where all bands are default (gain=0dB, disabled) — no need to read REAPER
+        let has_non_default = bands
+            .iter()
+            .any(|b| b.enabled || (b.gain_norm - 0.25).abs() > 0.01);
+        if !has_non_default {
+            unchanged_count += 1;
+            continue;
+        }
+
         let Some(&track_idx) = track_map.get(track_name.as_str()) else {
             skipped.push(SkippedEntry {
                 category: RestoreCategory::Eq,
@@ -188,7 +206,7 @@ pub async fn preview_restore(
             continue;
         };
 
-        // Read current EQ via ReaScript
+        // Read current EQ via ReaScript (only for tracks with non-default bands)
         let live_eq = proxy::handle_get_eq_params(state, track_idx as usize).await;
         match live_eq {
             Some(iem_core::ServerMsg::EqParams {
@@ -371,11 +389,20 @@ pub async fn apply_restore(
 
     let client = &state.http_client;
 
-    // Build name → track-index map from live REAPER
-    let track_map = query_track_map(client, &reaper_url).await?;
+    // Build name → track-index map (with send counts for optimized routing)
+    let (track_map, send_counts) = query_track_map_with_sends(client, &reaper_url).await?;
 
-    // Build src_idx → { dest_idx → send_idx } routing map
-    let routing = query_send_routing(client, &reaper_url, &track_map).await?;
+    // Only build routing for source tracks that appear in the backup sends
+    let needed_src_names: std::collections::HashSet<String> =
+        backup.sends.iter().map(|s| s.src_name.clone()).collect();
+    let routing = query_send_routing_for(
+        client,
+        &reaper_url,
+        &track_map,
+        &send_counts,
+        &needed_src_names,
+    )
+    .await?;
 
     let mut restored_count: usize = 0;
     let mut skipped: Vec<SkippedEntry> = Vec::new();
@@ -621,10 +648,25 @@ pub async fn apply_restore(
 // =============================================================================
 
 /// Build name → 1-based track index map from live REAPER.
+/// Track info: index + send count (from NTRACK;TRACK field 10)
+struct TrackEntry {
+    idx: u32,
+    send_count: u32,
+}
+
 async fn query_track_map(
     client: &reqwest::Client,
     reaper_url: &str,
 ) -> Result<HashMap<String, u32>, String> {
+    let (map, _) = query_track_map_with_sends(client, reaper_url).await?;
+    Ok(map)
+}
+
+/// Query track name→index map AND name→send_count map in one call.
+async fn query_track_map_with_sends(
+    client: &reqwest::Client,
+    reaper_url: &str,
+) -> Result<(HashMap<String, u32>, HashMap<String, u32>), String> {
     let url = proxy::reaper_api::query_tracks(reaper_url);
     let text = client
         .get(&url)
@@ -635,10 +677,11 @@ async fn query_track_map(
         .await
         .map_err(|e| format!("Failed to read REAPER tracks response: {e}"))?;
 
-    let mut map: HashMap<String, u32> = HashMap::new();
+    let mut idx_map: HashMap<String, u32> = HashMap::new();
+    let mut send_map: HashMap<String, u32> = HashMap::new();
     for line in text.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.first() != Some(&"TRACK") || parts.len() < 3 {
+        if parts.first() != Some(&"TRACK") || parts.len() < 11 {
             continue;
         }
         let Ok(idx) = parts[1].parse::<u32>() else {
@@ -647,25 +690,39 @@ async fn query_track_map(
         if idx == 0 {
             continue; // skip master
         }
-        map.insert(parts[2].to_string(), idx);
+        let name = parts[2].to_string();
+        let send_count: u32 = parts[10].parse().unwrap_or(0);
+        send_map.insert(name.clone(), send_count);
+        idx_map.insert(name, idx);
     }
-    Ok(map)
+    Ok((idx_map, send_map))
 }
 
 /// Build src_idx → { dest_idx → send_idx } routing map.
 ///
-/// Queries up to 30 sends per track; stops when the response is empty.
-async fn query_send_routing(
+/// Only queries routing for tracks in `needed_src_names` (not all tracks).
+/// Uses send_count to avoid querying beyond actual sends.
+async fn query_send_routing_for(
     client: &reqwest::Client,
     reaper_url: &str,
     track_map: &HashMap<String, u32>,
+    send_counts: &HashMap<String, u32>,
+    needed_src_names: &std::collections::HashSet<String>,
 ) -> Result<HashMap<u32, HashMap<u32, u32>>, String> {
     let mut routing: HashMap<u32, HashMap<u32, u32>> = HashMap::new();
 
-    for &src_idx in track_map.values() {
+    for src_name in needed_src_names {
+        let Some(&src_idx) = track_map.get(src_name) else {
+            continue;
+        };
+        let max_sends = send_counts.get(src_name).copied().unwrap_or(0);
+        if max_sends == 0 {
+            continue;
+        }
+
         let mut dest_map: HashMap<u32, u32> = HashMap::new();
 
-        for send_idx in 0u32..30 {
+        for send_idx in 0..max_sends {
             let url =
                 proxy::reaper_api::get_send_state(reaper_url, src_idx as usize, send_idx as usize);
             let text = match client.get(&url).send().await {
@@ -676,13 +733,11 @@ async fn query_send_routing(
                 Err(_) => break,
             };
 
-            // Empty response → no more sends for this track
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 break;
             }
 
-            // Parse SEND line: SEND\tsrc\tsend_idx\tmute\tvol\tpan\tdest
             for part_line in text.lines() {
                 let parts: Vec<&str> = part_line.split('\t').collect();
                 if parts.first() != Some(&"SEND") || parts.len() < 7 {
@@ -690,7 +745,6 @@ async fn query_send_routing(
                 }
                 let dest: i32 = parts[6].parse().unwrap_or(-1);
                 if dest < 1 {
-                    // hardware output or invalid — still continue to next send
                     continue;
                 }
                 dest_map.insert(dest as u32, send_idx);
