@@ -647,21 +647,6 @@ pub async fn apply_restore(
 // Private helpers
 // =============================================================================
 
-/// Build name → 1-based track index map from live REAPER.
-/// Track info: index + send count (from NTRACK;TRACK field 10)
-struct TrackEntry {
-    idx: u32,
-    send_count: u32,
-}
-
-async fn query_track_map(
-    client: &reqwest::Client,
-    reaper_url: &str,
-) -> Result<HashMap<String, u32>, String> {
-    let (map, _) = query_track_map_with_sends(client, reaper_url).await?;
-    Ok(map)
-}
-
 /// Query track name→index map AND name→send_count map in one call.
 async fn query_track_map_with_sends(
     client: &reqwest::Client,
