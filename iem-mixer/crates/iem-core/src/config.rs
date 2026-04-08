@@ -88,6 +88,14 @@ pub struct Config {
     /// the client is on the local church WiFi. Different IP = remote.
     #[serde(default)]
     pub local_public_ip: Option<String>,
+
+    /// Backup schedule times (HH:MM format, 24h), e.g. ["13:00", "21:00"]
+    #[serde(default = "default_backup_schedule")]
+    pub backup_schedule: Vec<String>,
+
+    /// How many days to keep backups before pruning
+    #[serde(default = "default_backup_retention_days")]
+    pub backup_retention_days: u32,
 }
 
 fn default_reaper_url() -> String {
@@ -115,6 +123,14 @@ fn default_tls_key() -> String {
     "key.pem".to_string()
 }
 
+fn default_backup_schedule() -> Vec<String> {
+    vec!["13:00".to_string(), "21:00".to_string()]
+}
+
+fn default_backup_retention_days() -> u32 {
+    60
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -133,6 +149,8 @@ impl Default for Config {
             tls_key: default_tls_key(),
             https_domain: None,
             local_public_ip: None,
+            backup_schedule: default_backup_schedule(),
+            backup_retention_days: default_backup_retention_days(),
         }
     }
 }
@@ -664,6 +682,29 @@ inputs: []
             result.is_none(),
             "Non-inear tracks should not be discovered"
         );
+    }
+
+    #[test]
+    fn test_backup_schedule_defaults() {
+        let config = Config::default();
+        assert_eq!(config.backup_schedule, vec!["13:00", "21:00"]);
+        assert_eq!(config.backup_retention_days, 60);
+    }
+
+    #[test]
+    fn test_backup_schedule_custom() {
+        let yaml = r#"
+reaper_url: "http://test:8080"
+backup_schedule:
+  - "09:00"
+  - "13:00"
+  - "18:00"
+  - "22:00"
+backup_retention_days: 30
+"#;
+        let config: Config = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.backup_schedule.len(), 4);
+        assert_eq!(config.backup_retention_days, 30);
     }
 }
 

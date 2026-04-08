@@ -277,6 +277,9 @@ pub fn SettingsModal(
                                     </div>
                                 </div>
                             </div>
+
+                            // Backup & Restore (engineer-only)
+                            <crate::components::backup_section::BackupSection />
                         })
                     } else {
                         None

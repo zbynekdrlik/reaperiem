@@ -943,6 +943,11 @@ jobs:
             Copy-Item "$appData\pins.json" "$wtPath\data\pins.json" -Force
             Write-Host "Collected pins.json"
           }
+          if (Test-Path "$appData\customizations") {
+            New-Item -ItemType Directory -Path "$wtPath\data\customizations" -Force | Out-Null
+            Copy-Item "$appData\customizations\*" "$wtPath\data\customizations\" -Force
+            Write-Host "Collected customizations"
+          }
 
           # Commit and push from the worktree
           Push-Location $wtPath

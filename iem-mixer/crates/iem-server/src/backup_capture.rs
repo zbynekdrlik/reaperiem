@@ -1,0 +1,303 @@
+//! Mixer state capture — reads all current state from REAPER and local files
+//!
+//! Used by backup operations to snapshot the full system state into a `MixerBackup`.
+
+use iem_core::{
+    ServerMsg,
+    backup::{BACKUP_VERSION, EqBandBackup, LimiterBackup, MixerBackup, SendBackup},
+};
+use std::collections::HashMap;
+
+use crate::{AppState, proxy};
+
+/// Capture the complete current mixer state.
+///
+/// Reads:
+/// - All tracks from REAPER (index, name, volume, send count)
+/// - All sends per track (vol/pan/mute/dest) — hardware outputs skipped
+/// - Track output volumes for "inear" and "stems" tracks
+/// - EQ bands for all tracks
+/// - Limiter params for "inear" tracks
+/// - Per-member UI customizations
+/// - Per-member PINs
+pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String> {
+    let reaper_url = {
+        let config = state.config.read().await;
+        config.reaper_url.clone()
+    };
+
+    tracing::info!("Backup capture: starting full mixer state snapshot");
+
+    // --- 1. Query all tracks ---
+    let tracks_url = proxy::reaper_api::query_tracks(&reaper_url);
+    let tracks_text = state
+        .http_client
+        .get(&tracks_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to query REAPER tracks: {e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read REAPER tracks response: {e}"))?;
+
+    // Parse track lines
+    // Format: TRACK\tidx\tname\tflags\tvol\tpan\t...\tsendcnt\t...
+    // Field indices (0-based): 0=TRACK, 1=idx, 2=name, 3=flags, 4=vol, 5=pan, ...
+    // sendcnt is at field 10 when VU fields are present (14+ fields) or field 8 (12 fields)
+    struct TrackInfo {
+        index: usize,
+        name: String,
+        vol_linear: f32,
+        send_count: usize,
+    }
+
+    let mut tracks: Vec<TrackInfo> = Vec::new();
+    let mut track_layout: HashMap<u32, String> = HashMap::new();
+
+    for line in tracks_text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() != Some(&"TRACK") || parts.len() < 12 {
+            continue;
+        }
+        let Ok(track_idx) = parts[1].parse::<usize>() else {
+            continue;
+        };
+        // Skip master track (index 0)
+        if track_idx == 0 {
+            continue;
+        }
+        let track_name = parts[2].to_string();
+        let vol_linear: f32 = parts[4].parse().unwrap_or(1.0);
+
+        // sendcnt: field 10 when 14+ fields (VU present), field 8 when 12 fields
+        let send_count = if parts.len() >= 14 {
+            parts[10].parse().unwrap_or(0)
+        } else {
+            parts[8].parse().unwrap_or(0)
+        };
+
+        track_layout.insert(track_idx as u32, track_name.clone());
+        tracks.push(TrackInfo {
+            index: track_idx,
+            name: track_name,
+            vol_linear,
+            send_count,
+        });
+    }
+
+    tracing::info!(
+        count = tracks.len(),
+        "Backup capture: found {} tracks",
+        tracks.len()
+    );
+
+    // Build name→track map for send destination resolution
+    let track_by_index: HashMap<usize, String> =
+        tracks.iter().map(|t| (t.index, t.name.clone())).collect();
+
+    // --- 2. Collect sends for all tracks that have sends ---
+    let mut sends: Vec<SendBackup> = Vec::new();
+
+    for track in &tracks {
+        if track.send_count == 0 {
+            continue;
+        }
+        for send_idx in 0..track.send_count {
+            let send_url = proxy::reaper_api::get_send_state(&reaper_url, track.index, send_idx);
+            let resp = match state.http_client.get(&send_url).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(
+                        track = %track.name,
+                        send_idx,
+                        error = %e,
+                        "Backup capture: failed to get send state, skipping"
+                    );
+                    continue;
+                }
+            };
+            let text = match resp.text().await {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            // Parse SEND line: SEND\tsrc\tsend_idx\tmute\tvol\tpan\tdest
+            for part_line in text.lines() {
+                let parts: Vec<&str> = part_line.split('\t').collect();
+                if parts.first() != Some(&"SEND") || parts.len() < 7 {
+                    continue;
+                }
+                let dest: i32 = parts[6].parse().unwrap_or(-1);
+                // dest < 1 means hardware output — skip
+                if dest < 1 {
+                    continue;
+                }
+                let vol: f32 = parts[4].parse().unwrap_or(1.0);
+                let mute_flag: i32 = parts[3].parse().unwrap_or(0);
+                let pan: f32 = parts[5].parse().unwrap_or(0.0);
+                let mute = mute_flag != 0;
+
+                let dest_name = track_by_index
+                    .get(&(dest as usize))
+                    .cloned()
+                    .unwrap_or_else(|| format!("track_{}", dest));
+
+                // Store LINEAR volume directly (same as REAPER API returns/accepts)
+                sends.push(SendBackup {
+                    src_name: track.name.clone(),
+                    dest_name,
+                    vol: vol as f64,
+                    pan: pan as f64,
+                    mute,
+                });
+            }
+        }
+    }
+
+    tracing::info!(
+        count = sends.len(),
+        "Backup capture: captured {} sends",
+        sends.len()
+    );
+
+    // --- 3. Collect track output volumes for "inear" and "stems" tracks ---
+    let mut track_volumes: HashMap<String, f64> = HashMap::new();
+    for track in &tracks {
+        let name_lower = track.name.to_lowercase();
+        if name_lower.contains("inear") || name_lower.contains("stems") {
+            // Store LINEAR volume directly (same as REAPER API)
+            track_volumes.insert(track.name.clone(), track.vol_linear as f64);
+        }
+    }
+
+    tracing::info!(
+        count = track_volumes.len(),
+        "Backup capture: captured {} output volumes",
+        track_volumes.len()
+    );
+
+    // --- 4. Read EQ for ALL tracks ---
+    let mut eq: HashMap<String, Vec<EqBandBackup>> = HashMap::new();
+    for track in &tracks {
+        match proxy::handle_get_eq_params(state, track.index).await {
+            Some(ServerMsg::EqParams {
+                track_name, bands, ..
+            }) => {
+                let band_backups: Vec<EqBandBackup> = bands
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| EqBandBackup::from((i as u8, b)))
+                    .collect();
+                let key = if track_name.trim().is_empty() {
+                    track.name.clone()
+                } else {
+                    track_name.trim().to_string()
+                };
+                eq.insert(key, band_backups);
+            }
+            Some(_) | None => {
+                tracing::debug!(track = %track.name, "Backup capture: no EQ data for track");
+            }
+        }
+    }
+
+    tracing::info!(
+        count = eq.len(),
+        "Backup capture: captured EQ for {} tracks",
+        eq.len()
+    );
+
+    // --- 5. Read limiter for "inear" tracks ---
+    let mut limiter: HashMap<String, LimiterBackup> = HashMap::new();
+    for track in &tracks {
+        if !track.name.to_lowercase().contains("inear") {
+            continue;
+        }
+        match proxy::handle_get_limiter_params(state, track.index).await {
+            Some(ServerMsg::LimiterParams {
+                track_name,
+                limit_db,
+                limit_norm,
+                enabled,
+                ..
+            }) => {
+                let key = if track_name.trim().is_empty() {
+                    track.name.clone()
+                } else {
+                    track_name.trim().to_string()
+                };
+                limiter.insert(
+                    key,
+                    LimiterBackup {
+                        limit_db,
+                        limit_norm,
+                        enabled,
+                    },
+                );
+            }
+            Some(_) | None => {
+                tracing::debug!(track = %track.name, "Backup capture: no limiter data for track");
+            }
+        }
+    }
+
+    tracing::info!(
+        count = limiter.len(),
+        "Backup capture: captured limiter for {} inear tracks",
+        limiter.len()
+    );
+
+    // --- 6. Read customizations for all known members ---
+    let known_members = [
+        "petronela",
+        "stevo",
+        "marek",
+        "zuzka",
+        "tina",
+        "mirec",
+        "alex",
+        "patrika",
+        "ani",
+        "engineer",
+    ];
+    let mut customizations = HashMap::new();
+    for member_id in &known_members {
+        let cust = state.customization_store.load(member_id);
+        if !cust.pinned.is_empty() || !cust.hidden.is_empty() {
+            customizations.insert(member_id.to_string(), cust);
+        }
+    }
+
+    tracing::info!(
+        count = customizations.len(),
+        "Backup capture: captured customizations for {} members",
+        customizations.len()
+    );
+
+    // --- 7. Read PINs ---
+    let pins = state.pin_store.read().await.all_pins();
+
+    tracing::info!(
+        count = pins.len(),
+        "Backup capture: captured {} PINs",
+        pins.len()
+    );
+
+    // --- 8. Build timestamp ---
+    let timestamp = chrono::Local::now()
+        .format("%Y-%m-%dT%H:%M:%S%z")
+        .to_string();
+
+    tracing::info!(%timestamp, "Backup capture: complete");
+
+    Ok(MixerBackup {
+        version: BACKUP_VERSION,
+        timestamp,
+        track_layout,
+        sends,
+        track_volumes,
+        eq,
+        limiter,
+        customizations,
+        pins,
+    })
+}

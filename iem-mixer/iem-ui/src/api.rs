@@ -262,3 +262,47 @@ pub async fn delete_photo(member_id: &str) -> Result<(), String> {
         Err(format!("Server error: {}", resp.status()))
     }
 }
+
+// === Backup API (engineer-only) ===
+
+/// List available backups
+pub async fn list_backups(token: &str) -> Result<Vec<iem_core::BackupInfo>, String> {
+    let resp = Request::get("/api/backups")
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("{e}"))?;
+    if !resp.ok() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    resp.json().await.map_err(|e| format!("{e}"))
+}
+
+/// Preview a backup restore
+pub async fn preview_restore(
+    token: &str,
+    filename: &str,
+) -> Result<iem_core::RestorePreview, String> {
+    let resp = Request::post(&format!("/api/backups/{}/preview", filename))
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("{e}"))?;
+    if !resp.ok() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    resp.json().await.map_err(|e| format!("{e}"))
+}
+
+/// Apply a backup restore
+pub async fn apply_restore(token: &str, filename: &str) -> Result<iem_core::RestoreResult, String> {
+    let resp = Request::post(&format!("/api/backups/{}/restore", filename))
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|e| format!("{e}"))?;
+    if !resp.ok() {
+        return Err(format!("HTTP {}", resp.status()));
+    }
+    resp.json().await.map_err(|e| format!("{e}"))
+}
