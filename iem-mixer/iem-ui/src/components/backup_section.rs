@@ -11,6 +11,7 @@ pub fn BackupSection() -> impl IntoView {
     let (selected, set_selected) = signal(Option::<String>::None);
     let (preview, set_preview) = signal(Option::<iem_core::RestorePreview>::None);
     let (restoring, set_restoring) = signal(false);
+    let (elapsed, set_elapsed) = signal(0u32);
     let (result, set_result) = signal(Option::<iem_core::RestoreResult>::None);
     let (error, set_error) = signal(Option::<String>::None);
     let (loading, set_loading) = signal(false);
@@ -127,6 +128,14 @@ pub fn BackupSection() -> impl IntoView {
                                     {format!("{} skipped (not found)", skipped_count)}
                                 </div>
                             })}
+                            {(p.estimated_seconds > 0 && change_count > 0).then(|| {
+                                let est = p.estimated_seconds;
+                                view! {
+                                    <div style="color: #aaa; margin-top: 4px;">
+                                        {format!("Estimated time: ~{}s", est)}
+                                    </div>
+                                }
+                            })}
                         </div>
                         <button
                             class="settings-action-btn"
@@ -134,7 +143,19 @@ pub fn BackupSection() -> impl IntoView {
                             on:click=move |_| {
                                 if let Some(fname) = selected.get_untracked() {
                                     set_restoring.set(true);
+                                    set_elapsed.set(0);
                                     set_error.set(None);
+                                    // Start elapsed timer
+                                    spawn_local(async move {
+                                        loop {
+                                            gloo_timers::future::TimeoutFuture::new(1000).await;
+                                            if !restoring.get_untracked() {
+                                                break;
+                                            }
+                                            set_elapsed.update(|e| *e += 1);
+                                        }
+                                    });
+                                    // Start restore
                                     spawn_local(async move {
                                         let token = match crate::auth::get_auth() {
                                             Some(a) => a.token,
@@ -152,7 +173,13 @@ pub fn BackupSection() -> impl IntoView {
                                 }
                             }
                         >
-                            {move || if restoring.get() { "Restoring..." } else { "Restore" }}
+                            {move || {
+                                if restoring.get() {
+                                    format!("Restoring... ({}s)", elapsed.get())
+                                } else {
+                                    "Restore".to_string()
+                                }
+                            }}
                         </button>
                     </div>
                 }

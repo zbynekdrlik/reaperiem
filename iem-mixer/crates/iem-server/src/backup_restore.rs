@@ -325,10 +325,35 @@ pub async fn preview_restore(
     // Suppress unused-variable warning for index_to_name (kept for potential future use)
     let _ = index_to_name;
 
+    // Estimate restore time: EQ is slow (~0.24s per band × 4 params), rest is fast
+    let eq_band_count: usize = changes
+        .iter()
+        .filter(|c| c.category == RestoreCategory::Eq)
+        .count()
+        * 5; // ~5 bands per track
+    let limiter_count = changes
+        .iter()
+        .filter(|c| c.category == RestoreCategory::Limiter)
+        .count();
+    let send_count = changes
+        .iter()
+        .filter(|c| c.category == RestoreCategory::Send)
+        .count();
+    // EQ: 4 params × 0.06s per param + 0.3s read per track
+    // Limiter: 2 params × 0.06s + 0.3s read per track
+    // Sends: ~0.01s each
+    // Add overhead for track map + routing queries (~3s)
+    let estimated_seconds = (eq_band_count as f32 * 0.24
+        + limiter_count as f32 * 0.42
+        + send_count as f32 * 0.01
+        + 3.0)
+        .ceil() as u32;
+
     Ok(RestorePreview {
         changes,
         unchanged_count,
         skipped,
+        estimated_seconds,
     })
 }
 
@@ -469,7 +494,7 @@ pub async fn apply_restore(
         let mut any_written = false;
         for band in bands {
             // Check if this band differs from live
-            let differs = live_bands.get(band.band as usize).map_or(true, |lb| {
+            let differs = live_bands.get(band.band as usize).is_none_or(|lb| {
                 (band.freq_norm - lb.freq_norm).abs() > 0.001
                     || (band.gain_norm - lb.gain_norm).abs() > 0.001
                     || (band.bw_norm - lb.bw_norm).abs() > 0.001

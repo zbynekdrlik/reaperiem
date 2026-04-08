@@ -121,6 +121,9 @@ pub struct RestorePreview {
     pub unchanged_count: usize,
     /// Items that will be skipped (e.g., track no longer exists)
     pub skipped: Vec<SkippedEntry>,
+    /// Estimated restore time in seconds (EQ is slow: ~0.24s per band)
+    #[serde(default)]
+    pub estimated_seconds: u32,
 }
 
 /// A single proposed change from a restore
