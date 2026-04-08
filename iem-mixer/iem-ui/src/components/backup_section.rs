@@ -60,6 +60,8 @@ pub fn BackupSection() -> impl IntoView {
                     }
                     list.into_iter().map(|b| {
                         let filename = b.filename.clone();
+                        let filename_for_style = filename.clone();
+                        let filename_for_click = filename.clone();
                         let display_time = b.timestamp.get(..16).unwrap_or(&b.timestamp).to_string();
                         let meta = format!("{} sends", b.send_count);
                         view! {
@@ -67,10 +69,10 @@ pub fn BackupSection() -> impl IntoView {
                                 class="settings-row"
                                 style=move || format!(
                                     "cursor: pointer; padding: 6px 8px; border-radius: 4px; {}",
-                                    if selected.get().as_deref() == Some(&filename) { "background: rgba(255,255,255,0.1);" } else { "" }
+                                    if selected.get().as_deref() == Some(&filename_for_style) { "background: rgba(255,255,255,0.1);" } else { "" }
                                 )
                                 on:click={
-                                    let filename = filename.clone();
+                                    let filename = filename_for_click.clone();
                                     move |_| {
                                         let fname = filename.clone();
                                         set_selected.set(Some(fname.clone()));
