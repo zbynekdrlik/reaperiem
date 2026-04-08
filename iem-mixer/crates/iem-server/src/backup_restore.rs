@@ -611,8 +611,12 @@ pub async fn apply_restore(
         }
     }
 
-    // --- Apply customizations ---
+    // --- Apply customizations (only if changed) ---
     for (member_id, cust) in &backup.customizations {
+        let current = state.customization_store.load(member_id);
+        if current.pinned == cust.pinned && current.hidden == cust.hidden {
+            continue; // Already matches
+        }
         if let Err(e) = state.customization_store.save(member_id, cust) {
             tracing::warn!(member = %member_id, error = %e, "apply_restore: failed to save customization");
             skipped.push(SkippedEntry {
@@ -625,20 +629,38 @@ pub async fn apply_restore(
         restored_count += 1;
     }
 
-    // --- Apply PINs ---
+    // --- Apply PINs (only if changed) ---
     {
-        let mut pin_store = state.pin_store.write().await;
+        let pin_store_read = state.pin_store.read().await;
+        let current_pins = pin_store_read.all_pins();
+        drop(pin_store_read);
+
+        let mut any_pin_changed = false;
         for (member_id, pin) in &backup.pins {
-            if let Err(e) = pin_store.set_pin(member_id, pin) {
-                tracing::warn!(member = %member_id, error = %e, "apply_restore: failed to set PIN");
-                skipped.push(SkippedEntry {
-                    category: RestoreCategory::Pin,
-                    description: member_id.clone(),
-                    reason: format!("IO error setting PIN: {e}"),
-                });
-                continue;
+            let current = current_pins
+                .get(member_id)
+                .map(|s| s.as_str())
+                .unwrap_or("");
+            if current == pin.as_str() {
+                continue; // Already matches
             }
-            restored_count += 1;
+            any_pin_changed = true;
+        }
+
+        if any_pin_changed {
+            let mut pin_store = state.pin_store.write().await;
+            for (member_id, pin) in &backup.pins {
+                if let Err(e) = pin_store.set_pin(member_id, pin) {
+                    tracing::warn!(member = %member_id, error = %e, "apply_restore: failed to set PIN");
+                    skipped.push(SkippedEntry {
+                        category: RestoreCategory::Pin,
+                        description: member_id.clone(),
+                        reason: format!("IO error setting PIN: {e}"),
+                    });
+                    continue;
+                }
+                restored_count += 1;
+            }
         }
     }
 
