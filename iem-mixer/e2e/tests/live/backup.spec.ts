@@ -38,12 +38,16 @@ async function getEngineerToken(page: Page): Promise<string> {
 }
 
 test.describe("Backup API (engineer-only)", () => {
+  // Backup capture reads EQ/limiter for all tracks via sequential EXTSTATE calls — slow
+  test.describe.configure({ timeout: 120_000 });
+
   test("backup capture creates a backup file", async ({ page }) => {
     await page.goto("/");
     const token = await getEngineerToken(page);
 
     const resp = await page.request.post("/api/backups/capture", {
       headers: { Authorization: `Bearer ${token}` },
+      timeout: 90_000,
     });
     expect(resp.status()).toBe(200);
 
@@ -62,6 +66,7 @@ test.describe("Backup API (engineer-only)", () => {
     // Ensure at least one backup exists
     await page.request.post("/api/backups/capture", {
       headers: { Authorization: `Bearer ${token}` },
+      timeout: 90_000,
     });
 
     const resp = await page.request.get("/api/backups", {
@@ -83,6 +88,7 @@ test.describe("Backup API (engineer-only)", () => {
     // Capture a fresh backup
     const captureResp = await page.request.post("/api/backups/capture", {
       headers: { Authorization: `Bearer ${token}` },
+      timeout: 90_000,
     });
     const info = await captureResp.json();
 
@@ -91,6 +97,7 @@ test.describe("Backup API (engineer-only)", () => {
       `/api/backups/${info.filename}/preview`,
       {
         headers: { Authorization: `Bearer ${token}` },
+        timeout: 90_000,
       },
     );
     expect(previewResp.status()).toBe(200);
