@@ -279,7 +279,10 @@ pub async fn list_backups(token: &str) -> Result<Vec<iem_core::BackupInfo>, Stri
 }
 
 /// Preview a backup restore
-pub async fn preview_restore(token: &str, filename: &str) -> Result<iem_core::RestorePreview, String> {
+pub async fn preview_restore(
+    token: &str,
+    filename: &str,
+) -> Result<iem_core::RestorePreview, String> {
     let resp = Request::post(&format!("/api/backups/{}/preview", filename))
         .header("Authorization", &format!("Bearer {}", token))
         .send()

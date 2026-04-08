@@ -6,7 +6,10 @@ use axum::{
     http::{StatusCode, header},
     routing::{get, post},
 };
-use iem_core::{ApiError, backup::{BackupInfo, MixerBackup, RestorePreview, RestoreResult}};
+use iem_core::{
+    ApiError,
+    backup::{BackupInfo, MixerBackup, RestorePreview, RestoreResult},
+};
 
 use crate::AppState;
 
@@ -69,23 +72,16 @@ async fn get_backup(
     headers: axum::http::HeaderMap,
 ) -> Result<Json<MixerBackup>, (StatusCode, Json<ApiError>)> {
     verify_engineer(&state, &headers).await?;
-    state
-        .backup_store
-        .load(&filename)
-        .map(Json)
-        .map_err(|e| {
-            if e.starts_with("invalid filename") {
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiError::new("INVALID_FILENAME", &e)),
-                )
-            } else {
-                (
-                    StatusCode::NOT_FOUND,
-                    Json(ApiError::new("NOT_FOUND", &e)),
-                )
-            }
-        })
+    state.backup_store.load(&filename).map(Json).map_err(|e| {
+        if e.starts_with("invalid filename") {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiError::new("INVALID_FILENAME", &e)),
+            )
+        } else {
+            (StatusCode::NOT_FOUND, Json(ApiError::new("NOT_FOUND", &e)))
+        }
+    })
 }
 
 /// `POST /api/backups/:filename/preview` — diff backup vs. live state.
@@ -96,12 +92,10 @@ async fn preview_backup(
 ) -> Result<Json<RestorePreview>, (StatusCode, Json<ApiError>)> {
     verify_engineer(&state, &headers).await?;
 
-    let backup = state.backup_store.load(&filename).map_err(|e| {
-        (
-            StatusCode::NOT_FOUND,
-            Json(ApiError::new("NOT_FOUND", &e)),
-        )
-    })?;
+    let backup = state
+        .backup_store
+        .load(&filename)
+        .map_err(|e| (StatusCode::NOT_FOUND, Json(ApiError::new("NOT_FOUND", &e))))?;
 
     crate::backup_restore::preview_restore(&state, &backup)
         .await
@@ -123,12 +117,10 @@ async fn restore_backup(
 ) -> Result<Json<RestoreResult>, (StatusCode, Json<ApiError>)> {
     verify_engineer(&state, &headers).await?;
 
-    let backup = state.backup_store.load(&filename).map_err(|e| {
-        (
-            StatusCode::NOT_FOUND,
-            Json(ApiError::new("NOT_FOUND", &e)),
-        )
-    })?;
+    let backup = state
+        .backup_store
+        .load(&filename)
+        .map_err(|e| (StatusCode::NOT_FOUND, Json(ApiError::new("NOT_FOUND", &e))))?;
 
     crate::backup_restore::apply_restore(&state, &backup)
         .await

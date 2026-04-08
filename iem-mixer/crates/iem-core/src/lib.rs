@@ -2,20 +2,20 @@
 //!
 //! Shared types, configuration, and constants for the IEM mixing system.
 
+pub mod backup;
 #[cfg(feature = "config")]
 pub mod config;
-pub mod backup;
 pub mod preset;
 pub mod snapshot;
 pub mod types;
 pub mod ws;
 
+pub use backup::{
+    BACKUP_VERSION, BackupInfo, EqBandBackup, LimiterBackup, MixerBackup, RestoreCategory,
+    RestoreChange, RestorePreview, RestoreProgress, RestoreResult, SendBackup, SkippedEntry,
+};
 #[cfg(feature = "config")]
 pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
-pub use backup::{
-    BackupInfo, EqBandBackup, LimiterBackup, MixerBackup, RestoreCategory, RestoreChange,
-    RestorePreview, RestoreProgress, RestoreResult, SendBackup, SkippedEntry, BACKUP_VERSION,
-};
 pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{

@@ -204,10 +204,7 @@ pub async fn preview_restore(
                 category: RestoreCategory::Limiter,
                 description: track_name.clone(),
                 current_value: "(live — not read for preview)".to_string(),
-                backup_value: format!(
-                    "limit={:.1}dB enabled={}",
-                    lim.limit_db, lim.enabled
-                ),
+                backup_value: format!("limit={:.1}dB enabled={}", lim.limit_db, lim.enabled),
             });
         } else {
             skipped.push(SkippedEntry {
@@ -225,10 +222,7 @@ pub async fn preview_restore(
             changes.push(RestoreChange {
                 category: RestoreCategory::Customization,
                 description: member_id.clone(),
-                current_value: format!(
-                    "pinned={:?} hidden={:?}",
-                    cur_cust.pinned, cur_cust.hidden
-                ),
+                current_value: format!("pinned={:?} hidden={:?}", cur_cust.pinned, cur_cust.hidden),
                 backup_value: format!(
                     "pinned={:?} hidden={:?}",
                     backup_cust.pinned, backup_cust.hidden
@@ -242,7 +236,10 @@ pub async fn preview_restore(
     // --- PINs ---
     let current_pins = state.pin_store.read().await.all_pins();
     for (member_id, backup_pin) in &backup.pins {
-        let cur_pin = current_pins.get(member_id).map(|s| s.as_str()).unwrap_or("");
+        let cur_pin = current_pins
+            .get(member_id)
+            .map(|s| s.as_str())
+            .unwrap_or("");
         if cur_pin != backup_pin.as_str() {
             changes.push(RestoreChange {
                 category: RestoreCategory::Pin,
@@ -338,8 +335,7 @@ pub async fn apply_restore(
         }
 
         // Set pan
-        let pan_url =
-            proxy::reaper_api::set_send_pan(&reaper_url, src, send_idx, send.pan as f32);
+        let pan_url = proxy::reaper_api::set_send_pan(&reaper_url, src, send_idx, send.pan as f32);
         if let Err(e) = client.get(&pan_url).send().await {
             tracing::warn!(src = %send.src_name, dest = %send.dest_name, error = %e, "apply_restore: failed to set send pan");
         }
@@ -542,11 +538,8 @@ async fn query_send_routing(
         let mut dest_map: HashMap<u32, u32> = HashMap::new();
 
         for send_idx in 0u32..30 {
-            let url = proxy::reaper_api::get_send_state(
-                reaper_url,
-                src_idx as usize,
-                send_idx as usize,
-            );
+            let url =
+                proxy::reaper_api::get_send_state(reaper_url, src_idx as usize, send_idx as usize);
             let text = match client.get(&url).send().await {
                 Ok(r) => match r.text().await {
                     Ok(t) => t,
@@ -650,16 +643,25 @@ async fn apply_eq_param(
         "track={}|band={}|param={}|value={:.6}",
         track_index, band, param, value
     );
-    let set_url =
-        proxy::reaper_api::set_extstate(reaper_url, "reaperiem", "eq_set", &eq_set_value);
+    let set_url = proxy::reaper_api::set_extstate(reaper_url, "reaperiem", "eq_set", &eq_set_value);
     if state.http_client.get(&set_url).send().await.is_err() {
-        tracing::warn!(track_index, band, param, "restore: failed to set eq_set EXTSTATE");
+        tracing::warn!(
+            track_index,
+            band,
+            param,
+            "restore: failed to set eq_set EXTSTATE"
+        );
         return;
     }
 
     let action_url = proxy::reaper_api::trigger_action(reaper_url, "_RS_REAPERIEM_SET_EQ");
     if state.http_client.get(&action_url).send().await.is_err() {
-        tracing::warn!(track_index, band, param, "restore: failed to trigger SET_EQ");
+        tracing::warn!(
+            track_index,
+            band,
+            param,
+            "restore: failed to trigger SET_EQ"
+        );
         return;
     }
 
@@ -680,12 +682,15 @@ async fn apply_limiter_param(
     let set_url =
         proxy::reaper_api::set_extstate(reaper_url, "reaperiem", "limiter_set", &set_value);
     if state.http_client.get(&set_url).send().await.is_err() {
-        tracing::warn!(track_index, param, "restore: failed to set limiter_set EXTSTATE");
+        tracing::warn!(
+            track_index,
+            param,
+            "restore: failed to set limiter_set EXTSTATE"
+        );
         return;
     }
 
-    let action_url =
-        proxy::reaper_api::trigger_action(reaper_url, "_RS_REAPERIEM_SET_LIMITER");
+    let action_url = proxy::reaper_api::trigger_action(reaper_url, "_RS_REAPERIEM_SET_LIMITER");
     if state.http_client.get(&action_url).send().await.is_err() {
         tracing::warn!(track_index, param, "restore: failed to trigger SET_LIMITER");
         return;
@@ -701,7 +706,7 @@ async fn apply_limiter_param(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iem_core::backup::{EqBandBackup, LimiterBackup, MixerBackup, SendBackup, BACKUP_VERSION};
+    use iem_core::backup::{BACKUP_VERSION, EqBandBackup, LimiterBackup, MixerBackup, SendBackup};
     use std::collections::HashMap;
 
     fn minimal_backup() -> MixerBackup {

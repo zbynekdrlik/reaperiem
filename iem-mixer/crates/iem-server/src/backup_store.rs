@@ -93,8 +93,7 @@ impl BackupStore {
         }
 
         let path = self.backups_dir.join(filename);
-        let content =
-            std::fs::read_to_string(&path).map_err(|e| format!("read error: {e}"))?;
+        let content = std::fs::read_to_string(&path).map_err(|e| format!("read error: {e}"))?;
 
         let backup: MixerBackup =
             serde_json::from_str(&content).map_err(|e| format!("parse error: {e}"))?;

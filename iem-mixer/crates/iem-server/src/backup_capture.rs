@@ -3,8 +3,8 @@
 //! Used by backup operations to snapshot the full system state into a `MixerBackup`.
 
 use iem_core::{
-    backup::{EqBandBackup, LimiterBackup, MixerBackup, SendBackup, BACKUP_VERSION},
     ServerMsg,
+    backup::{BACKUP_VERSION, EqBandBackup, LimiterBackup, MixerBackup, SendBackup},
 };
 use std::collections::HashMap;
 
@@ -85,13 +85,15 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         });
     }
 
-    tracing::info!(count = tracks.len(), "Backup capture: found {} tracks", tracks.len());
+    tracing::info!(
+        count = tracks.len(),
+        "Backup capture: found {} tracks",
+        tracks.len()
+    );
 
     // Build name→track map for send destination resolution
-    let track_by_index: HashMap<usize, String> = tracks
-        .iter()
-        .map(|t| (t.index, t.name.clone()))
-        .collect();
+    let track_by_index: HashMap<usize, String> =
+        tracks.iter().map(|t| (t.index, t.name.clone())).collect();
 
     // --- 2. Collect sends for all tracks that have sends ---
     let mut sends: Vec<SendBackup> = Vec::new();
@@ -101,8 +103,7 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
             continue;
         }
         for send_idx in 0..track.send_count {
-            let send_url =
-                proxy::reaper_api::get_send_state(&reaper_url, track.index, send_idx);
+            let send_url = proxy::reaper_api::get_send_state(&reaper_url, track.index, send_idx);
             let resp = match state.http_client.get(&send_url).send().await {
                 Ok(r) => r,
                 Err(e) => {
@@ -154,7 +155,11 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         }
     }
 
-    tracing::info!(count = sends.len(), "Backup capture: captured {} sends", sends.len());
+    tracing::info!(
+        count = sends.len(),
+        "Backup capture: captured {} sends",
+        sends.len()
+    );
 
     // --- 3. Collect track output volumes for "inear" and "stems" tracks ---
     let mut track_volumes: HashMap<String, f64> = HashMap::new();
@@ -197,7 +202,11 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         }
     }
 
-    tracing::info!(count = eq.len(), "Backup capture: captured EQ for {} tracks", eq.len());
+    tracing::info!(
+        count = eq.len(),
+        "Backup capture: captured EQ for {} tracks",
+        eq.len()
+    );
 
     // --- 5. Read limiter for "inear" tracks ---
     let mut limiter: HashMap<String, LimiterBackup> = HashMap::new();
@@ -269,7 +278,11 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
     // --- 7. Read PINs ---
     let pins = state.pin_store.read().await.all_pins();
 
-    tracing::info!(count = pins.len(), "Backup capture: captured {} PINs", pins.len());
+    tracing::info!(
+        count = pins.len(),
+        "Backup capture: captured {} PINs",
+        pins.len()
+    );
 
     // --- 8. Build timestamp ---
     let timestamp = chrono::Local::now()
