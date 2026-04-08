@@ -174,43 +174,110 @@ pub async fn preview_restore(
         }
     }
 
-    // --- EQ bands (coarse check: if track exists and backup has EQ, mark as change) ---
+    // --- EQ bands (read live values via ReaScript and compare) ---
     for (track_name, bands) in &backup.eq {
         if bands.is_empty() {
             continue;
         }
-        if track_map.contains_key(track_name.as_str()) {
-            // Full EQ comparison via ReaScript is too slow for preview; flag as a pending change
-            changes.push(RestoreChange {
-                category: RestoreCategory::Eq,
-                description: track_name.clone(),
-                current_value: "(live — not read for preview)".to_string(),
-                backup_value: format!("{} bands", bands.len()),
-            });
-        } else {
+        let Some(&track_idx) = track_map.get(track_name.as_str()) else {
             skipped.push(SkippedEntry {
                 category: RestoreCategory::Eq,
                 description: track_name.clone(),
                 reason: format!("Track '{}' not found in REAPER", track_name),
             });
+            continue;
+        };
+
+        // Read current EQ via ReaScript
+        let live_eq = proxy::handle_get_eq_params(state, track_idx as usize).await;
+        match live_eq {
+            Some(iem_core::ServerMsg::EqParams {
+                bands: live_bands, ..
+            }) => {
+                // Compare each band: freq_norm, gain_norm, bw_norm, enabled
+                let mut eq_differs = false;
+                if live_bands.len() != bands.len() {
+                    eq_differs = true;
+                } else {
+                    for (backup_band, live_band) in bands.iter().zip(live_bands.iter()) {
+                        if (backup_band.freq_norm - live_band.freq_norm).abs() > 0.001
+                            || (backup_band.gain_norm - live_band.gain_norm).abs() > 0.001
+                            || (backup_band.bw_norm - live_band.bw_norm).abs() > 0.001
+                            || backup_band.enabled != live_band.enabled
+                        {
+                            eq_differs = true;
+                            break;
+                        }
+                    }
+                }
+                if eq_differs {
+                    let enabled_count = bands.iter().filter(|b| b.enabled).count();
+                    changes.push(RestoreChange {
+                        category: RestoreCategory::Eq,
+                        description: track_name.clone(),
+                        current_value: format!("{} bands", live_bands.len()),
+                        backup_value: format!("{} bands ({} enabled)", bands.len(), enabled_count),
+                    });
+                } else {
+                    unchanged_count += 1;
+                }
+            }
+            _ => {
+                // Could not read EQ — count as change to be safe
+                changes.push(RestoreChange {
+                    category: RestoreCategory::Eq,
+                    description: track_name.clone(),
+                    current_value: "(could not read)".to_string(),
+                    backup_value: format!("{} bands", bands.len()),
+                });
+            }
         }
     }
 
-    // --- Limiter ---
+    // --- Limiter (read live values via ReaScript and compare) ---
     for (track_name, lim) in &backup.limiter {
-        if track_map.contains_key(track_name.as_str()) {
-            changes.push(RestoreChange {
-                category: RestoreCategory::Limiter,
-                description: track_name.clone(),
-                current_value: "(live — not read for preview)".to_string(),
-                backup_value: format!("limit={:.1}dB enabled={}", lim.limit_db, lim.enabled),
-            });
-        } else {
+        let Some(&track_idx) = track_map.get(track_name.as_str()) else {
             skipped.push(SkippedEntry {
                 category: RestoreCategory::Limiter,
                 description: track_name.clone(),
                 reason: format!("Track '{}' not found in REAPER", track_name),
             });
+            continue;
+        };
+
+        let live_lim = proxy::handle_get_limiter_params(state, track_idx as usize).await;
+        match live_lim {
+            Some(iem_core::ServerMsg::LimiterParams {
+                limit_db,
+                limit_norm,
+                enabled,
+                ..
+            }) => {
+                if (limit_db - lim.limit_db).abs() > 0.01
+                    || (limit_norm - lim.limit_norm).abs() > 0.01
+                    || enabled != lim.enabled
+                {
+                    changes.push(RestoreChange {
+                        category: RestoreCategory::Limiter,
+                        description: track_name.clone(),
+                        current_value: format!("limit={:.1}dB enabled={}", limit_db, enabled),
+                        backup_value: format!(
+                            "limit={:.1}dB enabled={}",
+                            lim.limit_db, lim.enabled
+                        ),
+                    });
+                } else {
+                    unchanged_count += 1;
+                }
+            }
+            _ => {
+                changes.push(RestoreChange {
+                    category: RestoreCategory::Limiter,
+                    description: track_name.clone(),
+                    current_value: "(could not read)".to_string(),
+                    backup_value: format!("limit={:.1}dB enabled={}", lim.limit_db, lim.enabled),
+                });
+            }
         }
     }
 
