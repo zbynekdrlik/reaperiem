@@ -498,7 +498,7 @@ pub async fn apply_restore(
         };
 
         // Read current volume and skip if unchanged
-        let current_vol = query_track_volume(client, &reaper_url, track_idx as u32).await;
+        let current_vol = query_track_volume(client, &reaper_url, track_idx).await;
         if let Some(cur) = current_vol {
             if (cur - backup_vol_db).abs() < 0.0001 {
                 continue; // Already matches
