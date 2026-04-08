@@ -145,10 +145,13 @@ pub fn BackupSection() -> impl IntoView {
                                     set_restoring.set(true);
                                     set_elapsed.set(0);
                                     set_error.set(None);
-                                    // Start elapsed timer
+                                    // Start elapsed timer (1s ticks)
                                     spawn_local(async move {
                                         loop {
-                                            gloo_timers::future::TimeoutFuture::new(1000).await;
+                                            let promise = js_sys::Promise::new(&mut |resolve, _| {
+                                                web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 1000).unwrap();
+                                            });
+                                            wasm_bindgen_futures::JsFuture::from(promise).await.ok();
                                             if !restoring.get_untracked() {
                                                 break;
                                             }
