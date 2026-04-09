@@ -159,6 +159,9 @@ pub struct MixerCache {
     pub snapshot_last_date: HashMap<String, String>,
     /// Solo state per member — transient, in-memory only (member_id -> soloed track indices)
     pub solo_states: HashMap<String, Vec<usize>>,
+    /// Pre-solo mute states per member — saved when solo activates, restored on unsolo
+    /// (member_id -> (track_index, send_index, was_muted))
+    pub pre_solo_mutes: HashMap<String, Vec<(usize, usize, bool)>>,
     /// Stems-bus track indices per member (member_id -> 1-based track index)
     pub stems_bus_indices: HashMap<String, usize>,
     /// Last known stems-bus volume per member (member_id -> state)
