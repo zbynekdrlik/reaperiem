@@ -1921,29 +1921,27 @@ async fn apply_command_to_cache(
                 }
             } else if !wants_solo && had_solo {
                 // EXITING SOLO: restore pre-solo mute states
-                if let Some(saved) = cache.pre_solo_mutes.remove(member_id) {
-                    if let Some(channels) = cache.member_states.get_mut(member_id) {
-                        for (track_idx, send_idx, was_muted) in &saved {
-                            if let Some(ch) =
-                                channels.iter_mut().find(|c| c.track_index == *track_idx)
-                            {
-                                if ch.muted != *was_muted {
-                                    ch.muted = *was_muted;
-                                    let mute_val: u8 = if *was_muted { 1 } else { 0 };
-                                    reaper_urls.push(reaper_api::set_send_mute(
-                                        &reaper_url,
-                                        *track_idx,
-                                        *send_idx,
-                                        mute_val,
-                                    ));
-                                    events.push(iem_core::ServerMsg::ChannelUpdate {
-                                        track_index: *track_idx,
-                                        level_db: ch.level_db,
-                                        muted: ch.muted,
-                                        pan: ch.pan,
-                                    });
-                                }
-                            }
+                if let Some(saved) = cache.pre_solo_mutes.remove(member_id)
+                    && let Some(channels) = cache.member_states.get_mut(member_id)
+                {
+                    for (track_idx, send_idx, was_muted) in &saved {
+                        if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_idx)
+                            && ch.muted != *was_muted
+                        {
+                            ch.muted = *was_muted;
+                            let mute_val: u8 = if *was_muted { 1 } else { 0 };
+                            reaper_urls.push(reaper_api::set_send_mute(
+                                &reaper_url,
+                                *track_idx,
+                                *send_idx,
+                                mute_val,
+                            ));
+                            events.push(iem_core::ServerMsg::ChannelUpdate {
+                                track_index: *track_idx,
+                                level_db: ch.level_db,
+                                muted: ch.muted,
+                                pan: ch.pan,
+                            });
                         }
                     }
                 }
