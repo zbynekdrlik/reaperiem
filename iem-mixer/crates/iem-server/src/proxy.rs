@@ -1425,7 +1425,6 @@ async fn handle_ws(
         if *count == 0 {
             cache.active_members.remove(&member_id);
             cache.member_states.remove(&member_id);
-            cache.solo_states.remove(&member_id);
         }
     }
 }
