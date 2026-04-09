@@ -4,28 +4,33 @@
     "label": "auto",
     "pinned": false,
     "channels": {
+      "7": {
+        "vol": 0.049544998,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 0.009548003,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.107152015,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.085097,
+        "mute": false,
+        "pan": 0.5
+      },
       "5": {
         "vol": 0.022646002,
         "mute": false,
         "pan": 0.5
       },
-      "4": {
-        "vol": 0.06381399,
-        "mute": false,
-        "pan": 1.0
-      },
-      "8": {
-        "vol": 0.0022640005,
-        "mute": true,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.014286001,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.049544998,
+      "11": {
+        "vol": 0.040264003,
         "mute": false,
         "pan": 0.5
       },
@@ -34,29 +39,29 @@
         "mute": false,
         "pan": 0.5
       },
-      "21": {
-        "vol": 0.190508,
+      "22": {
+        "vol": 0.11347801,
         "mute": false,
         "pan": 0.5
       },
-      "19": {
-        "vol": 0.080336995,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.015667994,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.033877995,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.14286101,
+      "10": {
+        "vol": 0.013487004,
         "mute": true,
+        "pan": 1.0
+      },
+      "17": {
+        "vol": 0.022642005,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.06381399,
+        "mute": false,
+        "pan": 1.0
+      },
+      "16": {
+        "vol": 0.014286001,
+        "mute": false,
         "pan": 0.5
       },
       "20": {
@@ -69,13 +74,33 @@
         "mute": false,
         "pan": 0.5
       },
-      "9": {
-        "vol": 0.009548003,
+      "8": {
+        "vol": 0.0022640005,
         "mute": true,
         "pan": 0.5
       },
-      "22": {
-        "vol": 0.11347801,
+      "19": {
+        "vol": 0.080336995,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.14286101,
+        "mute": true,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 0.015667994,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.190508,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.033877995,
         "mute": false,
         "pan": 0.5
       },
@@ -86,31 +111,6 @@
       },
       "15": {
         "vol": 0.07584299,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.040264003,
-        "mute": false,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.085097,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.107152015,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 0.013487004,
-        "mute": true,
-        "pan": 1.0
-      },
-      "17": {
-        "vol": 0.022642005,
         "mute": false,
         "pan": 0.5
       }
@@ -121,18 +121,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "19": {
-        "vol": 0.080336995,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.033877995,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.022646002,
+      "20": {
+        "vol": 0.053691994,
         "mute": false,
         "pan": 0.5
       },
@@ -146,28 +136,18 @@
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": 0.031983,
-        "mute": false,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 0.053691994,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 0.013487004,
+      "8": {
+        "vol": 0.0022640005,
         "mute": true,
-        "pan": 1.0
-      },
-      "11": {
-        "vol": 0.040264003,
-        "mute": false,
         "pan": 0.5
       },
-      "17": {
-        "vol": 0.022642005,
+      "1": {
+        "vol": 0.14286101,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.045176998,
         "mute": false,
         "pan": 0.5
       },
@@ -176,28 +156,13 @@
         "mute": false,
         "pan": 0.5
       },
-      "14": {
-        "vol": 0.045176998,
-        "mute": false,
+      "9": {
+        "vol": 0.009548003,
+        "mute": true,
         "pan": 0.5
       },
-      "21": {
-        "vol": 0.190508,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.107152015,
-        "mute": false,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.015667994,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.014286001,
+      "11": {
+        "vol": 0.040264003,
         "mute": false,
         "pan": 0.5
       },
@@ -206,28 +171,63 @@
         "mute": false,
         "pan": 1.0
       },
-      "8": {
-        "vol": 0.0022640005,
-        "mute": true,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.050689,
+      "17": {
+        "vol": 0.022642005,
         "mute": false,
         "pan": 0.5
       },
-      "1": {
-        "vol": 0.14286101,
-        "mute": true,
+      "12": {
+        "vol": 0.031983,
+        "mute": false,
         "pan": 0.5
       },
-      "9": {
-        "vol": 0.009548003,
+      "19": {
+        "vol": 0.080336995,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.013487004,
         "mute": true,
+        "pan": 1.0
+      },
+      "5": {
+        "vol": 0.022646002,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.190508,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.014286001,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.107152015,
+        "mute": false,
         "pan": 0.5
       },
       "15": {
         "vol": 0.07584299,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.033877995,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 0.015667994,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.050689,
         "mute": false,
         "pan": 0.5
       }
@@ -238,23 +238,13 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "6": {
-        "vol": 0.085097,
-        "mute": false,
+      "1": {
+        "vol": 0.14286101,
+        "mute": true,
         "pan": 0.5
       },
       "3": {
         "vol": 0.015667994,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.014286001,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.022642005,
         "mute": false,
         "pan": 0.5
       },
@@ -263,43 +253,18 @@
         "mute": true,
         "pan": 0.5
       },
-      "2": {
-        "vol": 0.107152015,
-        "mute": false,
-        "pan": 0.5
-      },
       "21": {
         "vol": 0.190508,
         "mute": false,
         "pan": 0.5
       },
-      "20": {
-        "vol": 0.053691994,
+      "2": {
+        "vol": 0.107152015,
         "mute": false,
         "pan": 0.5
       },
-      "14": {
-        "vol": 0.045176998,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 0.013487004,
-        "mute": true,
-        "pan": 1.0
-      },
-      "22": {
-        "vol": 0.11347801,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.14286101,
-        "mute": true,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.050689,
+      "5": {
+        "vol": 0.022646002,
         "mute": false,
         "pan": 0.5
       },
@@ -313,6 +278,61 @@
         "mute": false,
         "pan": 0.5
       },
+      "22": {
+        "vol": 0.11347801,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.013487004,
+        "mute": true,
+        "pan": 1.0
+      },
+      "15": {
+        "vol": 0.07584299,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.045176998,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.014286001,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.050689,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.049544998,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.085097,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.053691994,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.022642005,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.06381399,
+        "mute": false,
+        "pan": 1.0
+      },
       "11": {
         "vol": 0.040264003,
         "mute": false,
@@ -323,30 +343,10 @@
         "mute": true,
         "pan": 0.5
       },
-      "5": {
-        "vol": 0.022646002,
-        "mute": false,
-        "pan": 0.5
-      },
       "18": {
         "vol": 0.033877995,
         "mute": false,
         "pan": 0.5
-      },
-      "15": {
-        "vol": 0.07584299,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.049544998,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.06381399,
-        "mute": false,
-        "pan": 1.0
       }
     }
   },
@@ -355,34 +355,9 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "12": {
-        "vol": 0.031622775,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.048977874,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.014125375,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.19054608,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.063095726,
-        "mute": false,
-        "pan": 1.0
-      },
-      "18": {
-        "vol": 0.033884414,
-        "mute": false,
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
         "pan": 0.5
       },
       "11": {
@@ -400,14 +375,14 @@
         "mute": false,
         "pan": 0.5
       },
-      "13": {
-        "vol": 0.05011873,
+      "18": {
+        "vol": 0.033884414,
         "mute": false,
         "pan": 0.5
       },
-      "8": {
-        "vol": 0.0022387207,
-        "mute": true,
+      "13": {
+        "vol": 0.05011873,
+        "mute": false,
         "pan": 0.5
       },
       "15": {
@@ -415,18 +390,18 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 0.013489625,
-        "mute": true,
-        "pan": 1.0
-      },
-      "1": {
-        "vol": 0.14125374,
-        "mute": true,
-        "pan": 0.5
-      },
       "3": {
         "vol": 0.015848933,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.022387212,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.014125375,
         "mute": false,
         "pan": 0.5
       },
@@ -435,33 +410,58 @@
         "mute": false,
         "pan": 0.5
       },
-      "22": {
-        "vol": 0.11220185,
+      "2": {
+        "vol": 0.10715194,
         "mute": false,
         "pan": 0.5
       },
-      "20": {
-        "vol": 0.05370318,
+      "7": {
+        "vol": 0.048977874,
         "mute": false,
         "pan": 0.5
+      },
+      "10": {
+        "vol": 0.013489625,
+        "mute": true,
+        "pan": 1.0
       },
       "9": {
         "vol": 0.009549926,
         "mute": true,
         "pan": 0.5
       },
-      "5": {
-        "vol": 0.022387212,
+      "21": {
+        "vol": 0.19054608,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.031622775,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.14125374,
+        "mute": true,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.063095726,
+        "mute": false,
+        "pan": 1.0
+      },
+      "20": {
+        "vol": 0.05370318,
         "mute": false,
         "pan": 0.5
       },
       "6": {
         "vol": 0.085113816,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.10715194,
         "mute": false,
         "pan": 0.5
       }
@@ -472,9 +472,9 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "8": {
-        "vol": 0.0022387207,
-        "mute": true,
+      "7": {
+        "vol": 0.023442294,
+        "mute": false,
         "pan": 0.5
       },
       "1": {
@@ -482,39 +482,9 @@
         "mute": false,
         "pan": 0.0
       },
-      "4": {
-        "vol": 0.030199518,
-        "mute": false,
-        "pan": 1.0
-      },
-      "5": {
-        "vol": 0.021877611,
-        "mute": true,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": 0.08709635,
-        "mute": false,
-        "pan": 0.5
-      },
       "21": {
         "vol": 0.19054608,
         "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 0.05370318,
-        "mute": true,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.05495409,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.023442294,
-        "mute": false,
         "pan": 0.5
       },
       "10": {
@@ -522,13 +492,33 @@
         "mute": true,
         "pan": 1.0
       },
+      "4": {
+        "vol": 0.030199518,
+        "mute": false,
+        "pan": 1.0
+      },
+      "6": {
+        "vol": 0.08709635,
+        "mute": false,
+        "pan": 0.5
+      },
       "19": {
         "vol": 0.07943282,
         "mute": true,
         "pan": 0.5
       },
-      "17": {
-        "vol": 0.012022642,
+      "16": {
+        "vol": 0.008511377,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.028183833,
         "mute": false,
         "pan": 0.5
       },
@@ -537,38 +527,13 @@
         "mute": true,
         "pan": 0.5
       },
-      "2": {
-        "vol": 0.048977874,
-        "mute": false,
-        "pan": 0.0
-      },
-      "12": {
-        "vol": 0.085113816,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.008511377,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.030902956,
-        "mute": false,
-        "pan": 0.5
-      },
       "3": {
         "vol": 0.022387212,
         "mute": false,
         "pan": 0.18333349
       },
-      "14": {
-        "vol": 0.0123026855,
-        "mute": false,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 0.028183833,
+      "17": {
+        "vol": 0.012022642,
         "mute": false,
         "pan": 0.5
       },
@@ -581,68 +546,51 @@
         "vol": 0.042657953,
         "mute": false,
         "pan": 0.5
+      },
+      "18": {
+        "vol": 0.030902956,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.0123026855,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.05495409,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.048977874,
+        "mute": false,
+        "pan": 0.0
+      },
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.021877611,
+        "mute": true,
+        "pan": 0.5
       }
     },
     "eq_bands": {
-      "9": [
+      "3": [
         {
           "band_type": "highpass",
-          "freq_hz": 162.9,
+          "freq_hz": 100.4,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.203335,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "4": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 166.5,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.206296,
+          "freq_norm": 0.141952,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -698,6 +646,110 @@
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 102.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.144114,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "9": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 162.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.203335,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
         },
         {
           "band_type": "lowshelf",
@@ -844,13 +896,13 @@
           "enabled": false
         }
       ],
-      "2": [
+      "10": [
         {
           "band_type": "highpass",
-          "freq_hz": 100.4,
+          "freq_hz": 163.9,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.141935,
+          "freq_norm": 0.204146,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -896,13 +948,65 @@
           "enabled": false
         }
       ],
-      "8": [
+      "4": [
         {
           "band_type": "highpass",
-          "freq_hz": 102.3,
+          "freq_hz": 166.5,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.144114,
+          "freq_norm": 0.206296,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "2": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 100.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.141935,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -1052,58 +1156,6 @@
           "enabled": false
         }
       ],
-      "3": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 100.4,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.141952,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
       "7": [
         {
           "band_type": "highpass",
@@ -1153,58 +1205,6 @@
           "freq_norm": 0.718219,
           "gain_norm": 0.391567,
           "bw_norm": 0.0,
-          "enabled": false
-        }
-      ],
-      "10": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 163.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204146,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
           "enabled": false
         }
       ],
@@ -1319,19 +1319,19 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "14": {
-        "vol": 0.0123026855,
+      "6": {
+        "vol": 0.08709635,
         "mute": false,
         "pan": 0.5
       },
-      "13": {
-        "vol": 0.042657953,
+      "18": {
+        "vol": 0.030902956,
         "mute": false,
         "pan": 0.5
       },
-      "17": {
-        "vol": 0.012022642,
-        "mute": false,
+      "9": {
+        "vol": 0.009549926,
+        "mute": true,
         "pan": 0.5
       },
       "16": {
@@ -1339,50 +1339,20 @@
         "mute": false,
         "pan": 0.5
       },
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.05370318,
+        "mute": false,
+        "pan": 0.0
+      },
       "10": {
         "vol": 0.013489625,
         "mute": true,
         "pan": 1.0
-      },
-      "4": {
-        "vol": 0.030199518,
-        "mute": false,
-        "pan": 1.0
-      },
-      "19": {
-        "vol": 0.07943282,
-        "mute": true,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.022387212,
-        "mute": false,
-        "pan": 0.18333349
-      },
-      "6": {
-        "vol": 0.08709635,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.048977874,
-        "mute": false,
-        "pan": 0.0
-      },
-      "20": {
-        "vol": 0.05370318,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": 0.028183833,
-        "mute": false,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.021877611,
-        "mute": true,
-        "pan": 0.5
       },
       "22": {
         "vol": 0.11220185,
@@ -1394,18 +1364,38 @@
         "mute": true,
         "pan": 0.5
       },
-      "18": {
-        "vol": 0.030902956,
+      "3": {
+        "vol": 0.022387212,
+        "mute": false,
+        "pan": 0.18333349
+      },
+      "14": {
+        "vol": 0.0123026855,
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": 0.085113816,
+      "17": {
+        "vol": 0.012022642,
         "mute": false,
         "pan": 0.5
       },
-      "21": {
-        "vol": 0.19054608,
+      "15": {
+        "vol": 0.028183833,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.07943282,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.042657953,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
         "mute": true,
         "pan": 0.5
       },
@@ -1414,186 +1404,40 @@
         "mute": false,
         "pan": 0.5
       },
+      "2": {
+        "vol": 0.048977874,
+        "mute": false,
+        "pan": 0.0
+      },
+      "5": {
+        "vol": 0.021877611,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.19054608,
+        "mute": true,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.030199518,
+        "mute": false,
+        "pan": 1.0
+      },
       "11": {
         "vol": 0.05495409,
         "mute": false,
         "pan": 0.5
-      },
-      "9": {
-        "vol": 0.009549926,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.05370318,
-        "mute": false,
-        "pan": 0.0
       }
     },
     "eq_bands": {
-      "19": [
+      "4": [
         {
           "band_type": "highpass",
-          "freq_hz": 80.2,
+          "freq_hz": 166.5,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "2": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 100.4,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.141935,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "7": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 20.0,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.0,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 494.5,
-          "gain_db": -9.2,
-          "bw": 0.2,
-          "freq_norm": 0.365,
-          "gain_norm": 0.086242,
-          "bw_norm": 0.05,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 725.9,
-          "gain_db": 5.0,
-          "bw": 2.04,
-          "freq_norm": 0.425,
-          "gain_norm": 0.446873,
-          "bw_norm": 0.51,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 1272.5,
-          "gain_db": -5.3,
-          "bw": 0.8,
-          "freq_norm": 0.514875,
-          "gain_norm": 0.135292,
-          "bw_norm": 0.2,
-          "enabled": true
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 4448.1,
-          "gain_db": 3.9,
-          "bw": 0.68,
-          "freq_norm": 0.72,
-          "gain_norm": 0.391567,
-          "bw_norm": 0.17,
-          "enabled": true
-        }
-      ],
-      "6": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 165.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.205854,
+          "freq_norm": 0.206296,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -1649,6 +1493,110 @@
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "5": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 48.5,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.064806,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "20": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -1743,551 +1691,16 @@
           "enabled": false
         }
       ],
-      "22": [
+      "2": [
         {
           "band_type": "highpass",
-          "freq_hz": 80.2,
+          "freq_hz": 100.4,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2019.0,
-          "gain_db": -1.1,
-          "bw": 1.18,
-          "freq_norm": 0.59,
-          "gain_norm": 0.221442,
-          "bw_norm": 0.295,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 6390.5,
-          "gain_db": 2.4,
-          "bw": 2.0,
-          "freq_norm": 0.78,
-          "gain_norm": 0.328132,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "8": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 102.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.144114,
+          "freq_norm": 0.141935,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "10": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 163.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204146,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "4": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 166.5,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.206296,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "21": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "5": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 48.5,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.064806,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "20": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "1": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 164.7,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204827,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 244.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.26,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ]
-    }
-  },
-  {
-    "timestamp": 1774900143,
-    "label": "auto",
-    "pinned": false,
-    "channels": {
-      "15": {
-        "vol": 0.028183833,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.023442294,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.030199518,
-        "mute": false,
-        "pan": 1.0
-      },
-      "5": {
-        "vol": 0.021877611,
-        "mute": true,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": 0.0123026855,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.042657953,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": 0.009549926,
-        "mute": true,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": 0.05495409,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.012022642,
-        "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.05370318,
-        "mute": false,
-        "pan": 0.0
-      },
-      "3": {
-        "vol": 0.022387212,
-        "mute": false,
-        "pan": 0.18333349
-      },
-      "8": {
-        "vol": 0.0022387207,
-        "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": 0.05370318,
-        "mute": true,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": 0.085113816,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 0.013489625,
-        "mute": true,
-        "pan": 1.0
-      },
-      "6": {
-        "vol": 0.058884364,
-        "mute": false,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": 0.030902956,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.19054608,
-        "mute": true,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 0.07943282,
-        "mute": true,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.11220185,
-        "mute": true,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.008511377,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.08128307,
-        "mute": false,
-        "pan": 0.0
-      }
-    },
-    "eq_bands": {
-      "21": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -2486,16 +1899,499 @@
           "enabled": false
         }
       ],
-      "9": [
+      "21": [
         {
           "band_type": "highpass",
-          "freq_hz": 162.9,
+          "freq_hz": 80.2,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.203335,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "22": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2019.0,
+          "gain_db": -1.1,
+          "bw": 1.18,
+          "freq_norm": 0.59,
+          "gain_norm": 0.221442,
+          "bw_norm": 0.295,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 6390.5,
+          "gain_db": 2.4,
+          "bw": 2.0,
+          "freq_norm": 0.78,
+          "gain_norm": 0.328132,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "19": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "7": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 20.0,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.0,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 494.5,
+          "gain_db": -9.2,
+          "bw": 0.2,
+          "freq_norm": 0.365,
+          "gain_norm": 0.086242,
+          "bw_norm": 0.05,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 725.9,
+          "gain_db": 5.0,
+          "bw": 2.04,
+          "freq_norm": 0.425,
+          "gain_norm": 0.446873,
+          "bw_norm": 0.51,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1272.5,
+          "gain_db": -5.3,
+          "bw": 0.8,
+          "freq_norm": 0.514875,
+          "gain_norm": 0.135292,
+          "bw_norm": 0.2,
+          "enabled": true
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 4448.1,
+          "gain_db": 3.9,
+          "bw": 0.68,
+          "freq_norm": 0.72,
+          "gain_norm": 0.391567,
+          "bw_norm": 0.17,
+          "enabled": true
+        }
+      ],
+      "10": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 163.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.204146,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": 1774900143,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "9": {
+        "vol": 0.009549926,
+        "mute": true,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": 0.012022642,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.05370318,
+        "mute": false,
+        "pan": 0.0
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.0123026855,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.07943282,
+        "mute": true,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.008511377,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.030199518,
+        "mute": false,
+        "pan": 1.0
+      },
+      "6": {
+        "vol": 0.058884364,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.030902956,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.042657953,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.05495409,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.013489625,
+        "mute": true,
+        "pan": 1.0
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.19054608,
+        "mute": true,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": 0.022387212,
+        "mute": false,
+        "pan": 0.18333349
+      },
+      "7": {
+        "vol": 0.023442294,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.08128307,
+        "mute": false,
+        "pan": 0.0
+      },
+      "15": {
+        "vol": 0.028183833,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.021877611,
+        "mute": true,
+        "pan": 0.5
+      }
+    },
+    "eq_bands": {
+      "6": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 165.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.205854,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 102.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.144114,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "21": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -2642,6 +2538,110 @@
           "enabled": false
         }
       ],
+      "7": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 20.0,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.0,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 494.5,
+          "gain_db": -9.2,
+          "bw": 0.2,
+          "freq_norm": 0.365,
+          "gain_norm": 0.086242,
+          "bw_norm": 0.05,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 725.9,
+          "gain_db": 5.0,
+          "bw": 2.04,
+          "freq_norm": 0.425,
+          "gain_norm": 0.446873,
+          "bw_norm": 0.51,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1272.5,
+          "gain_db": -5.3,
+          "bw": 0.8,
+          "freq_norm": 0.514875,
+          "gain_norm": 0.135292,
+          "bw_norm": 0.2,
+          "enabled": true
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 4448.1,
+          "gain_db": 3.9,
+          "bw": 0.68,
+          "freq_norm": 0.72,
+          "gain_norm": 0.391567,
+          "bw_norm": 0.17,
+          "enabled": true
+        }
+      ],
+      "1": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 164.7,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.204827,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 244.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.26,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
       "2": [
         {
           "band_type": "highpass",
@@ -2701,6 +2701,58 @@
           "gain_db": 0.0,
           "bw": 2.0,
           "freq_norm": 0.204146,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "9": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 162.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.203335,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -2848,58 +2900,6 @@
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
-        }
-      ],
-      "7": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 20.0,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.0,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 494.5,
-          "gain_db": -9.2,
-          "bw": 0.2,
-          "freq_norm": 0.365,
-          "gain_norm": 0.086242,
-          "bw_norm": 0.05,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 725.9,
-          "gain_db": 5.0,
-          "bw": 2.04,
-          "freq_norm": 0.425,
-          "gain_norm": 0.446873,
-          "bw_norm": 0.51,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 1272.5,
-          "gain_db": -5.3,
-          "bw": 0.8,
-          "freq_norm": 0.514875,
-          "gain_norm": 0.135292,
-          "bw_norm": 0.2,
-          "enabled": true
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 4448.1,
-          "gain_db": 3.9,
-          "bw": 0.68,
-          "freq_norm": 0.72,
-          "gain_norm": 0.391567,
-          "bw_norm": 0.17,
-          "enabled": true
         }
       ],
       "3": [
@@ -3013,49 +3013,9 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "7": {
-        "vol": 0.023442294,
-        "mute": false,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 0.0022387207,
-        "mute": true,
-        "pan": 0.5
-      },
       "16": {
         "vol": 0.008511377,
         "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.19054608,
-        "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": 0.021877611,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.05370318,
-        "mute": false,
-        "pan": 0.0
-      },
-      "14": {
-        "vol": 0.0123026855,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.030199518,
-        "mute": false,
-        "pan": 1.0
-      },
-      "20": {
-        "vol": 0.05370318,
-        "mute": true,
         "pan": 0.5
       },
       "2": {
@@ -3068,13 +3028,13 @@
         "mute": false,
         "pan": 0.18333349
       },
-      "19": {
-        "vol": 0.07943282,
+      "18": {
+        "vol": 0.030902956,
         "mute": false,
         "pan": 0.5
       },
-      "18": {
-        "vol": 0.030902956,
+      "7": {
+        "vol": 0.023442294,
         "mute": false,
         "pan": 0.5
       },
@@ -3083,20 +3043,75 @@
         "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 0.013489625,
+      "5": {
+        "vol": 0.021877611,
         "mute": true,
-        "pan": 1.0
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.05495409,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": false,
+        "pan": 0.5
       },
       "9": {
         "vol": 0.009549926,
         "mute": true,
         "pan": 0.5
       },
+      "17": {
+        "vol": 0.012022642,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.0123026855,
+        "mute": false,
+        "pan": 0.5
+      },
       "13": {
         "vol": 0.042657953,
         "mute": false,
         "pan": 0.5
+      },
+      "19": {
+        "vol": 0.07943282,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.19054608,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.05370318,
+        "mute": false,
+        "pan": 0.0
+      },
+      "4": {
+        "vol": 0.030199518,
+        "mute": false,
+        "pan": 1.0
+      },
+      "10": {
+        "vol": 0.013489625,
+        "mute": true,
+        "pan": 1.0
       },
       "15": {
         "vol": 0.028183833,
@@ -3107,31 +3122,68 @@
         "vol": 0.085113816,
         "mute": false,
         "pan": 0.5
-      },
-      "11": {
-        "vol": 0.05495409,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.11220185,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.012022642,
-        "mute": false,
-        "pan": 0.5
       }
     },
     "eq_bands": {
-      "8": [
+      "19": [
         {
           "band_type": "highpass",
-          "freq_hz": 102.3,
+          "freq_hz": 80.2,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.144114,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "4": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 166.5,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.206296,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -3194,318 +3246,6 @@
           "gain_db": 0.0,
           "bw": 2.0,
           "freq_norm": 0.26,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "22": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2019.0,
-          "gain_db": -1.1,
-          "bw": 1.18,
-          "freq_norm": 0.59,
-          "gain_norm": 0.221442,
-          "bw_norm": 0.295,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 6390.5,
-          "gain_db": 2.4,
-          "bw": 2.0,
-          "freq_norm": 0.78,
-          "gain_norm": 0.328132,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "6": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 165.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.205854,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "21": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "5": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 48.5,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.064806,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "2": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 100.4,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.141935,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "19": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
@@ -3645,6 +3385,162 @@
           "enabled": false
         }
       ],
+      "3": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 100.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.141952,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "2": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 100.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.141935,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "22": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2019.0,
+          "gain_db": -1.1,
+          "bw": 1.18,
+          "freq_norm": 0.59,
+          "gain_norm": 0.221442,
+          "bw_norm": 0.295,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 6390.5,
+          "gain_db": 2.4,
+          "bw": 2.0,
+          "freq_norm": 0.78,
+          "gain_norm": 0.328132,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
       "7": [
         {
           "band_type": "highpass",
@@ -3695,6 +3591,162 @@
           "gain_norm": 0.391567,
           "bw_norm": 0.17,
           "enabled": true
+        }
+      ],
+      "6": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 165.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.205854,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 102.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.144114,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "21": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
         }
       ],
       "20": [
@@ -3749,68 +3801,16 @@
           "enabled": false
         }
       ],
-      "4": [
+      "5": [
         {
           "band_type": "highpass",
-          "freq_hz": 166.5,
+          "freq_hz": 48.5,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.206296,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
+          "freq_norm": 0.064806,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "3": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 100.4,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.141952,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
         },
         {
           "band_type": "lowshelf",
@@ -3860,28 +3860,8 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "20": {
-        "vol": 0.05370318,
-        "mute": true,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": 0.013489625,
-        "mute": true,
-        "pan": 1.0
-      },
-      "12": {
-        "vol": 0.085113816,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.008511377,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.042657953,
+      "7": {
+        "vol": 0.023442294,
         "mute": false,
         "pan": 0.5
       },
@@ -3890,75 +3870,20 @@
         "mute": false,
         "pan": 0.5
       },
-      "22": {
-        "vol": 0.11220185,
-        "mute": false,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": 0.08128307,
-        "mute": false,
-        "pan": 0.0
-      },
-      "5": {
-        "vol": 0.021877611,
+      "10": {
+        "vol": 0.013489625,
         "mute": true,
-        "pan": 0.5
-      },
-      "3": {
-        "vol": 0.022387212,
-        "mute": false,
-        "pan": 0.18333349
-      },
-      "18": {
-        "vol": 0.030902956,
-        "mute": false,
-        "pan": 0.5
-      },
-      "19": {
-        "vol": 0.07943282,
-        "mute": false,
-        "pan": 0.5
+        "pan": 1.0
       },
       "6": {
         "vol": 0.058884364,
         "mute": false,
         "pan": 0.5
       },
-      "11": {
-        "vol": 0.05495409,
+      "3": {
+        "vol": 0.022387212,
         "mute": false,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.05370318,
-        "mute": false,
-        "pan": 0.0
-      },
-      "7": {
-        "vol": 0.023442294,
-        "mute": false,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": 0.030199518,
-        "mute": false,
-        "pan": 1.0
-      },
-      "15": {
-        "vol": 0.028183833,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": 0.012022642,
-        "mute": false,
-        "pan": 0.5
-      },
-      "21": {
-        "vol": 0.19054608,
-        "mute": true,
-        "pan": 0.5
+        "pan": 0.18333349
       },
       "9": {
         "vol": 0.009549926,
@@ -3969,9 +3894,292 @@
         "vol": 0.0022387207,
         "mute": true,
         "pan": 0.5
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": 0.08128307,
+        "mute": false,
+        "pan": 0.0
+      },
+      "4": {
+        "vol": 0.030199518,
+        "mute": false,
+        "pan": 1.0
+      },
+      "16": {
+        "vol": 0.008511377,
+        "mute": false,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": 0.07943282,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.042657953,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.021877611,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.030902956,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.05370318,
+        "mute": false,
+        "pan": 0.0
+      },
+      "17": {
+        "vol": 0.012022642,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.05495409,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.19054608,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.028183833,
+        "mute": false,
+        "pan": 0.5
       }
     },
     "eq_bands": {
+      "22": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2019.0,
+          "gain_db": -1.1,
+          "bw": 1.18,
+          "freq_norm": 0.59,
+          "gain_norm": 0.221442,
+          "bw_norm": 0.295,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 6390.5,
+          "gain_db": 2.4,
+          "bw": 2.0,
+          "freq_norm": 0.78,
+          "gain_norm": 0.328132,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "21": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "7": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 20.0,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.0,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 494.5,
+          "gain_db": -9.2,
+          "bw": 0.2,
+          "freq_norm": 0.365,
+          "gain_norm": 0.086242,
+          "bw_norm": 0.05,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 725.9,
+          "gain_db": 5.0,
+          "bw": 2.04,
+          "freq_norm": 0.425,
+          "gain_norm": 0.446873,
+          "bw_norm": 0.51,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1272.5,
+          "gain_db": -5.3,
+          "bw": 0.8,
+          "freq_norm": 0.514875,
+          "gain_norm": 0.135292,
+          "bw_norm": 0.2,
+          "enabled": true
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 4448.1,
+          "gain_db": 3.9,
+          "bw": 0.68,
+          "freq_norm": 0.72,
+          "gain_norm": 0.391567,
+          "bw_norm": 0.17,
+          "enabled": true
+        }
+      ],
+      "1": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 164.7,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.204827,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 244.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.26,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
       "3": [
         {
           "band_type": "highpass",
@@ -4024,16 +4232,68 @@
           "enabled": false
         }
       ],
-      "9": [
+      "2": [
         {
           "band_type": "highpass",
-          "freq_hz": 162.9,
+          "freq_hz": 100.4,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.203335,
+          "freq_norm": 0.141935,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "20": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -4128,172 +4388,16 @@
           "enabled": false
         }
       ],
-      "19": [
+      "10": [
         {
           "band_type": "highpass",
-          "freq_hz": 80.2,
+          "freq_hz": 163.9,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "22": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2019.0,
-          "gain_db": -1.1,
-          "bw": 1.18,
-          "freq_norm": 0.59,
-          "gain_norm": 0.221442,
-          "bw_norm": 0.295,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 6390.5,
-          "gain_db": 2.4,
-          "bw": 2.0,
-          "freq_norm": 0.78,
-          "gain_norm": 0.328132,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "2": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 100.4,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.141935,
+          "freq_norm": 0.204146,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "21": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 80.2,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.116,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -4388,7 +4492,59 @@
           "enabled": false
         }
       ],
-      "20": [
+      "9": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 162.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.203335,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "19": [
         {
           "band_type": "highpass",
           "freq_hz": 80.2,
@@ -4492,58 +4648,6 @@
           "enabled": false
         }
       ],
-      "1": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 164.7,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204827,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 244.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.26,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
       "4": [
         {
           "band_type": "highpass",
@@ -4551,110 +4655,6 @@
           "gain_db": 0.0,
           "bw": 2.0,
           "freq_norm": 0.206296,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "7": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 20.0,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.0,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 494.5,
-          "gain_db": -9.2,
-          "bw": 0.2,
-          "freq_norm": 0.365,
-          "gain_norm": 0.086242,
-          "bw_norm": 0.05,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 725.9,
-          "gain_db": 5.0,
-          "bw": 2.04,
-          "freq_norm": 0.425,
-          "gain_norm": 0.446873,
-          "bw_norm": 0.51,
-          "enabled": true
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 1272.5,
-          "gain_db": -5.3,
-          "bw": 0.8,
-          "freq_norm": 0.514875,
-          "gain_norm": 0.135292,
-          "bw_norm": 0.2,
-          "enabled": true
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 4448.1,
-          "gain_db": 3.9,
-          "bw": 0.68,
-          "freq_norm": 0.72,
-          "gain_norm": 0.391567,
-          "bw_norm": 0.17,
-          "enabled": true
-        }
-      ],
-      "10": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 163.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204146,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -4707,33 +4707,58 @@
     "label": "auto",
     "pinned": false,
     "channels": {
-      "1": {
-        "vol": 0.05370318,
-        "mute": false,
-        "pan": 0.0
-      },
-      "9": {
-        "vol": 0.009549926,
-        "mute": true,
-        "pan": 0.5
-      },
       "17": {
         "vol": 0.012022642,
         "mute": false,
         "pan": 0.5
       },
-      "21": {
-        "vol": 0.19054608,
+      "5": {
+        "vol": 0.021877611,
         "mute": true,
         "pan": 0.5
       },
-      "4": {
-        "vol": 0.051286142,
+      "16": {
+        "vol": 0.008511377,
         "mute": false,
-        "pan": 1.0
+        "pan": 0.5
       },
       "19": {
         "vol": 0.07943282,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.023442294,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.0123026855,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": 0.013489625,
+        "mute": true,
+        "pan": 1.0
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.042657953,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.030902956,
         "mute": false,
         "pan": 0.5
       },
@@ -4742,9 +4767,14 @@
         "mute": false,
         "pan": 0.18333349
       },
-      "18": {
-        "vol": 0.030902956,
-        "mute": false,
+      "9": {
+        "vol": 0.009549926,
+        "mute": true,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
         "pan": 0.5
       },
       "15": {
@@ -4757,29 +4787,19 @@
         "mute": false,
         "pan": 0.5
       },
-      "20": {
-        "vol": 0.05370318,
+      "21": {
+        "vol": 0.19054608,
         "mute": true,
         "pan": 0.5
       },
-      "12": {
-        "vol": 0.085113816,
+      "1": {
+        "vol": 0.05370318,
         "mute": false,
-        "pan": 0.5
+        "pan": 0.0
       },
       "6": {
         "vol": 0.058884364,
         "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": 0.042657953,
-        "mute": false,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": 0.0022387207,
-        "mute": true,
         "pan": 0.5
       },
       "2": {
@@ -4787,38 +4807,70 @@
         "mute": false,
         "pan": 0.0
       },
-      "5": {
-        "vol": 0.021877611,
-        "mute": true,
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
         "pan": 0.5
       },
-      "10": {
-        "vol": 0.013489625,
-        "mute": true,
+      "4": {
+        "vol": 0.051286142,
+        "mute": false,
         "pan": 1.0
-      },
-      "14": {
-        "vol": 0.0123026855,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": 0.023442294,
-        "mute": false,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": 0.008511377,
-        "mute": false,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": 0.11220185,
-        "mute": false,
-        "pan": 0.5
       }
     },
     "eq_bands": {
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 102.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.144114,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
       "19": [
         {
           "band_type": "highpass",
@@ -4869,6 +4921,110 @@
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
+        }
+      ],
+      "21": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "7": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 20.0,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.0,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 494.5,
+          "gain_db": -9.2,
+          "bw": 0.2,
+          "freq_norm": 0.365,
+          "gain_norm": 0.086242,
+          "bw_norm": 0.05,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 725.9,
+          "gain_db": 5.0,
+          "bw": 2.04,
+          "freq_norm": 0.425,
+          "gain_norm": 0.446873,
+          "bw_norm": 0.51,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 1272.5,
+          "gain_db": -5.3,
+          "bw": 0.8,
+          "freq_norm": 0.514875,
+          "gain_norm": 0.135292,
+          "bw_norm": 0.2,
+          "enabled": true
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 4448.1,
+          "gain_db": 3.9,
+          "bw": 0.68,
+          "freq_norm": 0.72,
+          "gain_norm": 0.391567,
+          "bw_norm": 0.17,
+          "enabled": true
         }
       ],
       "1": [
@@ -4923,16 +5079,120 @@
           "enabled": false
         }
       ],
-      "9": [
+      "2": [
         {
           "band_type": "highpass",
-          "freq_hz": 162.9,
+          "freq_hz": 100.4,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.203335,
+          "freq_norm": 0.141935,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "4": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 166.5,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.206296,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "20": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
         },
         {
           "band_type": "lowshelf",
@@ -5027,13 +5287,117 @@
           "enabled": false
         }
       ],
-      "6": [
+      "9": [
         {
           "band_type": "highpass",
-          "freq_hz": 165.9,
+          "freq_hz": 162.9,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.205854,
+          "freq_norm": 0.203335,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "5": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 48.5,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.064806,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "10": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 163.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.204146,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": true
@@ -5131,7 +5495,334 @@
           "enabled": false
         }
       ],
-      "21": [
+      "6": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 165.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.205854,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ]
+    }
+  },
+  {
+    "timestamp": 1775679475,
+    "label": "auto",
+    "pinned": false,
+    "channels": {
+      "21": {
+        "vol": 0.19054608,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": 0.05370318,
+        "mute": false,
+        "pan": 0.0
+      },
+      "3": {
+        "vol": 0.022387212,
+        "mute": false,
+        "pan": 0.18333349
+      },
+      "2": {
+        "vol": 0.08128307,
+        "mute": false,
+        "pan": 0.0
+      },
+      "10": {
+        "vol": 0.013489625,
+        "mute": true,
+        "pan": 1.0
+      },
+      "17": {
+        "vol": 0.012022642,
+        "mute": false,
+        "pan": 0.5
+      },
+      "6": {
+        "vol": 0.058884364,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": 0.051286142,
+        "mute": false,
+        "pan": 1.0
+      },
+      "19": {
+        "vol": 0.07943282,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": 0.0123026855,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": 0.05495409,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.023442294,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.0022387207,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": 0.021877611,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": 0.028183833,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.05370318,
+        "mute": true,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": 0.11220185,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": 0.085113816,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": 0.042657953,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": 0.008511377,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": 0.030902956,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": 0.009549926,
+        "mute": true,
+        "pan": 0.5
+      }
+    },
+    "eq_bands": {
+      "8": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 102.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.144114,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "3": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 100.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.141952,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "9": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 162.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.203335,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "19": [
         {
           "band_type": "highpass",
           "freq_hz": 80.2,
@@ -5141,6 +5832,110 @@
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "1": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 164.7,
+          "gain_db": 9.8,
+          "bw": 2.0,
+          "freq_norm": 0.204827,
+          "gain_norm": 0.776598,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 244.9,
+          "gain_db": 10.6,
+          "bw": 2.0,
+          "freq_norm": 0.26,
+          "gain_norm": 0.851468,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "10": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 163.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.204146,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
         },
         {
           "band_type": "lowshelf",
@@ -5235,16 +6030,224 @@
           "enabled": false
         }
       ],
-      "5": [
+      "21": [
         {
           "band_type": "highpass",
-          "freq_hz": 48.5,
+          "freq_hz": 80.2,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.064806,
+          "freq_norm": 0.116,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "22": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 80.2,
+          "gain_db": 9.1,
+          "bw": 2.0,
+          "freq_norm": 0.116,
+          "gain_norm": 0.715395,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 4.9,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.439667,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2019.0,
+          "gain_db": -1.1,
+          "bw": 1.18,
+          "freq_norm": 0.59,
+          "gain_norm": 0.221442,
+          "bw_norm": 0.295,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 6390.5,
+          "gain_db": 2.4,
+          "bw": 2.0,
+          "freq_norm": 0.78,
+          "gain_norm": 0.328132,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "6": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 165.9,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.205854,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "4": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 166.5,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.206296,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
+        },
+        {
+          "band_type": "lowshelf",
+          "freq_hz": 200.3,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.2316,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 801.9,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.4408,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "band",
+          "freq_hz": 2996.2,
+          "gain_db": 0.0,
+          "bw": 1.0,
+          "freq_norm": 0.6548,
+          "gain_norm": 0.25,
+          "bw_norm": 0.25,
+          "enabled": false
+        },
+        {
+          "band_type": "highshelf",
+          "freq_hz": 8016.1,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.8176,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": false
+        }
+      ],
+      "2": [
+        {
+          "band_type": "highpass",
+          "freq_hz": 100.4,
+          "gain_db": 0.0,
+          "bw": 2.0,
+          "freq_norm": 0.141935,
+          "gain_norm": 0.25,
+          "bw_norm": 0.5,
+          "enabled": true
         },
         {
           "band_type": "lowshelf",
@@ -5339,172 +6342,16 @@
           "enabled": true
         }
       ],
-      "2": [
+      "5": [
         {
           "band_type": "highpass",
-          "freq_hz": 100.4,
+          "freq_hz": 48.5,
           "gain_db": 0.0,
           "bw": 2.0,
-          "freq_norm": 0.141935,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
+          "freq_norm": 0.064806,
           "gain_norm": 0.25,
           "bw_norm": 0.5,
           "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "10": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 163.9,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.204146,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "8": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 102.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.144114,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
-        },
-        {
-          "band_type": "lowshelf",
-          "freq_hz": 200.3,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.2316,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 801.9,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.4408,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "band",
-          "freq_hz": 2996.2,
-          "gain_db": 0.0,
-          "bw": 1.0,
-          "freq_norm": 0.6548,
-          "gain_norm": 0.25,
-          "bw_norm": 0.25,
-          "enabled": false
-        },
-        {
-          "band_type": "highshelf",
-          "freq_hz": 8016.1,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.8176,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": false
-        }
-      ],
-      "4": [
-        {
-          "band_type": "highpass",
-          "freq_hz": 166.5,
-          "gain_db": 0.0,
-          "bw": 2.0,
-          "freq_norm": 0.206296,
-          "gain_norm": 0.25,
-          "bw_norm": 0.5,
-          "enabled": true
         },
         {
           "band_type": "lowshelf",
