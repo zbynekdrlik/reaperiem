@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.137.0 (2026-04-09)
+
+- **Fix**: Solo no longer leaves tracks muted after PWA crash/disconnect (#155)
+- **Feature**: Server-managed solo state persists across reconnects — solo stays active until explicitly turned off
+
 ### v1.136.0 (2026-04-09)
 
 - **Feature**: Backup/restore system — automatic scheduled backups at 13:00 and 21:00, engineer-only restore UI in Settings modal with preview and estimated time
