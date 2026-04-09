@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.136.0 (2026-04-09)
+
+- **Feature**: Backup/restore system — automatic scheduled backups at 13:00 and 21:00, engineer-only restore UI in Settings modal with preview and estimated time
+- **Feature**: Track-level mute state (global mute, stems mute) now included in backups and restored correctly
+- **Fix**: Backup stores LINEAR volumes directly (no dB conversion) — prevents zeroing sends on restore
+- **Fix**: Restore skips unchanged values (sends, volumes, EQ, limiter, customizations, PINs) — faster restores
+- **Fix**: Estimated restore time includes 30s base read overhead for accurate predictions
+
 ### v1.130.0 (2026-04-04)
 
 - **Feature**: Member profile photos — upload from Settings modal, displayed as circular avatars on landing page (#16)
