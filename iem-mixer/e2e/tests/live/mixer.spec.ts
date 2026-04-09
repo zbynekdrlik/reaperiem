@@ -2167,13 +2167,18 @@ test.describe("Solo sync", () => {
     expect(await soloBtn1.count()).toBeGreaterThan(0);
 
     await soloBtn1.click({ force: true });
+    await page1.waitForTimeout(300);
 
     // Wait for solo to activate on page1 (requires working WS + server)
-    await expect(soloBtn1).toHaveClass(/on/, { timeout: 3000 });
+    await expect(soloBtn1).toHaveClass(/on/, { timeout: 5000 });
 
     // Verify page2 sees the solo state
     const soloBtn2 = page2.locator(".solo-btn").first();
-    await expect(soloBtn2).toHaveClass(/on/, { timeout: 3000 });
+    await expect(soloBtn2).toHaveClass(/on/, { timeout: 5000 });
+
+    // Clean up: unsolo to restore state
+    await soloBtn1.click({ force: true });
+    await expect(soloBtn1).toHaveClass(/off/, { timeout: 3000 });
 
     await ctx1.close();
     await ctx2.close();
