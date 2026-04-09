@@ -1678,7 +1678,7 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
         }
-        iem_core::ClientMsg::SetSolo { ref soloed } => {
+        iem_core::ClientMsg::SetSolo { soloed } => {
             for ti in soloed {
                 if !is_valid_track(*ti) {
                     return Err(format!("solo track_index {} out of range", ti));
@@ -1845,7 +1845,7 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::UpdateCustomization { .. } => {
             unreachable!("UpdateCustomization handled before apply_command_to_cache")
         }
-        iem_core::ClientMsg::SetSolo { ref soloed } => {
+        iem_core::ClientMsg::SetSolo { soloed } => {
             let soloed_set: std::collections::HashSet<usize> = soloed.iter().copied().collect();
             let mut cache = state.mixer_cache.write().await;
             let current_solo = cache
@@ -1960,12 +1960,15 @@ async fn apply_command_to_cache(
 
             // Mark command timestamps for all affected tracks (suppresses poller echo)
             let now = std::time::Instant::now();
-            if let Some(channels) = cache.member_states.get(member_id) {
-                for ch in channels {
-                    cache
-                        .command_timestamps
-                        .insert((member_id.to_string(), ch.track_index), now);
-                }
+            let track_indices: Vec<usize> = cache
+                .member_states
+                .get(member_id)
+                .map(|chs| chs.iter().map(|c| c.track_index).collect())
+                .unwrap_or_default();
+            for ti in track_indices {
+                cache
+                    .command_timestamps
+                    .insert((member_id.to_string(), ti), now);
             }
 
             drop(cache);
