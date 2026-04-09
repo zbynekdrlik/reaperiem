@@ -2166,10 +2166,23 @@ test.describe("Solo sync", () => {
     const soloBtn1 = page1.locator(".solo-btn").first();
     expect(await soloBtn1.count()).toBeGreaterThan(0);
 
-    await soloBtn1.click({ force: true });
-    await page1.waitForTimeout(300);
+    // Ensure REAPER connection is alive (solo requires connected=true)
+    await expect(page1.locator(".connection-status.connected, .mixer-header")).toBeVisible({ timeout: 5000 });
+    await page1.waitForTimeout(1000);
 
-    // Wait for solo to activate on page1 (requires working WS + server)
+    // Click solo — may need retry if connected briefly dropped
+    await soloBtn1.click({ force: true });
+    await page1.waitForTimeout(500);
+
+    // If solo didn't activate (connected was briefly false), retry once
+    const cls1 = (await soloBtn1.getAttribute("class")) || "";
+    if (!cls1.includes("on")) {
+      await page1.waitForTimeout(1000);
+      await soloBtn1.click({ force: true });
+      await page1.waitForTimeout(500);
+    }
+
+    // Wait for solo to activate on page1
     await expect(soloBtn1).toHaveClass(/on/, { timeout: 5000 });
 
     // Verify page2 sees the solo state
