@@ -182,6 +182,43 @@ pub async fn preview_restore(
         }
     }
 
+    // --- Track mutes (inear/stems track-level mute state) ---
+    for (track_name, &backup_muted) in &backup.track_mutes {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackMute,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        match query_track_mute(client, &reaper_url, track_idx as usize).await {
+            Some(cur_muted) => {
+                if cur_muted != backup_muted {
+                    changes.push(RestoreChange {
+                        category: RestoreCategory::TrackMute,
+                        description: track_name.clone(),
+                        current_value: format!("muted={}", cur_muted),
+                        backup_value: format!("muted={}", backup_muted),
+                    });
+                } else {
+                    unchanged_count += 1;
+                }
+            }
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackMute,
+                    description: track_name.clone(),
+                    reason: "Could not read current track mute state from REAPER".to_string(),
+                });
+            }
+        }
+    }
+
     // --- EQ bands (read live values via ReaScript and compare) ---
     for (track_name, bands) in &backup.eq {
         if bands.is_empty() {
@@ -360,10 +397,15 @@ pub async fn preview_restore(
         .iter()
         .filter(|c| c.category == RestoreCategory::Send)
         .count();
+    let track_mute_count = changes
+        .iter()
+        .filter(|c| c.category == RestoreCategory::TrackMute)
+        .count();
     let estimated_seconds = (30.0
         + eq_band_count as f32 * 0.24
         + limiter_count as f32 * 0.42
-        + send_count as f32 * 0.2)
+        + send_count as f32 * 0.2
+        + track_mute_count as f32 * 0.1)
         .ceil() as u32;
 
     Ok(RestorePreview {
@@ -510,6 +552,40 @@ pub async fn apply_restore(
             .get(format!(
                 "{}/_/SET/TRACK/{}/VOL/{:.10}",
                 reaper_url, track_idx, backup_vol
+            ))
+            .send()
+            .await;
+
+        restored_count += 1;
+    }
+
+    // --- Apply track mutes (only if changed) ---
+    for (track_name, &backup_muted) in &backup.track_mutes {
+        let track_idx = match track_map.get(track_name) {
+            Some(i) => *i as usize,
+            None => {
+                skipped.push(SkippedEntry {
+                    category: RestoreCategory::TrackMute,
+                    description: track_name.clone(),
+                    reason: format!("Track '{}' not found in REAPER", track_name),
+                });
+                continue;
+            }
+        };
+
+        // Read current mute and skip if unchanged
+        let current_muted = query_track_mute(client, &reaper_url, track_idx).await;
+        if let Some(cur) = current_muted {
+            if cur == backup_muted {
+                continue; // Already matches
+            }
+        }
+
+        let mute_val: u8 = if backup_muted { 1 } else { 0 };
+        let _ = client
+            .get(format!(
+                "{}/_/SET/TRACK/{}/MUTE/{}",
+                reaper_url, track_idx, mute_val
             ))
             .send()
             .await;
@@ -837,6 +913,29 @@ async fn query_track_volume(
     None
 }
 
+/// Read current track mute state from REAPER.
+///
+/// Parses flags field (index 3) from TRACK response. Mute = bit 3 (flags & 8).
+async fn query_track_mute(
+    client: &reqwest::Client,
+    reaper_url: &str,
+    track_idx: usize,
+) -> Option<bool> {
+    let url = format!("{}/_/TRACK/{}", reaper_url, track_idx);
+    let text = client.get(&url).send().await.ok()?.text().await.ok()?;
+
+    for line in text.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.first() != Some(&"TRACK") || parts.len() < 5 {
+            continue;
+        }
+        let flags: i32 = parts[3].parse().unwrap_or(0);
+        return Some((flags & 8) != 0);
+    }
+
+    None
+}
+
 /// Apply a single EQ band parameter via EXTSTATE + ReaScript.
 async fn apply_eq_param(
     state: &AppState,
@@ -967,6 +1066,7 @@ mod tests {
             },
             customizations: HashMap::new(),
             pins: HashMap::new(),
+            track_mutes: HashMap::new(),
         }
     }
 

@@ -30,6 +30,9 @@ pub struct MixerBackup {
     pub customizations: HashMap<String, Customization>,
     /// Per-member PINs: member ID → PIN string
     pub pins: HashMap<String, String>,
+    /// Track-level mute state for inear/stems tracks: track name → muted
+    #[serde(default)]
+    pub track_mutes: HashMap<String, bool>,
 }
 
 /// State of a single send at backup time
@@ -144,6 +147,7 @@ pub struct RestoreChange {
 pub enum RestoreCategory {
     Send,
     TrackVolume,
+    TrackMute,
     Eq,
     Limiter,
     Customization,
@@ -234,6 +238,9 @@ mod tests {
         let mut pins = HashMap::new();
         pins.insert("petka".to_string(), "1234".to_string());
 
+        let mut track_mutes = HashMap::new();
+        track_mutes.insert("PETKA inear".to_string(), false);
+
         let backup = MixerBackup {
             version: BACKUP_VERSION,
             timestamp: "2026-04-07T10:00:00Z".to_string(),
@@ -250,6 +257,7 @@ mod tests {
             limiter,
             customizations,
             pins,
+            track_mutes,
         };
 
         let json = serde_json::to_string(&backup).unwrap();
