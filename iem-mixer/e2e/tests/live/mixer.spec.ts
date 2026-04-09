@@ -2239,4 +2239,112 @@ test.describe("Solo sync", () => {
 
     await ctx.close();
   });
+
+  test("solo persists after disconnect and reconnect", async ({
+    browser,
+  }) => {
+    const ctx1 = await browser.newContext();
+    const page1 = await ctx1.newPage();
+
+    await page1.goto("/");
+    await loginAs(page1, "petronela");
+    await page1.goto("/petronela");
+    await waitForMixer(page1);
+
+    await expect(page1.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    const micsTab = page1.locator(".category-tab.mics");
+    if ((await micsTab.count()) > 0) await micsTab.click();
+    await page1.waitForTimeout(500);
+
+    const soloBtn = page1.locator(".solo-btn").first();
+    expect(await soloBtn.count()).toBeGreaterThan(0);
+
+    // Activate solo
+    await soloBtn.click({ force: true });
+    await expect(soloBtn).toHaveClass(/on/, { timeout: 3000 });
+
+    // Close the page (simulates crash/disconnect)
+    await ctx1.close();
+
+    // Wait for server to process disconnect
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // Reconnect with a new context (simulates reopening PWA)
+    const ctx2 = await browser.newContext();
+    const page2 = await ctx2.newPage();
+
+    await page2.goto("/");
+    await loginAs(page2, "petronela");
+    await page2.goto("/petronela");
+    await waitForMixer(page2);
+
+    await expect(page2.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    const micsTab2 = page2.locator(".category-tab.mics");
+    if ((await micsTab2.count()) > 0) await micsTab2.click();
+    await page2.waitForTimeout(500);
+
+    // Solo should still be active after reconnect
+    const soloBtn2 = page2.locator(".solo-btn").first();
+    await expect(soloBtn2).toHaveClass(/on/, { timeout: 5000 });
+
+    // Unsolo to clean up — should restore pre-solo mutes
+    await soloBtn2.click({ force: true });
+    await expect(soloBtn2).toHaveClass(/off/, { timeout: 3000 });
+
+    await ctx2.close();
+  });
+
+  test("unsolo restores original mute states", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    await waitForMixer(page);
+
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    const micsTab = page.locator(".category-tab.mics");
+    if ((await micsTab.count()) > 0) await micsTab.click();
+    await page.waitForTimeout(500);
+
+    const channels = page.locator(".channel");
+    const count = await channels.count();
+    expect(count).toBeGreaterThanOrEqual(2);
+
+    // Record initial mute states
+    const initialMutes: boolean[] = [];
+    for (let i = 0; i < count; i++) {
+      const cls = (await channels.nth(i).getAttribute("class")) || "";
+      initialMutes.push(cls.includes("muted"));
+    }
+
+    // Solo first channel
+    const soloBtn = page.locator(".solo-btn").first();
+    await soloBtn.click({ force: true });
+    await expect(soloBtn).toHaveClass(/on/, { timeout: 3000 });
+    await page.waitForTimeout(300);
+
+    // Verify non-solo channels are muted
+    for (let i = 1; i < count; i++) {
+      await expect(channels.nth(i)).toHaveClass(/muted/, { timeout: 2000 });
+    }
+
+    // Unsolo
+    await soloBtn.click({ force: true });
+    await expect(soloBtn).toHaveClass(/off/, { timeout: 3000 });
+    await page.waitForTimeout(500);
+
+    // Verify mute states match initial
+    for (let i = 0; i < count; i++) {
+      const cls = (await channels.nth(i).getAttribute("class")) || "";
+      const nowMuted = cls.includes("muted");
+      expect(nowMuted).toBe(initialMutes[i]);
+    }
+
+    await ctx.close();
+  });
 });
