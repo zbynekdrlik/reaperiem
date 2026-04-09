@@ -184,6 +184,7 @@ mod tests {
             limiter: HashMap::new(),
             customizations: HashMap::new(),
             pins: HashMap::new(),
+            track_mutes: HashMap::new(),
         }
     }
 

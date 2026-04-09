@@ -48,6 +48,7 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         index: usize,
         name: String,
         vol_linear: f32,
+        muted: bool,
         send_count: usize,
     }
 
@@ -67,7 +68,9 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
             continue;
         }
         let track_name = parts[2].to_string();
+        let flags: i32 = parts[3].parse().unwrap_or(0);
         let vol_linear: f32 = parts[4].parse().unwrap_or(1.0);
+        let muted = (flags & 8) != 0;
 
         // sendcnt: field 10 when 14+ fields (VU present), field 8 when 12 fields
         let send_count = if parts.len() >= 14 {
@@ -81,6 +84,7 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
             index: track_idx,
             name: track_name,
             vol_linear,
+            muted,
             send_count,
         });
     }
@@ -159,13 +163,15 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         sends.len()
     );
 
-    // --- 3. Collect track output volumes for "inear" and "stems" tracks ---
+    // --- 3. Collect track output volumes and mute states for "inear" and "stems" tracks ---
     let mut track_volumes: HashMap<String, f64> = HashMap::new();
+    let mut track_mutes: HashMap<String, bool> = HashMap::new();
     for track in &tracks {
         let name_lower = track.name.to_lowercase();
         if name_lower.contains("inear") || name_lower.contains("stems") {
             // Store LINEAR volume directly (same as REAPER API)
             track_volumes.insert(track.name.clone(), track.vol_linear as f64);
+            track_mutes.insert(track.name.clone(), track.muted);
         }
     }
 
@@ -289,6 +295,12 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
 
     tracing::info!(%timestamp, "Backup capture: complete");
 
+    tracing::info!(
+        count = track_mutes.len(),
+        "Backup capture: captured {} track mute states",
+        track_mutes.len()
+    );
+
     Ok(MixerBackup {
         version: BACKUP_VERSION,
         timestamp,
@@ -299,5 +311,6 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         limiter,
         customizations,
         pins,
+        track_mutes,
     })
 }
