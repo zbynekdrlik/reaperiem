@@ -575,10 +575,10 @@ pub async fn apply_restore(
 
         // Read current mute and skip if unchanged
         let current_muted = query_track_mute(client, &reaper_url, track_idx).await;
-        if let Some(cur) = current_muted {
-            if cur == backup_muted {
-                continue; // Already matches
-            }
+        if let Some(cur) = current_muted
+            && cur == backup_muted
+        {
+            continue; // Already matches
         }
 
         let mute_val: u8 = if backup_muted { 1 } else { 0 };
