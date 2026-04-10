@@ -89,14 +89,15 @@ body {
 }
 
 .mixer-header .back-btn {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-primary);
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   cursor: pointer;
+  padding: 0;
   margin-right: 12px;
 }
 
@@ -121,6 +122,55 @@ body {
   font-size: 0.55em;
   color: #fff;
   white-space: nowrap;
+}
+
+/* Solo active indicator in header (replaces version when solo is active) */
+.header-solo-btn {
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  animation: pulse-solo 1.5s ease-in-out infinite;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.header-solo-btn:hover {
+  background: #d97706;
+}
+
+.header-solo-btn:active {
+  background: #b45309;
+}
+
+.header-solo-btn .solo-close {
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+@keyframes pulse-solo {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-solo-btn {
+    animation: none;
+  }
 }
 
 /* Connection status dot — dynamic heartbeat when data flows */
@@ -1845,13 +1895,17 @@ body {
 
 /* Network mode indicator (LAN/WAN badge in header) */
 .network-indicator {
-  font-size: 0.6em;
+  font-size: 0.5em;
   font-weight: 700;
-  padding: 2px 6px;
+  padding: 2px 3px;
   border-radius: 4px;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   flex-shrink: 0;
   margin-right: 4px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  line-height: 1.1;
+  max-width: 14px;
 }
 
 .network-indicator.local {

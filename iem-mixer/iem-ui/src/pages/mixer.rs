@@ -1191,10 +1191,40 @@ pub fn MixerPage() -> impl IntoView {
                         Some(c) => c.to_uppercase().chain(chars).collect(),
                     }
                 }}</h1>
-                <div class="header-version">
-                    <span class="header-version-number">{iem_core::version_label()}</span>
-                    <span class="header-version-date">{iem_core::build_datetime()}</span>
-                </div>
+                <Show
+                    when=move || !soloed.get().is_empty()
+                    fallback=|| view! {
+                        <div class="header-version">
+                            <span class="header-version-number">{iem_core::version_label()}</span>
+                            <span class="header-version-date">{iem_core::build_datetime()}</span>
+                        </div>
+                    }
+                >
+                    <button
+                        class="header-solo-btn"
+                        aria-label="Clear solo"
+                        on:click=move |_| {
+                            if !connected.get() {
+                                return;
+                            }
+                            // Optimistic UI: restore pre-solo mutes locally
+                            let saved = pre_solo_mutes.get();
+                            set_channels.update(|chs| {
+                                for c in chs.iter_mut() {
+                                    let should_be_muted = saved.get(&c.track_index).copied().unwrap_or(false);
+                                    c.muted = should_be_muted;
+                                }
+                            });
+                            set_pre_solo_mutes.set(HashMap::new());
+                            set_soloed.set(std::collections::HashSet::new());
+                            // Send empty SetSolo — server restores REAPER mutes and broadcasts
+                            ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: vec![] });
+                        }
+                    >
+                        "SOLO"
+                        <span class="solo-close">"\u{2715}"</span>
+                    </button>
+                </Show>
                 <button class="settings-btn" on:click=move |_| set_settings_modal_visible.set(true)>
                     "\u{2699}"
                 </button>
@@ -2398,6 +2428,7 @@ fn ChannelList(
                         let is_currently_soloed = current_soloed.contains(&track_idx);
 
                         if is_currently_soloed {
+                            // UN-SOLO this track
                             let mut new_soloed = current_soloed.clone();
                             new_soloed.remove(&track_idx);
                             if let Some(partner) = partner_idx {
@@ -2405,22 +2436,17 @@ fn ChannelList(
                             }
 
                             if new_soloed.is_empty() {
+                                // Restore pre-solo mutes (optimistic UI)
                                 let saved = pre_solo_mutes.get();
-                                for ch in &all_channels {
-                                    let should_be_muted = saved.get(&ch.track_index).copied().unwrap_or(false);
-                                    let idx = ch.track_index;
-                                    set_channels.update(|chs| {
-                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
-                                            c.muted = should_be_muted;
-                                        }
-                                    });
-                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: idx,
-                                        muted: should_be_muted,
-                                    });
-                                }
+                                set_channels.update(|chs| {
+                                    for c in chs.iter_mut() {
+                                        let should_be_muted = saved.get(&c.track_index).copied().unwrap_or(false);
+                                        c.muted = should_be_muted;
+                                    }
+                                });
                                 set_pre_solo_mutes.set(HashMap::new());
                             } else {
+                                // Partial unsolo — mute the desoloed track(s)
                                 set_channels.update(|chs| {
                                     if let Some(ch) = chs.iter_mut().find(|c| c.track_index == track_idx) {
                                         ch.muted = true;
@@ -2431,60 +2457,31 @@ fn ChannelList(
                                         }
                                     }
                                 });
-                                ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                    track_index: track_idx,
-                                    muted: true,
-                                });
-                                if let Some(partner) = partner_idx {
-                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: partner,
-                                        muted: true,
-                                    });
-                                }
                             }
+
                             let soloed_vec: Vec<usize> = new_soloed.iter().copied().collect();
                             set_soloed.set(new_soloed);
                             ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: soloed_vec });
                         } else {
+                            // SOLO this track
                             let was_empty = current_soloed.is_empty();
 
                             if was_empty {
+                                // Save pre-solo mutes for optimistic UI restore
                                 let mut saved_mutes = HashMap::new();
                                 for ch in &all_channels {
                                     saved_mutes.insert(ch.track_index, ch.muted);
                                 }
                                 set_pre_solo_mutes.set(saved_mutes);
-
-                                for ch in &all_channels {
-                                    let should_mute = ch.track_index != track_idx && partner_idx != Some(ch.track_index);
-                                    let idx = ch.track_index;
-                                    set_channels.update(|chs| {
-                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
-                                            c.muted = should_mute;
-                                        }
-                                    });
-                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: idx,
-                                        muted: should_mute,
-                                    });
-                                }
-                            } else {
-                                // EXCLUSIVE: mute everything except the new solo target (#131)
-                                for ch in &all_channels {
-                                    let should_mute = ch.track_index != track_idx
-                                        && partner_idx != Some(ch.track_index);
-                                    let idx = ch.track_index;
-                                    set_channels.update(|chs| {
-                                        if let Some(c) = chs.iter_mut().find(|c| c.track_index == idx) {
-                                            c.muted = should_mute;
-                                        }
-                                    });
-                                    ws_send(ws, &iem_core::ClientMsg::SetMute {
-                                        track_index: idx,
-                                        muted: should_mute,
-                                    });
-                                }
                             }
+
+                            // Optimistic UI: mute everything except solo target
+                            set_channels.update(|chs| {
+                                for c in chs.iter_mut() {
+                                    c.muted = c.track_index != track_idx
+                                        && partner_idx != Some(c.track_index);
+                                }
+                            });
 
                             // Build soloed set — exclusive (only new track + partner)
                             let mut new_soloed = std::collections::HashSet::new();

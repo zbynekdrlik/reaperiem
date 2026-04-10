@@ -1343,38 +1343,20 @@ async fn handle_ws(
                                 continue;
                             }
 
-                            // Handle solo state updates (no REAPER command — solo is UI-only sync)
-                            if let ClientMsg::SetSolo { ref soloed } = cmd {
-                                {
-                                    let mut cache = state.mixer_cache.write().await;
-                                    if soloed.is_empty() {
-                                        cache.solo_states.remove(&member_id);
-                                    } else {
-                                        cache.solo_states
-                                            .insert(member_id.clone(), soloed.clone());
-                                    }
-                                }
-                                let _ = state.event_tx.send((
-                                    member_id.clone(),
-                                    ServerMsg::SoloUpdate {
-                                        soloed: soloed.clone(),
-                                    },
-                                ));
-                                continue;
-                            }
-
                             match apply_command_to_cache(&state, &member_id, &cmd).await {
                                 Ok((url, broadcast)) => {
                                     // Broadcast to other clients of same member for cross-device sync
                                     if let Some(event) = broadcast {
                                         let _ = state.event_tx.send((member_id.clone(), event));
                                     }
-                                    send_to_reaper(
-                                        state.http_client.clone(),
-                                        url,
-                                        member_id.clone(),
-                                        cmd,
-                                    );
+                                    if !url.is_empty() {
+                                        send_to_reaper(
+                                            state.http_client.clone(),
+                                            url,
+                                            member_id.clone(),
+                                            cmd,
+                                        );
+                                    }
                                 }
                                 Err(e) => {
                                     tracing::warn!(
@@ -1443,7 +1425,6 @@ async fn handle_ws(
         if *count == 0 {
             cache.active_members.remove(&member_id);
             cache.member_states.remove(&member_id);
-            cache.solo_states.remove(&member_id);
         }
     }
 }
@@ -1697,9 +1678,12 @@ async fn apply_command_to_cache(
             // Handled in WS handler before apply_command_to_cache is called
             return Err("UpdateCustomization should not reach apply_command_to_cache".to_string());
         }
-        iem_core::ClientMsg::SetSolo { .. } => {
-            // Handled in WS handler before apply_command_to_cache is called
-            return Err("SetSolo should not reach apply_command_to_cache".to_string());
+        iem_core::ClientMsg::SetSolo { soloed } => {
+            for ti in soloed {
+                if !is_valid_track(*ti) {
+                    return Err(format!("solo track_index {} out of range", ti));
+                }
+            }
         }
         iem_core::ClientMsg::CallEngineer => {
             // Handled in WS handler before apply_command_to_cache is called
@@ -1861,8 +1845,152 @@ async fn apply_command_to_cache(
         iem_core::ClientMsg::UpdateCustomization { .. } => {
             unreachable!("UpdateCustomization handled before apply_command_to_cache")
         }
-        iem_core::ClientMsg::SetSolo { .. } => {
-            unreachable!("SetSolo handled before apply_command_to_cache")
+        iem_core::ClientMsg::SetSolo { soloed } => {
+            let soloed_set: std::collections::HashSet<usize> = soloed.iter().copied().collect();
+            let mut cache = state.mixer_cache.write().await;
+            let current_solo = cache
+                .solo_states
+                .get(member_id)
+                .cloned()
+                .unwrap_or_default();
+            let had_solo = !current_solo.is_empty();
+            let wants_solo = !soloed_set.is_empty();
+
+            let mut reaper_urls: Vec<String> = Vec::new();
+            let mut events: Vec<iem_core::ServerMsg> = Vec::new();
+
+            if wants_solo && !had_solo {
+                // ENTERING SOLO: save current mute states, then mute everything except soloed
+                let mut saved = Vec::new();
+                if let Some(channels) = cache.member_states.get(member_id) {
+                    for ch in channels {
+                        if let Ok(si) = send_index_for(ch.track_index) {
+                            saved.push((ch.track_index, si, ch.muted));
+                        }
+                    }
+                }
+                cache.pre_solo_mutes.insert(member_id.to_string(), saved);
+
+                if let Some(channels) = cache.member_states.get_mut(member_id) {
+                    for ch in channels.iter_mut() {
+                        let should_mute = !soloed_set.contains(&ch.track_index);
+                        if ch.muted != should_mute {
+                            ch.muted = should_mute;
+                            if let Ok(si) = send_index_for(ch.track_index) {
+                                let mute_val: u8 = if should_mute { 1 } else { 0 };
+                                reaper_urls.push(reaper_api::set_send_mute(
+                                    &reaper_url,
+                                    ch.track_index,
+                                    si,
+                                    mute_val,
+                                ));
+                            }
+                            events.push(iem_core::ServerMsg::ChannelUpdate {
+                                track_index: ch.track_index,
+                                level_db: ch.level_db,
+                                muted: ch.muted,
+                                pan: ch.pan,
+                            });
+                        }
+                    }
+                }
+            } else if wants_solo && had_solo {
+                // SWITCHING SOLO: keep pre_solo_mutes, update mutes to new target
+                if let Some(channels) = cache.member_states.get_mut(member_id) {
+                    for ch in channels.iter_mut() {
+                        let should_mute = !soloed_set.contains(&ch.track_index);
+                        if ch.muted != should_mute {
+                            ch.muted = should_mute;
+                            if let Ok(si) = send_index_for(ch.track_index) {
+                                let mute_val: u8 = if should_mute { 1 } else { 0 };
+                                reaper_urls.push(reaper_api::set_send_mute(
+                                    &reaper_url,
+                                    ch.track_index,
+                                    si,
+                                    mute_val,
+                                ));
+                            }
+                            events.push(iem_core::ServerMsg::ChannelUpdate {
+                                track_index: ch.track_index,
+                                level_db: ch.level_db,
+                                muted: ch.muted,
+                                pan: ch.pan,
+                            });
+                        }
+                    }
+                }
+            } else if !wants_solo && had_solo {
+                // EXITING SOLO: restore pre-solo mute states
+                if let Some(saved) = cache.pre_solo_mutes.remove(member_id)
+                    && let Some(channels) = cache.member_states.get_mut(member_id)
+                {
+                    for (track_idx, send_idx, was_muted) in &saved {
+                        if let Some(ch) = channels.iter_mut().find(|c| c.track_index == *track_idx)
+                            && ch.muted != *was_muted
+                        {
+                            ch.muted = *was_muted;
+                            let mute_val: u8 = if *was_muted { 1 } else { 0 };
+                            reaper_urls.push(reaper_api::set_send_mute(
+                                &reaper_url,
+                                *track_idx,
+                                *send_idx,
+                                mute_val,
+                            ));
+                            events.push(iem_core::ServerMsg::ChannelUpdate {
+                                track_index: *track_idx,
+                                level_db: ch.level_db,
+                                muted: ch.muted,
+                                pan: ch.pan,
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Update solo state
+            if wants_solo {
+                cache
+                    .solo_states
+                    .insert(member_id.to_string(), soloed.clone());
+            } else {
+                cache.solo_states.remove(member_id);
+            }
+
+            // Mark command timestamps for all affected tracks (suppresses poller echo)
+            let now = std::time::Instant::now();
+            let track_indices: Vec<usize> = cache
+                .member_states
+                .get(member_id)
+                .map(|chs| chs.iter().map(|c| c.track_index).collect())
+                .unwrap_or_default();
+            for ti in track_indices {
+                cache
+                    .command_timestamps
+                    .insert((member_id.to_string(), ti), now);
+            }
+
+            drop(cache);
+
+            // Send all REAPER commands
+            for url in &reaper_urls {
+                let _ = state.http_client.get(url).send().await;
+            }
+
+            // Broadcast solo state update
+            let _ = state.event_tx.send((
+                member_id.to_string(),
+                iem_core::ServerMsg::SoloUpdate {
+                    soloed: soloed.clone(),
+                },
+            ));
+
+            // Broadcast channel updates for changed mutes
+            for event in events {
+                let _ = state.event_tx.send((member_id.to_string(), event));
+            }
+
+            // Return empty URL — REAPER commands already sent above
+            return Ok(("".to_string(), None));
         }
         iem_core::ClientMsg::CallEngineer => {
             unreachable!("CallEngineer handled before apply_command_to_cache")
