@@ -1,5 +1,12 @@
 # Mutation Testing CI Gate — Implementation Plan
 
+> **⚠️ SUPERSEDED:** This plan is a historical record of what was intended at planning time. The code blocks below show the ORIGINAL plan, not the final merged implementation. Several things changed during execution:
+> - `git diff` needs `--relative` to emit workspace-relative paths (without it, cargo-mutants silently matches zero files)
+> - `cargo mutants` must be invoked **twice** (once per package) because `cargo` rejects cross-package feature selection (`--features iem-server/audio`) combined with `--package iem-core`
+> - The `--timeout` value was raised from 120s → 300s after observing CPU contention under `--jobs 4`
+>
+> For the current authoritative description of the gate, see `docs/superpowers/specs/2026-04-10-mutation-testing-design.md` and `.github/workflows/ci.yml`. The commits on PR #159 tell the full iteration story.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `cargo-mutants` as a hard CI gate so weak tests cannot ship unnoticed. Uses `--in-diff` against `origin/main` so only newly-changed code is gated.

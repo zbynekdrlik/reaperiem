@@ -456,7 +456,7 @@ jobs:
           cargo mutants \
             --in-diff pr.diff \
             --package iem-core \
-            --timeout 120 \
+            --timeout 300 \
             --jobs 4 \
             --no-shuffle
           echo "=== Mutating iem-server (--features audio) ==="
@@ -464,7 +464,7 @@ jobs:
             --in-diff pr.diff \
             --package iem-server \
             --features audio \
-            --timeout 120 \
+            --timeout 300 \
             --jobs 4 \
             --no-shuffle
 

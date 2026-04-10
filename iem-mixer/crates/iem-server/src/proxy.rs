@@ -3378,8 +3378,9 @@ mod tests {
     #[test]
     fn test_reaper_pan_to_ui_nan_maps_to_center() {
         // A malformed REAPER response could yield NaN; we must not leak it
-        // into the UI pan state. clamp_pan maps NaN to 0.0 (REAPER center),
-        // which converts to 0.5 (UI center).
+        // into the UI pan state. The inline NaN guard in reaper_pan_to_ui
+        // returns 0.5 (UI center) directly, avoiding any NaN propagation
+        // into the arithmetic expression below it.
         let ui_pan = reaper_pan_to_ui(f32::NAN);
         assert!(
             (ui_pan - 0.5).abs() < 0.001,
