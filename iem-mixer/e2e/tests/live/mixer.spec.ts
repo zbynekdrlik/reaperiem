@@ -2365,4 +2365,48 @@ test.describe("Solo sync", () => {
 
     await ctx.close();
   });
+
+  test("header solo button clears solo from any tab", async ({ browser }) => {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+
+    await page.goto("/");
+    await loginAs(page, "petronela");
+    await page.goto("/petronela");
+    await waitForMixer(page);
+
+    await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    // Switch to Mics tab to find a solo button
+    const micsTab = page.locator(".category-tab.mics");
+    if ((await micsTab.count()) > 0) await micsTab.click();
+    await page.waitForTimeout(500);
+
+    // Verify header initially shows version (no solo active)
+    await expect(page.locator(".header-version")).toBeVisible();
+    await expect(page.locator(".header-solo-btn")).toHaveCount(0);
+
+    // Activate solo
+    const soloBtn = page.locator(".solo-btn").first();
+    await soloBtn.click({ force: true });
+    await page.waitForTimeout(500);
+    await expect(soloBtn).toHaveClass(/on/, { timeout: 5000 });
+
+    // Header should now show SOLO button
+    await expect(page.locator(".header-solo-btn")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(".header-version")).toHaveCount(0);
+
+    // Click header SOLO button to clear
+    await page.locator(".header-solo-btn").click({ force: true });
+    await page.waitForTimeout(500);
+
+    // Header should revert to version display
+    await expect(page.locator(".header-version")).toBeVisible({ timeout: 3000 });
+    await expect(page.locator(".header-solo-btn")).toHaveCount(0);
+
+    // Channel solo button should be off
+    await expect(soloBtn).toHaveClass(/off/, { timeout: 3000 });
+
+    await ctx.close();
+  });
 });
