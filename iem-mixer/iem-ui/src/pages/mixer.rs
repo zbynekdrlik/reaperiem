@@ -1191,10 +1191,40 @@ pub fn MixerPage() -> impl IntoView {
                         Some(c) => c.to_uppercase().chain(chars).collect(),
                     }
                 }}</h1>
-                <div class="header-version">
-                    <span class="header-version-number">{iem_core::version_label()}</span>
-                    <span class="header-version-date">{iem_core::build_datetime()}</span>
-                </div>
+                <Show
+                    when=move || !soloed.get().is_empty()
+                    fallback=|| view! {
+                        <div class="header-version">
+                            <span class="header-version-number">{iem_core::version_label()}</span>
+                            <span class="header-version-date">{iem_core::build_datetime()}</span>
+                        </div>
+                    }
+                >
+                    <button
+                        class="header-solo-btn"
+                        aria-label="Clear solo"
+                        on:click=move |_| {
+                            if !connected.get() {
+                                return;
+                            }
+                            // Optimistic UI: restore pre-solo mutes locally
+                            let saved = pre_solo_mutes.get();
+                            set_channels.update(|chs| {
+                                for c in chs.iter_mut() {
+                                    let should_be_muted = saved.get(&c.track_index).copied().unwrap_or(false);
+                                    c.muted = should_be_muted;
+                                }
+                            });
+                            set_pre_solo_mutes.set(HashMap::new());
+                            set_soloed.set(std::collections::HashSet::new());
+                            // Send empty SetSolo — server restores REAPER mutes and broadcasts
+                            ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: vec![] });
+                        }
+                    >
+                        "SOLO"
+                        <span class="solo-close">"\u{2715}"</span>
+                    </button>
+                </Show>
                 <button class="settings-btn" on:click=move |_| set_settings_modal_visible.set(true)>
                     "\u{2699}"
                 </button>
