@@ -129,10 +129,12 @@ pub fn merge_or_replace_channels(
     }
 }
 
-/// Returns true iff `value` is a finite pan value within [-1.0, 1.0].
-/// NaN and infinities return false.
+/// Returns true when `value` is a pan value within [-1.0, 1.0].
+/// NaN and infinities return false: `Range::contains` uses ordered
+/// comparisons, which always return false for NaN, and infinities are
+/// not ≤ 1.0, so the single range check suffices.
 pub fn is_valid_pan(value: f32) -> bool {
-    value.is_finite() && (-1.0..=1.0).contains(&value)
+    (-1.0..=1.0).contains(&value)
 }
 
 /// API error response
@@ -263,8 +265,9 @@ mod tests {
 
     // ================================================================
     // is_valid_pan tests — designed to kill all cargo-mutants mutants:
-    // body replacement (true, false), operator swaps (< vs <=, > vs >=),
-    // && vs ||, and negation removal.
+    // body replacement (true, false), range-endpoint mutations, and
+    // boundary drift. The implementation is a single Range::contains
+    // call, so the mutation surface is small.
     // ================================================================
 
     #[test]
@@ -292,22 +295,13 @@ mod tests {
 
     #[test]
     fn test_is_valid_pan_false_for_non_finite() {
-        // NaN: kills body-replace-with-true and removal of is_finite check.
+        // NaN: Range::contains returns false because NaN comparisons
+        // always return false. Infinities: ±INFINITY is never ≤ 1.0 and
+        // NEG_INFINITY is never ≥ -1.0. So the range check alone
+        // rejects all non-finite inputs without a separate is_finite guard.
         assert!(!is_valid_pan(f32::NAN));
         assert!(!is_valid_pan(f32::INFINITY));
         assert!(!is_valid_pan(f32::NEG_INFINITY));
-    }
-
-    #[test]
-    fn test_is_valid_pan_asymmetric_cases_kill_and_or_swap() {
-        // With && swapped to ||, is_valid_pan(-2.0) becomes
-        // (is_finite=true) || (in -1..=1 = false) = true, which is wrong.
-        // Our assertion above already catches that; this test makes it
-        // explicit for the documentation and for future readers.
-        let outside_below = -2.0_f32;
-        assert!(outside_below.is_finite());
-        assert!(!(-1.0..=1.0).contains(&outside_below));
-        assert!(!is_valid_pan(outside_below));
     }
 
     // ================================================================
