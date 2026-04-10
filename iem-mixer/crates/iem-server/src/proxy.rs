@@ -914,13 +914,26 @@ pub(crate) fn quantize_02(value: f32) -> f32 {
 ///
 /// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
 /// UI uses:     0.0 = left, 0.5 = center, 1.0 = right
+/// NaN inputs from a malformed REAPER response are mapped to center (0.5).
 pub(crate) fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
+    if reaper_pan.is_nan() {
+        return 0.5;
+    }
     ((reaper_pan + 1.0) / 2.0).clamp(0.0, 1.0)
 }
 
 /// Convert UI pan (0.0 to 1.0) to REAPER pan (-1.0 to 1.0)
 pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
     ((ui_pan * 2.0) - 1.0).clamp(-1.0, 1.0)
+}
+
+/// Validate a pan value for SetPan commands.
+/// Returns Err with a user-facing message if pan is NaN, infinite, or out of [-1.0, 1.0].
+pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
+    if !iem_core::is_valid_pan(pan) {
+        return Err("pan must be between -1.0 and 1.0".to_string());
+    }
+    Ok(())
 }
 
 // =============================================================================
@@ -1653,9 +1666,7 @@ async fn apply_command_to_cache(
             if !is_valid_track(*track_index) {
                 return Err(format!("track_index {} out of range", track_index));
             }
-            if pan.is_nan() || pan.is_infinite() || *pan < -1.0 || *pan > 1.0 {
-                return Err("pan must be between -1.0 and 1.0".to_string());
-            }
+            validate_pan_value(*pan)?;
         }
         iem_core::ClientMsg::SetMute { track_index, .. } => {
             if !is_valid_track(*track_index) {
@@ -3362,6 +3373,57 @@ mod tests {
         assert!((reaper_pan_to_ui(2.0) - 1.0).abs() < 0.001);
         assert!((ui_pan_to_reaper(-1.0) - (-1.0)).abs() < 0.001);
         assert!((ui_pan_to_reaper(2.0) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_reaper_pan_to_ui_nan_maps_to_center() {
+        // A malformed REAPER response could yield NaN; we must not leak it
+        // into the UI pan state. clamp_pan maps NaN to 0.0 (REAPER center),
+        // which converts to 0.5 (UI center).
+        let ui_pan = reaper_pan_to_ui(f32::NAN);
+        assert!(
+            (ui_pan - 0.5).abs() < 0.001,
+            "NaN pan should map to UI center 0.5, got {}",
+            ui_pan
+        );
+    }
+
+    #[test]
+    fn test_validate_pan_value_accepts_valid_pans() {
+        // Kills body-replace-with-Err and the "delete !" mutant
+        // (which would flip the condition and reject valid pans).
+        assert!(validate_pan_value(-1.0).is_ok());
+        assert!(validate_pan_value(-0.5).is_ok());
+        assert!(validate_pan_value(0.0).is_ok());
+        assert!(validate_pan_value(0.5).is_ok());
+        assert!(validate_pan_value(1.0).is_ok());
+    }
+
+    #[test]
+    fn test_validate_pan_value_rejects_out_of_range() {
+        // Kills body-replace-with-Ok and the "delete !" mutant
+        // (which would flip the condition and accept invalid pans).
+        assert!(validate_pan_value(-1.0001).is_err());
+        assert!(validate_pan_value(1.0001).is_err());
+        assert!(validate_pan_value(-2.0).is_err());
+        assert!(validate_pan_value(2.0).is_err());
+    }
+
+    #[test]
+    fn test_validate_pan_value_rejects_non_finite() {
+        assert!(validate_pan_value(f32::NAN).is_err());
+        assert!(validate_pan_value(f32::INFINITY).is_err());
+        assert!(validate_pan_value(f32::NEG_INFINITY).is_err());
+    }
+
+    #[test]
+    fn test_validate_pan_value_error_message() {
+        let err = validate_pan_value(2.0).unwrap_err();
+        assert!(
+            err.contains("-1.0") && err.contains("1.0"),
+            "error message should mention the valid range, got: {}",
+            err
+        );
     }
 
     #[test]

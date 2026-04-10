@@ -129,6 +129,12 @@ pub fn merge_or_replace_channels(
     }
 }
 
+/// Returns true iff `value` is a finite pan value within [-1.0, 1.0].
+/// NaN and infinities return false.
+pub fn is_valid_pan(value: f32) -> bool {
+    value.is_finite() && (-1.0..=1.0).contains(&value)
+}
+
 /// API error response
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiError {
@@ -253,6 +259,55 @@ mod tests {
         };
         assert_eq!(claims.sub, "marek");
         assert!(!claims.engineer);
+    }
+
+    // ================================================================
+    // is_valid_pan tests — designed to kill all cargo-mutants mutants:
+    // body replacement (true, false), operator swaps (< vs <=, > vs >=),
+    // && vs ||, and negation removal.
+    // ================================================================
+
+    #[test]
+    fn test_is_valid_pan_true_in_range() {
+        assert!(is_valid_pan(0.0));
+        assert!(is_valid_pan(0.5));
+        assert!(is_valid_pan(-0.5));
+    }
+
+    #[test]
+    fn test_is_valid_pan_true_at_boundaries() {
+        // These kill `<=` → `<` and `>=` → `>` mutants.
+        assert!(is_valid_pan(-1.0));
+        assert!(is_valid_pan(1.0));
+    }
+
+    #[test]
+    fn test_is_valid_pan_false_just_outside_range() {
+        // These kill body-replace-with-true mutants and catch boundary drift.
+        assert!(!is_valid_pan(-1.0001));
+        assert!(!is_valid_pan(1.0001));
+        assert!(!is_valid_pan(-2.0));
+        assert!(!is_valid_pan(2.0));
+    }
+
+    #[test]
+    fn test_is_valid_pan_false_for_non_finite() {
+        // NaN: kills body-replace-with-true and removal of is_finite check.
+        assert!(!is_valid_pan(f32::NAN));
+        assert!(!is_valid_pan(f32::INFINITY));
+        assert!(!is_valid_pan(f32::NEG_INFINITY));
+    }
+
+    #[test]
+    fn test_is_valid_pan_asymmetric_cases_kill_and_or_swap() {
+        // With && swapped to ||, is_valid_pan(-2.0) becomes
+        // (is_finite=true) || (in -1..=1 = false) = true, which is wrong.
+        // Our assertion above already catches that; this test makes it
+        // explicit for the documentation and for future readers.
+        let outside_below = -2.0_f32;
+        assert!(outside_below.is_finite());
+        assert!(!(-1.0..=1.0).contains(&outside_below));
+        assert!(!is_valid_pan(outside_below));
     }
 
     // ================================================================
