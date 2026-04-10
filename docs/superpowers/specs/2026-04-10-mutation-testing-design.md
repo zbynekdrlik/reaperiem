@@ -38,7 +38,7 @@ cargo test -p iem-core
 cargo test -p iem-server --features audio
 ```
 
-cargo-mutants is invoked once with both packages selected and the `audio` feature enabled, so a single run covers both crates.
+cargo-mutants is invoked **twice**, once per package, because `cargo` rejects cross-package feature selection (`--features iem-server/audio`) when a specific package is selected via `-p`. iem-core runs with default features; iem-server runs with `--features audio`. Each invocation's `--in-diff` sees the same `pr.diff`, and each fails independently if a mutant survives.
 
 ## Trigger
 
@@ -68,14 +68,15 @@ Use `taiki-e/install-action@v2` to install `cargo-mutants` as a prebuilt binary.
 
 ## Diff Computation
 
-For both `dev` push and PR runs, the comparison base is `origin/main`. The job runs:
+For both `dev` push and PR runs, the comparison base is `origin/main`. The job runs from the `iem-mixer/` workspace root:
 
 ```bash
-git fetch origin main --depth=200
-git diff origin/main...HEAD > pr.diff
+git fetch origin main
+git diff --relative origin/main...HEAD \
+  -- 'crates/iem-core/**/*.rs' 'crates/iem-server/**/*.rs' > pr.diff
 ```
 
-The triple-dot (`...`) form gives the diff from the merge base, which is the correct semantic for "what did this branch change relative to main."
+The triple-dot (`...`) form gives the diff from the merge base, which is the correct semantic for "what did this branch change relative to main." The `--relative` flag is load-bearing: it emits pathnames relative to the cwd (the workspace root), matching the workspace-relative paths `cargo mutants --in-diff` expects. Without `--relative`, the diff would contain repo-root-relative paths like `iem-mixer/crates/iem-core/foo.rs` and cargo-mutants would silently match zero files.
 
 If `pr.diff` is empty or contains no Rust changes in the targeted crates, `cargo mutants --in-diff` will exit cleanly with zero mutants generated. The job logs the count explicitly so a green run is auditable.
 
@@ -112,7 +113,7 @@ The job uses the same `~/.cargo` cache pattern as the `test` job (key: `${{ runn
 
 3. **Workspace root vs crate root**: cargo-mutants must run from the workspace root (`iem-mixer/`). Per-crate `--package` flags select what to mutate.
 
-4. **Timeout**: Set `--timeout 120` (per-mutant test timeout, in seconds) so a stuck test doesn't hang the job indefinitely. Default is `auto` (5× baseline), which is usually fine, but explicit is safer for CI.
+4. **Timeout**: Set `--timeout 300` (per-mutant test timeout, in seconds) so a stuck test doesn't hang the job indefinitely. Default is `auto` (5× baseline). 300s gives ~7× headroom over the observed iem-server baseline of 42s, which is necessary because `--jobs 4` causes heavy CPU contention on ubuntu-latest (4-core) runners, tripling both build and test wall times for parallel mutants. The initial value was 120s but that proved fragile — see the v1.139.0 changelog entry and the v1.140.0 follow-up.
 
 5. **Cache invalidation**: When `Cargo.lock` changes, the cache is regenerated. This is acceptable and matches the existing `test` job.
 
