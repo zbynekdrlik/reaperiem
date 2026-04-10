@@ -2409,4 +2409,64 @@ test.describe("Solo sync", () => {
 
     await ctx.close();
   });
+
+  test("header solo button appears on second tab when first tab solos", async ({
+    browser,
+  }) => {
+    const ctx1 = await browser.newContext();
+    const ctx2 = await browser.newContext();
+    const page1 = await ctx1.newPage();
+    const page2 = await ctx2.newPage();
+
+    await page1.goto("/");
+    await page2.goto("/");
+    await loginAs(page1, "petronela");
+    await page1.goto("/petronela");
+    await loginAs(page2, "petronela");
+    await page2.goto("/petronela");
+
+    await waitForMixer(page1);
+    await waitForMixer(page2);
+
+    await expect(page1.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+    await expect(page2.locator(".channel").first()).toBeVisible({ timeout: 15000 });
+
+    // Switch both to Mics tab
+    const micsTab1 = page1.locator(".category-tab.mics");
+    if ((await micsTab1.count()) > 0) await micsTab1.click();
+    const micsTab2 = page2.locator(".category-tab.mics");
+    if ((await micsTab2.count()) > 0) await micsTab2.click();
+    await page1.waitForTimeout(500);
+    await page2.waitForTimeout(500);
+
+    // Both headers show version initially
+    await expect(page1.locator(".header-version")).toBeVisible();
+    await expect(page2.locator(".header-version")).toBeVisible();
+
+    // Activate solo on tab1
+    const soloBtn1 = page1.locator(".solo-btn").first();
+    await soloBtn1.click({ force: true });
+    await page1.waitForTimeout(500);
+    await expect(soloBtn1).toHaveClass(/on/, { timeout: 5000 });
+
+    // Tab1 header shows SOLO button
+    await expect(page1.locator(".header-solo-btn")).toBeVisible({ timeout: 3000 });
+
+    // Tab2 should ALSO show SOLO button (sync via SoloUpdate broadcast)
+    await expect(page2.locator(".header-solo-btn")).toBeVisible({ timeout: 5000 });
+
+    // Clear solo from tab2
+    await page2.locator(".header-solo-btn").click({ force: true });
+    await page2.waitForTimeout(500);
+
+    // Both tabs revert to version display
+    await expect(page2.locator(".header-version")).toBeVisible({ timeout: 3000 });
+    await expect(page1.locator(".header-version")).toBeVisible({ timeout: 5000 });
+
+    // Both tabs' solo buttons are off
+    await expect(soloBtn1).toHaveClass(/off/, { timeout: 3000 });
+
+    await ctx1.close();
+    await ctx2.close();
+  });
 });
