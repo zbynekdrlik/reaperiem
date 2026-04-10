@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.140.0 (2026-04-10)
+
+- **CI**: Mutation testing hardening — raised `cargo-mutants --timeout` from 120s to 300s after observing CPU contention under `--jobs 4` on ubuntu-latest runners. Simplified `iem_core::is_valid_pan` by removing a redundant `is_finite()` check (`Range::contains` already rejects NaN and infinities).
+- **Docs**: Fixed stale comment in `test_reaper_pan_to_ui_nan_maps_to_center` that referenced a removed helper function. Updated the mutation testing spec and marked the plan as superseded by the final implementation.
+
 ### v1.139.0 (2026-04-10)
 
 - **CI**: Added `cargo-mutants` test quality gate. Mutation testing runs on every dev push and PR, mutating only code changed vs `origin/main` (`--in-diff`). Any surviving mutant fails CI. Covers `iem-core` and `iem-server`. Catches weak tests that exercise code without verifying behavior.
