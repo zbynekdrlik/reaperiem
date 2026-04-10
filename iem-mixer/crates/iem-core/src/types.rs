@@ -129,15 +129,6 @@ pub fn merge_or_replace_channels(
     }
 }
 
-/// Clamp a pan value to the valid range [-1.0, 1.0].
-/// NaN inputs are mapped to 0.0 (center).
-pub fn clamp_pan(value: f32) -> f32 {
-    if value.is_nan() {
-        return 0.0;
-    }
-    value.clamp(-1.0, 1.0)
-}
-
 /// Returns true iff `value` is a finite pan value within [-1.0, 1.0].
 /// NaN and infinities return false.
 pub fn is_valid_pan(value: f32) -> bool {
@@ -271,49 +262,10 @@ mod tests {
     }
 
     // ================================================================
-    // Pan helper tests — designed to kill all cargo-mutants mutants:
-    // body replacement (Default::default, true, false), operator swaps
-    // (< vs <=, > vs >=), && vs ||, and negation removal.
+    // is_valid_pan tests — designed to kill all cargo-mutants mutants:
+    // body replacement (true, false), operator swaps (< vs <=, > vs >=),
+    // && vs ||, and negation removal.
     // ================================================================
-
-    #[test]
-    fn test_clamp_pan_values_inside_range_are_unchanged() {
-        assert_eq!(clamp_pan(-0.5), -0.5);
-        assert_eq!(clamp_pan(0.25), 0.25);
-        assert_eq!(clamp_pan(0.75), 0.75);
-    }
-
-    #[test]
-    fn test_clamp_pan_zero_is_zero() {
-        // Distinguishes correct impl from body-replace-with-default (0.0).
-        // Combined with the non-zero tests above, this kills body replacement.
-        assert_eq!(clamp_pan(0.0), 0.0);
-    }
-
-    #[test]
-    fn test_clamp_pan_clamps_below_minus_one() {
-        assert_eq!(clamp_pan(-1.5), -1.0);
-        assert_eq!(clamp_pan(-100.0), -1.0);
-        assert_eq!(clamp_pan(f32::NEG_INFINITY), -1.0);
-    }
-
-    #[test]
-    fn test_clamp_pan_clamps_above_one() {
-        assert_eq!(clamp_pan(1.5), 1.0);
-        assert_eq!(clamp_pan(100.0), 1.0);
-        assert_eq!(clamp_pan(f32::INFINITY), 1.0);
-    }
-
-    #[test]
-    fn test_clamp_pan_boundaries_exact() {
-        assert_eq!(clamp_pan(-1.0), -1.0);
-        assert_eq!(clamp_pan(1.0), 1.0);
-    }
-
-    #[test]
-    fn test_clamp_pan_nan_maps_to_zero() {
-        assert_eq!(clamp_pan(f32::NAN), 0.0);
-    }
 
     #[test]
     fn test_is_valid_pan_true_in_range() {

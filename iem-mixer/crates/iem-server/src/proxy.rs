@@ -914,10 +914,12 @@ pub(crate) fn quantize_02(value: f32) -> f32 {
 ///
 /// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
 /// UI uses:     0.0 = left, 0.5 = center, 1.0 = right
-/// NaN inputs from a malformed REAPER response are mapped to center.
+/// NaN inputs from a malformed REAPER response are mapped to center (0.5).
 pub(crate) fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
-    let sane = iem_core::clamp_pan(reaper_pan);
-    ((sane + 1.0) / 2.0).clamp(0.0, 1.0)
+    if reaper_pan.is_nan() {
+        return 0.5;
+    }
+    ((reaper_pan + 1.0) / 2.0).clamp(0.0, 1.0)
 }
 
 /// Convert UI pan (0.0 to 1.0) to REAPER pan (-1.0 to 1.0)

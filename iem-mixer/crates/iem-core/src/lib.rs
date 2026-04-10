@@ -20,7 +20,7 @@ pub use preset::{ChannelPreset, MAX_PRESETS, PresetEntry};
 pub use snapshot::{ChannelSnapshot, MAX_SNAPSHOTS, MixSnapshot};
 pub use types::{
     ApiError, AuthClaims, BatchControlRequest, BatchOperation, Channel, Customization, MixerState,
-    PollResponse, clamp_pan, is_valid_pan, merge_or_replace_channels,
+    PollResponse, is_valid_pan, merge_or_replace_channels,
 };
 
 pub use ws::{AlertInfo, ClientMsg, EqBand, ServerMsg};
