@@ -383,6 +383,75 @@ jobs:
           path: iem-mixer/e2e/test-results/
 
   # ============================================================
+  # MUTATION TESTING - Test quality gate (kills weak tests)
+  # ============================================================
+  mutation-test:
+    name: Mutation Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need full history for diff against origin/main
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libopus-dev pkg-config
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            iem-mixer/target/
+          key: ${{ runner.os }}-cargo-mutants-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+
+      - name: Create minimal dist folder for rust-embed
+        run: |
+          mkdir -p iem-mixer/iem-ui/dist
+          echo "placeholder" > iem-mixer/iem-ui/dist/index.html
+
+      - name: Compute diff against origin/main
+        working-directory: iem-mixer
+        run: |
+          git fetch origin main --depth=200
+          # Triple-dot diff: changes from merge base to HEAD
+          git diff origin/main...HEAD -- 'crates/iem-core/**/*.rs' 'crates/iem-server/**/*.rs' > pr.diff
+          echo "Diff size: $(wc -l < pr.diff) lines"
+          if [ ! -s pr.diff ]; then
+            echo "No Rust changes in iem-core or iem-server — nothing to mutate"
+          fi
+
+      - name: Run mutation testing
+        working-directory: iem-mixer
+        run: |
+          if [ ! -s pr.diff ]; then
+            echo "Skipping cargo-mutants run: empty diff"
+            exit 0
+          fi
+          cargo mutants \
+            --in-diff pr.diff \
+            --package iem-core \
+            --package iem-server \
+            --features iem-server/audio \
+            --timeout 120 \
+            --jobs 4 \
+            --no-shuffle
+
+  # ============================================================
   # CHECK VERSION BUMP - Only on PRs to main
   # Compares PR version against main branch version
   # ============================================================
