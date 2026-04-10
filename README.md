@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.139.0 (2026-04-10)
+
+- **CI**: Added `cargo-mutants` test quality gate. Mutation testing runs on every dev push and PR, mutating only code changed vs `origin/main` (`--in-diff`). Any surviving mutant fails CI. Covers `iem-core` and `iem-server`. Catches weak tests that exercise code without verifying behavior.
+
 ### v1.138.0 (2026-04-10)
 
 - **Feature**: Solo indicator in header — when solo is active, a prominent yellow "SOLO ✕" button replaces the version display in the header, visible on every tab. One click clears solo from any tab.
