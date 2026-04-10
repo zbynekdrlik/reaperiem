@@ -446,11 +446,24 @@ jobs:
             echo "Skipping cargo-mutants run: empty diff"
             exit 0
           fi
+          # Two invocations: `--features pkg/feat` is only valid at the
+          # workspace level, not with `--package <name>`. cargo rejects
+          # `cargo test -p iem-core --features iem-server/audio` because
+          # iem-core doesn't know the audio feature exists. Run each
+          # package separately with its own feature set, matching what
+          # the regular `test` job compiles.
+          echo "=== Mutating iem-core ==="
           cargo mutants \
             --in-diff pr.diff \
             --package iem-core \
+            --timeout 120 \
+            --jobs 4 \
+            --no-shuffle
+          echo "=== Mutating iem-server (--features audio) ==="
+          cargo mutants \
+            --in-diff pr.diff \
             --package iem-server \
-            --features iem-server/audio \
+            --features audio \
             --timeout 120 \
             --jobs 4 \
             --no-shuffle
