@@ -914,8 +914,10 @@ pub(crate) fn quantize_02(value: f32) -> f32 {
 ///
 /// REAPER uses: -1.0 = left, 0.0 = center, 1.0 = right
 /// UI uses:     0.0 = left, 0.5 = center, 1.0 = right
+/// NaN inputs from a malformed REAPER response are mapped to center.
 pub(crate) fn reaper_pan_to_ui(reaper_pan: f32) -> f32 {
-    ((reaper_pan + 1.0) / 2.0).clamp(0.0, 1.0)
+    let sane = iem_core::clamp_pan(reaper_pan);
+    ((sane + 1.0) / 2.0).clamp(0.0, 1.0)
 }
 
 /// Convert UI pan (0.0 to 1.0) to REAPER pan (-1.0 to 1.0)
@@ -1653,7 +1655,7 @@ async fn apply_command_to_cache(
             if !is_valid_track(*track_index) {
                 return Err(format!("track_index {} out of range", track_index));
             }
-            if pan.is_nan() || pan.is_infinite() || *pan < -1.0 || *pan > 1.0 {
+            if !iem_core::is_valid_pan(*pan) {
                 return Err("pan must be between -1.0 and 1.0".to_string());
             }
         }
@@ -3362,6 +3364,19 @@ mod tests {
         assert!((reaper_pan_to_ui(2.0) - 1.0).abs() < 0.001);
         assert!((ui_pan_to_reaper(-1.0) - (-1.0)).abs() < 0.001);
         assert!((ui_pan_to_reaper(2.0) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_reaper_pan_to_ui_nan_maps_to_center() {
+        // A malformed REAPER response could yield NaN; we must not leak it
+        // into the UI pan state. clamp_pan maps NaN to 0.0 (REAPER center),
+        // which converts to 0.5 (UI center).
+        let ui_pan = reaper_pan_to_ui(f32::NAN);
+        assert!(
+            (ui_pan - 0.5).abs() < 0.001,
+            "NaN pan should map to UI center 0.5, got {}",
+            ui_pan
+        );
     }
 
     #[test]
