@@ -427,9 +427,13 @@ jobs:
       - name: Compute diff against origin/main
         working-directory: iem-mixer
         run: |
-          git fetch origin main --depth=200
-          # Triple-dot diff: changes from merge base to HEAD
-          git diff origin/main...HEAD -- 'crates/iem-core/**/*.rs' 'crates/iem-server/**/*.rs' > pr.diff
+          git fetch origin main
+          # --relative emits paths relative to cwd (iem-mixer/), matching
+          # the workspace-relative paths cargo-mutants expects from --in-diff.
+          # Without it, paths would be repo-root-relative ("iem-mixer/crates/...")
+          # and cargo-mutants would silently match zero files.
+          # Triple-dot diff: changes from merge base to HEAD.
+          git diff --relative origin/main...HEAD -- 'crates/iem-core/**/*.rs' 'crates/iem-server/**/*.rs' > pr.diff
           echo "Diff size: $(wc -l < pr.diff) lines"
           if [ ! -s pr.diff ]; then
             echo "No Rust changes in iem-core or iem-server — nothing to mutate"
