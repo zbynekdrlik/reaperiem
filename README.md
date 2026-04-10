@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.138.0 (2026-04-10)
+
+- **Feature**: Solo indicator in header — when solo is active, a prominent yellow "SOLO ✕" button replaces the version display in the header, visible on every tab. One click clears solo from any tab.
+- **UI**: Header compacted — smaller back button and vertical LAN/WAN indicator to save horizontal space
+
 ### v1.137.0 (2026-04-09)
 
 - **Fix**: Solo no longer leaves tracks muted after PWA crash/disconnect (#155)
