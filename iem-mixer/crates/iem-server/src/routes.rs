@@ -102,6 +102,15 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         )
         // Web Push notification subscription (#133)
         .route("/api/push/vapid-key", get(get_vapid_key))
+        .route(
+            "/api/client-error",
+            // 10_240 bytes = 10 KiB. Written as a plain literal (not 10 * 1024)
+            // so cargo-mutants has no binary operator to mutate. The exact
+            // value is pinned by router-layer integration tests in proxy.rs
+            // (`client_error_router_rejects_body_just_under_large` and
+            // `client_error_router_rejects_oversize_body`). #153
+            post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
+        )
         .route("/api/push/subscribe", post(push_subscribe))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))

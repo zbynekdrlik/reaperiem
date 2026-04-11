@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.142.0 (2026-04-11)
+
+- **Fix**: PWA self-healing — a new 5-second WebSocket watchdog force-closes sockets that have received no frames for more than 30 seconds. Catches "zombie sockets" where `readyState` is OPEN but no data flows. After force-close, the existing `.disconnected-banner` shows and the reconnect loop opens a new socket. Reconnect now uses exponential backoff (2s → 4s → 8s → 15s → 30s cap) instead of the previous unbounded 2-second polling — gentler on mobile radios and battery. (#153)
+- **Feature**: WASM panic hook. When the Leptos/Rust frontend panics, a custom hook now renders a red full-screen reload banner into `document.body` (via raw DOM so it survives a broken reactive graph) and fire-and-forgets a POST to the new public `/api/client-error` endpoint. Diagnostics include version, git hash, URL, user-agent, panic message, and source location. Server-side reports are logged via `tracing::warn!` with a grep-able `client_error` prefix and land in the existing rolling log at `%APPDATA%\iem-mixer\logs\iem-mixer.log.YYYY-MM-DD`. Converts silent freezes into inspectable errors. (#153)
+
 ### v1.141.0 (2026-04-11)
 
 - **Fix**: SOS alert button now shows the active (red, pulsing) state on the clicking member's own device (#150). On WebSocket connect, the server now catches up a non-engineer member's own active alert state, mirroring the existing engineer catch-up. Previously, reloading the page after triggering SOS left the member's UI stuck in idle while the server still held their alert, and clicking SOS again hit a no-op short-circuit in the CallEngineer handler so the button could never return to active. Restored the `toHaveClass(/active/)` assertion in `alert.spec.ts` as a regression guard.
