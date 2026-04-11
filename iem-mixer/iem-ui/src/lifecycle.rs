@@ -63,21 +63,15 @@ pub fn install_panic_hook() {
     }));
 }
 
-fn render_panic_overlay(info: &std::panic::PanicHookInfo<'_>) {
-    let Some(window) = web_sys::window() else {
-        return;
-    };
-    let Some(document) = window.document() else {
-        return;
-    };
-    let Some(body) = document.body() else { return };
-
-    let message = format_panic_message(info);
-    let summary = truncate_for_display(&message, 200);
-    let version = iem_core::version_label();
-
-    // Raw HTML bypasses the (now broken) Leptos reactive graph.
-    let overlay_html = format!(
+/// Build the red reload overlay HTML for a given panic summary and version.
+///
+/// Pure function — no DOM access, no globals. Extracted from
+/// `render_panic_overlay` so it can be unit-tested. The `summary` and
+/// `version` strings are HTML-escaped before interpolation so that a panic
+/// payload like `<script>alert(1)</script>` becomes visible text in the
+/// overlay instead of injected script.
+fn build_overlay_html(summary: &str, version: &str) -> String {
+    format!(
         r#"<div id="iem-panic-overlay" style="
             position:fixed;inset:0;z-index:2147483647;
             background:rgba(20,0,0,0.95);color:#fff;
@@ -100,9 +94,24 @@ fn render_panic_overlay(info: &std::panic::PanicHookInfo<'_>) {
             </button>
             <p style="opacity:0.5;font-size:11px;margin-top:16px;">{}</p>
         </div>"#,
-        html_escape(&summary),
-        html_escape(&version),
-    );
+        html_escape(summary),
+        html_escape(version),
+    )
+}
+
+fn render_panic_overlay(info: &std::panic::PanicHookInfo<'_>) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
+    let Some(body) = document.body() else { return };
+
+    let message = format_panic_message(info);
+    let summary = truncate_for_display(&message, 200);
+    let version = iem_core::version_label();
+    let overlay_html = build_overlay_html(&summary, &version);
 
     body.set_inner_html(&overlay_html);
 
@@ -241,5 +250,57 @@ mod tests {
             html_escape(r#"<script>alert("&")</script>"#),
             "&lt;script&gt;alert(&quot;&amp;&quot;)&lt;/script&gt;"
         );
+    }
+
+    #[test]
+    fn build_overlay_html_contains_title_and_reload_button() {
+        let html = build_overlay_html("some panic", "v1.142.0");
+        assert!(
+            html.contains("IEM Mixer encountered an error"),
+            "overlay missing title: {html}"
+        );
+        assert!(
+            html.contains(r#"id="iem-panic-reload""#),
+            "overlay missing reload button: {html}"
+        );
+        assert!(
+            html.contains(r#"id="iem-panic-overlay""#),
+            "overlay missing container id: {html}"
+        );
+        assert!(html.contains("Reload"), "overlay missing reload label");
+    }
+
+    #[test]
+    fn build_overlay_html_interpolates_summary_and_version() {
+        let html = build_overlay_html("my custom panic msg", "v9.9.9");
+        assert!(html.contains("my custom panic msg"));
+        assert!(html.contains("v9.9.9"));
+    }
+
+    #[test]
+    fn build_overlay_html_escapes_hostile_summary() {
+        // Hostile panic messages must not inject script tags into the overlay.
+        let hostile = r#"<script>alert("xss")</script>"#;
+        let html = build_overlay_html(hostile, "v1.0.0");
+        assert!(
+            !html.contains("<script>"),
+            "raw <script> tag leaked into overlay: {html}"
+        );
+        assert!(
+            html.contains("&lt;script&gt;"),
+            "hostile input was not escaped: {html}"
+        );
+    }
+
+    #[test]
+    fn build_overlay_html_uses_high_zindex_and_fixed_position() {
+        // Regression guard: the overlay must cover the entire viewport on top
+        // of whatever Leptos rendered before the panic. If the position/
+        // z-index rules are removed the overlay would be invisible behind the
+        // (probably still-mounted) app shell.
+        let html = build_overlay_html("x", "v1.0");
+        assert!(html.contains("position:fixed"));
+        assert!(html.contains("inset:0"));
+        assert!(html.contains("z-index:2147483647"));
     }
 }

@@ -83,5 +83,6 @@ audio = ["dep:bytes"]
 integration = []  # gates live REAPER integration tests in tests/reaper_live.rs
 
 [dev-dependencies]
-tower = "0.5"
+tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+tracing-test = "0.2"

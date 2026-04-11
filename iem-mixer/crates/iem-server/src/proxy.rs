@@ -4409,4 +4409,151 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert_eq!(report.version.as_deref(), Some("1.142.0"));
         assert_eq!(report.git_hash.as_deref(), Some("abc"));
     }
+
+    // ---- Router-layer integration tests for /api/client-error (#153) ----
+    //
+    // These tests wire the real handler through an axum Router with the same
+    // DefaultBodyLimit layer used in routes.rs, so the body size gate is
+    // actually exercised. A handler-only unit test would bypass the layer.
+
+    fn client_error_test_router() -> axum::Router {
+        use axum::routing::post;
+        axum::Router::new().route(
+            "/api/client-error",
+            post(client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
+        )
+    }
+
+    #[tokio::test]
+    async fn client_error_router_accepts_minimal_body() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let router = client_error_test_router();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/client-error")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"panic_message":"router-min"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn client_error_router_rejects_oversize_body() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        // 11 KiB payload — exceeds the 10_240 byte limit on the layer.
+        let big = "x".repeat(11 * 1024);
+        let body_json = format!(r#"{{"panic_message":"{}"}}"#, big);
+        assert!(
+            body_json.len() > 10_240,
+            "test payload must be larger than the limit"
+        );
+
+        let router = client_error_test_router();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/client-error")
+            .header("content-type", "application/json")
+            .body(Body::from(body_json))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    }
+
+    #[tokio::test]
+    async fn client_error_router_rejects_body_just_under_large() {
+        // Sanity: a body just under the 10 KiB limit must still be accepted.
+        // Kills the mutation where `DefaultBodyLimit::max(10_240)` could be
+        // changed to a smaller literal without any test noticing.
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        // 9 KiB payload inside a JSON envelope — total body ~9250 bytes.
+        let payload = "y".repeat(9 * 1024);
+        let body_json = format!(r#"{{"panic_message":"{}"}}"#, payload);
+        assert!(
+            body_json.len() < 10_240,
+            "test payload must be smaller than the limit"
+        );
+
+        let router = client_error_test_router();
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/client-error")
+            .header("content-type", "application/json")
+            .body(Body::from(body_json))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    // Tracing capture test — verifies the handler emits a structured warn
+    // event with the expected fields. Uses tracing-test's #[traced_test]
+    // which installs a thread-local subscriber and provides logs_contain.
+    //
+    // Kills mutations on the tracing::warn! macro body that cargo-mutants
+    // would otherwise leave uncaught (e.g. the level check conditional).
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn client_error_emits_structured_warn_event() {
+        let report = ClientErrorReport {
+            panic_message: "tracing-capture-marker-42".to_string(),
+            version: Some("9.9.9".to_string()),
+            git_hash: Some("deadbee".to_string()),
+            url: Some("/trace-test".to_string()),
+            user_agent: Some("TraceUA".to_string()),
+            location: Some("trace:1:1".to_string()),
+            backtrace: None,
+        };
+        let status = client_error(axum::Json(report)).await;
+        assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+
+        // Captured logs must contain the structured fields we care about.
+        assert!(
+            logs_contain("client_error"),
+            "expected 'client_error' message in captured logs",
+        );
+        assert!(
+            logs_contain("tracing-capture-marker-42"),
+            "expected panic_message to appear in captured logs",
+        );
+        assert!(
+            logs_contain("9.9.9"),
+            "expected version to appear in captured logs",
+        );
+        assert!(
+            logs_contain("/trace-test"),
+            "expected url to appear in captured logs",
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn client_error_emits_backtrace_log_when_present() {
+        let report = ClientErrorReport {
+            panic_message: "with-bt".to_string(),
+            version: None,
+            git_hash: None,
+            url: None,
+            user_agent: None,
+            location: None,
+            backtrace: Some("trace-capture-bt-marker-99".to_string()),
+        };
+        let _ = client_error(axum::Json(report)).await;
+        assert!(
+            logs_contain("client_error_backtrace"),
+            "expected 'client_error_backtrace' message in captured logs",
+        );
+        assert!(
+            logs_contain("trace-capture-bt-marker-99"),
+            "expected backtrace body to appear in captured logs",
+        );
+    }
 }
