@@ -92,6 +92,23 @@ async function assertNoPanicOverlay(page: Page): Promise<void> {
   await expect(overlay).toHaveCount(0);
 }
 
+// Pre-existing non-disposal noise that Playwright's chromium produces in
+// its incognito profile and that the production code cannot silence.
+// These are NOT caused by the disposal race; filter them out of the
+// oracle so the test fails ONLY on disposal-specific noise.
+const NON_DISPOSAL_NOISE_PATTERNS = [
+  // Chrome hard-blocks the Push API in incognito; subscribe_to_push()
+  // (engineer-only, one-shot on mount) prints this warning. Unrelated
+  // to #153 — tracked by Chrome bug 401439.
+  /Push API in incognito mode/i,
+];
+
+function filterKnownNoise(messages: string[]): string[] {
+  return messages.filter(
+    (m) => !NON_DISPOSAL_NOISE_PATTERNS.some((re) => re.test(m)),
+  );
+}
+
 async function assertCleanSettle(
   page: Page,
   console_noise: { errors: string[]; warnings: string[] },
@@ -100,6 +117,7 @@ async function assertCleanSettle(
 ): Promise<void> {
   await page.waitForTimeout(settleMs);
   await assertNoPanicOverlay(page);
+
   const disposedNoise = [...console_noise.errors, ...console_noise.warnings].filter(
     (m) => m.toLowerCase().includes("disposed"),
   );
@@ -107,19 +125,23 @@ async function assertCleanSettle(
     disposedNoise,
     `console had disposed-signal messages: ${JSON.stringify(disposedNoise)}`,
   ).toEqual([]);
+
   expect(
     client_error_posts,
     `unexpected /api/client-error POSTs during settle: ${JSON.stringify(
       client_error_posts,
     )}`,
   ).toEqual([]);
+
+  const filteredErrors = filterKnownNoise(console_noise.errors);
+  const filteredWarnings = filterKnownNoise(console_noise.warnings);
   expect(
-    console_noise.errors,
-    `console errors during settle: ${JSON.stringify(console_noise.errors)}`,
+    filteredErrors,
+    `unexpected console errors during settle: ${JSON.stringify(filteredErrors)}`,
   ).toEqual([]);
   expect(
-    console_noise.warnings,
-    `console warnings during settle: ${JSON.stringify(console_noise.warnings)}`,
+    filteredWarnings,
+    `unexpected console warnings during settle: ${JSON.stringify(filteredWarnings)}`,
   ).toEqual([]);
 }
 
@@ -136,8 +158,13 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
     await waitForStreamingMixer(page);
 
     // Navigate back via the browser's history API (matches Android back button).
+    // We deliberately do NOT assert on the final URL: landing.rs has an
+    // auto-redirect effect that sends authenticated users straight to
+    // `/<member>` once per session, so the final URL is non-deterministic.
+    // What matters is that the mixer's disposal and whatever landing/redirect
+    // transition follows produces zero panics, zero console noise, and zero
+    // /api/client-error POSTs — which is exactly what the oracles check.
     await page.goBack();
-    await expect(page).toHaveURL(/\/$/);
 
     await assertCleanSettle(page, noise, posts, 3000);
   });
@@ -155,7 +182,6 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
 
     // The in-page back button is the .back-btn in mixer-header.
     await page.locator(".back-btn").click();
-    await expect(page).toHaveURL(/\/$/);
 
     await assertCleanSettle(page, noise, posts, 3000);
   });
@@ -189,8 +215,9 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
       await page.goto("/engineer");
       await waitForStreamingMixer(page);
       await page.goBack();
-      await expect(page).toHaveURL(/\/$/);
       // Short settle between iterations; the final 3s settle is at the end.
+      // URL after goBack is non-deterministic due to landing.rs auto-redirect —
+      // the oracle is the disposal noise check, not the URL.
       await page.waitForTimeout(500);
     }
 
