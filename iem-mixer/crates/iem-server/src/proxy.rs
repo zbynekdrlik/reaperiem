@@ -936,6 +936,44 @@ pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
     Ok(())
 }
 
+/// Build the alert catch-up message a WebSocket should send immediately
+/// after connect, or `None` if no catch-up is needed.
+///
+/// - Engineer: receives `ActiveAlerts` listing every active alert across all
+///   members, so the dashboard can restore pending SOS notifications.
+/// - Non-engineer member: receives `EngineerAlert` for their own member_id
+///   if and only if the server still holds an active alert for them. This
+///   is the fix for #150 — without it, reloading the page after triggering
+///   SOS leaves the member's UI idle while the server's `active_alerts`
+///   cache keeps the alert, and the next `CallEngineer` click no-ops in the
+///   `cache.active_alerts.contains_key(...)` short-circuit so the button
+///   can never return to active.
+pub(crate) fn build_alert_catchup(
+    active_alerts: &std::collections::HashMap<String, (String, String)>,
+    member_id: &str,
+) -> Option<ServerMsg> {
+    if member_id == "engineer" {
+        if active_alerts.is_empty() {
+            return None;
+        }
+        let alerts: Vec<iem_core::AlertInfo> = active_alerts
+            .values()
+            .map(|(from_member, from_name)| iem_core::AlertInfo {
+                from_member: from_member.clone(),
+                from_name: from_name.clone(),
+            })
+            .collect();
+        Some(ServerMsg::ActiveAlerts { alerts })
+    } else if active_alerts.contains_key(member_id) {
+        Some(ServerMsg::EngineerAlert {
+            from_member: member_id.to_string(),
+            from_name: String::new(),
+        })
+    } else {
+        None
+    }
+}
+
 // =============================================================================
 // WebSocket handler
 // =============================================================================
@@ -1058,33 +1096,12 @@ async fn handle_ws(
         }
     }
 
-    // Send active alerts to engineer on connect (catch-up)
-    if member_id == "engineer" {
+    // Send alert catch-up on WS connect. Engineer gets all active alerts,
+    // non-engineer members get only their own (so their UI state survives a
+    // page reload — see #150 for the stuck-idle bug this fixes).
+    {
         let cache = state.mixer_cache.read().await;
-        if !cache.active_alerts.is_empty() {
-            let alerts: Vec<iem_core::AlertInfo> = cache
-                .active_alerts
-                .values()
-                .map(|(from_member, from_name)| iem_core::AlertInfo {
-                    from_member: from_member.clone(),
-                    from_name: from_name.clone(),
-                })
-                .collect();
-            let msg = ServerMsg::ActiveAlerts { alerts };
-            let json = serde_json::to_string(&msg).unwrap_or_default();
-            let _ = socket.send(Message::Text(json.into())).await;
-        }
-    } else {
-        // Send member's own active alert on connect (catch-up after reload) (#150).
-        // Without this the member's UI shows idle after a page reload while the
-        // server still holds their alert, and clicking SOS again no-ops in the
-        // CallEngineer handler so the button can never return to active.
-        let cache = state.mixer_cache.read().await;
-        if cache.active_alerts.contains_key(&member_id) {
-            let msg = ServerMsg::EngineerAlert {
-                from_member: member_id.clone(),
-                from_name: String::new(),
-            };
+        if let Some(msg) = build_alert_catchup(&cache.active_alerts, &member_id) {
             let json = serde_json::to_string(&msg).unwrap_or_default();
             let _ = socket.send(Message::Text(json.into())).await;
         }
@@ -2986,6 +3003,101 @@ async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: App
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    // ---- Alert catch-up helper (#150) -----------------------------------
+
+    fn alert_entry(from_member: &str, from_name: &str) -> (String, String) {
+        (from_member.to_string(), from_name.to_string())
+    }
+
+    #[test]
+    fn test_build_alert_catchup_engineer_with_no_alerts_returns_none() {
+        let alerts: HashMap<String, (String, String)> = HashMap::new();
+        assert!(build_alert_catchup(&alerts, "engineer").is_none());
+    }
+
+    #[test]
+    fn test_build_alert_catchup_engineer_with_alerts_returns_active_alerts() {
+        let mut alerts = HashMap::new();
+        alerts.insert(
+            "petronela".to_string(),
+            alert_entry("petronela", "PETRONELA"),
+        );
+        alerts.insert("stevo".to_string(), alert_entry("stevo", "STEVO"));
+
+        let msg = build_alert_catchup(&alerts, "engineer")
+            .expect("engineer with alerts should receive ActiveAlerts");
+        match msg {
+            ServerMsg::ActiveAlerts { alerts: out } => {
+                assert_eq!(out.len(), 2);
+                let mut ids: Vec<String> = out.iter().map(|a| a.from_member.clone()).collect();
+                ids.sort();
+                assert_eq!(ids, vec!["petronela".to_string(), "stevo".to_string()]);
+            }
+            other => panic!("expected ActiveAlerts, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_alert_catchup_member_with_own_alert_returns_engineer_alert() {
+        let mut alerts = HashMap::new();
+        alerts.insert(
+            "petronela".to_string(),
+            alert_entry("petronela", "PETRONELA"),
+        );
+
+        let msg = build_alert_catchup(&alerts, "petronela")
+            .expect("member with active alert should receive catch-up");
+        match msg {
+            ServerMsg::EngineerAlert {
+                from_member,
+                from_name,
+            } => {
+                assert_eq!(from_member, "petronela");
+                // from_name is intentionally empty on the member side — the
+                // member doesn't need to render a name for their own button.
+                assert_eq!(from_name, "");
+            }
+            other => panic!("expected EngineerAlert, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_build_alert_catchup_member_with_no_alert_returns_none() {
+        let alerts: HashMap<String, (String, String)> = HashMap::new();
+        assert!(build_alert_catchup(&alerts, "petronela").is_none());
+    }
+
+    #[test]
+    fn test_build_alert_catchup_member_only_sees_own_alert_not_other_members() {
+        // Regression guard: a member must NOT get another member's alert.
+        // If this ever returns Some for a member whose id is not a key, the
+        // member's button would incorrectly flash active when a different
+        // member triggered SOS.
+        let mut alerts = HashMap::new();
+        alerts.insert("stevo".to_string(), alert_entry("stevo", "STEVO"));
+        assert!(build_alert_catchup(&alerts, "petronela").is_none());
+    }
+
+    #[test]
+    fn test_build_alert_catchup_member_echo_is_own_id() {
+        // When a member has an active alert, the EngineerAlert echo must
+        // carry THEIR own id, not some other member's. Kills a mutant that
+        // swaps `member_id` for a literal or for a value from the map.
+        let mut alerts = HashMap::new();
+        alerts.insert("petronela".to_string(), alert_entry("x", "y"));
+        alerts.insert("stevo".to_string(), alert_entry("z", "w"));
+
+        let msg = build_alert_catchup(&alerts, "petronela").unwrap();
+        if let ServerMsg::EngineerAlert { from_member, .. } = msg {
+            assert_eq!(from_member, "petronela");
+        } else {
+            panic!("expected EngineerAlert");
+        }
+    }
+
+    // ---- dB conversion --------------------------------------------------
 
     #[test]
     fn test_db_to_reaper_vol_unity() {
