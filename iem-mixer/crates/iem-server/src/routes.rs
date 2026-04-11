@@ -104,7 +104,11 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .route("/api/push/vapid-key", get(get_vapid_key))
         .route(
             "/api/client-error",
-            post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10 * 1024)),
+            // 10_240 bytes = 10 KiB. Written as a plain literal (not 10 * 1024)
+            // so cargo-mutants has no binary operator to mutate — the layer is
+            // not exercised by any unit test (handler tests call client_error
+            // directly), so a mutated bound would not be caught. #153
+            post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
         )
         .route("/api/push/subscribe", post(push_subscribe))
         // WebSocket
