@@ -154,7 +154,11 @@ pub fn TalkButton(
         }
 
         // Start mic capture (the WS handler will set state to Live on TalkAcquired,
-        // but we start capturing proactively to reduce latency)
+        // but we start capturing proactively to reduce latency).
+        //
+        // Use try_update on set_state to guard against disposal race — if the
+        // component unmounts while start_talkback is awaiting, writing to a
+        // disposed signal would panic. See #153 follow-up.
         if let Some(url) = ws_url_builder() {
             let set_state = set_state;
             wasm_bindgen_futures::spawn_local(async move {
@@ -165,7 +169,7 @@ pub fn TalkButton(
                     Err(e) => {
                         let msg = format!("{:?}", e);
                         if msg.contains("NotAllowedError") || msg.contains("Permission") {
-                            set_state.set(TalkState::MicBlocked);
+                            let _ = set_state.try_update(|v| *v = TalkState::MicBlocked);
                         } else {
                             web_sys::console::error_1(
                                 &format!("[talk] start failed: {}", msg).into(),

@@ -16,7 +16,10 @@ pub fn BackupSection() -> impl IntoView {
     let (error, set_error) = signal(Option::<String>::None);
     let (loading, set_loading) = signal(false);
 
-    // Load backups on mount
+    // Load backups on mount.
+    // Use try_update to guard signal writes against the disposal race — if the
+    // Settings modal closes while list_backups is awaiting, the resumed task
+    // would panic on a disposed signal. See #153 follow-up.
     {
         spawn_local(async move {
             let token = match crate::auth::get_auth() {
@@ -24,8 +27,12 @@ pub fn BackupSection() -> impl IntoView {
                 None => return,
             };
             match crate::api::list_backups(&token).await {
-                Ok(list) => set_backups.set(list),
-                Err(e) => set_error.set(Some(e)),
+                Ok(list) => {
+                    let _ = set_backups.try_update(|v| *v = list);
+                }
+                Err(e) => {
+                    let _ = set_error.try_update(|v| *v = Some(e));
+                }
             }
         });
     }
@@ -86,11 +93,19 @@ pub fn BackupSection() -> impl IntoView {
                                                 Some(a) => a.token,
                                                 None => return,
                                             };
+                                            // try_update guards against disposal race
+                                            // if the modal closes during preview_restore. #153
                                             match crate::api::preview_restore(&token, &fname).await {
-                                                Ok(p) => set_preview.set(Some(p)),
-                                                Err(e) => set_error.set(Some(e)),
+                                                Ok(p) => {
+                                                    let _ = set_preview
+                                                        .try_update(|v| *v = Some(p));
+                                                }
+                                                Err(e) => {
+                                                    let _ = set_error
+                                                        .try_update(|v| *v = Some(e));
+                                                }
                                             }
-                                            set_loading.set(false);
+                                            let _ = set_loading.try_update(|v| *v = false);
                                         });
                                     }
                                 }
@@ -145,17 +160,30 @@ pub fn BackupSection() -> impl IntoView {
                                     set_restoring.set(true);
                                     set_elapsed.set(0);
                                     set_error.set(None);
-                                    // Start elapsed timer (1s ticks)
+                                    // Start elapsed timer (1s ticks).
+                                    // Both the `restoring` read and the `set_elapsed` write
+                                    // use try_* so the loop terminates cleanly if the modal
+                                    // closes mid-restore instead of panicking. #153
                                     spawn_local(async move {
                                         loop {
                                             let promise = js_sys::Promise::new(&mut |resolve, _| {
                                                 web_sys::window().unwrap().set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 1000).unwrap();
                                             });
                                             wasm_bindgen_futures::JsFuture::from(promise).await.ok();
-                                            if !restoring.get_untracked() {
+                                            // If the signal is disposed, treat as "not restoring"
+                                            // and break out of the loop.
+                                            let still_restoring = restoring
+                                                .try_get_untracked()
+                                                .unwrap_or(false);
+                                            if !still_restoring {
                                                 break;
                                             }
-                                            set_elapsed.update(|e| *e += 1);
+                                            if set_elapsed
+                                                .try_update(|e| *e += 1)
+                                                .is_none()
+                                            {
+                                                break;
+                                            }
                                         }
                                     });
                                     // Start restore
@@ -166,12 +194,16 @@ pub fn BackupSection() -> impl IntoView {
                                         };
                                         match crate::api::apply_restore(&token, &fname).await {
                                             Ok(r) => {
-                                                set_result.set(Some(r));
-                                                set_preview.set(None);
+                                                let _ = set_result
+                                                    .try_update(|v| *v = Some(r));
+                                                let _ = set_preview.try_update(|v| *v = None);
                                             }
-                                            Err(e) => set_error.set(Some(e)),
+                                            Err(e) => {
+                                                let _ = set_error
+                                                    .try_update(|v| *v = Some(e));
+                                            }
                                         }
-                                        set_restoring.set(false);
+                                        let _ = set_restoring.try_update(|v| *v = false);
                                     });
                                 }
                             }

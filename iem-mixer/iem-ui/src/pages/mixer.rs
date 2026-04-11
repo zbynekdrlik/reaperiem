@@ -686,12 +686,15 @@ pub fn MixerPage() -> impl IntoView {
     let (has_photo, set_has_photo) = signal(false);
 
     // Check if member has photo on mount (#16)
+    // Use try_update to guard against disposal race — if the user navigates
+    // away while `get_members` is still in flight, the await resumes on a
+    // disposed signal and Leptos panics. See #153.
     {
         let mid = member_id();
         wasm_bindgen_futures::spawn_local(async move {
             if let Ok(members) = crate::api::get_members().await {
                 if let Some(m) = members.iter().find(|m| m.id == mid) {
-                    set_has_photo.set(m.has_photo);
+                    let _ = set_has_photo.try_update(|v| *v = m.has_photo);
                 }
             }
         });
