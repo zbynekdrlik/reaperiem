@@ -33,67 +33,79 @@ pub fn PinChangeModal(
     // Reset state when modal opens
     Effect::new(move |_| {
         if visible.get() {
-            set_current_pin.set(String::new());
-            set_new_pin.set(String::new());
-            set_confirm_pin.set(String::new());
-            set_error_msg.set(String::new());
-            set_success.set(false);
-            set_loading.set(false);
-            set_active_field.set(initial_field);
+            let _ = set_current_pin.try_set(String::new());
+            let _ = set_new_pin.try_set(String::new());
+            let _ = set_confirm_pin.try_set(String::new());
+            let _ = set_error_msg.try_set(String::new());
+            let _ = set_success.try_set(false);
+            let _ = set_loading.try_set(false);
+            let _ = set_active_field.try_set(initial_field);
         }
     });
 
     let on_numpad = move |digit: char| {
         let field = active_field.get();
         match field {
-            0 => set_current_pin.update(|p| {
-                if p.len() < 4 {
-                    p.push(digit);
-                    if p.len() == 4 {
-                        set_active_field.set(1);
+            0 => {
+                let _ = set_current_pin.try_update(|p| {
+                    if p.len() < 4 {
+                        p.push(digit);
+                        if p.len() == 4 {
+                            let _ = set_active_field.try_set(1);
+                        }
                     }
-                }
-            }),
-            1 => set_new_pin.update(|p| {
-                if p.len() < 4 {
-                    p.push(digit);
-                    if p.len() == 4 {
-                        set_active_field.set(2);
+                });
+            }
+            1 => {
+                let _ = set_new_pin.try_update(|p| {
+                    if p.len() < 4 {
+                        p.push(digit);
+                        if p.len() == 4 {
+                            let _ = set_active_field.try_set(2);
+                        }
                     }
-                }
-            }),
-            _ => set_confirm_pin.update(|p| {
-                if p.len() < 4 {
-                    p.push(digit);
-                }
-            }),
+                });
+            }
+            _ => {
+                let _ = set_confirm_pin.try_update(|p| {
+                    if p.len() < 4 {
+                        p.push(digit);
+                    }
+                });
+            }
         }
-        set_error_msg.set(String::new());
+        let _ = set_error_msg.try_set(String::new());
     };
 
     let on_backspace = move |_| {
         let field = active_field.get();
         match field {
-            0 => set_current_pin.update(|p| {
-                p.pop();
-            }),
-            1 => set_new_pin.update(|p| {
-                if p.is_empty() {
-                    // Engineers have no field 0, so stay on field 1
-                    if !is_engineer {
-                        set_active_field.set(0);
+            0 => {
+                let _ = set_current_pin.try_update(|p| {
+                    p.pop();
+                });
+            }
+            1 => {
+                let _ = set_new_pin.try_update(|p| {
+                    if p.is_empty() {
+                        // Engineers have no field 0, so stay on field 1
+                        if !is_engineer {
+                            let _ = set_active_field.try_set(0);
+                        }
+                    } else {
+                        p.pop();
                     }
-                } else {
-                    p.pop();
-                }
-            }),
-            _ => set_confirm_pin.update(|p| {
-                if p.is_empty() {
-                    set_active_field.set(1);
-                } else {
-                    p.pop();
-                }
-            }),
+                });
+            }
+            _ => {
+                let _ = set_confirm_pin.try_update(|p| {
+                    if p.is_empty() {
+                        let _ = set_active_field.try_set(1);
+                    } else {
+                        p.pop();
+                    }
+                });
+            }
         }
     };
 
@@ -104,24 +116,24 @@ pub fn PinChangeModal(
 
         // Engineers skip current PIN validation
         if !is_engineer && cur.len() != 4 {
-            set_error_msg.set("Enter current PIN".to_string());
-            set_active_field.set(0);
+            let _ = set_error_msg.try_set("Enter current PIN".to_string());
+            let _ = set_active_field.try_set(0);
             return;
         }
         if new.len() != 4 {
-            set_error_msg.set("Enter new PIN".to_string());
-            set_active_field.set(1);
+            let _ = set_error_msg.try_set("Enter new PIN".to_string());
+            let _ = set_active_field.try_set(1);
             return;
         }
         if new != confirm {
-            set_error_msg.set("PINs don't match".to_string());
-            set_confirm_pin.set(String::new());
-            set_active_field.set(2);
+            let _ = set_error_msg.try_set("PINs don't match".to_string());
+            let _ = set_confirm_pin.try_set(String::new());
+            let _ = set_active_field.try_set(2);
             return;
         }
 
-        set_loading.set(true);
-        set_error_msg.set(String::new());
+        let _ = set_loading.try_set(true);
+        let _ = set_error_msg.try_set(String::new());
 
         let member = member_stored.get_value();
         let old_pin = if is_engineer {
@@ -162,7 +174,7 @@ pub fn PinChangeModal(
             "pin-field"
         };
         view! {
-            <div class=class on:click=move |_| set_active_field.set(field_id)>
+            <div class=class on:click=move |_| { let _ = set_active_field.try_set(field_id); }>
                 {(0..4)
                     .map(|i| {
                         let filled = i < len;

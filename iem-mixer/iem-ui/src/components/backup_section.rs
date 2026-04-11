@@ -83,11 +83,11 @@ pub fn BackupSection() -> impl IntoView {
                                     let filename = filename_for_click.clone();
                                     move |_| {
                                         let fname = filename.clone();
-                                        set_selected.set(Some(fname.clone()));
-                                        set_preview.set(None);
-                                        set_result.set(None);
-                                        set_error.set(None);
-                                        set_loading.set(true);
+                                        let _ = set_selected.try_set(Some(fname.clone()));
+                                        let _ = set_preview.try_set(None);
+                                        let _ = set_result.try_set(None);
+                                        let _ = set_error.try_set(None);
+                                        let _ = set_loading.try_set(true);
                                         spawn_local(async move {
                                             let token = match crate::auth::get_auth() {
                                                 Some(a) => a.token,
@@ -157,9 +157,9 @@ pub fn BackupSection() -> impl IntoView {
                             disabled=move || restoring.get() || change_count == 0
                             on:click=move |_| {
                                 if let Some(fname) = selected.get_untracked() {
-                                    set_restoring.set(true);
-                                    set_elapsed.set(0);
-                                    set_error.set(None);
+                                    let _ = set_restoring.try_set(true);
+                                    let _ = set_elapsed.try_set(0);
+                                    let _ = set_error.try_set(None);
                                     // Start elapsed timer (1s ticks).
                                     // Both the `restoring` read and the `set_elapsed` write
                                     // use try_* so the loop terminates cleanly if the modal

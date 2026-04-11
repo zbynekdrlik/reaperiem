@@ -211,7 +211,7 @@ pub fn SettingsModal(
 
                         <div class="settings-row" on:click=move |_| {
                             let new_val = !double_tap_fader.get_untracked();
-                            set_double_tap_fader.set(new_val);
+                            let _ = set_double_tap_fader.try_set(new_val);
                             let mid = member_id.get_value();
                             let mut settings = UserSettings::load(&mid);
                             settings.double_tap_fader = new_val;
@@ -243,7 +243,7 @@ pub fn SettingsModal(
                                             data-testid="boost-minus"
                                             on:click=move |_| {
                                                 let new_val = (listen_boost.get_untracked() - 3.0).max(0.0);
-                                                set_listen_boost.set(new_val);
+                                                let _ = set_listen_boost.try_set(new_val);
                                                 let mid = member_id.get_value();
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;
@@ -264,7 +264,7 @@ pub fn SettingsModal(
                                             data-testid="boost-plus"
                                             on:click=move |_| {
                                                 let new_val = (listen_boost.get_untracked() + 3.0).min(24.0);
-                                                set_listen_boost.set(new_val);
+                                                let _ = set_listen_boost.try_set(new_val);
                                                 let mid = member_id.get_value();
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;

@@ -128,7 +128,7 @@ fn LimiterSlider(
     Effect::new(move |_| {
         let v = value_norm.get();
         if !is_active.get_untracked() {
-            set_local_norm.set(v);
+            let _ = set_local_norm.try_set(v);
         }
     });
 
@@ -156,16 +156,16 @@ fn LimiterSlider(
         last_tap_clone.set(now);
         if now - prev < DOUBLE_TAP_MS {
             // Double-tap → reset to default (-6 dB = norm 0.0)
-            set_local_norm.set(DEFAULT_NORM);
+            let _ = set_local_norm.try_set(DEFAULT_NORM);
             on_change.run(("limit".to_string(), DEFAULT_NORM));
             return;
         }
 
         // Start activation delay (150ms hold before fader responds)
-        set_is_activating.set(true);
+        let _ = set_is_activating.try_set(true);
         let cb = Closure::once_into_js(move || {
-            set_is_activating.set(false);
-            set_is_active.set(true);
+            let _ = set_is_activating.try_set(false);
+            let _ = set_is_active.try_set(true);
         });
         if let Some(w) = web_sys::window() {
             if let Ok(id) = w.set_timeout_with_callback_and_timeout_and_arguments_0(
@@ -198,7 +198,7 @@ fn LimiterSlider(
             let delta_norm = (delta_px / width) as f32;
             let new_norm = (start_norm_move.get() + delta_norm).clamp(0.0, 1.0);
 
-            set_local_norm.set(new_norm);
+            let _ = set_local_norm.try_set(new_norm);
             on_change.run(("limit".to_string(), new_norm));
         }
     };
@@ -214,8 +214,8 @@ fn LimiterSlider(
             activation_timer_up.set(None);
         }
 
-        set_is_activating.set(false);
-        set_is_active.set(false);
+        let _ = set_is_activating.try_set(false);
+        let _ = set_is_active.try_set(false);
 
         if let Some(el) = track_ref.get() {
             let target: &web_sys::Element = &el;

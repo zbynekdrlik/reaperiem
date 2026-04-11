@@ -39,11 +39,11 @@ pub fn LoginPage() -> impl IntoView {
 
     // Wrap the digit handler in Rc for cloning
     let handle_digit = Rc::new(move |digit: char| {
-        set_error.set(None);
+        let _ = set_error.try_set(None);
         let mut current_pin = pin.get();
         if current_pin.len() < 4 {
             current_pin.push(digit);
-            set_pin.set(current_pin.clone());
+            let _ = set_pin.try_set(current_pin.clone());
         }
 
         // Auto-submit when 4 digits entered
@@ -53,7 +53,7 @@ pub fn LoginPage() -> impl IntoView {
             let pin_val = current_pin;
             let nav = navigate.clone();
 
-            set_loading.set(true);
+            let _ = set_loading.try_set(true);
 
             // try_update: the login page can unmount mid-await (e.g. the
             // user hits the back button while the request is in flight). #153
@@ -86,15 +86,15 @@ pub fn LoginPage() -> impl IntoView {
             }
             "Backspace" => {
                 e.prevent_default();
-                set_error.set(None);
-                set_pin.update(|p| {
+                let _ = set_error.try_set(None);
+                let _ = set_pin.try_update(|p| {
                     p.pop();
                 });
             }
             "Escape" | "Delete" => {
                 e.prevent_default();
-                set_error.set(None);
-                set_pin.set(String::new());
+                let _ = set_error.try_set(None);
+                let _ = set_pin.try_set(String::new());
             }
             _ => {}
         }
@@ -173,8 +173,8 @@ pub fn LoginPage() -> impl IntoView {
                             <button
                                 class="numpad-btn clear"
                                 on:click=move |_| {
-                                    set_error.set(None);
-                                    set_pin.set(String::new());
+                                    let _ = set_error.try_set(None);
+                                    let _ = set_pin.try_set(String::new());
                                 }
                                 disabled=loading
                             >"CLR"</button>
@@ -182,8 +182,8 @@ pub fn LoginPage() -> impl IntoView {
                             <button
                                 class="numpad-btn backspace"
                                 on:click=move |_| {
-                                    set_error.set(None);
-                                    set_pin.update(|p| { p.pop(); });
+                                    let _ = set_error.try_set(None);
+                                    let _ = set_pin.try_update(|p| { p.pop(); });
                                 }
                                 disabled=loading
                             >"\u{232B}"</button>

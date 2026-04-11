@@ -954,11 +954,11 @@ fn EqSlider(
         }
 
         drag_ts.set(local_value.get_untracked());
-        set_is_pending.set(true);
+        let _ = set_is_pending.try_set(true);
 
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
-            set_is_activated.set(true);
-            set_is_pending.set(false);
+            let _ = set_is_activated.try_set(true);
+            let _ = set_is_pending.try_set(false);
             on_drag_start.run(());
             // Haptic feedback
             if let Some(window) = web_sys::window() {
@@ -980,7 +980,7 @@ fn EqSlider(
                 let dy = (current_y - sy).abs();
                 if dy > dx + 10.0 && !is_activated.get() {
                     *timeout_tm.borrow_mut() = None;
-                    set_is_pending.set(false);
+                    let _ = set_is_pending.try_set(false);
                     return;
                 }
             }
@@ -1014,8 +1014,8 @@ fn EqSlider(
         *last_touch_te.borrow_mut() = js_sys::Date::now();
         *timeout_te.borrow_mut() = None;
         let was_active = is_activated.get_untracked();
-        set_is_pending.set(false);
-        set_is_activated.set(false);
+        let _ = set_is_pending.try_set(false);
+        let _ = set_is_activated.try_set(false);
         *base_x_te.borrow_mut() = None;
         if was_active {
             on_drag_end.run(());
@@ -1024,8 +1024,8 @@ fn EqSlider(
 
     let handle_touchcancel = move |_ev: web_sys::TouchEvent| {
         let was_active = is_activated.get_untracked();
-        set_is_pending.set(false);
-        set_is_activated.set(false);
+        let _ = set_is_pending.try_set(false);
+        let _ = set_is_activated.try_set(false);
         if was_active {
             on_drag_end.run(());
         }
@@ -1059,11 +1059,11 @@ fn EqSlider(
 
         drag_md.set(local_value.get_untracked());
         *base_x_md.borrow_mut() = Some(ev.client_x() as f64);
-        set_is_pending.set(true);
+        let _ = set_is_pending.try_set(true);
 
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
-            set_is_activated.set(true);
-            set_is_pending.set(false);
+            let _ = set_is_activated.try_set(true);
+            let _ = set_is_pending.try_set(false);
             on_drag_start.run(());
         });
         *timeout_md.borrow_mut() = Some(timeout);

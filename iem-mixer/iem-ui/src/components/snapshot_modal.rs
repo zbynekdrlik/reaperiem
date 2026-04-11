@@ -163,8 +163,8 @@ pub fn SnapshotModal(
     Effect::new(move |_| {
         if visible.get() {
             let member_id = member_id_stored.get_value();
-            set_loading.set(true);
-            set_error.set(None);
+            let _ = set_loading.try_set(true);
+            let _ = set_error.try_set(None);
 
             // try_update: modal can close mid-await. #153
             wasm_bindgen_futures::spawn_local(async move {
@@ -184,7 +184,7 @@ pub fn SnapshotModal(
 
     let handle_save_now = move |_| {
         let member_id = member_id_stored.get_value();
-        set_loading.set(true);
+        let _ = set_loading.try_set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
             // try_update: modal can close mid-await. #153
@@ -269,7 +269,7 @@ pub fn SnapshotModal(
                                                             let member_id = member_id_stored.get_value();
                                                             move |_| {
                                                                 let member_id = member_id.clone();
-                                                                set_loading.set(true);
+                                                                let _ = set_loading.try_set(true);
                                                                 wasm_bindgen_futures::spawn_local(async move {
                                                                     // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = restore_snapshot(&member_id, timestamp).await {
@@ -289,7 +289,7 @@ pub fn SnapshotModal(
                                                             let member_id = member_id_stored.get_value();
                                                             move |_| {
                                                                 let member_id = member_id.clone();
-                                                                set_loading.set(true);
+                                                                let _ = set_loading.try_set(true);
                                                                 wasm_bindgen_futures::spawn_local(async move {
                                                                     // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = delete_snapshot(&member_id, timestamp).await {
