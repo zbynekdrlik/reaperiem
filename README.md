@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.143.0 (2026-04-11)
+
+- **Fix**: comprehensive hardening of Leptos reactive-disposal races. v1.142.0's new WASM panic hook immediately surfaced a pre-existing bug class in production: `spawn_local` async tasks that wrote to signals after an `await` could panic with "tried to access a reactive value that has already been disposed" when the component unmounted mid-task. This release converts **54 signal-write sites** across 9 files (`mixer.rs`, `talk_button.rs`, `backup_section.rs`, `audio_player.rs`, `pin_change_modal.rs`, `preset_modal.rs`, `snapshot_modal.rs`, `landing.rs`, `login.rs`) to use `try_set` / `try_update`, which silently no-op on disposed signals instead of panicking. (#153)
+- **CI gate**: new `scripts/check_disposal_safety.py` check in the test-integrity job scans every `.rs` file in `iem-mixer/iem-ui/src/` and fails the build if any new `set_*.set()` / `set_*.update()` call appears inside a `spawn_local(async ...)` block without the `try_` prefix. Prevents this class of bug from ever coming back. Escape hatch via `// disposal-safe: <reason>` comment for the rare legitimate case. (#153)
+
 ### v1.142.0 (2026-04-11)
 
 - **Fix**: PWA self-healing — a new 5-second WebSocket watchdog force-closes sockets that have received no frames for more than 30 seconds. Catches "zombie sockets" where `readyState` is OPEN but no data flows. After force-close, the existing `.disconnected-banner` shows and the reconnect loop opens a new socket. Reconnect now uses exponential backoff (2s → 4s → 8s → 15s → 30s cap) instead of the previous unbounded 2-second polling — gentler on mobile radios and battery. (#153)

@@ -129,22 +129,24 @@ pub fn PinChangeModal(
         } else {
             cur.clone()
         };
+        // try_update on every signal write — this task may outlive the
+        // modal if the user closes it while change_pin is awaiting. #153
         spawn_local(async move {
             match crate::api::change_pin(&old_pin, &new, &member).await {
                 Ok(()) => {
-                    set_success.set(true);
-                    set_loading.set(false);
+                    let _ = set_success.try_set(true);
+                    let _ = set_loading.try_set(false);
                 }
                 Err(e) => {
-                    set_error_msg.set(e);
-                    set_loading.set(false);
+                    let _ = set_error_msg.try_set(e);
+                    let _ = set_loading.try_set(false);
                     if !is_engineer {
-                        set_current_pin.set(String::new());
-                        set_active_field.set(0);
+                        let _ = set_current_pin.try_set(String::new());
+                        let _ = set_active_field.try_set(0);
                     } else {
-                        set_new_pin.set(String::new());
-                        set_confirm_pin.set(String::new());
-                        set_active_field.set(1);
+                        let _ = set_new_pin.try_set(String::new());
+                        let _ = set_confirm_pin.try_set(String::new());
+                        let _ = set_active_field.try_set(1);
                     }
                 }
             }

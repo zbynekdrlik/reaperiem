@@ -243,15 +243,17 @@ pub fn PresetModal(
             set_loading.set(true);
             set_error.set(None);
 
+            // try_update on every signal write — modal can close during
+            // the fetch and dispose the surrounding scope. #153
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_presets(&member_id).await {
                     Ok(list) => {
-                        set_presets.set(list);
-                        set_loading.set(false);
+                        let _ = set_presets.try_set(list);
+                        let _ = set_loading.try_set(false);
                     }
                     Err(e) => {
-                        set_error.set(Some(e));
-                        set_loading.set(false);
+                        let _ = set_error.try_set(Some(e));
+                        let _ = set_loading.try_set(false);
                     }
                 }
             });
@@ -281,13 +283,15 @@ pub fn PresetModal(
                 Ok(()) => {
                     // Refresh list
                     if let Ok(list) = fetch_presets(&member_id).await {
-                        set_presets.set(list);
+                        let _ = set_presets.try_set(list);
                     }
-                    set_new_name.set(String::new());
+                    let _ = set_new_name.try_set(String::new());
                 }
-                Err(e) => set_error.set(Some(e)),
+                Err(e) => {
+                    let _ = set_error.try_set(Some(e));
+                }
             }
-            set_loading.set(false);
+            let _ = set_loading.try_set(false);
         });
     };
 
@@ -387,6 +391,7 @@ pub fn PresetModal(
                                                             set_loading.set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
+                                                                // try_update: modal can close mid-await. #153
                                                                 match update_preset_api(
                                                                     &member_id,
                                                                     &name,
@@ -398,12 +403,14 @@ pub fn PresetModal(
                                                                 {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            set_presets.set(list);
+                                                                            let _ = set_presets.try_set(list);
                                                                         }
                                                                     }
-                                                                    Err(e) => set_error.set(Some(e)),
+                                                                    Err(e) => {
+                                                                        let _ = set_error.try_set(Some(e));
+                                                                    }
                                                                 }
-                                                                set_loading.set(false);
+                                                                let _ = set_loading.try_set(false);
                                                             });
                                                         }
                                                     >
@@ -417,15 +424,18 @@ pub fn PresetModal(
                                                             set_loading.set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
+                                                                // try_update: modal can close mid-await. #153
                                                                 match delete_preset_api(&member_id, &name).await {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            set_presets.set(list);
+                                                                            let _ = set_presets.try_set(list);
                                                                         }
                                                                     }
-                                                                    Err(e) => set_error.set(Some(e)),
+                                                                    Err(e) => {
+                                                                        let _ = set_error.try_set(Some(e));
+                                                                    }
                                                                 }
-                                                                set_loading.set(false);
+                                                                let _ = set_loading.try_set(false);
                                                             });
                                                         }
                                                     >

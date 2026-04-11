@@ -524,7 +524,7 @@ pub fn Fader(
                         Some(integer) => integer,
                         None => quantize(new_raw),
                     };
-                    set_local_value.set(new_value);
+                    let _ = set_local_value.try_set(new_value);
                     on_change.run(new_value);
                     *move_base_x_mm.borrow_mut() = Some(current_x);
                 }
@@ -538,7 +538,7 @@ pub fn Fader(
         // mouseup: cleanup listeners and state
         let uc = Closure::wrap(Box::new(move |_ev: web_sys::MouseEvent| {
             *timeout_handle_mu.borrow_mut() = None;
-            set_is_pending.set(false);
+            let _ = set_is_pending.try_set(false);
 
             if is_activated.get_untracked() {
                 if let Some(cb) = on_activate {
@@ -546,7 +546,7 @@ pub fn Fader(
                 }
             }
 
-            set_is_activated.set(false);
+            let _ = set_is_activated.try_set(false);
             *move_base_x_mu.borrow_mut() = None;
 
             if let Some(cb) = on_touch_state {
