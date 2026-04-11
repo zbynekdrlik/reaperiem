@@ -461,7 +461,7 @@ pub fn EQModal(
             // <Show> renders its body (which reads the RwSignals we just created).
             // Without deferral, Leptos detects recursive closure invocation → WASM panic.
             wasm_bindgen_futures::spawn_local(async move {
-                local_state_created.set(true);
+                let _ = local_state_created.try_set(true);
             });
         } else if !any_dragging.get_untracked() {
             // Subsequent: sync values then trigger display update
@@ -469,16 +469,16 @@ pub fn EQModal(
             for local in locals.iter() {
                 let ri = local.reaper_band_idx as usize;
                 if let Some(parent_band) = parent.get(ri) {
-                    local.freq_norm.set(parent_band.freq_norm);
-                    local.gain_norm.set(parent_band.gain_norm);
-                    local.bw_norm.set(parent_band.bw_norm);
-                    local.freq_hz.set(parent_band.freq_hz);
-                    local.gain_db.set(parent_band.gain_db);
-                    local.bw_oct.set(parent_band.bw);
-                    local.enabled.set(parent_band.enabled);
+                    let _ = local.freq_norm.try_set(parent_band.freq_norm);
+                    let _ = local.gain_norm.try_set(parent_band.gain_norm);
+                    let _ = local.bw_norm.try_set(parent_band.bw_norm);
+                    let _ = local.freq_hz.try_set(parent_band.freq_hz);
+                    let _ = local.gain_db.try_set(parent_band.gain_db);
+                    let _ = local.bw_oct.try_set(parent_band.bw);
+                    let _ = local.enabled.try_set(parent_band.enabled);
                 }
             }
-            curve_trigger.update(|n| *n += 1);
+            let _ = curve_trigger.try_update(|n| *n += 1);
         }
     });
 
@@ -671,13 +671,13 @@ pub fn EQModal(
                                                     // Toggle band enabled/disabled via BANDENABLEDM
                                                     // (no colon — per-band control)
                                                     if enabled_sig.get_untracked() {
-                                                        enabled_sig.set(false);
+                                                        let _ = enabled_sig.try_set(false);
                                                         on_param_change.run((idx, "enabled".to_string(), 0.0));
                                                     } else {
-                                                        enabled_sig.set(true);
+                                                        let _ = enabled_sig.try_set(true);
                                                         on_param_change.run((idx, "enabled".to_string(), 1.0));
                                                     }
-                                                    curve_trigger.update(|n| *n += 1);
+                                                    let _ = curve_trigger.try_update(|n| *n += 1);
                                                 }
                                             />
                                             // Reset button
@@ -687,8 +687,8 @@ pub fn EQModal(
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
                                                     // Reset gain to 0dB
-                                                    gain_sig.set(0.25);
-                                                    gain_db_sig.set(0.0);
+                                                    let _ = gain_sig.try_set(0.25);
+                                                    let _ = gain_db_sig.try_set(0.0);
                                                     on_param_change.run((idx, "gain".to_string(), 0.25));
                                                     // Reset freq to per-band default
                                                     // Norm values verified empirically against REAPER
@@ -707,15 +707,15 @@ pub fn EQModal(
                                                         "highpass" | "lowshelf" | "highshelf" | "lowpass" => 0.50,
                                                         _ => 0.25,
                                                     };
-                                                    freq_sig.set(default_freq_norm);
-                                                    freq_hz_sig.set(norm_to_freq_hz(default_freq_norm));
+                                                    let _ = freq_sig.try_set(default_freq_norm);
+                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(default_freq_norm));
                                                     on_param_change.run((idx, "freq".to_string(), default_freq_norm));
                                                     // Override BW with type-specific default
-                                                    bw_sig.set(default_bw_norm);
-                                                    bw_oct_sig.set(norm_to_bw(default_bw_norm));
+                                                    let _ = bw_sig.try_set(default_bw_norm);
+                                                    let _ = bw_oct_sig.try_set(norm_to_bw(default_bw_norm));
                                                     on_param_change.run((idx, "bw".to_string(), default_bw_norm));
                                                     // Enable/disable state NOT changed — reset only affects parameters
-                                                    curve_trigger.update(|n| *n += 1);
+                                                    let _ = curve_trigger.try_update(|n| *n += 1);
                                                 }
                                             >
                                                 "\u{21BA}"
@@ -730,18 +730,18 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
-                                                        last_send_freq.set(now);
+                                                        let _ = last_send_freq.try_set(now);
                                                         on_param_change.run((band_idx_sv.get_value(), "freq".to_string(), v));
                                                     }
-                                                    freq_sig.set(v);
-                                                    freq_hz_sig.set(norm_to_freq_hz(v));
-                                                    curve_trigger.update(|n| *n += 1);
+                                                    let _ = freq_sig.try_set(v);
+                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(v));
+                                                    let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
-                                                    any_dragging.set(true);
+                                                    let _ = any_dragging.try_set(true);
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
-                                                    any_dragging.set(false);
+                                                    let _ = any_dragging.try_set(false);
                                                 })
                                                 css_class="eq-slider-freq"
                                             />
@@ -766,18 +766,18 @@ pub fn EQModal(
                                                     let norm = gain_db_to_norm(db);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
-                                                        last_send_gain.set(now);
+                                                        let _ = last_send_gain.try_set(now);
                                                         on_param_change.run((band_idx_sv.get_value(), "gain".to_string(), norm));
                                                     }
-                                                    gain_sig.set(norm);
-                                                    gain_db_sig.set(db);
-                                                    curve_trigger.update(|n| *n += 1);
+                                                    let _ = gain_sig.try_set(norm);
+                                                    let _ = gain_db_sig.try_set(db);
+                                                    let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
-                                                    any_dragging.set(true);
+                                                    let _ = any_dragging.try_set(true);
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
-                                                    any_dragging.set(false);
+                                                    let _ = any_dragging.try_set(false);
                                                 })
                                                 css_class="eq-slider-gain"
                                                 default_value=0.5
@@ -799,18 +799,18 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
-                                                        last_send_bw.set(now);
+                                                        let _ = last_send_bw.try_set(now);
                                                         on_param_change.run((band_idx_sv.get_value(), "bw".to_string(), v));
                                                     }
-                                                    bw_sig.set(v);
-                                                    bw_oct_sig.set(norm_to_bw(v));
-                                                    curve_trigger.update(|n| *n += 1);
+                                                    let _ = bw_sig.try_set(v);
+                                                    let _ = bw_oct_sig.try_set(norm_to_bw(v));
+                                                    let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
-                                                    any_dragging.set(true);
+                                                    let _ = any_dragging.try_set(true);
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
-                                                    any_dragging.set(false);
+                                                    let _ = any_dragging.try_set(false);
                                                 })
                                                 css_class=""
                                                 default_value=0.5
@@ -922,7 +922,7 @@ fn EqSlider(
     Effect::new(move || {
         let parent_val = value.get();
         if !is_activated.get_untracked() {
-            local_value.set(parent_val);
+            let _ = local_value.try_set(parent_val);
             drag_sync.set(parent_val);
         }
     });
@@ -939,7 +939,7 @@ fn EqSlider(
                 // Double-tap detected — reset to default
                 ev.prevent_default();
                 last_tap_ts.set(0.0);
-                local_value.set(def);
+                let _ = local_value.try_set(def);
                 on_change.run(def);
                 return;
             }
@@ -1002,7 +1002,7 @@ fn EqSlider(
                     let new_val = (raw + delta_ratio as f32).clamp(0.0, 1.0);
                     drag_tm.set(new_val);
                     let quantized = (new_val * 200.0).round() / 200.0; // 0.005 steps
-                    local_value.set(quantized);
+                    let _ = local_value.try_set(quantized);
                     on_change.run(quantized);
                     *base_x_tm.borrow_mut() = Some(current_x);
                 }
@@ -1095,7 +1095,7 @@ fn EqSlider(
                     let new_val = (raw + delta_ratio as f32).clamp(0.0, 1.0);
                     drag_mm.set(new_val);
                     let quantized = (new_val * 200.0).round() / 200.0;
-                    local_value.set(quantized);
+                    let _ = local_value.try_set(quantized);
                     on_change.run(quantized);
                     *base_x_mm.borrow_mut() = Some(current_x);
                 }
@@ -1131,7 +1131,7 @@ fn EqSlider(
     // Desktop double-click to reset to default
     let handle_dblclick = move |_ev: web_sys::MouseEvent| {
         if let Some(def) = default_value {
-            local_value.set(def);
+            let _ = local_value.try_set(def);
             on_change.run(def);
         }
     };

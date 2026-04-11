@@ -100,6 +100,31 @@ UNSAFE_WRITE = re.compile(
     r"\bset_\w+\s*\.\s*\b(?:set|update)(?:_untracked)?\b\s*\("
 )
 
+# Second-pass detection: track locally-bound RwSignal names.
+#
+# Leptos `RwSignal::new(x)` is commonly bound to arbitrary identifiers
+# that do NOT follow the `set_*` convention (e.g.
+# `let local_value = RwSignal::new(0.0)`). The primary UNSAFE_WRITE regex
+# misses these because its receiver anchor is `set_\w+`. To cover them,
+# we do a first pass over each file to collect the set of identifiers
+# bound to `RwSignal::new(...)`, then a second pass flags any
+# `<name>.set(` / `<name>.update(` call on one of those tracked names.
+#
+# Two binding shapes are tracked:
+#   1. `let <name> = RwSignal::new(...)` (and `let mut <name> = ...`)
+#   2. Struct field initializers of the form `<field>: RwSignal::new(...)`
+#      inside struct literals. This is conservative — the field name is
+#      added to the tracked set even though the scanner cannot tell
+#      which *receiver expression* owns that field. In practice, any
+#      `foo.<field>.set(...)` call on a struct with such a field is a
+#      disposal-race candidate and deserves `try_set` anyway.
+RWSIGNAL_BINDING = re.compile(
+    r"^\s*let\s+(?:mut\s+)?(\w+)\s*=\s*RwSignal::new\s*\("
+)
+RWSIGNAL_FIELD_BINDING = re.compile(
+    r"^\s*(\w+)\s*:\s*RwSignal::new\s*\("
+)
+
 # Rustfmt-split writes:
 #     set_alert_data
 #         .set(Some(x));
@@ -137,6 +162,47 @@ def _strip_strings(line: str) -> str:
     return "".join(result)
 
 
+def _collect_rwsignal_names(lines: list[str]) -> set[str]:
+    """First pass: find every identifier in `lines` bound to `RwSignal::new(...)`.
+
+    Scans both `let <name> = RwSignal::new(...)` and struct-field
+    initializers `<field>: RwSignal::new(...)`. Comment-only lines are
+    skipped, and string literals are stripped before matching so a
+    literal like `"let x = RwSignal::new(0)"` does not pollute the set.
+    """
+    names: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            continue
+        code = _strip_strings(line)
+        m = RWSIGNAL_BINDING.match(code)
+        if m:
+            names.add(m.group(1))
+            continue
+        mf = RWSIGNAL_FIELD_BINDING.match(code)
+        if mf:
+            names.add(mf.group(1))
+    return names
+
+
+def _build_tracked_name_regex(names: set[str]) -> re.Pattern[str] | None:
+    r"""Build a single regex that flags `.set(` / `.update(` calls on
+    any of the tracked identifiers.
+
+    Returns None if `names` is empty (nothing to scan for).
+
+    Example output for names={"local_value", "curve_trigger"}:
+        \b(?:local_value|curve_trigger)\s*\.\s*\b(?:set|update)(?:_untracked)?\b\s*\(
+    """
+    if not names:
+        return None
+    alt = "|".join(sorted(re.escape(n) for n in names))
+    return re.compile(
+        r"\b(?:" + alt + r")\s*\.\s*\b(?:set|update)(?:_untracked)?\b\s*\("
+    )
+
+
 def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
     """Return (line_number, line_text) for every violation in `path`.
 
@@ -144,10 +210,20 @@ def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
     `set_*.set_untracked(...)`, or `set_*.update_untracked(...)` call
     is a violation anywhere in the file, unless the line has the
     `// disposal-safe: ...` escape hatch.
+
+    In addition, a second-pass check flags `.set(` / `.update(` calls
+    on any identifier locally bound to `RwSignal::new(...)` — this
+    catches Leptos locals whose names don't follow the `set_*`
+    convention (e.g. `let local_value = RwSignal::new(0.0)`).
     """
     violations: list[tuple[int, str]] = []
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
+
+    # First pass: collect every identifier in this file bound to an
+    # RwSignal. Second pass will flag writes on these names.
+    tracked_names = _collect_rwsignal_names(lines)
+    tracked_re = _build_tracked_name_regex(tracked_names)
 
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
@@ -165,8 +241,10 @@ def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
         stripped_code = _strip_strings(line)
 
         # Single-line write: `set_foo.set(1)` / `set_foo.update(...)` etc.
+        matched_primary = False
         if UNSAFE_WRITE.search(stripped_code) and ESCAPE_HATCH not in line:
             violations.append((lineno, line.rstrip()))
+            matched_primary = True
 
         # Rustfmt-split write: current line ends in `set_\w+`, next line
         # starts with `.set(` / `.update(` etc. Flag at the current line
@@ -180,6 +258,18 @@ def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
                 and ESCAPE_HATCH not in next_line
             ):
                 violations.append((lineno, line.rstrip()))
+
+        # Second-pass: writes on locally-tracked RwSignal names. Only
+        # fire if the primary regex didn't already match on this line,
+        # to avoid double-reporting. Respects the `// disposal-safe:`
+        # escape hatch just like the primary pass.
+        if (
+            not matched_primary
+            and tracked_re is not None
+            and tracked_re.search(stripped_code)
+            and ESCAPE_HATCH not in line
+        ):
+            violations.append((lineno, line.rstrip()))
 
     return violations
 

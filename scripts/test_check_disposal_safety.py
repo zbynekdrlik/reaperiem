@@ -251,6 +251,67 @@ fn f() {
 
 
 # ---------------------------------------------------------------------------
+# Second-pass: locally-bound RwSignal names must be flagged
+# ---------------------------------------------------------------------------
+
+
+def test_rwsignal_bound_local_name_is_flagged() -> None:
+    src = """
+fn f() {
+    let local_value = RwSignal::new(0.0);
+    local_value.set(1.0);
+}
+"""
+    assert_violation_at("plain set on RwSignal-bound local is flagged", src, 4)
+
+
+def test_rwsignal_bound_update_is_flagged() -> None:
+    src = """
+fn f() {
+    let curve_trigger = RwSignal::new(0u32);
+    curve_trigger.update(|n| *n += 1);
+}
+"""
+    assert_violation_at("plain update on RwSignal-bound local is flagged", src, 4)
+
+
+def test_rwsignal_bound_try_set_is_ok() -> None:
+    src = """
+fn f() {
+    let local_value = RwSignal::new(0.0);
+    let _ = local_value.try_set(1.0);
+}
+"""
+    assert_no_violations("try_set on RwSignal-bound local is OK", src)
+
+
+def test_rwsignal_bound_inside_spawn_local_is_flagged() -> None:
+    src = """
+fn f() {
+    let local_state_created = RwSignal::new(false);
+    spawn_local(async move {
+        local_state_created.set(true);
+    });
+}
+"""
+    assert_violation_at(
+        "plain set on RwSignal-bound local inside spawn_local is flagged",
+        src,
+        5,
+    )
+
+
+def test_non_rwsignal_set_on_plain_identifier_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let cell = std::cell::Cell::new(0.0);
+    cell.set(1.0);
+}
+"""
+    assert_no_violations("plain .set on non-RwSignal identifier is not flagged", src)
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 

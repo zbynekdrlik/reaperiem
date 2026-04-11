@@ -120,7 +120,9 @@ pub fn SettingsModal(
                                         wasm_bindgen_futures::spawn_local(async move {
                                             if crate::api::delete_photo(&mid).await.is_ok() {
                                                 if let Some(set) = set_hp {
-                                                    set.set(false);
+                                                    // disposal-race-safe: try_set on destructured
+                                                    // WriteSignal after .await in spawn_local.
+                                                    let _ = set.try_set(false);
                                                 }
                                             }
                                         });
@@ -185,7 +187,9 @@ pub fn SettingsModal(
                                         wasm_bindgen_futures::spawn_local(async move {
                                             if crate::api::upload_photo(&mid, &base64).await.is_ok() {
                                                 if let Some(set) = set_hp {
-                                                    set.set(true);
+                                                    // disposal-race-safe: try_set on destructured
+                                                    // WriteSignal after .await in spawn_local.
+                                                    let _ = set.try_set(true);
                                                 }
                                             }
                                         });
