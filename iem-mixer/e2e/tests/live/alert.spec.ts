@@ -53,16 +53,26 @@ test.describe("Band Member Alert Button (#125)", () => {
   });
 
   test("alert button shows active state after click (#150)", async ({ page }) => {
-    // Capture WebSocket frames in both directions for diagnosis on failure.
+    // Capture only signal-bearing WebSocket frames for diagnosis on failure.
+    // State and Meters frames carry full mix data (channel names, levels,
+    // per-track meters) which is noise for this test and would also leak
+    // private mixer state into CI logs. Everything we need for diagnosis —
+    // whether CallEngineer went out, whether EngineerAlert came back,
+    // whether AlertCleared was seen — is in the short signal frames.
+    const SIGNAL_EVENTS = /"(event|cmd)"\s*:\s*"(CallEngineer|ClearAlert|EngineerAlert|ActiveAlerts|AlertCleared)"/;
     const wsSent: string[] = [];
     const wsReceived: string[] = [];
     page.on("websocket", (ws) => {
       if (!ws.url().includes("/ws/")) return;
       ws.on("framesent", (f) => {
-        if (typeof f.payload === "string") wsSent.push(f.payload);
+        if (typeof f.payload === "string" && SIGNAL_EVENTS.test(f.payload)) {
+          wsSent.push(f.payload);
+        }
       });
       ws.on("framereceived", (f) => {
-        if (typeof f.payload === "string") wsReceived.push(f.payload);
+        if (typeof f.payload === "string" && SIGNAL_EVENTS.test(f.payload)) {
+          wsReceived.push(f.payload);
+        }
       });
     });
 
@@ -90,14 +100,18 @@ test.describe("Band Member Alert Button (#125)", () => {
 
     // If the server holds a stale active alert for this member (prior
     // failed run), it broadcasts a catch-up EngineerAlert right after
-    // initial State — the WS-connect handler added for #150. Give that
-    // async message a moment to propagate through the Leptos signal,
-    // then clear the alert so the main flow starts idle. Without this,
-    // the next CallEngineer click would hit the "alert already active"
-    // short-circuit in proxy.rs and never reach the member's UI.
-    await page.waitForTimeout(300);
-    const residualClass = (await alertBtn.getAttribute("class")) ?? "";
-    if (residualClass.includes("active")) {
+    // initial State — the WS-connect handler added for #150. Poll for up
+    // to 1s; if the button becomes active we clear it so the main flow
+    // starts idle. If the button stays idle there is nothing to clear
+    // and we proceed immediately — no fixed wait.
+    let hadResidualAlert = false;
+    try {
+      await expect(alertBtn).toHaveClass(/active/, { timeout: 1000 });
+      hadResidualAlert = true;
+    } catch {
+      // No residual — fresh state, proceed.
+    }
+    if (hadResidualAlert) {
       await alertBtn.click({ force: true });
       await expect(alertBtn).not.toHaveClass(/active/, { timeout: 5000 });
     }
@@ -107,9 +121,9 @@ test.describe("Band Member Alert Button (#125)", () => {
     try {
       await expect(alertBtn).toHaveClass(/active/, { timeout: 10000 });
     } catch (err) {
-      console.log("=== WS frames sent by member ===");
+      console.log("=== WS signal frames sent by member ===");
       for (const p of wsSent) console.log("→", p);
-      console.log("=== WS frames received by member ===");
+      console.log("=== WS signal frames received by member ===");
       for (const p of wsReceived) console.log("←", p);
       console.log(
         "=== alert-btn class at failure ===",

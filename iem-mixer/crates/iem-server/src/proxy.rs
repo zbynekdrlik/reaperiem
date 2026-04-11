@@ -3098,6 +3098,34 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_build_alert_catchup_engineer_with_own_alert_goes_through_engineer_branch() {
+        // Edge case: if the engineer somehow ends up in `active_alerts`
+        // (e.g. by triggering SOS from their own mixer page), the helper
+        // must still route through the engineer branch and return
+        // ActiveAlerts including their own entry — never EngineerAlert.
+        // This locks in the "engineer_id-first" branching so a future
+        // refactor can't accidentally send engineers a member-style echo.
+        let mut alerts = HashMap::new();
+        alerts.insert("engineer".to_string(), alert_entry("engineer", "ENGINEER"));
+        alerts.insert(
+            "petronela".to_string(),
+            alert_entry("petronela", "PETRONELA"),
+        );
+
+        let msg = build_alert_catchup(&alerts, "engineer")
+            .expect("engineer with alerts should receive ActiveAlerts");
+        match msg {
+            ServerMsg::ActiveAlerts { alerts: out } => {
+                assert_eq!(out.len(), 2);
+                let mut ids: Vec<String> = out.iter().map(|a| a.from_member.clone()).collect();
+                ids.sort();
+                assert_eq!(ids, vec!["engineer".to_string(), "petronela".to_string()]);
+            }
+            other => panic!("expected ActiveAlerts, got {:?}", other),
+        }
+    }
+
     // ---- dB conversion --------------------------------------------------
 
     #[test]
