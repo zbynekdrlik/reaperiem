@@ -166,15 +166,16 @@ pub fn SnapshotModal(
             set_loading.set(true);
             set_error.set(None);
 
+            // try_update: modal can close mid-await. #153
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_snapshots(&member_id).await {
                     Ok(list) => {
-                        set_snapshots.set(list);
-                        set_loading.set(false);
+                        let _ = set_snapshots.try_update(|v| *v = list);
+                        let _ = set_loading.try_update(|v| *v = false);
                     }
                     Err(e) => {
-                        set_error.set(Some(e));
-                        set_loading.set(false);
+                        let _ = set_error.try_update(|v| *v = Some(e));
+                        let _ = set_loading.try_update(|v| *v = false);
                     }
                 }
             });
@@ -186,16 +187,18 @@ pub fn SnapshotModal(
         set_loading.set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
+            // try_update: modal can close mid-await. #153
             match create_snapshot(&member_id, Some("manual".to_string())).await {
                 Ok(()) => {
-                    // Refresh list
                     if let Ok(list) = fetch_snapshots(&member_id).await {
-                        set_snapshots.set(list);
+                        let _ = set_snapshots.try_update(|v| *v = list);
                     }
                 }
-                Err(e) => set_error.set(Some(e)),
+                Err(e) => {
+                    let _ = set_error.try_update(|v| *v = Some(e));
+                }
             }
-            set_loading.set(false);
+            let _ = set_loading.try_update(|v| *v = false);
         });
     };
 
@@ -268,10 +271,11 @@ pub fn SnapshotModal(
                                                                 let member_id = member_id.clone();
                                                                 set_loading.set(true);
                                                                 wasm_bindgen_futures::spawn_local(async move {
+                                                                    // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = restore_snapshot(&member_id, timestamp).await {
-                                                                        set_error.set(Some(e));
+                                                                        let _ = set_error.try_update(|v| *v = Some(e));
                                                                     }
-                                                                    set_loading.set(false);
+                                                                    let _ = set_loading.try_update(|v| *v = false);
                                                                     on_close.run(());
                                                                 });
                                                             }
@@ -287,12 +291,13 @@ pub fn SnapshotModal(
                                                                 let member_id = member_id.clone();
                                                                 set_loading.set(true);
                                                                 wasm_bindgen_futures::spawn_local(async move {
+                                                                    // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = delete_snapshot(&member_id, timestamp).await {
-                                                                        set_error.set(Some(e));
+                                                                        let _ = set_error.try_update(|v| *v = Some(e));
                                                                     } else if let Ok(list) = fetch_snapshots(&member_id).await {
-                                                                        set_snapshots.set(list);
+                                                                        let _ = set_snapshots.try_update(|v| *v = list);
                                                                     }
-                                                                    set_loading.set(false);
+                                                                    let _ = set_loading.try_update(|v| *v = false);
                                                                 });
                                                             }
                                                         }

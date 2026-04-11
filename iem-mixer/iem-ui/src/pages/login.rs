@@ -55,6 +55,8 @@ pub fn LoginPage() -> impl IntoView {
 
             set_loading.set(true);
 
+            // try_update: the login page can unmount mid-await (e.g. the
+            // user hits the back button while the request is in flight). #153
             spawn_local(async move {
                 match api::login(&member_val, &pin_val).await {
                     Ok(auth) => {
@@ -62,9 +64,9 @@ pub fn LoginPage() -> impl IntoView {
                         nav(&next_val, Default::default());
                     }
                     Err(e) => {
-                        set_error.set(Some(e));
-                        set_pin.set(String::new());
-                        set_loading.set(false);
+                        let _ = set_error.try_update(|v| *v = Some(e));
+                        let _ = set_pin.try_update(|v| *v = String::new());
+                        let _ = set_loading.try_update(|v| *v = false);
                     }
                 }
             });

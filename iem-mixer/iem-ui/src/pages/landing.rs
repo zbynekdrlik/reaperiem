@@ -56,11 +56,16 @@ pub fn LandingPage() -> impl IntoView {
         // Reset to loading state
         set_state.set(LoadState::Loading);
 
-        // Spawn async fetch
+        // Spawn async fetch. try_update: the landing page can unmount
+        // (user navigates) while get_members_with_timeout is awaiting. #153
         wasm_bindgen_futures::spawn_local(async move {
             match get_members_with_timeout().await {
-                Ok(members) => set_state.set(LoadState::Loaded(members)),
-                Err(e) => set_state.set(LoadState::Error(e)),
+                Ok(members) => {
+                    let _ = set_state.try_update(|v| *v = LoadState::Loaded(members));
+                }
+                Err(e) => {
+                    let _ = set_state.try_update(|v| *v = LoadState::Error(e));
+                }
             }
         });
     });
