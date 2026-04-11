@@ -49,30 +49,33 @@ test.describe("Client error reporting (#153)", () => {
     // to flush before we go looking in the file.
     await page.waitForTimeout(2000);
 
-    // SSH to iem.lan and grep today's log file for the marker. We use
-    // Select-String on the wildcard path so we don't have to compute the
-    // date-stamped filename client-side (daily rollover). Tail the last
-    // 500 lines of each matching file to keep the payload small.
-    const psCommand = `
-$files = Get-ChildItem -Path "$env:APPDATA\\iem-mixer\\logs\\iem-mixer.log.*" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 2;
-if ($files) { $files | ForEach-Object { Get-Content $_.FullName -Tail 500 } | Select-String '${marker}' }
-`;
+    // This test runs on the self-hosted runner which lives ON iem.lan, so
+    // we read the log file directly from the local filesystem — no SSH
+    // needed (the runner cannot SSH back to itself). Absolute path is used
+    // because the runner process may not run as `newlevel`, which would
+    // make $env:APPDATA point at a different user's Roaming folder. The
+    // Tauri app always writes to newlevel's APPDATA (dirs::data_dir()
+    // joined with "iem-mixer/logs/iem-mixer.log" + daily rolling suffix).
+    const logGlob =
+      "C:\\Users\\newlevel\\AppData\\Roaming\\iem-mixer\\logs\\iem-mixer.log.*";
+    const psCommand =
+      '$files = Get-ChildItem -Path "' +
+      logGlob +
+      '" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 2;' +
+      "if ($files) { $files | ForEach-Object { Get-Content $_.FullName -Tail 500 } | Select-String '" +
+      marker +
+      "' }";
 
     let found = "";
     try {
       found = execFileSync(
-        "ssh",
-        [
-          "-o", "BatchMode=yes",
-          "-o", "StrictHostKeyChecking=no",
-          "newlevel@iem.lan",
-          "powershell", "-NoProfile", "-Command", psCommand,
-        ],
+        "powershell",
+        ["-NoProfile", "-Command", psCommand],
         { timeout: 20_000 },
       ).toString();
     } catch (err) {
       throw new Error(
-        `SSH grep for marker '${marker}' failed: ${(err as Error).message}`,
+        `Local log grep for marker '${marker}' failed: ${(err as Error).message}`,
       );
     }
 
