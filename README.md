@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.141.0 (2026-04-11)
+
+- **Fix**: SOS alert button now shows the active (red, pulsing) state on the clicking member's own device (#150). On WebSocket connect, the server now catches up a non-engineer member's own active alert state, mirroring the existing engineer catch-up. Previously, reloading the page after triggering SOS left the member's UI stuck in idle while the server still held their alert, and clicking SOS again hit a no-op short-circuit in the CallEngineer handler so the button could never return to active. Restored the `toHaveClass(/active/)` assertion in `alert.spec.ts` as a regression guard.
+
 ### v1.140.0 (2026-04-10)
 
 - **CI**: Mutation testing hardening — raised `cargo-mutants --timeout` from 120s to 300s after observing CPU contention under `--jobs 4` on ubuntu-latest runners. Simplified `iem_core::is_valid_pan` by removing a redundant `is_finite()` check (`Range::contains` already rejects NaN and infinities).
