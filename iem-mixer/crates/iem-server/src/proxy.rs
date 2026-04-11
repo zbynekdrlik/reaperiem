@@ -951,7 +951,7 @@ pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
 pub(crate) fn build_alert_catchup(
     active_alerts: &std::collections::HashMap<String, (String, String)>,
     member_id: &str,
-) -> Option<ServerMsg> {
+) -> Option<iem_core::ServerMsg> {
     if member_id == "engineer" {
         if active_alerts.is_empty() {
             return None;
@@ -963,9 +963,9 @@ pub(crate) fn build_alert_catchup(
                 from_name: from_name.clone(),
             })
             .collect();
-        Some(ServerMsg::ActiveAlerts { alerts })
+        Some(iem_core::ServerMsg::ActiveAlerts { alerts })
     } else if active_alerts.contains_key(member_id) {
-        Some(ServerMsg::EngineerAlert {
+        Some(iem_core::ServerMsg::EngineerAlert {
             from_member: member_id.to_string(),
             from_name: String::new(),
         })
