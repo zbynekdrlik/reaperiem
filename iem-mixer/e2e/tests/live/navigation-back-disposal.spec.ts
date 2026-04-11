@@ -50,8 +50,10 @@ async function waitForStreamingMixer(page: Page): Promise<void> {
   await expect(page.locator(".disconnected-banner")).not.toBeVisible({
     timeout: 15000,
   });
-  // At least one channel rendered (State message arrived)
-  await expect(page.locator(".channel-strip").first()).toBeVisible({
+  // At least one channel rendered (State message arrived).
+  // The repo-wide convention for channel elements is `.channel` (not
+  // `.channel-strip`) — see mixer.spec.ts for prior art.
+  await expect(page.locator(".channel").first()).toBeVisible({
     timeout: 15000,
   });
   // Give the WebSocket a beat to receive a Meters frame so onmessage
