@@ -52,10 +52,20 @@ test.describe("Band Member Alert Button (#125)", () => {
     await expect(alertBtn).toHaveCount(0);
   });
 
-  test("alert button is clickable and triggers SOS", async ({ page }) => {
-    // NOTE: Active class assertion removed — see #150.
-    // The SOS mechanism works (engineer receives toast, verified in next test)
-    // but the member's button does not receive the "active" CSS class.
+  test("alert button shows active state after click (#150)", async ({ page }) => {
+    // Capture WebSocket frames in both directions for diagnosis on failure.
+    const wsSent: string[] = [];
+    const wsReceived: string[] = [];
+    page.on("websocket", (ws) => {
+      if (!ws.url().includes("/ws/")) return;
+      ws.on("framesent", (f) => {
+        if (typeof f.payload === "string") wsSent.push(f.payload);
+      });
+      ws.on("framereceived", (f) => {
+        if (typeof f.payload === "string") wsReceived.push(f.payload);
+      });
+    });
+
     await page.goto("/");
     const membersResp = await page.request.get("/api/members");
     const members = await membersResp.json();
@@ -69,11 +79,48 @@ test.describe("Band Member Alert Button (#125)", () => {
     const alertBtn = page.locator(".alert-btn");
     await expect(alertBtn).toBeVisible({ timeout: 5000 });
 
-    // Click SOS — verifies button is interactive
-    await alertBtn.click({ force: true });
+    // Wait for the initial ServerMsg::State to arrive before clicking.
+    // The click handler silently drops if `ws.ready_state() != OPEN`
+    // (alert_button.rs:15). First channel rendering is a reliable proxy
+    // for "WS open AND initial state delivered".
+    await page.waitForFunction(
+      () => document.querySelectorAll(".channel").length > 0,
+      { timeout: 10000 },
+    );
 
-    // Button should still be visible after click (not removed from DOM)
-    await expect(alertBtn).toBeVisible();
+    // If the server holds a stale active alert for this member (prior
+    // failed run), it broadcasts a catch-up EngineerAlert right after
+    // initial State — the WS-connect handler added for #150. Give that
+    // async message a moment to propagate through the Leptos signal,
+    // then clear the alert so the main flow starts idle. Without this,
+    // the next CallEngineer click would hit the "alert already active"
+    // short-circuit in proxy.rs and never reach the member's UI.
+    await page.waitForTimeout(300);
+    const residualClass = (await alertBtn.getAttribute("class")) ?? "";
+    if (residualClass.includes("active")) {
+      await alertBtn.click({ force: true });
+      await expect(alertBtn).not.toHaveClass(/active/, { timeout: 5000 });
+    }
+
+    // Click SOS — send CallEngineer, expect `active` class from server echo.
+    await alertBtn.click({ force: true });
+    try {
+      await expect(alertBtn).toHaveClass(/active/, { timeout: 10000 });
+    } catch (err) {
+      console.log("=== WS frames sent by member ===");
+      for (const p of wsSent) console.log("→", p);
+      console.log("=== WS frames received by member ===");
+      for (const p of wsReceived) console.log("←", p);
+      console.log(
+        "=== alert-btn class at failure ===",
+        await alertBtn.getAttribute("class"),
+      );
+      throw err;
+    }
+
+    // Clear the alert so we leave the server in a clean state.
+    await alertBtn.click({ force: true });
+    await expect(alertBtn).not.toHaveClass(/active/, { timeout: 5000 });
   });
 
   test("alert persists until engineer dismisses", async ({ browser }) => {

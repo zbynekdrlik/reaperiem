@@ -1074,6 +1074,20 @@ async fn handle_ws(
             let json = serde_json::to_string(&msg).unwrap_or_default();
             let _ = socket.send(Message::Text(json.into())).await;
         }
+    } else {
+        // Send member's own active alert on connect (catch-up after reload) (#150).
+        // Without this the member's UI shows idle after a page reload while the
+        // server still holds their alert, and clicking SOS again no-ops in the
+        // CallEngineer handler so the button can never return to active.
+        let cache = state.mixer_cache.read().await;
+        if cache.active_alerts.contains_key(&member_id) {
+            let msg = ServerMsg::EngineerAlert {
+                from_member: member_id.clone(),
+                from_name: String::new(),
+            };
+            let json = serde_json::to_string(&msg).unwrap_or_default();
+            let _ = socket.send(Message::Text(json.into())).await;
+        }
     }
 
     // Send network mode (local/remote) — updates on every WS reconnect,
