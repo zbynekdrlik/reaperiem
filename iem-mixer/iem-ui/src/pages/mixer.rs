@@ -169,7 +169,10 @@ fn connect_websocket(
 
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
-        // Any received frame counts as "alive" — refresh watchdog + reset backoff.
+        // Any received frame counts as "alive" — refresh watchdog and reset
+        // the reconnect backoff counter. This runs on every frame (not just
+        // the first); the Cell write is a no-op after the first reset, so
+        // the extra cost is negligible and the code stays branch-free.
         last_frame_at_msg.set(js_sys::Date::now());
         reconnect_attempt_msg.set(0);
         if let Some(text) = e.data().as_string() {
@@ -961,7 +964,11 @@ pub fn MixerPage() -> impl IntoView {
             return;
         }
         let now = js_sys::Date::now();
-        if crate::lifecycle::is_stale(last_frame_at_watch.get(), now, 30_000.0) {
+        if crate::lifecycle::is_stale(
+            last_frame_at_watch.get(),
+            now,
+            crate::lifecycle::WS_STALENESS_THRESHOLD_MS,
+        ) {
             web_sys::console::warn_1(
                 &"WS watchdog: no frames for >30s, force-closing socket".into(),
             );
@@ -973,7 +980,7 @@ pub fn MixerPage() -> impl IntoView {
         .unwrap()
         .set_interval_with_callback_and_timeout_and_arguments_0(
             watchdog_closure.as_ref().unchecked_ref(),
-            5_000,
+            crate::lifecycle::WS_WATCHDOG_INTERVAL_MS as i32,
         )
         .unwrap();
     watchdog_closure.forget();

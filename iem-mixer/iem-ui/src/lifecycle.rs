@@ -1,8 +1,30 @@
 //! Lifecycle helpers: panic hook, WebSocket watchdog staleness check, reconnect backoff.
 //!
-//! Pure helpers live at module root; side-effecting install functions (panic hook)
-//! are in sub-sections. Unit tests cover the pure helpers only — DOM mutation
-//! paths rely on simplicity and end-to-end verification.
+//! Pure helpers (`backoff_delay_ms`, `is_stale`, `build_overlay_html`, and the
+//! small string helpers) are unit-tested at module root. DOM- and network-
+//! touching functions (`render_panic_overlay`, `post_panic_report`, the WS
+//! watchdog closure in `mixer.rs`) are thin wrappers over web-sys APIs and
+//! are verified end-to-end by the post-deploy Playwright test.
+
+/// Interval (ms) between WebSocket watchdog ticks.
+///
+/// The watchdog fires this often and checks whether the socket has received
+/// any frame in the last `WS_STALENESS_THRESHOLD_MS` milliseconds. Shared
+/// from here so `mixer.rs` does not carry a magic number.
+pub const WS_WATCHDOG_INTERVAL_MS: u32 = 5_000;
+
+/// A socket is considered stale — and force-closed — if no frame has arrived
+/// within this many milliseconds.
+///
+/// Chosen conservatively: the server poller broadcasts meter updates every
+/// 150 ms, so missing 200 consecutive broadcasts (30 s) is unambiguously a
+/// zombie socket rather than a brief network blip.
+pub const WS_STALENESS_THRESHOLD_MS: f64 = 30_000.0;
+
+/// Maximum number of characters from a panic message to show in the reload
+/// overlay. Longer messages are truncated with an ellipsis to keep the
+/// overlay legible on phone-sized viewports.
+pub const PANIC_MESSAGE_MAX_DISPLAY_CHARS: usize = 200;
 
 /// Return the reconnect delay (in ms) for the given attempt number.
 ///
@@ -27,7 +49,7 @@ pub fn is_stale(last_frame_ms: f64, now_ms: f64, threshold_ms: f64) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// Panic hook — side-effecting, not unit-testable.
+// Panic hook — thin DOM/network wrappers over the pure helpers above.
 // ---------------------------------------------------------------------------
 
 use wasm_bindgen::JsCast;
@@ -109,7 +131,7 @@ fn render_panic_overlay(info: &std::panic::PanicHookInfo<'_>) {
     let Some(body) = document.body() else { return };
 
     let message = format_panic_message(info);
-    let summary = truncate_for_display(&message, 200);
+    let summary = truncate_for_display(&message, PANIC_MESSAGE_MAX_DISPLAY_CHARS);
     let version = iem_core::version_label();
     let overlay_html = build_overlay_html(&summary, &version);
 
@@ -146,6 +168,13 @@ fn post_panic_report(info: &std::panic::PanicHookInfo<'_>) {
         .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
         .unwrap_or_default();
 
+    // Note: the server-side ClientErrorReport struct also has a `backtrace`
+    // field, but we deliberately do not populate it here. Rust WASM builds
+    // strip symbol information by default, so any backtrace captured inside
+    // the browser would be just wasm instruction offsets — worse than useless
+    // for debugging. The native backtrace remains available via the browser
+    // console (through console_error_panic_hook). If we later add symbol
+    // shipping (.wasm.map) we can revisit.
     let body = serde_json::json!({
         "panic_message": message,
         "version": iem_core::VERSION,
@@ -177,14 +206,24 @@ fn post_panic_report(info: &std::panic::PanicHookInfo<'_>) {
     }
 }
 
-fn format_panic_message(info: &std::panic::PanicHookInfo<'_>) -> String {
-    if let Some(s) = info.payload().downcast_ref::<&str>() {
+/// Extract a human-readable string from a panic payload.
+///
+/// `std::panic::PanicHookInfo` cannot be constructed by user code, so this
+/// helper takes the `&dyn Any` payload directly (the same thing
+/// `PanicHookInfo::payload()` returns). That makes it unit-testable with
+/// synthetic `&str`, `String`, and arbitrary types.
+fn format_panic_payload(payload: &dyn std::any::Any) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
         (*s).to_string()
-    } else if let Some(s) = info.payload().downcast_ref::<String>() {
+    } else if let Some(s) = payload.downcast_ref::<String>() {
         s.clone()
     } else {
         String::from("(unknown panic payload)")
     }
+}
+
+fn format_panic_message(info: &std::panic::PanicHookInfo<'_>) -> String {
+    format_panic_payload(info.payload())
 }
 
 fn truncate_for_display(s: &str, max: usize) -> String {
@@ -302,5 +341,44 @@ mod tests {
         assert!(html.contains("position:fixed"));
         assert!(html.contains("inset:0"));
         assert!(html.contains("z-index:2147483647"));
+    }
+
+    #[test]
+    fn format_panic_payload_extracts_str_slice() {
+        // &'static str is the most common panic payload type.
+        let payload: &dyn std::any::Any = &"boom";
+        assert_eq!(format_panic_payload(payload), "boom");
+    }
+
+    #[test]
+    fn format_panic_payload_extracts_owned_string() {
+        // String payloads happen when formatting is used (panic!("{}", x)).
+        let payload: String = String::from("owned boom");
+        assert_eq!(format_panic_payload(&payload), "owned boom");
+    }
+
+    #[test]
+    fn format_panic_payload_handles_unknown_type_gracefully() {
+        // Arbitrary types fall through to a stable sentinel string so the
+        // overlay and POST body are always populated.
+        let payload: u32 = 42;
+        assert_eq!(format_panic_payload(&payload), "(unknown panic payload)");
+    }
+
+    #[test]
+    fn watchdog_threshold_is_larger_than_interval() {
+        // Sanity: the staleness threshold must be strictly larger than the
+        // interval, otherwise the watchdog would false-positive on its own
+        // tick latency.
+        assert!((WS_WATCHDOG_INTERVAL_MS as f64) < WS_STALENESS_THRESHOLD_MS);
+    }
+
+    #[test]
+    fn panic_message_display_cap_matches_truncate_behavior() {
+        // Guard against someone silently dropping the truncation by making
+        // the cap ridiculously large. 200 chars is small enough to fit on
+        // a phone viewport.
+        assert!(PANIC_MESSAGE_MAX_DISPLAY_CHARS <= 500);
+        assert!(PANIC_MESSAGE_MAX_DISPLAY_CHARS > 0);
     }
 }

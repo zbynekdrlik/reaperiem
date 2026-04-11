@@ -105,9 +105,10 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         .route(
             "/api/client-error",
             // 10_240 bytes = 10 KiB. Written as a plain literal (not 10 * 1024)
-            // so cargo-mutants has no binary operator to mutate — the layer is
-            // not exercised by any unit test (handler tests call client_error
-            // directly), so a mutated bound would not be caught. #153
+            // so cargo-mutants has no binary operator to mutate. The exact
+            // value is pinned by router-layer integration tests in proxy.rs
+            // (`client_error_router_rejects_body_just_under_large` and
+            // `client_error_router_rejects_oversize_body`). #153
             post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
         )
         .route("/api/push/subscribe", post(push_subscribe))
