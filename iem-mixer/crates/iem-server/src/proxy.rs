@@ -3003,6 +3003,7 @@ async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: App
 #[cfg(test)]
 mod tests {
     use super::*;
+    use iem_core::ServerMsg;
     use std::collections::HashMap;
 
     // ---- Alert catch-up helper (#150) -----------------------------------
