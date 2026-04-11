@@ -119,6 +119,14 @@ fn connect_websocket(
         let _ = old_ws.close();
     }
 
+    // Watchdog state (#153): last_frame_at updated on every received frame,
+    // checked every 5s by the watchdog interval to detect zombie sockets.
+    // reconnect_attempt drives the exponential backoff schedule — it increments
+    // in onclose and resets to 0 on the first frame of a fresh socket.
+    let last_frame_at = std::rc::Rc::new(std::cell::Cell::new(js_sys::Date::now()));
+    let reconnect_attempt = std::rc::Rc::new(std::cell::Cell::new(0u32));
+    let last_reconnect_attempt_at = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
+
     let location = web_sys::window().unwrap().location();
     let host = location.host().unwrap_or_default();
     let protocol = if location.protocol().unwrap_or_default() == "https:" {
@@ -156,8 +164,14 @@ fn connect_websocket(
     let fail_count_msg = ws_fail_count.clone();
     let fail_count_close = ws_fail_count;
 
+    let last_frame_at_msg = last_frame_at.clone();
+    let reconnect_attempt_msg = reconnect_attempt.clone();
+
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+        // Any received frame counts as "alive" — refresh watchdog + reset backoff.
+        last_frame_at_msg.set(js_sys::Date::now());
+        reconnect_attempt_msg.set(0);
         if let Some(text) = e.data().as_string() {
             if let Ok(msg) = serde_json::from_str::<iem_core::ServerMsg>(&text) {
                 let touched = fader_touched.get_untracked();
@@ -377,10 +391,13 @@ fn connect_websocket(
     }) as Box<dyn FnMut(web_sys::MessageEvent)>);
     ws.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
 
+    let reconnect_attempt_close = reconnect_attempt.clone();
+
     // Handle close — mark disconnected and increment failure counter
     let onclose = Closure::wrap(Box::new(move |_: web_sys::CloseEvent| {
         set_connected.set(false);
         fail_count_close.set(fail_count_close.get() + 1);
+        reconnect_attempt_close.set(reconnect_attempt_close.get() + 1);
     }) as Box<dyn FnMut(web_sys::CloseEvent)>);
     ws.set_onclose(Some(onclose.as_ref().unchecked_ref()));
 
@@ -821,7 +838,19 @@ pub fn MixerPage() -> impl IntoView {
     // since gloo_timers::Interval contains non-Send closures.
     let reconnect_member_id = member_id.clone();
     let navigate_auth_fail = use_navigate();
+    let reconnect_attempt_tick = reconnect_attempt.clone();
+    let last_reconnect_attempt_at_tick = last_reconnect_attempt_at.clone();
     let reconnect_closure = Closure::wrap(Box::new(move || {
+        // Exponential backoff gate: skip this tick if the scheduled delay
+        // hasn't elapsed since the last reconnect attempt. #153
+        let now_ms = js_sys::Date::now();
+        let attempt = reconnect_attempt_tick.get();
+        let delay_ms = crate::lifecycle::backoff_delay_ms(attempt) as f64;
+        let last_attempt = last_reconnect_attempt_at_tick.get();
+        if last_attempt > 0.0 && (now_ms - last_attempt) < delay_ms {
+            return;
+        }
+
         let needs_reconnect = match ws.get_untracked() {
             Some(ref w) => w.ready_state() == web_sys::WebSocket::CLOSED,
             None => false,
@@ -847,6 +876,7 @@ pub fn MixerPage() -> impl IntoView {
                 return;
             }
 
+            last_reconnect_attempt_at_tick.set(now_ms);
             connect_websocket(
                 &member,
                 ws,
@@ -898,12 +928,45 @@ pub fn MixerPage() -> impl IntoView {
         .unwrap();
     reconnect_closure.forget();
 
+    // Watchdog (#153): every 5s, check whether the socket has received any
+    // frame in the last 30s. If not, force-close it — onclose fires,
+    // connected=false, the existing .disconnected-banner appears, and the
+    // reconnect loop opens a new socket. Catches zombie sockets where
+    // ready_state == OPEN but no data flows.
+    let last_frame_at_watch = last_frame_at.clone();
+    let ws_watch = ws;
+    let watchdog_closure = Closure::wrap(Box::new(move || {
+        let Some(socket) = ws_watch.get_untracked() else {
+            return;
+        };
+        if socket.ready_state() != web_sys::WebSocket::OPEN {
+            return;
+        }
+        let now = js_sys::Date::now();
+        if crate::lifecycle::is_stale(last_frame_at_watch.get(), now, 30_000.0) {
+            web_sys::console::warn_1(
+                &"WS watchdog: no frames for >30s, force-closing socket".into(),
+            );
+            let _ = socket.close();
+        }
+    }) as Box<dyn FnMut()>);
+
+    let watchdog_interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            watchdog_closure.as_ref().unchecked_ref(),
+            5_000,
+        )
+        .unwrap();
+    watchdog_closure.forget();
+
     // Clean up reconnect interval on component unmount.
     // The i32 interval_id is Send+Sync so it can be captured in on_cleanup.
     // The WebSocket signal and its closures are dropped with the component.
     on_cleanup(move || {
         if let Some(w) = web_sys::window() {
             w.clear_interval_with_handle(interval_id);
+            w.clear_interval_with_handle(watchdog_interval_id);
         }
     });
 
