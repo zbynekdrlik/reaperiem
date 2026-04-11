@@ -14,8 +14,8 @@ use wasm_bindgen::prelude::*;
 /// Main entry point for WASM
 #[wasm_bindgen(start)]
 pub fn main() {
-    // Better panic messages in console
-    console_error_panic_hook::set_once();
+    // Install panic hook with overlay + server reporting (#153)
+    lifecycle::install_panic_hook();
 
     // Mount the app
     leptos::mount::mount_to_body(router::App);
