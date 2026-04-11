@@ -12,6 +12,53 @@ use std::collections::HashMap;
 
 use crate::AppState;
 
+/// Error report sent by the WASM client when a panic occurs.
+///
+/// All fields except `panic_message` are optional so that degraded clients
+/// (e.g. broken Leptos graph, missing window globals) can still send a report.
+#[derive(Debug, serde::Deserialize)]
+pub struct ClientErrorReport {
+    pub panic_message: String,
+    pub version: Option<String>,
+    pub git_hash: Option<String>,
+    pub url: Option<String>,
+    pub user_agent: Option<String>,
+    pub location: Option<String>,
+    pub backtrace: Option<String>,
+}
+
+/// POST /api/client-error — receive a client-side panic report and log it.
+///
+/// Public route (no auth) because panics may occur when auth itself is broken.
+/// Request body is capped at 10 KB by the route-level `DefaultBodyLimit` layer
+/// in routes.rs. Always returns 204 No Content on success; malformed bodies
+/// return 400 via Axum's default JSON rejection.
+///
+/// Logs via `tracing::warn!` with a structured `client_error` prefix so the
+/// line is grep-able: `journalctl -u iem-mixer | grep client_error`.
+pub async fn client_error(
+    axum::Json(report): axum::Json<ClientErrorReport>,
+) -> axum::http::StatusCode {
+    tracing::warn!(
+        target: "iem_server::client_error",
+        version = report.version.as_deref().unwrap_or("?"),
+        git_hash = report.git_hash.as_deref().unwrap_or("?"),
+        url = report.url.as_deref().unwrap_or("?"),
+        user_agent = report.user_agent.as_deref().unwrap_or("?"),
+        location = report.location.as_deref().unwrap_or("?"),
+        panic = %report.panic_message,
+        "client_error",
+    );
+    if let Some(bt) = report.backtrace.as_deref() {
+        tracing::warn!(
+            target: "iem_server::client_error",
+            backtrace = %bt,
+            "client_error_backtrace",
+        );
+    }
+    axum::http::StatusCode::NO_CONTENT
+}
+
 /// Query parameters for WebSocket connection
 #[derive(Debug, serde::Deserialize)]
 pub struct WsQuery {
@@ -4296,5 +4343,70 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/eq_read_track/3"
         );
         assert!(url.contains("/_/"), "set_extstate must use /_/ prefix");
+    }
+
+    // ---- /api/client-error tests (#153) ----
+
+    #[tokio::test]
+    async fn client_error_accepts_minimal_body() {
+        let report = ClientErrorReport {
+            panic_message: "boom".to_string(),
+            version: None,
+            git_hash: None,
+            url: None,
+            user_agent: None,
+            location: None,
+            backtrace: None,
+        };
+        let status = client_error(axum::Json(report)).await;
+        assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn client_error_accepts_full_body() {
+        let report = ClientErrorReport {
+            panic_message: "assertion failed at line 42".to_string(),
+            version: Some("1.142.0".to_string()),
+            git_hash: Some("abc1234".to_string()),
+            url: Some("/engineer".to_string()),
+            user_agent: Some("Mozilla/5.0".to_string()),
+            location: Some("iem-ui/src/pages/mixer.rs:456:9".to_string()),
+            backtrace: Some("  at foo\n  at bar".to_string()),
+        };
+        let status = client_error(axum::Json(report)).await;
+        assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+    }
+
+    #[test]
+    fn client_error_report_deserialize_minimal() {
+        let json = r#"{"panic_message":"boom"}"#;
+        let report: ClientErrorReport = serde_json::from_str(json).expect("parse");
+        assert_eq!(report.panic_message, "boom");
+        assert!(report.version.is_none());
+        assert!(report.git_hash.is_none());
+    }
+
+    #[test]
+    fn client_error_report_deserialize_missing_panic_message_fails() {
+        let json = r#"{"version":"1.142.0"}"#;
+        let result: Result<ClientErrorReport, _> = serde_json::from_str(json);
+        assert!(result.is_err(), "should reject body with no panic_message");
+    }
+
+    #[test]
+    fn client_error_report_deserialize_full_body() {
+        let json = r#"{
+            "panic_message":"boom",
+            "version":"1.142.0",
+            "git_hash":"abc",
+            "url":"/engineer",
+            "user_agent":"UA",
+            "location":"file:1:1",
+            "backtrace":"trace"
+        }"#;
+        let report: ClientErrorReport = serde_json::from_str(json).expect("parse");
+        assert_eq!(report.panic_message, "boom");
+        assert_eq!(report.version.as_deref(), Some("1.142.0"));
+        assert_eq!(report.git_hash.as_deref(), Some("abc"));
     }
 }

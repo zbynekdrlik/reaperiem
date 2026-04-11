@@ -102,6 +102,10 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
         )
         // Web Push notification subscription (#133)
         .route("/api/push/vapid-key", get(get_vapid_key))
+        .route(
+            "/api/client-error",
+            post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10 * 1024)),
+        )
         .route("/api/push/subscribe", post(push_subscribe))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
