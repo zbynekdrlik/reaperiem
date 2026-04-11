@@ -120,7 +120,7 @@ pub fn ListenButton(
             // tick fires between on_cleanup running and the interval actually
             // being cancelled by the browser. #153
             let closure = Closure::wrap(Box::new(move || {
-                let _ = set_stream_stats.try_update(|v| *v = poll_stream_stats());
+                let _ = set_stream_stats.try_set(poll_stream_stats());
             }) as Box<dyn FnMut()>);
             let id = web_sys::window()
                 .unwrap()
@@ -390,7 +390,7 @@ fn start_listening(
             frame_counter.set(count + 1);
             feed_opus_frame(&data);
             if !is_listening.get() {
-                let _ = set_state_msg.try_update(|v| *v = ListenState::Listening);
+                let _ = set_state_msg.try_set(ListenState::Listening);
                 is_listening.set(true);
             }
             return;
@@ -401,19 +401,19 @@ fn start_listening(
             if let Ok(msg) = serde_json::from_str::<iem_core::ServerMsg>(&text) {
                 if let iem_core::ServerMsg::AudioStatus { status, target } = msg {
                     if let Some(t) = target {
-                        let _ = set_listen_target.try_update(|v| *v = t);
+                        let _ = set_listen_target.try_set(t);
                     }
                     match status.as_str() {
                         "listening" => {
-                            let _ = set_state_msg.try_update(|v| *v = ListenState::Listening);
+                            let _ = set_state_msg.try_set(ListenState::Listening);
                             is_listening.set(true);
                         }
                         "no_source" => {
-                            let _ = set_state_msg.try_update(|v| *v = ListenState::NoSource);
+                            let _ = set_state_msg.try_set(ListenState::NoSource);
                             is_listening.set(false);
                         }
                         "stopped" => {
-                            let _ = set_state_msg.try_update(|v| *v = ListenState::Idle);
+                            let _ = set_state_msg.try_set(ListenState::Idle);
                             is_listening.set(false);
                         }
                         _ => {}
@@ -430,18 +430,18 @@ fn start_listening(
     let set_ws_close = set_ws;
     // All signal writes use try_update — same disposal-race reason as on_message. #153
     let on_close = Closure::wrap(Box::new(move |_: web_sys::Event| {
-        let _ = set_ws_close.try_update(|v| *v = None);
+        let _ = set_ws_close.try_set(None);
         let intentional = intentional_stop.try_get_untracked().unwrap_or(false);
         if intentional {
             // User clicked stop — stay in Idle, don't reconnect
             web_sys::console::log_1(&"[audio] WebSocket closed (user stopped)".into());
-            let _ = set_intentional_stop.try_update(|v| *v = false);
-            let _ = set_state_close.try_update(|v| *v = ListenState::Idle);
+            let _ = set_intentional_stop.try_set(false);
+            let _ = set_state_close.try_set(ListenState::Idle);
         } else {
             // Unexpected disconnect — auto-reconnect
             web_sys::console::log_1(&"[audio] WebSocket closed — will reconnect".into());
             // Don't stop audio player — keep AudioContext alive for seamless resume
-            let _ = set_state_close.try_update(|v| *v = ListenState::Reconnecting);
+            let _ = set_state_close.try_set(ListenState::Reconnecting);
         }
     }) as Box<dyn FnMut(_)>);
 
@@ -469,7 +469,7 @@ fn start_listening(
     // try_update because start_listening is called from the reconnect
     // interval closure which can outlive the component. If ListenButton is
     // unmounted between reconnect attempts, set_ws is disposed here. #153
-    let _ = set_ws.try_update(|v| *v = Some(socket.clone()));
+    let _ = set_ws.try_set(Some(socket.clone()));
     // Do NOT set ListenState::Listening here — wait for the first binary frame
     // to arrive in on_message (line 149). Setting it prematurely makes the UI
     // show "Listening..." even when the WS fails to connect or ListenStart

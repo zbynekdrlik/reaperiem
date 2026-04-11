@@ -169,7 +169,7 @@ pub fn TalkButton(
                     Err(e) => {
                         let msg = format!("{:?}", e);
                         if msg.contains("NotAllowedError") || msg.contains("Permission") {
-                            let _ = set_state.try_update(|v| *v = TalkState::MicBlocked);
+                            let _ = set_state.try_set(TalkState::MicBlocked);
                         } else {
                             web_sys::console::error_1(
                                 &format!("[talk] start failed: {}", msg).into(),

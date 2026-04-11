@@ -28,10 +28,10 @@ pub fn BackupSection() -> impl IntoView {
             };
             match crate::api::list_backups(&token).await {
                 Ok(list) => {
-                    let _ = set_backups.try_update(|v| *v = list);
+                    let _ = set_backups.try_set(list);
                 }
                 Err(e) => {
-                    let _ = set_error.try_update(|v| *v = Some(e));
+                    let _ = set_error.try_set(Some(e));
                 }
             }
         });
@@ -98,14 +98,14 @@ pub fn BackupSection() -> impl IntoView {
                                             match crate::api::preview_restore(&token, &fname).await {
                                                 Ok(p) => {
                                                     let _ = set_preview
-                                                        .try_update(|v| *v = Some(p));
+                                                        .try_set(Some(p));
                                                 }
                                                 Err(e) => {
                                                     let _ = set_error
-                                                        .try_update(|v| *v = Some(e));
+                                                        .try_set(Some(e));
                                                 }
                                             }
-                                            let _ = set_loading.try_update(|v| *v = false);
+                                            let _ = set_loading.try_set(false);
                                         });
                                     }
                                 }
@@ -195,15 +195,15 @@ pub fn BackupSection() -> impl IntoView {
                                         match crate::api::apply_restore(&token, &fname).await {
                                             Ok(r) => {
                                                 let _ = set_result
-                                                    .try_update(|v| *v = Some(r));
-                                                let _ = set_preview.try_update(|v| *v = None);
+                                                    .try_set(Some(r));
+                                                let _ = set_preview.try_set(None);
                                             }
                                             Err(e) => {
                                                 let _ = set_error
-                                                    .try_update(|v| *v = Some(e));
+                                                    .try_set(Some(e));
                                             }
                                         }
-                                        let _ = set_restoring.try_update(|v| *v = false);
+                                        let _ = set_restoring.try_set(false);
                                     });
                                 }
                             }

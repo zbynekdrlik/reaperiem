@@ -1109,8 +1109,8 @@ fn EqSlider(
         let uc = Closure::wrap(Box::new(move |_ev: web_sys::MouseEvent| {
             *timeout_mu.borrow_mut() = None;
             let was_active = is_activated.get();
-            set_is_pending.set(false);
-            set_is_activated.set(false);
+            let _ = set_is_pending.try_set(false);
+            let _ = set_is_activated.try_set(false);
             *base_x_mu.borrow_mut() = None;
 
             if let Some(mc) = mm_cleanup.borrow_mut().take() {

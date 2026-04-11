@@ -147,12 +147,20 @@ jobs:
           fi
           echo "OK: No assume/skip patterns found in E2E tests"
 
-      - name: Ban unsafe signal writes inside spawn_local (#153)
+      - name: Self-test the disposal safety scanner (#153)
+        run: |
+          # Run the scanner's own unit tests first so a broken scanner
+          # can never silently pass a violation through.
+          python3 scripts/test_check_disposal_safety.py
+
+      - name: Ban unsafe signal writes inside danger zones (#153)
         run: |
           # Prevents the Leptos "reactive value has already been disposed"
-          # panic. Every set_*.set() / set_*.update() inside a spawn_local
-          # async block must use try_set / try_update so a mid-await dispose
-          # is handled silently instead of panicking.
+          # panic. Every set_*.set() / set_*.update() / .set_untracked() /
+          # .update_untracked() inside a spawn_local async block OR a
+          # Closure::wrap(Box::new(move ...)) block must use the try_*
+          # variant so a mid-await or post-dispose fire is handled silently
+          # instead of panicking.
           python3 scripts/check_disposal_safety.py
 
   # ============================================================

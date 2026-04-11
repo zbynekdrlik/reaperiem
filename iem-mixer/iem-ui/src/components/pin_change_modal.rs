@@ -134,19 +134,19 @@ pub fn PinChangeModal(
         spawn_local(async move {
             match crate::api::change_pin(&old_pin, &new, &member).await {
                 Ok(()) => {
-                    let _ = set_success.try_update(|v| *v = true);
-                    let _ = set_loading.try_update(|v| *v = false);
+                    let _ = set_success.try_set(true);
+                    let _ = set_loading.try_set(false);
                 }
                 Err(e) => {
-                    let _ = set_error_msg.try_update(|v| *v = e);
-                    let _ = set_loading.try_update(|v| *v = false);
+                    let _ = set_error_msg.try_set(e);
+                    let _ = set_loading.try_set(false);
                     if !is_engineer {
-                        let _ = set_current_pin.try_update(|v| *v = String::new());
-                        let _ = set_active_field.try_update(|v| *v = 0);
+                        let _ = set_current_pin.try_set(String::new());
+                        let _ = set_active_field.try_set(0);
                     } else {
-                        let _ = set_new_pin.try_update(|v| *v = String::new());
-                        let _ = set_confirm_pin.try_update(|v| *v = String::new());
-                        let _ = set_active_field.try_update(|v| *v = 1);
+                        let _ = set_new_pin.try_set(String::new());
+                        let _ = set_confirm_pin.try_set(String::new());
+                        let _ = set_active_field.try_set(1);
                     }
                 }
             }

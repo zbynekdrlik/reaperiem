@@ -170,12 +170,12 @@ pub fn SnapshotModal(
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_snapshots(&member_id).await {
                     Ok(list) => {
-                        let _ = set_snapshots.try_update(|v| *v = list);
-                        let _ = set_loading.try_update(|v| *v = false);
+                        let _ = set_snapshots.try_set(list);
+                        let _ = set_loading.try_set(false);
                     }
                     Err(e) => {
-                        let _ = set_error.try_update(|v| *v = Some(e));
-                        let _ = set_loading.try_update(|v| *v = false);
+                        let _ = set_error.try_set(Some(e));
+                        let _ = set_loading.try_set(false);
                     }
                 }
             });
@@ -191,14 +191,14 @@ pub fn SnapshotModal(
             match create_snapshot(&member_id, Some("manual".to_string())).await {
                 Ok(()) => {
                     if let Ok(list) = fetch_snapshots(&member_id).await {
-                        let _ = set_snapshots.try_update(|v| *v = list);
+                        let _ = set_snapshots.try_set(list);
                     }
                 }
                 Err(e) => {
-                    let _ = set_error.try_update(|v| *v = Some(e));
+                    let _ = set_error.try_set(Some(e));
                 }
             }
-            let _ = set_loading.try_update(|v| *v = false);
+            let _ = set_loading.try_set(false);
         });
     };
 
@@ -273,9 +273,9 @@ pub fn SnapshotModal(
                                                                 wasm_bindgen_futures::spawn_local(async move {
                                                                     // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = restore_snapshot(&member_id, timestamp).await {
-                                                                        let _ = set_error.try_update(|v| *v = Some(e));
+                                                                        let _ = set_error.try_set(Some(e));
                                                                     }
-                                                                    let _ = set_loading.try_update(|v| *v = false);
+                                                                    let _ = set_loading.try_set(false);
                                                                     on_close.run(());
                                                                 });
                                                             }
@@ -293,11 +293,11 @@ pub fn SnapshotModal(
                                                                 wasm_bindgen_futures::spawn_local(async move {
                                                                     // try_update: modal can close mid-await. #153
                                                                     if let Err(e) = delete_snapshot(&member_id, timestamp).await {
-                                                                        let _ = set_error.try_update(|v| *v = Some(e));
+                                                                        let _ = set_error.try_set(Some(e));
                                                                     } else if let Ok(list) = fetch_snapshots(&member_id).await {
-                                                                        let _ = set_snapshots.try_update(|v| *v = list);
+                                                                        let _ = set_snapshots.try_set(list);
                                                                     }
-                                                                    let _ = set_loading.try_update(|v| *v = false);
+                                                                    let _ = set_loading.try_set(false);
                                                                 });
                                                             }
                                                         }

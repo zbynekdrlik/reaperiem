@@ -61,10 +61,10 @@ pub fn LandingPage() -> impl IntoView {
         wasm_bindgen_futures::spawn_local(async move {
             match get_members_with_timeout().await {
                 Ok(members) => {
-                    let _ = set_state.try_update(|v| *v = LoadState::Loaded(members));
+                    let _ = set_state.try_set(LoadState::Loaded(members));
                 }
                 Err(e) => {
-                    let _ = set_state.try_update(|v| *v = LoadState::Error(e));
+                    let _ = set_state.try_set(LoadState::Error(e));
                 }
             }
         });

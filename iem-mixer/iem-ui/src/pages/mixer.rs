@@ -191,32 +191,32 @@ fn connect_websocket(
                     } => {
                         // Successfully received data — reset failure counter
                         fail_count_msg.set(0);
-                        set_channels.update(|chs| {
+                        let _ = set_channels.try_update(|chs| {
                             let touched_snapshot: std::collections::HashMap<usize, bool> =
                                 touched.iter().map(|(k, v)| (*k, *v)).collect();
                             iem_core::merge_or_replace_channels(chs, new_chs, &touched_snapshot);
                         });
                         // Update global volume from initial state
                         if let Some(lvl) = global_level_db {
-                            set_global_level.set(lvl);
+                            let _ = set_global_level.try_set(lvl);
                         }
                         if let Some(muted) = global_muted {
-                            set_global_muted.set(muted);
+                            let _ = set_global_muted.try_set(muted);
                         }
                         if let Some(idx) = output_track_index {
-                            set_output_track_idx.set(Some(idx));
+                            let _ = set_output_track_idx.try_set(Some(idx));
                         }
                         if let Some(lvl) = stems_level_db {
-                            set_stems_level.set(lvl);
+                            let _ = set_stems_level.try_set(lvl);
                         }
                         if let Some(muted) = stems_muted {
-                            set_stems_muted.set(muted);
+                            let _ = set_stems_muted.try_set(muted);
                         }
                         if let Some(idx) = stems_bus_index {
-                            set_stems_bus_idx.set(Some(idx));
+                            let _ = set_stems_bus_idx.try_set(Some(idx));
                         }
-                        set_connected.set(conn);
-                        set_loading.set(false);
+                        let _ = set_connected.try_set(conn);
+                        let _ = set_loading.try_set(false);
                     }
                     iem_core::ServerMsg::Meters { meters: m } => {
                         if !page_visible.get() {
@@ -227,12 +227,12 @@ fn connect_websocket(
                         if now - last_meter_time.get() >= 50.0 {
                             last_meter_time.set(now);
                             // Merge delta meters into existing map (server sends only changed values)
-                            set_meters.update(|existing| {
+                            let _ = set_meters.try_update(|existing| {
                                 for (k, v) in m {
                                     existing.insert(k, v);
                                 }
                             });
-                            set_data_pulse.update(|v| *v = !*v);
+                            let _ = set_data_pulse.try_update(|v| *v = !*v);
                         }
                     }
                     iem_core::ServerMsg::ChannelUpdate {
@@ -242,7 +242,7 @@ fn connect_websocket(
                         pan,
                     } => {
                         if !touched.get(&track_index).copied().unwrap_or(false) {
-                            set_channels.update(|chs| {
+                            let _ = set_channels.try_update(|chs| {
                                 if let Some(ch) =
                                     chs.iter_mut().find(|c| c.track_index == track_index)
                                 {
@@ -255,25 +255,25 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::GlobalVolumeUpdate { level_db, muted } => {
                         if !global_touched.get_untracked() {
-                            set_global_level.set(level_db);
-                            set_global_muted.set(muted);
+                            let _ = set_global_level.try_set(level_db);
+                            let _ = set_global_muted.try_set(muted);
                         }
                     }
                     iem_core::ServerMsg::StemsVolumeUpdate { level_db, muted } => {
                         if !stems_touched.get_untracked() {
-                            set_stems_level.set(level_db);
-                            set_stems_muted.set(muted);
+                            let _ = set_stems_level.try_set(level_db);
+                            let _ = set_stems_muted.try_set(muted);
                         }
                     }
                     iem_core::ServerMsg::ConnectionChanged { connected: conn } => {
-                        set_connected.set(conn);
+                        let _ = set_connected.try_set(conn);
                     }
                     iem_core::ServerMsg::CustomizationUpdate { pinned, hidden } => {
-                        set_pinned_channels.set(pinned);
-                        set_hidden_channels.set(hidden);
+                        let _ = set_pinned_channels.try_set(pinned);
+                        let _ = set_hidden_channels.try_set(hidden);
                     }
                     iem_core::ServerMsg::NetworkMode { mode } => {
-                        set_network_mode.set(mode);
+                        let _ = set_network_mode.try_set(mode);
                     }
                     iem_core::ServerMsg::SoloUpdate { soloed: new_solo } => {
                         let new_soloed: std::collections::HashSet<usize> =
@@ -283,7 +283,7 @@ fn connect_websocket(
                         if new_soloed != current {
                             if new_soloed.is_empty() && !current.is_empty() {
                                 // Remote un-soloed all: clear pre-solo mutes
-                                set_pre_solo_mutes.set(HashMap::new());
+                                let _ = set_pre_solo_mutes.try_set(HashMap::new());
                             } else if !new_soloed.is_empty() && current.is_empty() {
                                 // Remote entered solo: save current mute states for restore
                                 let chs = channels.get_untracked();
@@ -291,16 +291,16 @@ fn connect_websocket(
                                 for ch in &chs {
                                     saved.insert(ch.track_index, ch.muted);
                                 }
-                                set_pre_solo_mutes.set(saved);
+                                let _ = set_pre_solo_mutes.try_set(saved);
                             } else if !new_soloed.is_empty() && !current.is_empty() {
                                 // Remote exclusive switch: update local mute display (#131)
-                                set_channels.update(|chs| {
+                                let _ = set_channels.try_update(|chs| {
                                     for c in chs.iter_mut() {
                                         c.muted = !new_soloed.contains(&c.track_index);
                                     }
                                 });
                             }
-                            set_soloed.set(new_soloed);
+                            let _ = set_soloed.try_set(new_soloed);
                         }
                     }
                     iem_core::ServerMsg::AudioStatus { .. } => {
@@ -310,31 +310,33 @@ fn connect_websocket(
                         from_member,
                         from_name,
                     } => {
-                        set_alert_data.set(Some((from_member.clone(), from_name)));
-                        set_alert_active.set(true);
+                        let _ = set_alert_data.try_set(Some((from_member.clone(), from_name)));
+                        let _ = set_alert_active.try_set(true);
                     }
                     iem_core::ServerMsg::AlertCleared { member_id: cleared } => {
-                        set_alert_active.set(false);
+                        let _ = set_alert_active.try_set(false);
                         if let Some((ref m, _)) = alert_data.get_untracked() {
                             if *m == cleared {
-                                set_alert_data.set(None);
+                                let _ = set_alert_data.try_set(None);
                             }
                         }
                     }
                     iem_core::ServerMsg::ActiveAlerts { alerts } => {
                         if let Some(first) = alerts.first() {
-                            set_alert_data
-                                .set(Some((first.from_member.clone(), first.from_name.clone())));
+                            let _ = set_alert_data.try_set(Some((
+                                first.from_member.clone(),
+                                first.from_name.clone(),
+                            )));
                         }
                     }
                     iem_core::ServerMsg::TalkAcquired => {
-                        set_talk_state.set(TalkState::Live);
+                        let _ = set_talk_state.try_set(TalkState::Live);
                     }
                     iem_core::ServerMsg::TalkBusy { .. } => {
-                        set_talk_state.set(TalkState::InUse);
+                        let _ = set_talk_state.try_set(TalkState::InUse);
                     }
                     iem_core::ServerMsg::TalkReleased => {
-                        set_talk_state.set(TalkState::Idle);
+                        let _ = set_talk_state.try_set(TalkState::Idle);
                     }
                     iem_core::ServerMsg::EngineerTalking { active } => {
                         // Red page overlay on band member devices (no vibration)
@@ -349,14 +351,14 @@ fn connect_websocket(
                                 }
                             }
                         }
-                        set_engineer_talking.set(active);
+                        let _ = set_engineer_talking.try_set(active);
                     }
                     iem_core::ServerMsg::EqParams {
                         track_index: _,
                         track_name: _,
                         bands,
                     } => {
-                        set_eq_bands.set(
+                        let _ = set_eq_bands.try_set(
                             bands
                                 .into_iter()
                                 .map(|b| EqBandState {
@@ -371,7 +373,7 @@ fn connect_websocket(
                                 })
                                 .collect(),
                         );
-                        set_eq_loading.set(false);
+                        let _ = set_eq_loading.try_set(false);
                     }
                     iem_core::ServerMsg::EqParamsMulti { .. } => {
                         // Handled by preset modal (future integration)
@@ -383,10 +385,10 @@ fn connect_websocket(
                         limit_norm,
                         enabled,
                     } => {
-                        set_limiter_limit_db.set(limit_db);
-                        set_limiter_limit_norm.set(limit_norm);
-                        set_limiter_enabled.set(enabled);
-                        set_limiter_loading.set(false);
+                        let _ = set_limiter_limit_db.try_set(limit_db);
+                        let _ = set_limiter_limit_norm.try_set(limit_norm);
+                        let _ = set_limiter_enabled.try_set(enabled);
+                        let _ = set_limiter_loading.try_set(false);
                     }
                 }
             }
@@ -398,7 +400,7 @@ fn connect_websocket(
 
     // Handle close — mark disconnected and increment failure counter
     let onclose = Closure::wrap(Box::new(move |_: web_sys::CloseEvent| {
-        set_connected.set(false);
+        let _ = set_connected.try_set(false);
         fail_count_close.set(fail_count_close.get() + 1);
         reconnect_attempt_close.set(reconnect_attempt_close.get() + 1);
     }) as Box<dyn FnMut(web_sys::CloseEvent)>);
@@ -694,7 +696,7 @@ pub fn MixerPage() -> impl IntoView {
         wasm_bindgen_futures::spawn_local(async move {
             if let Ok(members) = crate::api::get_members().await {
                 if let Some(m) = members.iter().find(|m| m.id == mid) {
-                    let _ = set_has_photo.try_update(|v| *v = m.has_photo);
+                    let _ = set_has_photo.try_set(m.has_photo);
                 }
             }
         });

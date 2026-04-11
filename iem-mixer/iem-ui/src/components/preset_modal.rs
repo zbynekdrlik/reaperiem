@@ -248,12 +248,12 @@ pub fn PresetModal(
             wasm_bindgen_futures::spawn_local(async move {
                 match fetch_presets(&member_id).await {
                     Ok(list) => {
-                        let _ = set_presets.try_update(|v| *v = list);
-                        let _ = set_loading.try_update(|v| *v = false);
+                        let _ = set_presets.try_set(list);
+                        let _ = set_loading.try_set(false);
                     }
                     Err(e) => {
-                        let _ = set_error.try_update(|v| *v = Some(e));
-                        let _ = set_loading.try_update(|v| *v = false);
+                        let _ = set_error.try_set(Some(e));
+                        let _ = set_loading.try_set(false);
                     }
                 }
             });
@@ -283,15 +283,15 @@ pub fn PresetModal(
                 Ok(()) => {
                     // Refresh list
                     if let Ok(list) = fetch_presets(&member_id).await {
-                        let _ = set_presets.try_update(|v| *v = list);
+                        let _ = set_presets.try_set(list);
                     }
-                    let _ = set_new_name.try_update(|v| *v = String::new());
+                    let _ = set_new_name.try_set(String::new());
                 }
                 Err(e) => {
-                    let _ = set_error.try_update(|v| *v = Some(e));
+                    let _ = set_error.try_set(Some(e));
                 }
             }
-            let _ = set_loading.try_update(|v| *v = false);
+            let _ = set_loading.try_set(false);
         });
     };
 
@@ -403,14 +403,14 @@ pub fn PresetModal(
                                                                 {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            let _ = set_presets.try_update(|v| *v = list);
+                                                                            let _ = set_presets.try_set(list);
                                                                         }
                                                                     }
                                                                     Err(e) => {
-                                                                        let _ = set_error.try_update(|v| *v = Some(e));
+                                                                        let _ = set_error.try_set(Some(e));
                                                                     }
                                                                 }
-                                                                let _ = set_loading.try_update(|v| *v = false);
+                                                                let _ = set_loading.try_set(false);
                                                             });
                                                         }
                                                     >
@@ -428,14 +428,14 @@ pub fn PresetModal(
                                                                 match delete_preset_api(&member_id, &name).await {
                                                                     Ok(()) => {
                                                                         if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            let _ = set_presets.try_update(|v| *v = list);
+                                                                            let _ = set_presets.try_set(list);
                                                                         }
                                                                     }
                                                                     Err(e) => {
-                                                                        let _ = set_error.try_update(|v| *v = Some(e));
+                                                                        let _ = set_error.try_set(Some(e));
                                                                     }
                                                                 }
-                                                                let _ = set_loading.try_update(|v| *v = false);
+                                                                let _ = set_loading.try_set(false);
                                                             });
                                                         }
                                                     >

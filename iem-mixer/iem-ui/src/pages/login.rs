@@ -64,9 +64,9 @@ pub fn LoginPage() -> impl IntoView {
                         nav(&next_val, Default::default());
                     }
                     Err(e) => {
-                        let _ = set_error.try_update(|v| *v = Some(e));
-                        let _ = set_pin.try_update(|v| *v = String::new());
-                        let _ = set_loading.try_update(|v| *v = false);
+                        let _ = set_error.try_set(Some(e));
+                        let _ = set_pin.try_set(String::new());
+                        let _ = set_loading.try_set(false);
                     }
                 }
             });
