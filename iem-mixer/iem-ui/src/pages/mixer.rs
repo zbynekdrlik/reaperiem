@@ -1404,7 +1404,6 @@ pub fn MixerPage() -> impl IntoView {
                                 set_eq_open=set_eq_open
                                 set_eq_bands=set_eq_bands
                                 set_eq_loading=set_eq_loading
-                                is_engineer=is_engineer
                                 set_limiter_open=set_limiter_open
                                 set_limiter_loading=set_limiter_loading
                             />
@@ -1634,7 +1633,6 @@ fn GlobalVolumeFader(
     set_eq_open: WriteSignal<Option<(usize, String)>>,
     set_eq_bands: WriteSignal<Vec<EqBandState>>,
     set_eq_loading: WriteSignal<bool>,
-    is_engineer: bool,
     set_limiter_open: WriteSignal<Option<(usize, String)>>,
     set_limiter_loading: WriteSignal<bool>,
 ) -> impl IntoView {
@@ -1829,23 +1827,21 @@ fn GlobalVolumeFader(
                 >
                     "EQ"
                 </button>
-                {is_engineer.then(|| view! {
-                    <button
-                        class="limiter-btn-small"
-                        on:click=move |_| {
-                            if let Some(idx) = output_track_idx.get() {
-                                let _ = set_limiter_loading.try_set(true);
-                                let _ = set_limiter_open.try_set(Some((idx, "IEM VOL".to_string())));
-                                ws_send(
-                                    ws,
-                                    &iem_core::ClientMsg::GetLimiterParams { track_index: idx },
-                                );
-                            }
+                <button
+                    class="limiter-btn-small"
+                    on:click=move |_| {
+                        if let Some(idx) = output_track_idx.get() {
+                            let _ = set_limiter_loading.try_set(true);
+                            let _ = set_limiter_open.try_set(Some((idx, "IEM VOL".to_string())));
+                            ws_send(
+                                ws,
+                                &iem_core::ClientMsg::GetLimiterParams { track_index: idx },
+                            );
                         }
-                    >
-                        "LIM"
-                    </button>
-                })}
+                    }
+                >
+                    "LIM"
+                </button>
                 <button
                     class=move || if muted.get() { "mute-btn on" } else { "mute-btn off" }
                     on:click=on_mute_click

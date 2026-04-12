@@ -1090,7 +1090,8 @@ pub async fn ws_mixer(
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))));
     }
 
-    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id, network_mode)))
+    let is_engineer = claims.engineer;
+    Ok(ws.on_upgrade(move |socket| handle_ws(socket, state, member_id, network_mode, is_engineer)))
 }
 
 /// Handle a WebSocket connection for a member
@@ -1099,6 +1100,7 @@ async fn handle_ws(
     state: AppState,
     member_id: String,
     network_mode: String,
+    is_engineer: bool,
 ) {
     use axum::extract::ws::Message;
     use iem_core::{ClientMsg, ServerMsg};
@@ -1232,16 +1234,38 @@ async fn handle_ws(
                             }
 
                             // Handle Limiter commands (async EXTSTATE + ReaScript flow) (#72)
+
+                            // Limiter ownership check: non-engineer members can only
+                            // control the limiter on their own output track (#156).
+                            let owns_limiter_track = |track_index: usize| -> bool {
+                                if is_engineer {
+                                    return true;
+                                }
+                                // Use try_read to avoid holding the lock across an await point.
+                                if let Ok(cache) = state.mixer_cache.try_read() {
+                                    cache
+                                        .output_track_indices
+                                        .get(&member_id)
+                                        .is_some_and(|&idx| idx == track_index)
+                                } else {
+                                    false // Lock contended — deny conservatively
+                                }
+                            };
+
                             if let iem_core::ClientMsg::GetLimiterParams { track_index } = cmd {
-                                let state_clone = state.clone();
-                                let member_clone = member_id.clone();
-                                tokio::spawn(async move {
-                                    if let Some(lim_msg) =
-                                        handle_get_limiter_params(&state_clone, track_index).await
-                                    {
-                                        let _ = state_clone.event_tx.send((member_clone, lim_msg));
-                                    }
-                                });
+                                if owns_limiter_track(track_index) {
+                                    let state_clone = state.clone();
+                                    let member_clone = member_id.clone();
+                                    tokio::spawn(async move {
+                                        if let Some(lim_msg) =
+                                            handle_get_limiter_params(&state_clone, track_index)
+                                                .await
+                                        {
+                                            let _ =
+                                                state_clone.event_tx.send((member_clone, lim_msg));
+                                        }
+                                    });
+                                }
                                 continue;
                             }
                             if let iem_core::ClientMsg::SetLimiterParam {
@@ -1250,17 +1274,19 @@ async fn handle_ws(
                                 value,
                             } = cmd
                             {
-                                let state_clone = state.clone();
-                                let param_clone = param.clone();
-                                tokio::spawn(async move {
-                                    handle_set_limiter_param(
-                                        &state_clone,
-                                        track_index,
-                                        &param_clone,
-                                        value,
-                                    )
-                                    .await;
-                                });
+                                if owns_limiter_track(track_index) {
+                                    let state_clone = state.clone();
+                                    let param_clone = param.clone();
+                                    tokio::spawn(async move {
+                                        handle_set_limiter_param(
+                                            &state_clone,
+                                            track_index,
+                                            &param_clone,
+                                            value,
+                                        )
+                                        .await;
+                                    });
+                                }
                                 continue;
                             }
                             if let iem_core::ClientMsg::SetLimiterEnabled {
@@ -1268,16 +1294,18 @@ async fn handle_ws(
                                 enabled,
                             } = cmd
                             {
-                                let state_clone = state.clone();
-                                tokio::spawn(async move {
-                                    handle_set_limiter_param(
-                                        &state_clone,
-                                        track_index,
-                                        "enabled",
-                                        if enabled { 1.0 } else { 0.0 },
-                                    )
-                                    .await;
-                                });
+                                if owns_limiter_track(track_index) {
+                                    let state_clone = state.clone();
+                                    tokio::spawn(async move {
+                                        handle_set_limiter_param(
+                                            &state_clone,
+                                            track_index,
+                                            "enabled",
+                                            if enabled { 1.0 } else { 0.0 },
+                                        )
+                                        .await;
+                                    });
+                                }
                                 continue;
                             }
 
