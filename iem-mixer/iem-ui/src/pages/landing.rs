@@ -54,7 +54,7 @@ pub fn LandingPage() -> impl IntoView {
         let _ = retry_trigger.get();
 
         // Reset to loading state
-        set_state.set(LoadState::Loading);
+        let _ = set_state.try_set(LoadState::Loading);
 
         // Spawn async fetch. try_update: the landing page can unmount
         // (user navigates) while get_members_with_timeout is awaiting. #153
@@ -71,7 +71,7 @@ pub fn LandingPage() -> impl IntoView {
     });
 
     let retry = move |_| {
-        set_retry_trigger.update(|n| *n += 1);
+        let _ = set_retry_trigger.try_update(|n| *n += 1);
     };
 
     view! {

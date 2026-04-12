@@ -154,7 +154,7 @@ pub fn Fader(
             && !is_animating.get()
             && !guard_active
         {
-            set_local_value.set(value.get());
+            let _ = set_local_value.try_set(value.get());
         }
     });
 
@@ -166,7 +166,7 @@ pub fn Fader(
             // Cancel any existing animation
             animation_handle_start.borrow_mut().take();
 
-            set_is_animating.set(true);
+            let _ = set_is_animating.try_set(true);
             if let Some(cb) = on_touch_state {
                 cb.run(true); // prevents server echo
             }
@@ -180,11 +180,11 @@ pub fn Fader(
 
                 if diff.abs() < ANIMATION_STEP_DB {
                     // Close enough — snap to target and stop
-                    set_local_value.set(ANIMATION_TARGET_DB);
+                    let _ = set_local_value.try_set(ANIMATION_TARGET_DB);
                     on_change.run(ANIMATION_TARGET_DB);
                     // Stop animation
                     animation_handle_inner.borrow_mut().take();
-                    set_is_animating.set(false);
+                    let _ = set_is_animating.try_set(false);
                     // Set guard time to block Effect overwrite
                     *animation_guard_inner.borrow_mut() = js_sys::Date::now();
                     if let Some(cb) = on_touch_state {
@@ -198,7 +198,7 @@ pub fn Fader(
                         -ANIMATION_STEP_DB
                     };
                     let new_val = quantize(current + step);
-                    set_local_value.set(new_val);
+                    let _ = set_local_value.try_set(new_val);
                     on_change.run(new_val);
                 }
             });
@@ -216,7 +216,7 @@ pub fn Fader(
         move || {
             if is_animating.get_untracked() {
                 animation_handle_cancel.borrow_mut().take();
-                set_is_animating.set(false);
+                let _ = set_is_animating.try_set(false);
                 // Note: no on_touch_state(false) here — the touchstart/mousedown
                 // handler immediately calls on_touch_state(true) itself
             }
@@ -286,7 +286,7 @@ pub fn Fader(
                 ev.prevent_default();
                 // Reset tap tracking
                 *last_tap_time_ts.borrow_mut() = 0.0;
-                set_is_touch_interaction.set(true);
+                let _ = set_is_touch_interaction.try_set(true);
                 start_animation_ts();
                 return;
             }
@@ -300,17 +300,17 @@ pub fn Fader(
             *move_base_x_ts.borrow_mut() = Some(x);
         }
 
-        set_is_touch_interaction.set(true);
+        let _ = set_is_touch_interaction.try_set(true);
         raw_drag_value_ts.set(local_value.get_untracked());
-        set_is_pending.set(true);
+        let _ = set_is_pending.try_set(true);
 
         if let Some(cb) = on_touch_state {
             cb.run(true);
         }
 
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
-            set_is_activated.set(true);
-            set_is_pending.set(false);
+            let _ = set_is_activated.try_set(true);
+            let _ = set_is_pending.try_set(false);
 
             if let Some(cb) = on_activate {
                 cb.run(true);
@@ -340,7 +340,7 @@ pub fn Fader(
 
                 if dy > dx + 10.0 && !is_activated.get() {
                     *timeout_handle_tm.borrow_mut() = None;
-                    set_is_pending.set(false);
+                    let _ = set_is_pending.try_set(false);
                     return;
                 }
             }
@@ -372,7 +372,7 @@ pub fn Fader(
                         Some(integer) => integer,
                         None => quantize(new_raw),
                     };
-                    set_local_value.set(new_value);
+                    let _ = set_local_value.try_set(new_value);
                     on_change.run(new_value);
                     // Update base for next incremental move
                     *move_base_x_tm.borrow_mut() = Some(current_x);
@@ -384,7 +384,7 @@ pub fn Fader(
     let handle_touchend = move |_ev: TouchEvent| {
         *last_touch_time_te.borrow_mut() = js_sys::Date::now();
         *timeout_handle_te.borrow_mut() = None;
-        set_is_pending.set(false);
+        let _ = set_is_pending.try_set(false);
 
         if is_activated.get_untracked() {
             if let Some(cb) = on_activate {
@@ -392,8 +392,8 @@ pub fn Fader(
             }
         }
 
-        set_is_activated.set(false);
-        set_is_touch_interaction.set(false);
+        let _ = set_is_activated.try_set(false);
+        let _ = set_is_touch_interaction.try_set(false);
         *touch_start_x.borrow_mut() = None;
         *touch_start_y.borrow_mut() = None;
         *move_base_x_te.borrow_mut() = None;
@@ -410,7 +410,7 @@ pub fn Fader(
     let handle_touchcancel = move |_ev: TouchEvent| {
         *last_touch_time_tc.borrow_mut() = js_sys::Date::now();
         *timeout_handle_tc.borrow_mut() = None;
-        set_is_pending.set(false);
+        let _ = set_is_pending.try_set(false);
 
         if is_activated.get_untracked() {
             if let Some(cb) = on_activate {
@@ -418,8 +418,8 @@ pub fn Fader(
             }
         }
 
-        set_is_activated.set(false);
-        set_is_touch_interaction.set(false);
+        let _ = set_is_activated.try_set(false);
+        let _ = set_is_touch_interaction.try_set(false);
 
         if !is_animating.get_untracked() {
             if let Some(cb) = on_touch_state {
@@ -470,7 +470,7 @@ pub fn Fader(
         // Save current value and mouse position — NO JUMP, relative only
         raw_drag_value_md.set(local_value.get_untracked());
         *move_base_x_md.borrow_mut() = Some(ev.client_x() as f64);
-        set_is_pending.set(true);
+        let _ = set_is_pending.try_set(true);
 
         if let Some(cb) = on_touch_state {
             cb.run(true);
@@ -478,8 +478,8 @@ pub fn Fader(
 
         // Start 300ms activation timer (same as touch)
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
-            set_is_activated.set(true);
-            set_is_pending.set(false);
+            let _ = set_is_activated.try_set(true);
+            let _ = set_is_pending.try_set(false);
 
             if let Some(cb) = on_activate {
                 cb.run(true);
@@ -540,7 +540,7 @@ pub fn Fader(
             *timeout_handle_mu.borrow_mut() = None;
             let _ = set_is_pending.try_set(false);
 
-            if is_activated.get_untracked() {
+            if is_activated.try_get_untracked().unwrap_or(false) {
                 if let Some(cb) = on_activate {
                     cb.run(false);
                 }

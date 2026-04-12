@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for `scripts/check_disposal_safety.py`.
+"""Unit tests for `scripts/check_disposal_safety.py` (context-free rule).
 
 Run: python3 scripts/test_check_disposal_safety.py
 
@@ -7,11 +7,14 @@ The tests work on synthetic source snippets written to temporary files,
 so they do not touch the real iem-ui tree. Each test creates a file,
 runs `scan_file`, and asserts on the violations list.
 
-Why unit test a grep-shaped tool: the scanner's entire value proposition
-is that it has zero false positives on the existing safe patterns in the
-codebase (so developers trust it and don't hit "clippy fatigue") and zero
-false negatives on the known-bad patterns (so it actually prevents #153
-regressions). A fixture-based test suite pins both sides.
+The rule under test is context-free: any `.set()` / `.update()` /
+`.set_untracked()` / `.update_untracked()` call whose receiver matches
+`set_\\w+` is a violation, regardless of whether it is inside a
+spawn_local, a Closure::wrap, an event handler, or a plain top-level
+function. Helper functions called from inside a danger zone can still
+panic with "reactive value has already been disposed", so the only
+safe rule is "never write a Leptos signal unconditionally anywhere in
+the file". The safe alternatives are the `try_` prefixed forms.
 """
 
 from __future__ import annotations
@@ -70,11 +73,47 @@ def assert_no_violations(name: str, src: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# True positives — must be flagged
+# True positives — must be flagged (context-free)
 # ---------------------------------------------------------------------------
 
 
-def test_set_inside_spawn_local_is_flagged() -> None:
+def test_plain_set_at_top_level_fn_is_flagged() -> None:
+    src = """
+fn helper() {
+    set_foo.set(1);
+}
+"""
+    assert_violation_at("plain set at top-level fn is flagged", src, 3)
+
+
+def test_plain_update_at_top_level_fn_is_flagged() -> None:
+    src = """
+fn helper() {
+    set_foo.update(|v| *v = 1);
+}
+"""
+    assert_violation_at("plain update at top-level fn is flagged", src, 3)
+
+
+def test_plain_set_untracked_is_flagged() -> None:
+    src = """
+fn helper() {
+    set_foo.set_untracked(1);
+}
+"""
+    assert_violation_at("plain set_untracked at top-level fn is flagged", src, 3)
+
+
+def test_plain_update_untracked_is_flagged() -> None:
+    src = """
+fn helper() {
+    set_foo.update_untracked(|v| *v = 1);
+}
+"""
+    assert_violation_at("plain update_untracked at top-level fn is flagged", src, 3)
+
+
+def test_plain_set_inside_spawn_local_is_flagged() -> None:
     src = """
 fn f() {
     spawn_local(async move {
@@ -82,43 +121,10 @@ fn f() {
     });
 }
 """
-    assert_violation_at("set inside spawn_local is flagged", src, 4)
+    assert_violation_at("plain set inside spawn_local is flagged", src, 4)
 
 
-def test_update_inside_spawn_local_is_flagged() -> None:
-    src = """
-fn f() {
-    spawn_local(async move {
-        set_foo.update(|v| *v = 1);
-    });
-}
-"""
-    assert_violation_at("update inside spawn_local is flagged", src, 4)
-
-
-def test_set_untracked_inside_spawn_local_is_flagged() -> None:
-    src = """
-fn f() {
-    spawn_local(async move {
-        set_foo.set_untracked(1);
-    });
-}
-"""
-    assert_violation_at("set_untracked inside spawn_local is flagged", src, 4)
-
-
-def test_update_untracked_inside_spawn_local_is_flagged() -> None:
-    src = """
-fn f() {
-    spawn_local(async move {
-        set_foo.update_untracked(|v| *v = 1);
-    });
-}
-"""
-    assert_violation_at("update_untracked inside spawn_local is flagged", src, 4)
-
-
-def test_set_inside_closure_wrap_is_flagged() -> None:
+def test_plain_set_inside_closure_wrap_is_flagged() -> None:
     src = """
 fn f() {
     let cb = Closure::wrap(Box::new(move |_: Event| {
@@ -126,41 +132,45 @@ fn f() {
     }) as Box<dyn FnMut(_)>);
 }
 """
-    assert_violation_at("set inside Closure::wrap is flagged", src, 4)
+    assert_violation_at("plain set inside Closure::wrap is flagged", src, 4)
+
+
+def test_plain_set_inside_on_click_is_flagged() -> None:
+    src = """
+fn f() -> impl IntoView {
+    view! {
+        <button on:click=move |_| {
+            set_foo.set(1);
+        }>
+            "click"
+        </button>
+    }
+}
+"""
+    assert_violation_at("plain set inside on:click handler is flagged", src, 5)
+
+
+def test_plain_set_inside_callback_new_is_flagged() -> None:
+    src = """
+fn f() {
+    let cb = Callback::new(move |_: ()| {
+        set_foo.set(false);
+    });
+}
+"""
+    assert_violation_at("plain set inside Callback::new is flagged", src, 4)
 
 
 def test_rustfmt_split_multiline_is_flagged() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        set_alert_data
-            .set(Some(x));
-    });
+    set_alert_data
+        .set(Some(x));
 }
 """
     # The violation is reported at the WRITER line (first half), so fixers
     # land on the variable name.
-    assert_violation_at("rustfmt-split multi-line is flagged", src, 4)
-
-
-def test_nested_danger_zones_are_tracked_independently() -> None:
-    src = """
-fn f() {
-    spawn_local(async move {
-        let cb = Closure::wrap(Box::new(move |_: Event| {
-            set_inner.set(1);
-        }));
-        set_outer.set(2);
-    });
-}
-"""
-    vs = scan_src(src)
-    lines = sorted(ln for ln, _ in vs)
-    check(
-        "both inner and outer writes flagged",
-        lines == [5, 7],
-        f"expected [5, 7], got {lines}",
-    )
+    assert_violation_at("rustfmt-split multi-line is flagged", src, 3)
 
 
 # ---------------------------------------------------------------------------
@@ -168,48 +178,41 @@ fn f() {
 # ---------------------------------------------------------------------------
 
 
-def test_try_set_inside_spawn_local_is_ok() -> None:
+def test_try_set_is_ok() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        let _ = set_foo.try_set(1);
-    });
+    let _ = set_foo.try_set(1);
 }
 """
-    assert_no_violations("try_set inside spawn_local is OK", src)
+    assert_no_violations("try_set is OK", src)
 
 
-def test_try_update_inside_spawn_local_is_ok() -> None:
+def test_try_update_is_ok() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        let _ = set_foo.try_update(|v| *v = 1);
-    });
+    let _ = set_foo.try_update(|v| *v = 1);
 }
 """
-    assert_no_violations("try_update inside spawn_local is OK", src)
+    assert_no_violations("try_update is OK", src)
 
 
-def test_set_outside_any_danger_zone_is_ok() -> None:
+def test_try_set_untracked_is_ok() -> None:
     src = """
 fn f() {
-    set_foo.set(1);
-    set_bar.update(|v| *v += 1);
+    let _ = set_foo.try_set_untracked(1);
 }
 """
-    assert_no_violations("set outside danger zone is OK", src)
+    assert_no_violations("try_set_untracked is OK", src)
 
 
 def test_web_sys_setters_are_not_flagged() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        window.set_interval_with_callback(cb, 1000);
-        opts.set_body(&value);
-        socket.set_onclose(Some(closure));
-        headers.set("content-type", "application/json");
-        element.set_onclick(handler);
-    });
+    window.set_interval_with_callback(cb, 1000);
+    opts.set_body(&value);
+    socket.set_onclose(Some(closure));
+    headers.set("content-type", "application/json");
+    element.set_onclick(handler);
 }
 """
     assert_no_violations(
@@ -221,9 +224,7 @@ fn f() {
 def test_disposal_safe_escape_hatch_respected() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        set_foo.set(1); // disposal-safe: only runs during mount
-    });
+    set_foo.set(1); // disposal-safe: only runs during mount
 }
 """
     assert_no_violations("// disposal-safe: escape hatch respected", src)
@@ -232,10 +233,8 @@ fn f() {
 def test_line_comment_set_is_not_flagged() -> None:
     src = """
 fn f() {
-    spawn_local(async move {
-        // set_foo.set(1) — example in a comment
-        let _ = set_foo.try_set(1);
-    });
+    // set_foo.set(1) — example in a comment
+    let _ = set_foo.try_set(1);
 }
 """
     assert_no_violations("signal write inside a // comment is not flagged", src)
@@ -244,25 +243,264 @@ fn f() {
 def test_string_literal_set_is_not_flagged() -> None:
     src = '''
 fn f() {
-    spawn_local(async move {
-        let s = "set_foo.set(1)";
-        let _ = set_foo.try_set(1);
-    });
+    let s = "set_foo.set(1)";
+    let _ = set_foo.try_set(1);
 }
 '''
     assert_no_violations("signal write inside a string literal is not flagged", src)
 
 
-def test_set_in_plain_function_not_closure_not_flagged() -> None:
+# ---------------------------------------------------------------------------
+# Second-pass: locally-bound RwSignal names must be flagged
+# ---------------------------------------------------------------------------
+
+
+def test_rwsignal_bound_local_name_is_flagged() -> None:
     src = """
 fn f() {
-    fn helper() {
-        set_foo.set(1); // plain fn, not a closure
-    }
-    helper();
+    let local_value = RwSignal::new(0.0);
+    local_value.set(1.0);
 }
 """
-    assert_no_violations("set inside a plain nested fn is not flagged", src)
+    assert_violation_at("plain set on RwSignal-bound local is flagged", src, 4)
+
+
+def test_rwsignal_bound_update_is_flagged() -> None:
+    src = """
+fn f() {
+    let curve_trigger = RwSignal::new(0u32);
+    curve_trigger.update(|n| *n += 1);
+}
+"""
+    assert_violation_at("plain update on RwSignal-bound local is flagged", src, 4)
+
+
+def test_rwsignal_bound_try_set_is_ok() -> None:
+    src = """
+fn f() {
+    let local_value = RwSignal::new(0.0);
+    let _ = local_value.try_set(1.0);
+}
+"""
+    assert_no_violations("try_set on RwSignal-bound local is OK", src)
+
+
+def test_rwsignal_bound_inside_spawn_local_is_flagged() -> None:
+    src = """
+fn f() {
+    let local_state_created = RwSignal::new(false);
+    spawn_local(async move {
+        local_state_created.set(true);
+    });
+}
+"""
+    assert_violation_at(
+        "plain set on RwSignal-bound local inside spawn_local is flagged",
+        src,
+        5,
+    )
+
+
+def test_non_rwsignal_set_on_plain_identifier_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let cell = std::cell::Cell::new(0.0);
+    cell.set(1.0);
+}
+"""
+    assert_no_violations("plain .set on non-RwSignal identifier is not flagged", src)
+
+
+# ---------------------------------------------------------------------------
+# Read-side rule: plain get_untracked / with_untracked / read_untracked
+# inside danger zones (spawn_local, Closure::wrap, Effect::new) is a
+# violation. `.get()` / `.with()` / `.read()` (tracked) are NOT targeted
+# — those only appear in reactive render code, and the burn radius is
+# too big. The `_untracked` variants are what async/closure code uses.
+# ---------------------------------------------------------------------------
+
+
+def test_plain_get_untracked_inside_spawn_local_is_flagged() -> None:
+    src = """
+fn f() {
+    spawn_local(async move {
+        let v = some_sig.get_untracked();
+    });
+}
+"""
+    assert_violation_at(
+        "plain get_untracked inside spawn_local is flagged",
+        src,
+        4,
+    )
+
+
+def test_plain_with_untracked_inside_closure_wrap_is_flagged() -> None:
+    src = """
+fn f() {
+    let cb = Closure::wrap(Box::new(move |_: Event| {
+        some_sig.with_untracked(|v| do_something(v));
+    }) as Box<dyn FnMut(_)>);
+}
+"""
+    assert_violation_at(
+        "plain with_untracked inside Closure::wrap is flagged",
+        src,
+        4,
+    )
+
+
+def test_plain_get_untracked_inside_effect_new_is_flagged() -> None:
+    src = """
+fn f() {
+    Effect::new(move |_| {
+        let v = some_sig.get_untracked();
+    });
+}
+"""
+    assert_violation_at(
+        "plain get_untracked inside Effect::new is flagged",
+        src,
+        4,
+    )
+
+
+def test_try_get_untracked_inside_spawn_local_is_ok() -> None:
+    src = """
+fn f() {
+    spawn_local(async move {
+        if let Some(v) = some_sig.try_get_untracked() {
+            do_something(v);
+        }
+    });
+}
+"""
+    assert_no_violations(
+        "try_get_untracked inside spawn_local is OK",
+        src,
+    )
+
+
+def test_plain_get_untracked_outside_danger_zone_is_ok() -> None:
+    src = """
+fn f() {
+    let v = some_sig.get_untracked();
+}
+"""
+    assert_no_violations(
+        "plain get_untracked in top-level fn is OK (synchronous read only)",
+        src,
+    )
+
+
+def test_plain_get_untracked_inside_on_click_is_ok() -> None:
+    src = """
+fn f() {
+    view! {
+        <button on:click=move |_| {
+            let v = some_sig.get_untracked();
+        }>{"click"}</button>
+    }
+}
+"""
+    assert_no_violations(
+        "plain get_untracked inside on:click is OK (synchronous, DOM-gated)",
+        src,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Pinned invariant: std interior-mutability types do NOT match UNSAFE_READ.
+#
+# The `_untracked` suffix on get/with/read is Leptos-specific; std `Cell`,
+# `RefCell`, thread-local `LocalKey`, `AtomicUsize`, and `OnceCell` do not
+# expose methods by those names, so even a broad `\w+\.\bget_untracked\b`
+# regex inside a danger zone cannot accidentally match them. These tests
+# pin that invariant so a future scanner change can't silently start
+# flagging Cell/RefCell accesses inside spawn_local or Closure::wrap.
+# ---------------------------------------------------------------------------
+
+
+def test_cell_get_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let cell = std::cell::Cell::new(0.0);
+    spawn_local(async move {
+        let v = cell.get();
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "Cell::get() inside spawn_local is not flagged (Cell has no get_untracked)",
+        src,
+    )
+
+
+def test_refcell_borrow_inside_closure_wrap_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let rc = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let rc2 = rc.clone();
+    let cb = Closure::wrap(Box::new(move |_: Event| {
+        let borrow = rc2.borrow();
+        for item in borrow.iter() { use_item(item); }
+    }) as Box<dyn FnMut(_)>);
+}
+"""
+    assert_no_violations(
+        "RefCell::borrow() inside Closure::wrap is not flagged",
+        src,
+    )
+
+
+def test_thread_local_with_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+thread_local! { static COUNTER: std::cell::Cell<u32> = std::cell::Cell::new(0); }
+
+fn f() {
+    spawn_local(async move {
+        COUNTER.with(|c| c.set(c.get() + 1));
+    });
+}
+"""
+    assert_no_violations(
+        "thread-local LocalKey::with() is not flagged (`with`, not `with_untracked`)",
+        src,
+    )
+
+
+def test_rc_cell_get_inside_effect_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let state = std::rc::Rc::new(std::cell::Cell::new(0));
+    let state_e = state.clone();
+    Effect::new(move |_| {
+        let v = state_e.get();
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "Rc<Cell>::get() inside Effect::new is not flagged",
+        src,
+    )
+
+
+def test_atomic_load_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let counter = std::sync::atomic::AtomicUsize::new(0);
+    spawn_local(async move {
+        let v = counter.load(std::sync::atomic::Ordering::Relaxed);
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "AtomicUsize::load() inside spawn_local is not flagged",
+        src,
+    )
 
 
 # ---------------------------------------------------------------------------

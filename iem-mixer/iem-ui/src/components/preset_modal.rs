@@ -240,8 +240,8 @@ pub fn PresetModal(
     Effect::new(move |_| {
         if visible.get() {
             let member_id = member_id_stored.get_value();
-            set_loading.set(true);
-            set_error.set(None);
+            let _ = set_loading.try_set(true);
+            let _ = set_error.try_set(None);
 
             // try_update on every signal write — modal can close during
             // the fetch and dispose the surrounding scope. #153
@@ -268,7 +268,7 @@ pub fn PresetModal(
 
         let state = get_current_state.run(());
         let member_id = member_id_stored.get_value();
-        set_loading.set(true);
+        let _ = set_loading.try_set(true);
 
         wasm_bindgen_futures::spawn_local(async move {
             match save_preset_api(
@@ -298,7 +298,7 @@ pub fn PresetModal(
     let handle_input = move |ev: web_sys::Event| {
         let target = ev.target().unwrap();
         let input = target.dyn_into::<web_sys::HtmlInputElement>().unwrap();
-        set_new_name.set(input.value());
+        let _ = set_new_name.try_set(input.value());
     };
 
     let handle_overlay_click = move |ev: web_sys::MouseEvent| {
@@ -388,7 +388,7 @@ pub fn PresetModal(
                                                             let state = get_current_state.run(());
                                                             let member_id = member_id_stored.get_value();
                                                             let name = name_update.clone();
-                                                            set_loading.set(true);
+                                                            let _ = set_loading.try_set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
                                                                 // try_update: modal can close mid-await. #153
@@ -421,7 +421,7 @@ pub fn PresetModal(
                                                         on:click=move |_| {
                                                             let member_id = member_id_stored.get_value();
                                                             let name = name_delete.clone();
-                                                            set_loading.set(true);
+                                                            let _ = set_loading.try_set(true);
 
                                                             wasm_bindgen_futures::spawn_local(async move {
                                                                 // try_update: modal can close mid-await. #153

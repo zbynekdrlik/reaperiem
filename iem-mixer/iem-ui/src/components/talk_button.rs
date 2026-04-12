@@ -48,7 +48,7 @@ pub fn TalkButton(
     // Check browser support on mount
     Effect::new(move || {
         if !is_talkback_supported() {
-            set_state.set(TalkState::Unsupported);
+            let _ = set_state.try_set(TalkState::Unsupported);
         }
     });
 
@@ -200,7 +200,7 @@ pub fn TalkButton(
             }
         }
 
-        set_state.set(TalkState::Idle);
+        let _ = set_state.try_set(TalkState::Idle);
     };
 
     let on_pointer_up = move |e: web_sys::PointerEvent| {

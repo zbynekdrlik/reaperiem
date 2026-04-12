@@ -120,7 +120,9 @@ pub fn SettingsModal(
                                         wasm_bindgen_futures::spawn_local(async move {
                                             if crate::api::delete_photo(&mid).await.is_ok() {
                                                 if let Some(set) = set_hp {
-                                                    set.set(false);
+                                                    // disposal-race-safe: try_set on destructured
+                                                    // WriteSignal after .await in spawn_local.
+                                                    let _ = set.try_set(false);
                                                 }
                                             }
                                         });
@@ -185,7 +187,9 @@ pub fn SettingsModal(
                                         wasm_bindgen_futures::spawn_local(async move {
                                             if crate::api::upload_photo(&mid, &base64).await.is_ok() {
                                                 if let Some(set) = set_hp {
-                                                    set.set(true);
+                                                    // disposal-race-safe: try_set on destructured
+                                                    // WriteSignal after .await in spawn_local.
+                                                    let _ = set.try_set(true);
                                                 }
                                             }
                                         });
@@ -211,7 +215,7 @@ pub fn SettingsModal(
 
                         <div class="settings-row" on:click=move |_| {
                             let new_val = !double_tap_fader.get_untracked();
-                            set_double_tap_fader.set(new_val);
+                            let _ = set_double_tap_fader.try_set(new_val);
                             let mid = member_id.get_value();
                             let mut settings = UserSettings::load(&mid);
                             settings.double_tap_fader = new_val;
@@ -243,7 +247,7 @@ pub fn SettingsModal(
                                             data-testid="boost-minus"
                                             on:click=move |_| {
                                                 let new_val = (listen_boost.get_untracked() - 3.0).max(0.0);
-                                                set_listen_boost.set(new_val);
+                                                let _ = set_listen_boost.try_set(new_val);
                                                 let mid = member_id.get_value();
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;
@@ -264,7 +268,7 @@ pub fn SettingsModal(
                                             data-testid="boost-plus"
                                             on:click=move |_| {
                                                 let new_val = (listen_boost.get_untracked() + 3.0).min(24.0);
-                                                set_listen_boost.set(new_val);
+                                                let _ = set_listen_boost.try_set(new_val);
                                                 let mid = member_id.get_value();
                                                 let mut settings = UserSettings::load(&mid);
                                                 settings.listen_boost_db = new_val;

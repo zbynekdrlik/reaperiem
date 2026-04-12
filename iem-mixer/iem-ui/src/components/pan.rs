@@ -97,7 +97,7 @@ pub fn PanKnob(
             && !is_animating.get()
             && !guard_active
         {
-            set_local_value.set(value.get());
+            let _ = set_local_value.try_set(value.get());
         }
     });
 
@@ -109,7 +109,7 @@ pub fn PanKnob(
             // Cancel any existing animation
             animation_handle_start.borrow_mut().take();
 
-            set_is_animating.set(true);
+            let _ = set_is_animating.try_set(true);
 
             let animation_handle_inner = animation_handle_start.clone();
             let animation_guard_inner = animation_guard_start.clone();
@@ -120,11 +120,11 @@ pub fn PanKnob(
 
                 if diff.abs() < ANIMATION_STEP {
                     // Close enough — snap to target and stop
-                    set_local_value.set(ANIMATION_TARGET);
+                    let _ = set_local_value.try_set(ANIMATION_TARGET);
                     on_change.run(ANIMATION_TARGET);
                     // Stop animation
                     animation_handle_inner.borrow_mut().take();
-                    set_is_animating.set(false);
+                    let _ = set_is_animating.try_set(false);
                     // Set guard time to block Effect overwrite
                     *animation_guard_inner.borrow_mut() = js_sys::Date::now();
                 } else {
@@ -135,7 +135,7 @@ pub fn PanKnob(
                         -ANIMATION_STEP
                     };
                     let new_val = current + step;
-                    set_local_value.set(new_val);
+                    let _ = set_local_value.try_set(new_val);
                     on_change.run(new_val);
                 }
             });
@@ -153,7 +153,7 @@ pub fn PanKnob(
         move || {
             if is_animating.get_untracked() {
                 animation_handle_cancel.borrow_mut().take();
-                set_is_animating.set(false);
+                let _ = set_is_animating.try_set(false);
             }
         }
     };
@@ -212,7 +212,7 @@ pub fn PanKnob(
                 ev.prevent_default();
                 // Reset tap tracking
                 *last_tap_time_start.borrow_mut() = 0.0;
-                set_is_touch_interaction.set(true);
+                let _ = set_is_touch_interaction.try_set(true);
                 start_animation_ts();
                 return;
             }
@@ -228,15 +228,15 @@ pub fn PanKnob(
         }
 
         // Mark as touch interaction and save current value
-        set_is_touch_interaction.set(true);
-        set_saved_value.set(local_value.get_untracked());
+        let _ = set_is_touch_interaction.try_set(true);
+        let _ = set_saved_value.try_set(local_value.get_untracked());
 
-        set_is_pending.set(true);
+        let _ = set_is_pending.try_set(true);
 
         // Start activation timeout
         let timeout = gloo_timers::callback::Timeout::new(ACTIVATION_DELAY_MS, move || {
-            set_is_activated.set(true);
-            set_is_pending.set(false);
+            let _ = set_is_activated.try_set(true);
+            let _ = set_is_pending.try_set(false);
 
             // Haptic feedback on activation
             if let Some(window) = web_sys::window() {
@@ -263,7 +263,7 @@ pub fn PanKnob(
 
                 if dy > dx + 10.0 && !is_activated.get() {
                     *timeout_handle_tm.borrow_mut() = None;
-                    set_is_pending.set(false);
+                    let _ = set_is_pending.try_set(false);
                     return;
                 }
             }
@@ -287,7 +287,7 @@ pub fn PanKnob(
                         let delta_ratio = delta_x / rect.width();
                         let base = saved_value.get_untracked();
                         let new_value = (base + delta_ratio as f32).clamp(0.0, 1.0);
-                        set_local_value.set(new_value);
+                        let _ = set_local_value.try_set(new_value);
                         input.set_value(&format!("{}", (new_value * 100.0) as i32));
                         on_change_touch.run(new_value);
                     }
@@ -314,13 +314,13 @@ pub fn PanKnob(
         if is_touch_interaction.get_untracked() {
             let restore = saved_value.get_untracked();
             input.set_value(&format!("{}", (restore * 100.0) as i32));
-            set_local_value.set(restore);
+            let _ = set_local_value.try_set(restore);
             return;
         }
 
         // Desktop/mouse: immediate response
         let new_value: f32 = input.value().parse().unwrap_or(50.0) / 100.0;
-        set_local_value.set(new_value);
+        let _ = set_local_value.try_set(new_value);
         on_change_input.run(new_value);
     };
 
@@ -328,9 +328,9 @@ pub fn PanKnob(
     let handle_touchend = move |_ev: TouchEvent| {
         *last_touch_time_te.borrow_mut() = js_sys::Date::now();
         *timeout_handle_te.borrow_mut() = None;
-        set_is_pending.set(false);
-        set_is_activated.set(false);
-        set_is_touch_interaction.set(false);
+        let _ = set_is_pending.try_set(false);
+        let _ = set_is_activated.try_set(false);
+        let _ = set_is_touch_interaction.try_set(false);
         *touch_start_x.borrow_mut() = None;
         *touch_start_y.borrow_mut() = None;
         *move_base_x_te.borrow_mut() = None;
@@ -365,9 +365,9 @@ pub fn PanKnob(
                 on:touchmove=handle_touchmove
                 on:touchend=handle_touchend
                 on:touchcancel=move |_| {
-                    set_is_pending.set(false);
-                    set_is_activated.set(false);
-                    set_is_touch_interaction.set(false);
+                    let _ = set_is_pending.try_set(false);
+                    let _ = set_is_activated.try_set(false);
+                    let _ = set_is_touch_interaction.try_set(false);
                 }
                 on:dblclick=handle_dblclick
                 title="Pan (double-tap to center)"

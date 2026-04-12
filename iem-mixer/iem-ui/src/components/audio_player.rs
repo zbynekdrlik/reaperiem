@@ -92,7 +92,7 @@ pub fn ListenButton(
     // Check browser support on mount
     Effect::new(move || {
         if !is_audio_supported() {
-            set_state.set(ListenState::Unsupported);
+            let _ = set_state.try_set(ListenState::Unsupported);
         }
     });
 
@@ -105,12 +105,14 @@ pub fn ListenButton(
     Effect::new(move || {
         let current_state = state.get();
 
-        // Clear previous interval if any
-        if let Some(id) = stats_interval.get_untracked() {
+        // Clear previous interval if any. Double-Option: outer guards the
+        // signal disposal race (scope may be gone when effect re-runs
+        // during teardown); inner is the signal's own `Option<i32>`.
+        if let Some(Some(id)) = stats_interval.try_get_untracked() {
             if let Some(w) = web_sys::window() {
                 w.clear_interval_with_handle(id);
             }
-            set_stats_interval.set(None);
+            let _ = set_stats_interval.try_set(None);
         }
         // Drop old closure (prevents leak)
         stats_closure_effect.borrow_mut().take();
@@ -131,7 +133,7 @@ pub fn ListenButton(
                 .unwrap();
             // Store closure to keep it alive (and allow cleanup on re-run)
             *stats_closure_effect.borrow_mut() = Some(closure);
-            set_stats_interval.set(Some(id));
+            let _ = set_stats_interval.try_set(Some(id));
         }
     });
 
@@ -144,17 +146,20 @@ pub fn ListenButton(
 
         // Clear existing reconnect timer if state changed away from Reconnecting
         if current_state != ListenState::Reconnecting {
-            if let Some(id) = reconnect_interval.get_untracked() {
+            // Double-Option: outer = disposal guard, inner = signal value.
+            if let Some(Some(id)) = reconnect_interval.try_get_untracked() {
                 if let Some(w) = web_sys::window() {
                     w.clear_interval_with_handle(id);
                 }
-                set_reconnect_interval.set(None);
+                let _ = set_reconnect_interval.try_set(None);
             }
             return;
         }
 
-        // Already have a reconnect timer running
-        if reconnect_interval.get_untracked().is_some() {
+        // Already have a reconnect timer running. On disposal we treat
+        // the signal as "no timer", so `flatten()` collapses the outer
+        // None into an inner None and the is_some() check stays correct.
+        if reconnect_interval.try_get_untracked().flatten().is_some() {
             return;
         }
 
@@ -192,7 +197,7 @@ pub fn ListenButton(
             .unwrap();
         // Store closure to keep it alive (and allow cleanup on re-run)
         *reconnect_closure_effect.borrow_mut() = Some(closure);
-        set_reconnect_interval.set(Some(id));
+        let _ = set_reconnect_interval.try_set(Some(id));
     });
 
     // Cleanup on unmount
@@ -210,7 +215,7 @@ pub fn ListenButton(
                 w.clear_interval_with_handle(id);
             }
         }
-        set_intentional_stop.set(true);
+        let _ = set_intentional_stop.try_set(true);
         if let Some(ws) = ws.get_untracked() {
             let _ = ws.close();
         }
@@ -239,11 +244,11 @@ pub fn ListenButton(
                 if let Some(w) = web_sys::window() {
                     w.clear_interval_with_handle(id);
                 }
-                set_reconnect_interval.set(None);
+                let _ = set_reconnect_interval.try_set(None);
             }
             stop_listening(ws, set_state, set_ws, set_intentional_stop);
-            set_listen_target.set(String::new());
-            set_stream_stats.set(StreamStats::default());
+            let _ = set_listen_target.try_set(String::new());
+            let _ = set_stream_stats.try_set(StreamStats::default());
         }
     };
 
@@ -483,7 +488,7 @@ fn stop_listening(
     set_intentional_stop: WriteSignal<bool>,
 ) {
     // Set the flag BEFORE closing — on_close checks this to avoid auto-reconnect
-    set_intentional_stop.set(true);
+    let _ = set_intentional_stop.try_set(true);
     if let Some(socket) = ws.get_untracked() {
         // Send ListenStop command before closing
         let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStop).unwrap_or_default();
@@ -491,6 +496,6 @@ fn stop_listening(
         let _ = socket.close();
     }
     stop_audio_player();
-    set_ws.set(None);
-    set_state.set(ListenState::Idle);
+    let _ = set_ws.try_set(None);
+    let _ = set_state.try_set(ListenState::Idle);
 }
