@@ -14,7 +14,14 @@ For **shelving filters** (lowshelf, highshelf), the curve overshoots by 1–2 dB
 
 ## 2. Root Cause (verified on live system 2026-04-12)
 
-Live data captured from production v1.146.0 for MIREC mic (track 7) via `read_eq_params.lua`:
+Visual evidence captured from production v1.146.0 — **same MIREC mic, same band settings, two different renderings**:
+
+| REAPER ReaEQ (ground truth) | iem-mixer (buggy) |
+|---|---|
+| ![REAPER ReaEQ for MIREC](./2026-04-12-eq-curve-shelf-math/mirec-reaeq-v1.146.0.png) | ![iem-mixer EQ for MIREC](./2026-04-12-eq-curve-shelf-math/mirec-iem-mixer-v1.146.0.png) |
+| Band 3 peak sits **at the dot** (~+4 dB, matching the stated +4.3 dB gain). Shelves 2 and 5 are smooth — no ringing, no resonance near the corners. | Band 3 peak sits **above the dot** (curve reaches +5.73 dB vs dot at +4.3 dB — **+1.43 dB excess**). Lowshelf at 510 Hz rings just above its corner and inflates the neighbouring peaking band. |
+
+Live band parameters (via `read_eq_params.lua`):
 
 ```
 b0 HIGHPASS   20.0 Hz   (disabled)
