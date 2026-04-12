@@ -1318,13 +1318,21 @@ test.describe("EQ value sync - ENGINEER track", () => {
 // 640 Hz, but the drawn curve peaked at +5.73 dB because the adjacent
 // lowshelf at 510 Hz rang upward just above its corner.
 //
-// Invariant being tested: at each enabled band's center frequency, the
-// summed response curve must equal that band's stated gain within a small
-// tolerance. In SVG coords (±12 dB mapped to 0..300 px, i.e. 12.5 px/dB),
-// 3 px ≈ 0.24 dB is well below REAPER's typical 0.1 dB display resolution
-// but far above numerical noise.
+// Invariant: the tallest point of the summed response curve cannot exceed
+// the tallest individual band's dot by more than a small tolerance. In
+// SVG coords (±12 dB mapped to 0..300 px, i.e. 12.5 px/dB), 3 px ≈ 0.24 dB
+// is well below REAPER's typical 0.1 dB display resolution but far above
+// numerical noise. On v1.146.0 the MIREC curve peaks at y=78.4 (+5.73 dB)
+// while the tallest band dot (b2 at +4.3 dB) sits at y=96.25 — that's a
+// ~17.85 px excess this test must catch.
 //
-// On v1.146.0 this test fails with a measured excess of ~17.85 px at band 2.
+// Why a per-band y-match check is NOT used: shelving bands' dots represent
+// "corner frequency at stated gain", but the cookbook shelf biquad's
+// magnitude at the corner frequency is NOT the stated gain (it's around
+// half, for Butterworth). Additionally, adjacent peaking bands bleed gain
+// into the shelf's corner region. A per-band y-match would fail for shelf
+// dots even with correct math. The summed-peak invariant above is
+// mathematically sound for arbitrary band combinations.
 
 test.describe("#167 EQ curve shape (live MIREC)", () => {
   test("engineer EQ curve does not overshoot band dots", async ({ page }) => {
@@ -1398,40 +1406,8 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
     expect(points.length).toBeGreaterThan(100);
     expect(dots.length).toBeGreaterThan(0);
 
-    // Helper: find the path y value at x (nearest neighbour in the 201-point
-    // path, which is enough because dots sit on the same x grid as path samples).
-    const pathYAt = (targetX: number): number => {
-      let best = points[0];
-      let bestDx = Math.abs(points[0][0] - targetX);
-      for (const p of points) {
-        const dx = Math.abs(p[0] - targetX);
-        if (dx < bestDx) {
-          bestDx = dx;
-          best = p;
-        }
-      }
-      return best[1];
-    };
-
     // Pixel tolerance: 3 px ≈ 0.24 dB at 12.5 px/dB. Below user-visible.
     const TOLERANCE_PX = 3;
-
-    // Invariant 1: at every enabled band dot's x, the curve y must be within
-    // TOLERANCE_PX of that dot's y. Skip dots at the viewport edges (x=0 or
-    // x=800) because highpass/lowpass filters at the extremes are not required
-    // to sit on the curve in the same way peaking/shelf bands do.
-    for (const dot of dots) {
-      if (dot.cx <= 2 || dot.cx >= 798) continue;
-      const pathY = pathYAt(dot.cx);
-      const deviation = Math.abs(pathY - dot.cy);
-      expect(
-        deviation,
-        `Band dot at (${dot.cx.toFixed(1)}, ${dot.cy.toFixed(1)}) — ` +
-          `path y at same x is ${pathY.toFixed(1)}, deviation ${deviation.toFixed(1)} px ` +
-          `(≈ ${(deviation / 12.5).toFixed(2)} dB). On v1.146.0 the MIREC b2 ` +
-          `deviation is ~17.85 px / +1.43 dB — that is the #167 bug.`,
-      ).toBeLessThanOrEqual(TOLERANCE_PX);
-    }
 
     // Invariant 2: the tallest point of the curve must not exceed the tallest
     // enabled band dot by more than TOLERANCE_PX. "Tallest" = smallest y.
