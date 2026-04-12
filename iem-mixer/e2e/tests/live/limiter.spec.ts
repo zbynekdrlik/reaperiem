@@ -1,9 +1,9 @@
 /**
- * Limiter Tests — output bus limiter controls (#72).
+ * Limiter Tests — output bus limiter controls (#72, #156).
  *
- * These tests verify the LIMIT button visibility and modal behavior.
- * The mixer page requires a REAPER connection to render channel strips,
- * so tests gracefully skip in CI when REAPER is not available.
+ * These tests verify the LIMIT button visibility and modal behavior
+ * for both engineers and regular band members.
+ * The mixer page requires a REAPER connection to render channel strips.
  */
 
 import { test, expect, Page } from "@playwright/test";
@@ -92,7 +92,7 @@ test.describe("Output Limiter — Issue #72", () => {
     expect(consoleMessages).toEqual([]);
   });
 
-  test("member does NOT see LIMIT button", async ({ page }) => {
+  test("member sees LIMIT button and can open modal", async ({ page }) => {
     const consoleMessages: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
@@ -108,24 +108,35 @@ test.describe("Output Limiter — Issue #72", () => {
       }
     });
 
-    const membersResp = await page.request.get("/api/members");
-    const members = await membersResp.json();
-    expect(members.length).toBeGreaterThan(0);
-    const member = members[0];
-
-    // Login as regular member
+    // Login as regular member (petronela, PIN 7711)
     await page.goto("/");
-    await loginAsMember(page, member.id);
-    await page.goto(`/${member.id}`);
+    await loginAsMember(page, "petronela");
+    await page.goto("/petronela");
 
     await waitForMixer(page);
 
     await expect(page.locator(".channel").first()).toBeVisible({ timeout: 10000 });
 
-    // LIMIT button should NOT be visible to regular members
+    // LIMIT button SHOULD be visible to regular members (#156)
     const limitBtn = page.locator(".limiter-btn-small");
-    const count = await limitBtn.count();
-    expect(count).toBe(0);
+    await expect(limitBtn.first()).toBeVisible({ timeout: 5000 });
+
+    // Click it and verify modal opens
+    await limitBtn.first().click();
+
+    const modal = page.locator(".limiter-modal");
+    await expect(modal).toBeVisible({ timeout: 5000 });
+
+    // Verify modal has the MAX LEVEL slider
+    const sliders = page.locator(".limiter-slider-track");
+    await expect(sliders.first()).toBeVisible({ timeout: 3000 });
+    const sliderCount = await sliders.count();
+    expect(sliderCount).toBe(1);
+
+    // Close modal
+    const closeBtn = page.locator(".limiter-close-btn");
+    await closeBtn.click();
+    await expect(modal).not.toBeVisible({ timeout: 2000 });
 
     expect(consoleMessages).toEqual([]);
   });
