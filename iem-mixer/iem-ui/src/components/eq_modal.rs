@@ -624,6 +624,11 @@ pub fn EQModal(
                                             fill=color.clone()
                                             stroke="white" stroke-width="2"
                                             opacity="0.9"
+                                            // data-band-dot enables stable targeting by E2E tests
+                                            // (see eq.spec.ts #167 curve-shape test). Avoids relying
+                                            // on r>=6 heuristics that would break if decorative
+                                            // circles were added to the SVG.
+                                            data-band-dot="true"
                                         />
                                         <text
                                             x=move || { curve_trigger.get(); freq_to_x(freq_hz_sig.get_untracked(), svg_width) }
@@ -1519,67 +1524,64 @@ mod tests {
         }
     }
 
-    /// Lowshelf must not overshoot its passband — no ringing above the
-    /// stated gain across the entire 20 Hz .. 20 kHz range.
+    /// Shelf response must not overshoot (positive gain) or undershoot
+    /// (negative gain) its passband — the curve must stay within the band's
+    /// [gain, 0] envelope across the entire 20 Hz .. 20 kHz range.
+    /// Covers BOTH positive and negative shelf gains (symmetric regression).
     #[test]
-    fn test_lowshelf_no_overshoot() {
-        let b = band("lowshelf", 500.0, 6.0, 0.5);
-        let mut max_gain = f32::NEG_INFINITY;
-        let mut min_gain = f32::INFINITY;
-        // Log-sweep 20 Hz .. 20 kHz in 400 steps.
-        for i in 0..=400 {
-            let t = i as f32 / 400.0;
-            let freq = 20.0 * (1000.0_f32).powf(t);
-            let g = compute_band_gain(freq, &b);
-            if g > max_gain {
-                max_gain = g;
+    fn test_shelf_no_overshoot_or_undershoot() {
+        // (band_type, corner_hz, gain_db)
+        let cases = &[
+            ("lowshelf", 500.0_f32, 6.0_f32),
+            ("lowshelf", 500.0, -6.0),
+            ("highshelf", 5000.0, 6.0),
+            ("highshelf", 5000.0, -6.0),
+        ];
+        for &(ty, corner, gain) in cases {
+            let b = band(ty, corner, gain, 0.5);
+            let mut max_gain = f32::NEG_INFINITY;
+            let mut min_gain = f32::INFINITY;
+            // Log-sweep 20 Hz .. 20 kHz in 400 steps.
+            for i in 0..=400 {
+                let t = i as f32 / 400.0;
+                let freq = 20.0 * (1000.0_f32).powf(t);
+                let g = compute_band_gain(freq, &b);
+                if g > max_gain {
+                    max_gain = g;
+                }
+                if g < min_gain {
+                    min_gain = g;
+                }
             }
-            if g < min_gain {
-                min_gain = g;
-            }
+            // 0.3 dB of slop covers the smooth transition region.
+            let (lo, hi) = if gain >= 0.0 {
+                (-0.3, gain + 0.3)
+            } else {
+                (gain - 0.3, 0.3)
+            };
+            assert!(
+                max_gain <= hi,
+                "{ty} {gain} dB bw=0.5: max={max_gain} > {hi}"
+            );
+            assert!(
+                min_gain >= lo,
+                "{ty} {gain} dB bw=0.5: min={min_gain} < {lo}"
+            );
         }
-        // +6 dB shelf must stay within [−0.3, 6.3] dB across the whole
-        // spectrum. 0.3 dB of slop covers the smooth transition region.
-        assert!(max_gain <= 6.3, "lowshelf +6 dB overshoots: max={max_gain}");
-        assert!(
-            min_gain >= -0.3,
-            "lowshelf +6 dB dips below 0 dB: min={min_gain}"
-        );
     }
 
-    /// Highshelf must not overshoot either.
+    /// #167 regression: shelf immediately adjacent to peaking band does not
+    /// ring upward into the peaking band's region. The constants below are
+    /// a snapshot of MIREC mic's EQ as of 2026-04-12 — if the engineer
+    /// changes MIREC's EQ in REAPER, these values drift but the test still
+    /// upholds the invariant (upper bound only). For a synthetic standalone
+    /// test of the same invariant, see `test_shelf_no_overshoot_or_undershoot`.
+    ///
+    /// With the pre-fix peaking-Q shelf math, summing these four bands
+    /// produced a peak of +5.73 dB at 640 Hz (+1.43 dB over b2's stated
+    /// +4.3 dB). With the fix the peak is ≤ +4.6 dB.
     #[test]
-    fn test_highshelf_no_overshoot() {
-        let b = band("highshelf", 5000.0, 6.0, 0.5);
-        let mut max_gain = f32::NEG_INFINITY;
-        let mut min_gain = f32::INFINITY;
-        for i in 0..=400 {
-            let t = i as f32 / 400.0;
-            let freq = 20.0 * (1000.0_f32).powf(t);
-            let g = compute_band_gain(freq, &b);
-            if g > max_gain {
-                max_gain = g;
-            }
-            if g < min_gain {
-                min_gain = g;
-            }
-        }
-        assert!(
-            max_gain <= 6.3,
-            "highshelf +6 dB overshoots: max={max_gain}"
-        );
-        assert!(
-            min_gain >= -0.3,
-            "highshelf +6 dB dips below 0 dB: min={min_gain}"
-        );
-    }
-
-    /// #167 regression: captured MIREC fixture from production v1.146.0.
-    /// With the buggy math, summing these bands gives a peak of +5.73 dB
-    /// at 640 Hz; with the fix, the sum at 640 Hz must not exceed +4.6 dB
-    /// (adjacent bands bleed negative so real sum is ~3.5 dB, not 4.3).
-    #[test]
-    fn test_mirec_fixture_no_shelf_ringing_167() {
+    fn test_shelf_adjacent_to_peaking_does_not_ring_167() {
         let bands = vec![
             // b0 highpass disabled — skip
             band("lowshelf", 510.8, -2.1, 0.56),
@@ -1589,17 +1591,17 @@ mod tests {
         ];
         // Sum responses at 640 Hz — must not overshoot b2's stated +4.3 dB.
         // Real sum is lower than 4.3 because adjacent bands bleed negative
-        // contributions (lowshelf past corner at -0.31 dB, peaking at 1473 Hz bleeding
-        // down). The #167 bug made this sum ~+5.7 dB (shelf ringing adding
-        // instead of settling). Fix invariant: sum must stay ≤ +4.6 dB at
-        // the peaking band's center frequency.
+        // contributions (lowshelf past corner ~-0.31 dB, peaking at 1473 Hz
+        // bleeding down). The #167 bug made this sum ~+5.7 dB (shelf ringing
+        // adding instead of settling). Fix invariant: sum must stay ≤ +4.6 dB
+        // at the peaking band's center frequency.
         let mut total = 0.0_f32;
         for b in &bands {
             total += compute_band_gain(640.6, b);
         }
         assert!(
             total <= 4.6,
-            "MIREC sum at 640 Hz = {total} dB, expected ≤ 4.6 (no overshoot)"
+            "fixture sum at 640 Hz = {total} dB, expected ≤ 4.6 (no overshoot)"
         );
         // And the whole curve max (scanned log-sweep) must not exceed +4.6 dB.
         let mut curve_max = f32::NEG_INFINITY;
@@ -1616,7 +1618,7 @@ mod tests {
         }
         assert!(
             curve_max <= 4.6,
-            "MIREC curve max = {curve_max} dB, expected ≤ 4.6 (no shelf ringing)"
+            "fixture curve max = {curve_max} dB, expected ≤ 4.6 (no shelf ringing)"
         );
     }
 }

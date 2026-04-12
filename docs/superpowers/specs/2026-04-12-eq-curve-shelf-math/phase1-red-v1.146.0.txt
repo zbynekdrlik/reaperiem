@@ -1,0 +1,36 @@
+
+Running 1 test using 1 worker
+
+  ✘  1 [chromium] › tests/live/eq.spec.ts:1338:7 › #167 EQ curve shape (live MIREC) › engineer EQ curve does not overshoot band dots (2.5s)
+
+
+  1) [chromium] › tests/live/eq.spec.ts:1338:7 › #167 EQ curve shape (live MIREC) › engineer EQ curve does not overshoot band dots 
+
+    Error: Curve peak y=78.4 exceeds tallest dot y=96.3 by 17.8 px (≈ 1.43 dB). On v1.146.0 curve peaks at y=78.4 while b2 dot is at y=96.25 — #167.
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: >= [32m93.25[39m
+    Received:    [31m78.4[39m
+
+      1419 |         `by ${(dotMinY - curveMinY).toFixed(1)} px (≈ ${((dotMinY - curveMinY) / 12.5).toFixed(2)} dB). ` +
+      1420 |         `On v1.146.0 curve peaks at y=78.4 while b2 dot is at y=96.25 — #167.`,
+    > 1421 |     ).toBeGreaterThanOrEqual(dotMinY - TOLERANCE_PX);
+           |       ^
+      1422 |
+      1423 |     // Invariant 3: no console errors or warnings (airuleset
+      1424 |     // browser-console-zero-errors.md).
+        at /home/newlevel/devel/reaperiem/iem-mixer/e2e/tests/live/eq.spec.ts:1421:7
+
+    Error Context: test-results/eq--167-EQ-curve-shape-liv-46543-oes-not-overshoot-band-dots-chromium/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/eq--167-EQ-curve-shape-liv-46543-oes-not-overshoot-band-dots-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/eq--167-EQ-curve-shape-liv-46543-oes-not-overshoot-band-dots-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › tests/live/eq.spec.ts:1338:7 › #167 EQ curve shape (live MIREC) › engineer EQ curve does not overshoot band dots 

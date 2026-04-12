@@ -1388,14 +1388,15 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
       while ((m = regex.exec(d)) !== null) {
         points.push([parseFloat(m[1]), parseFloat(m[2])]);
       }
-      const dots = Array.from(svg.querySelectorAll<SVGCircleElement>("circle"))
-        .map((c) => ({
-          cx: parseFloat(c.getAttribute("cx") || "0"),
-          cy: parseFloat(c.getAttribute("cy") || "0"),
-          r: parseFloat(c.getAttribute("r") || "0"),
-        }))
-        // Drop tiny tick marks / grid helpers — band dots have r >= 6
-        .filter((c) => c.r >= 6);
+      // Stable selector: circles carrying data-band-dot="true" are the band
+      // position dots (added in eq_modal.rs specifically for this test).
+      const dots = Array.from(
+        svg.querySelectorAll<SVGCircleElement>("circle[data-band-dot]"),
+      ).map((c) => ({
+        cx: parseFloat(c.getAttribute("cx") || "0"),
+        cy: parseFloat(c.getAttribute("cy") || "0"),
+        r: parseFloat(c.getAttribute("r") || "0"),
+      }));
       return { points, dots };
     });
 
@@ -1409,8 +1410,9 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
     // Pixel tolerance: 3 px ≈ 0.24 dB at 12.5 px/dB. Below user-visible.
     const TOLERANCE_PX = 3;
 
-    // Invariant 2: the tallest point of the curve must not exceed the tallest
-    // enabled band dot by more than TOLERANCE_PX. "Tallest" = smallest y.
+    // Main invariant: the tallest point of the summed response curve cannot
+    // exceed the tallest enabled band dot by more than TOLERANCE_PX pixels.
+    // "Tallest" = smallest y in SVG coordinates.
     const curveMinY = Math.min(...points.map((p) => p[1]));
     const dotMinY = Math.min(...dots.map((d) => d.cy));
     expect(
@@ -1420,8 +1422,7 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
         `On v1.146.0 curve peaks at y=78.4 while b2 dot is at y=96.25 — #167.`,
     ).toBeGreaterThanOrEqual(dotMinY - TOLERANCE_PX);
 
-    // Invariant 3: no console errors or warnings (airuleset
-    // browser-console-zero-errors.md).
+    // Console-clean invariant (airuleset browser-console-zero-errors.md).
     expect(consoleMessages).toEqual([]);
   });
 });
