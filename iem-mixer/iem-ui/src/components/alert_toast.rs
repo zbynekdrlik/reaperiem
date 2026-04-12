@@ -4,7 +4,7 @@ use leptos::prelude::*;
 use wasm_bindgen::prelude::*;
 
 /// Persistent alert toast for engineer.
-/// Vibrates every 3s, plays subtle chime every 10s, shows system notification.
+/// Pattern vibration (45s cycle, 30s refresh), plays subtle chime every 10s, shows system notification.
 /// Stays until engineer clicks dismiss (sends ClearAlert via WS).
 #[component]
 pub fn AlertToast(
@@ -16,26 +16,56 @@ pub fn AlertToast(
         std::rc::Rc::new(std::cell::RefCell::new(None));
     let snd_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
         std::rc::Rc::new(std::cell::RefCell::new(None));
+    let vis_effect: std::rc::Rc<std::cell::RefCell<Option<Closure<dyn FnMut()>>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
     Effect::new(move || {
         let current = alert.get();
         if let Some((_, ref name)) = current {
+            // Clean up previous alert state if Effect re-fires (Some→Some transition)
+            if let Some(ref cb) = *vis_effect.borrow() {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = doc.remove_event_listener_with_callback(
+                        "visibilitychange",
+                        cb.as_ref().unchecked_ref(),
+                    );
+                }
+            }
+            vib_effect.borrow_mut().take();
+            snd_effect.borrow_mut().take();
+            vis_effect.borrow_mut().take();
+            stop_loops();
+
             // System notification (ask permission if needed)
             let name_clone = name.clone();
             wasm_bindgen_futures::spawn_local(async move {
                 request_and_notify(&name_clone).await;
             });
 
-            // Start vibration loop (500ms pulse every 1.5s — urgent)
+            // Build vibration pattern: [500, 1000] × 30 = 45s of pulsing
+            // Browser handles timing natively — immune to JS timer throttling
+            let pattern = js_sys::Array::new();
+            for _ in 0..30 {
+                pattern.push(&JsValue::from(500)); // vibrate 500ms
+                pattern.push(&JsValue::from(1000)); // pause 1000ms
+            }
+
+            // Fire pattern immediately
+            if let Some(window) = web_sys::window() {
+                let _ = window.navigator().vibrate_with_pattern(&pattern);
+            }
+
+            // 30s safety-net interval: re-fire pattern for very long alerts
+            let pattern_clone = pattern.clone();
             let vib_cb = Closure::wrap(Box::new(move || {
                 if let Some(window) = web_sys::window() {
-                    let _ = window.navigator().vibrate_with_duration(500);
+                    let _ = window.navigator().vibrate_with_pattern(&pattern_clone);
                 }
             }) as Box<dyn FnMut()>);
             if let Some(window) = web_sys::window() {
                 let id = window
                     .set_interval_with_callback_and_timeout_and_arguments_0(
                         vib_cb.as_ref().unchecked_ref(),
-                        1500,
+                        30_000,
                     )
                     .unwrap_or(0);
                 let _ = js_sys::Reflect::set(
@@ -43,9 +73,27 @@ pub fn AlertToast(
                     &JsValue::from_str("__iem_alert_vib"),
                     &JsValue::from(id),
                 );
-                let _ = window.navigator().vibrate_with_duration(500);
             }
             *vib_effect.borrow_mut() = Some(vib_cb);
+
+            // visibilitychange listener: re-fire pattern when engineer returns to app
+            let pattern_vis = pattern.clone();
+            let vis_cb = Closure::wrap(Box::new(move || {
+                if let Some(window) = web_sys::window() {
+                    if let Some(doc) = window.document() {
+                        if !doc.hidden() {
+                            let _ = window.navigator().vibrate_with_pattern(&pattern_vis);
+                        }
+                    }
+                }
+            }) as Box<dyn FnMut()>);
+            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                let _ = doc.add_event_listener_with_callback(
+                    "visibilitychange",
+                    vis_cb.as_ref().unchecked_ref(),
+                );
+            }
+            *vis_effect.borrow_mut() = Some(vis_cb);
 
             // Start sound loop (play chime, repeat every 10s)
             play_chime();
@@ -76,9 +124,19 @@ pub fn AlertToast(
                 }
             }
         } else {
+            // Remove visibilitychange listener before dropping the closure
+            if let Some(ref cb) = *vis_effect.borrow() {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = doc.remove_event_listener_with_callback(
+                        "visibilitychange",
+                        cb.as_ref().unchecked_ref(),
+                    );
+                }
+            }
             // Drop closures
             vib_effect.borrow_mut().take();
             snd_effect.borrow_mut().take();
+            vis_effect.borrow_mut().take();
             stop_loops();
             // Remove red page pulse overlay
             if let Some(window) = web_sys::window() {

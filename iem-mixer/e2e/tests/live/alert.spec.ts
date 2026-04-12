@@ -189,4 +189,116 @@ test.describe("Band Member Alert Button (#125)", () => {
     await ctx1.close();
     await ctx2.close();
   });
+
+  test("engineer vibration uses pattern array, not single pulses (#162)", async ({ browser }) => {
+    const consoleMessages: string[] = [];
+    const ctx1 = await browser.newContext();
+    const ctx2 = await browser.newContext();
+    const memberPage = await ctx1.newPage();
+    const engineerPage = await ctx2.newPage();
+
+    engineerPage.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        // Filter known browser noise (vibrate API, incognito Push API, integrity preload)
+        if (
+          !text.includes("navigator.vibrate") &&
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
+          consoleMessages.push(`[${msg.type()}] ${text}`);
+        }
+      }
+    });
+
+    // Monkey-patch navigator.vibrate on engineer page to capture calls
+    await engineerPage.goto("/");
+    await engineerPage.evaluate(() => {
+      (window as any).__vibrateCalls = [];
+      navigator.vibrate = (pattern: any) => {
+        (window as any).__vibrateCalls.push(
+          Array.isArray(pattern) ? { type: "pattern", length: pattern.length }
+                                 : { type: "single", value: pattern }
+        );
+        return true;
+      };
+    });
+
+    await loginAs(engineerPage, "engineer", "1177");
+    await engineerPage.goto("/engineer");
+    await waitForMixer(engineerPage);
+
+    // Member triggers SOS
+    await memberPage.goto("/");
+    const membersResp = await memberPage.request.get("/api/members");
+    const members = await membersResp.json();
+    const member = members[0];
+    await loginAs(memberPage, member.id);
+    await memberPage.goto(`/${member.id}`);
+    await waitForMixer(memberPage);
+
+    // Wait for WS to be ready
+    await memberPage.waitForFunction(
+      () => document.querySelectorAll(".channel").length > 0,
+      { timeout: 10000 },
+    );
+
+    // Clear any residual alert
+    const alertBtn = memberPage.locator(".alert-btn");
+    await expect(alertBtn).toBeVisible({ timeout: 5000 });
+    let hadResidual = false;
+    try {
+      await expect(alertBtn).toHaveClass(/active/, { timeout: 1000 });
+      hadResidual = true;
+    } catch { /* no residual */ }
+    if (hadResidual) {
+      await alertBtn.click({ force: true });
+      await expect(alertBtn).not.toHaveClass(/active/, { timeout: 5000 });
+    }
+
+    // Re-apply monkey-patch (navigation may have cleared it)
+    await engineerPage.evaluate(() => {
+      (window as any).__vibrateCalls = [];
+      navigator.vibrate = (pattern: any) => {
+        (window as any).__vibrateCalls.push(
+          Array.isArray(pattern) ? { type: "pattern", length: pattern.length }
+                                 : { type: "single", value: pattern }
+        );
+        return true;
+      };
+    });
+
+    // Member clicks SOS
+    await alertBtn.click({ force: true });
+
+    // Engineer should see the toast
+    const toast = engineerPage.locator(".alert-toast");
+    await expect(toast).toBeVisible({ timeout: 10000 });
+
+    // Wait a moment for vibration to fire
+    await engineerPage.waitForTimeout(500);
+
+    // Check vibration calls — should have at least one pattern call, no single 500ms pulses
+    const calls = await engineerPage.evaluate(() => (window as any).__vibrateCalls);
+    const patternCalls = calls.filter((c: any) => c.type === "pattern");
+    const singlePulses = calls.filter((c: any) => c.type === "single" && c.value === 500);
+
+    expect(patternCalls.length).toBeGreaterThanOrEqual(1);
+    // Pattern should be [500, 1000] × 30 = 60 elements
+    expect(patternCalls[0].length).toBe(60);
+    // No old-style single 500ms pulses (vibrate(0) for cancel is OK)
+    expect(singlePulses.length).toBe(0);
+
+    // Clean up — dismiss the alert
+    const dismissBtn = engineerPage.locator(".alert-toast-dismiss");
+    await dismissBtn.click({ force: true });
+    await expect(toast).not.toBeVisible({ timeout: 3000 });
+
+    // Zero console errors
+    expect(consoleMessages).toEqual([]);
+
+    await ctx1.close();
+    await ctx2.close();
+  });
 });
