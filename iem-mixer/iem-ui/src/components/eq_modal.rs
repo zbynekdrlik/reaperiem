@@ -171,8 +171,15 @@ fn biquad_peaking(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
 
 fn biquad_low_shelf(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
     let a = 10.0_f32.powf(gain_db / 40.0);
-    let q = bw_to_q(bw_oct, w0);
-    let alpha = w0.sin() / (2.0 * q);
+    // Audio EQ Cookbook shelf-slope formula (NOT the peaking-Q formula).
+    // S is the shelf slope parameter; for a given "bandwidth in octaves"
+    // display value, S = 1 / bw_oct is the standard DSP mapping —
+    // narrow bandwidth → steeper shelf. Clamped to [0.01, 2.0]:
+    //   - lower: prevents sqrt(negative) when (1/S - 1) goes too negative
+    //   - upper: above S≈2 the formula re-introduces the same resonance
+    //     we are trying to remove
+    let s = (1.0 / bw_oct.max(0.01)).clamp(0.01, 2.0);
+    let alpha = w0.sin() / 2.0 * ((a + 1.0 / a) * (1.0 / s - 1.0) + 2.0).max(0.0).sqrt();
     let cos_w0 = w0.cos();
     let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
 
@@ -187,8 +194,9 @@ fn biquad_low_shelf(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
 
 fn biquad_high_shelf(w0: f32, gain_db: f32, bw_oct: f32) -> BiquadCoeffs {
     let a = 10.0_f32.powf(gain_db / 40.0);
-    let q = bw_to_q(bw_oct, w0);
-    let alpha = w0.sin() / (2.0 * q);
+    // Audio EQ Cookbook shelf-slope formula. See biquad_low_shelf comment.
+    let s = (1.0 / bw_oct.max(0.01)).clamp(0.01, 2.0);
+    let alpha = w0.sin() / 2.0 * ((a + 1.0 / a) * (1.0 / s - 1.0) + 2.0).max(0.0).sqrt();
     let cos_w0 = w0.cos();
     let two_sqrt_a_alpha = 2.0 * a.sqrt() * alpha;
 
@@ -1442,6 +1450,165 @@ mod tests {
         assert_ne!(
             path, flat_path,
             "Enabled HPF should produce a different curve than flat"
+        );
+    }
+
+    /// Helper: build an EqBandState with sensible defaults.
+    fn band(ty: &str, freq_hz: f32, gain_db: f32, bw: f32) -> EqBandState {
+        EqBandState {
+            band_type: ty.to_string(),
+            freq_hz,
+            gain_db,
+            bw,
+            freq_norm: 0.0,
+            gain_norm: 0.0,
+            bw_norm: 0.0,
+            enabled: true,
+        }
+    }
+
+    /// Regression guard: peaking filter's magnitude at its center frequency
+    /// must equal the stated gain. This already passes on v1.146.0 — we
+    /// commit it so future changes can't break it.
+    #[test]
+    fn test_peaking_exact_at_center_frequency() {
+        for &gain in &[-12.0_f32, -6.0, -3.0, 0.0, 3.0, 6.0, 12.0] {
+            for &bw in &[0.5_f32, 1.0, 2.0] {
+                let b = band("band", 1000.0, gain, bw);
+                let g = compute_band_gain(1000.0, &b);
+                assert!(
+                    (g - gain).abs() < 0.05,
+                    "peaking {gain} dB bw={bw}: got {g} at center freq"
+                );
+            }
+        }
+    }
+
+    /// Lowshelf passband (well below corner) must equal stated gain.
+    #[test]
+    fn test_lowshelf_passband_equals_gain() {
+        for &gain in &[-6.0_f32, -3.0, 3.0, 6.0] {
+            for &bw in &[0.5_f32, 1.0] {
+                let b = band("lowshelf", 500.0, gain, bw);
+                // Evaluate far below corner — should be full shelf gain.
+                let g = compute_band_gain(20.0, &b);
+                assert!(
+                    (g - gain).abs() < 0.3,
+                    "lowshelf 500 Hz {gain} dB bw={bw}: passband at 20 Hz = {g}"
+                );
+            }
+        }
+    }
+
+    /// Highshelf passband (well above corner) must equal stated gain.
+    #[test]
+    fn test_highshelf_passband_equals_gain() {
+        for &gain in &[-6.0_f32, -3.0, 3.0, 6.0] {
+            for &bw in &[0.5_f32, 1.0] {
+                let b = band("highshelf", 5000.0, gain, bw);
+                // Evaluate far above corner — should be full shelf gain.
+                let g = compute_band_gain(20000.0, &b);
+                assert!(
+                    (g - gain).abs() < 0.3,
+                    "highshelf 5 kHz {gain} dB bw={bw}: passband at 20 kHz = {g}"
+                );
+            }
+        }
+    }
+
+    /// Lowshelf must not overshoot its passband — no ringing above the
+    /// stated gain across the entire 20 Hz .. 20 kHz range.
+    #[test]
+    fn test_lowshelf_no_overshoot() {
+        let b = band("lowshelf", 500.0, 6.0, 0.5);
+        let mut max_gain = f32::NEG_INFINITY;
+        let mut min_gain = f32::INFINITY;
+        // Log-sweep 20 Hz .. 20 kHz in 400 steps.
+        for i in 0..=400 {
+            let t = i as f32 / 400.0;
+            let freq = 20.0 * (1000.0_f32).powf(t);
+            let g = compute_band_gain(freq, &b);
+            if g > max_gain {
+                max_gain = g;
+            }
+            if g < min_gain {
+                min_gain = g;
+            }
+        }
+        // +6 dB shelf must stay within [−0.3, 6.3] dB across the whole
+        // spectrum. 0.3 dB of slop covers the smooth transition region.
+        assert!(max_gain <= 6.3, "lowshelf +6 dB overshoots: max={max_gain}");
+        assert!(
+            min_gain >= -0.3,
+            "lowshelf +6 dB dips below 0 dB: min={min_gain}"
+        );
+    }
+
+    /// Highshelf must not overshoot either.
+    #[test]
+    fn test_highshelf_no_overshoot() {
+        let b = band("highshelf", 5000.0, 6.0, 0.5);
+        let mut max_gain = f32::NEG_INFINITY;
+        let mut min_gain = f32::INFINITY;
+        for i in 0..=400 {
+            let t = i as f32 / 400.0;
+            let freq = 20.0 * (1000.0_f32).powf(t);
+            let g = compute_band_gain(freq, &b);
+            if g > max_gain {
+                max_gain = g;
+            }
+            if g < min_gain {
+                min_gain = g;
+            }
+        }
+        assert!(
+            max_gain <= 6.3,
+            "highshelf +6 dB overshoots: max={max_gain}"
+        );
+        assert!(
+            min_gain >= -0.3,
+            "highshelf +6 dB dips below 0 dB: min={min_gain}"
+        );
+    }
+
+    /// #167 regression: captured MIREC fixture from production v1.146.0.
+    /// With the buggy math, summing these bands gives a peak of +5.73 dB
+    /// at 640 Hz; with the fix, the peak must sit at b2's stated +4.3 dB
+    /// within 0.3 dB.
+    #[test]
+    fn test_mirec_fixture_no_shelf_ringing_167() {
+        let bands = vec![
+            // b0 highpass disabled — skip
+            band("lowshelf", 510.8, -2.1, 0.56),
+            band("band", 640.6, 4.3, 1.14),
+            band("band", 1473.3, -1.5, 0.92),
+            band("highshelf", 4448.1, 3.6, 0.80),
+        ];
+        // Sum responses at 640 Hz — should equal b2's +4.3 dB ± 0.3 dB.
+        let mut total = 0.0_f32;
+        for b in &bands {
+            total += compute_band_gain(640.6, b);
+        }
+        assert!(
+            (total - 4.3).abs() < 0.3,
+            "MIREC sum at 640 Hz = {total} dB, expected +4.3 ± 0.3"
+        );
+        // And the whole curve max (scanned log-sweep) must not exceed +4.6 dB.
+        let mut curve_max = f32::NEG_INFINITY;
+        for i in 0..=400 {
+            let t = i as f32 / 400.0;
+            let freq = 20.0 * (1000.0_f32).powf(t);
+            let mut sum = 0.0;
+            for b in &bands {
+                sum += compute_band_gain(freq, b);
+            }
+            if sum > curve_max {
+                curve_max = sum;
+            }
+        }
+        assert!(
+            curve_max <= 4.6,
+            "MIREC curve max = {curve_max} dB, expected ≤ 4.6 (no shelf ringing)"
         );
     }
 }
