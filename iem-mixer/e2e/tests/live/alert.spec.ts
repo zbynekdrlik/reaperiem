@@ -200,7 +200,13 @@ test.describe("Band Member Alert Button (#125)", () => {
     engineerPage.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         const text = msg.text();
-        if (!text.includes("navigator.vibrate")) {
+        // Filter known browser noise (vibrate API, incognito Push API, integrity preload)
+        if (
+          !text.includes("navigator.vibrate") &&
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
           consoleMessages.push(`[${msg.type()}] ${text}`);
         }
       }
