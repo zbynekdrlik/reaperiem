@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.145.0 (2026-04-12)
+
+- **Feature**: LIM button now visible to all band members on their IEM Volume fader, not just the engineer — every member can control their own hearing protection threshold (#156)
+- **Security**: Server-side track-ownership validation ensures members can only control the limiter on their own output track; engineer retains control of all tracks (#156)
+
 ### v1.144.0 (2026-04-12)
 
 - **Fix**: Eliminated the "tried to access a reactive value that has already been disposed" error that could appear on the Android PWA when navigating back from the member mixer to the member selector. The underlying cause was plain Leptos `.set()` / `.update()` calls racing with component disposal when background intervals, WebSocket callbacks, and `spawn_local` async tasks kept firing during teardown. Production logs showed the panic arriving at ~1 Hz after the user was already on the landing page, because disposed-scope writes aborted the JS tick but did not stop the underlying intervals. (#153)
