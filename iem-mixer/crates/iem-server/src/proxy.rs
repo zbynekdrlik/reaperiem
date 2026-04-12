@@ -1246,7 +1246,7 @@ async fn handle_ws(
                                     cache
                                         .output_track_indices
                                         .get(&member_id)
-                                        .map_or(false, |&idx| idx == track_index)
+                                        .is_some_and(|&idx| idx == track_index)
                                 } else {
                                     false // Lock contended — deny conservatively
                                 }
