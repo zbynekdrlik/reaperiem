@@ -105,8 +105,10 @@ pub fn ListenButton(
     Effect::new(move || {
         let current_state = state.get();
 
-        // Clear previous interval if any
-        if let Some(id) = stats_interval.get_untracked() {
+        // Clear previous interval if any. Double-Option: outer guards the
+        // signal disposal race (scope may be gone when effect re-runs
+        // during teardown); inner is the signal's own `Option<i32>`.
+        if let Some(Some(id)) = stats_interval.try_get_untracked() {
             if let Some(w) = web_sys::window() {
                 w.clear_interval_with_handle(id);
             }
@@ -144,7 +146,8 @@ pub fn ListenButton(
 
         // Clear existing reconnect timer if state changed away from Reconnecting
         if current_state != ListenState::Reconnecting {
-            if let Some(id) = reconnect_interval.get_untracked() {
+            // Double-Option: outer = disposal guard, inner = signal value.
+            if let Some(Some(id)) = reconnect_interval.try_get_untracked() {
                 if let Some(w) = web_sys::window() {
                     w.clear_interval_with_handle(id);
                 }
@@ -153,8 +156,10 @@ pub fn ListenButton(
             return;
         }
 
-        // Already have a reconnect timer running
-        if reconnect_interval.get_untracked().is_some() {
+        // Already have a reconnect timer running. On disposal we treat
+        // the signal as "no timer", so `flatten()` collapses the outer
+        // None into an inner None and the is_some() check stays correct.
+        if reconnect_interval.try_get_untracked().flatten().is_some() {
             return;
         }
 

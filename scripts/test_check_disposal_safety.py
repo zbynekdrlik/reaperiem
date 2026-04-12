@@ -312,6 +312,104 @@ fn f() {
 
 
 # ---------------------------------------------------------------------------
+# Read-side rule: plain get_untracked / with_untracked / read_untracked
+# inside danger zones (spawn_local, Closure::wrap, Effect::new) is a
+# violation. `.get()` / `.with()` / `.read()` (tracked) are NOT targeted
+# — those only appear in reactive render code, and the burn radius is
+# too big. The `_untracked` variants are what async/closure code uses.
+# ---------------------------------------------------------------------------
+
+
+def test_plain_get_untracked_inside_spawn_local_is_flagged() -> None:
+    src = """
+fn f() {
+    spawn_local(async move {
+        let v = some_sig.get_untracked();
+    });
+}
+"""
+    assert_violation_at(
+        "plain get_untracked inside spawn_local is flagged",
+        src,
+        4,
+    )
+
+
+def test_plain_with_untracked_inside_closure_wrap_is_flagged() -> None:
+    src = """
+fn f() {
+    let cb = Closure::wrap(Box::new(move |_: Event| {
+        some_sig.with_untracked(|v| do_something(v));
+    }) as Box<dyn FnMut(_)>);
+}
+"""
+    assert_violation_at(
+        "plain with_untracked inside Closure::wrap is flagged",
+        src,
+        4,
+    )
+
+
+def test_plain_get_untracked_inside_effect_new_is_flagged() -> None:
+    src = """
+fn f() {
+    Effect::new(move |_| {
+        let v = some_sig.get_untracked();
+    });
+}
+"""
+    assert_violation_at(
+        "plain get_untracked inside Effect::new is flagged",
+        src,
+        4,
+    )
+
+
+def test_try_get_untracked_inside_spawn_local_is_ok() -> None:
+    src = """
+fn f() {
+    spawn_local(async move {
+        if let Some(v) = some_sig.try_get_untracked() {
+            do_something(v);
+        }
+    });
+}
+"""
+    assert_no_violations(
+        "try_get_untracked inside spawn_local is OK",
+        src,
+    )
+
+
+def test_plain_get_untracked_outside_danger_zone_is_ok() -> None:
+    src = """
+fn f() {
+    let v = some_sig.get_untracked();
+}
+"""
+    assert_no_violations(
+        "plain get_untracked in top-level fn is OK (synchronous read only)",
+        src,
+    )
+
+
+def test_plain_get_untracked_inside_on_click_is_ok() -> None:
+    src = """
+fn f() {
+    view! {
+        <button on:click=move |_| {
+            let v = some_sig.get_untracked();
+        }>{"click"}</button>
+    }
+}
+"""
+    assert_no_violations(
+        "plain get_untracked inside on:click is OK (synchronous, DOM-gated)",
+        src,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 

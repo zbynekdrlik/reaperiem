@@ -540,7 +540,7 @@ pub fn Fader(
             *timeout_handle_mu.borrow_mut() = None;
             let _ = set_is_pending.try_set(false);
 
-            if is_activated.get_untracked() {
+            if is_activated.try_get_untracked().unwrap_or(false) {
                 if let Some(cb) = on_activate {
                     cb.run(false);
                 }

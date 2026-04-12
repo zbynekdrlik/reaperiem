@@ -127,7 +127,7 @@ fn LimiterSlider(
     // Sync from server when not dragging
     Effect::new(move |_| {
         let v = value_norm.get();
-        if !is_active.get_untracked() {
+        if !is_active.try_get_untracked().unwrap_or(true) {
             let _ = set_local_norm.try_set(v);
         }
     });

@@ -100,6 +100,59 @@ UNSAFE_WRITE = re.compile(
     r"\bset_\w+\s*\.\s*\b(?:set|update)(?:_untracked)?\b\s*\("
 )
 
+# Read-side danger-zone check.
+#
+# Leptos 0.7 `.get_untracked()` / `.with_untracked()` / `.read_untracked()`
+# also panic on a disposed signal, with the exact same message as the
+# write side ("tried to access a reactive value that has already been
+# disposed"). Async tasks (`spawn_local`) and JS callbacks
+# (`Closure::wrap`) can fire AFTER the component's scope has been
+# disposed — e.g. a WebSocket onmessage handler delivering a frame that
+# arrived during teardown — and any plain untracked read inside such a
+# closure then panics.
+#
+# The tracked variants (`.get()`, `.with()`, `.read()`) are intentionally
+# NOT targeted here: they are pervasive in reactive render code (view!
+# macros, Memo bodies, on:click handlers) where the burn radius of a
+# blanket rule is too big. The `_untracked` variants are exactly the
+# ones used from async/closure contexts (tracked reads inside async
+# would cause runaway reactivity), so they're a clean target.
+#
+# The safe alternatives are `try_get_untracked()`, `try_with_untracked()`,
+# and `try_read_untracked()`, all of which return `Option<T>` and silently
+# yield `None` on a disposed signal instead of panicking. The natural
+# fix at a call site is:
+#
+#     let Some(v) = sig.try_get_untracked() else { return; };
+#
+# or, when a sensible default exists:
+#
+#     let v = sig.try_get_untracked().unwrap_or_default();
+#
+# The check is scoped to DANGER ZONES only — syntactic regions that can
+# outlive the component's disposal:
+#   * `spawn_local(async move { ... })`
+#   * `Closure::wrap(Box::new(move |...| { ... }) ...)`
+#   * `Effect::new(move |_| { ... })`
+#
+# Plain untracked reads outside a danger zone are considered safe: their
+# execution context is scope-bound and runs synchronously during mount /
+# render, so they cannot race with disposal.
+
+DANGER_ZONE_START = re.compile(
+    r"\bspawn_local\s*\(\s*async(?:\s+move)?\s*\{"
+    r"|\bClosure::wrap\s*\(\s*Box::new\s*\(\s*move\s*\|[^|]*\|\s*\{"
+    r"|\bEffect::new\s*\(\s*move\s*\|[^|]*\|\s*\{"
+)
+
+# Match plain `.get_untracked(` / `.with_untracked(` / `.read_untracked(`.
+# The `\b` word boundary before each name prevents `try_get_untracked`
+# etc. from matching, because the character before `get` inside
+# `try_get_untracked` is `_` (a word char) and `\bget` therefore fails.
+UNSAFE_READ = re.compile(
+    r"\w+\s*\.\s*\b(?:get_untracked|with_untracked|read_untracked)\s*\("
+)
+
 # Second-pass detection: track locally-bound RwSignal names.
 #
 # Leptos `RwSignal::new(x)` is commonly bound to arbitrary identifiers
@@ -225,6 +278,19 @@ def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
     tracked_names = _collect_rwsignal_names(lines)
     tracked_re = _build_tracked_name_regex(tracked_names)
 
+    # Brace-depth stack for danger zones (read-side rule only).
+    #
+    # We maintain a stack of integers, each element being the brace depth
+    # at which a danger zone started. When the running depth drops back
+    # to that level, we pop the zone off the stack. "Inside a danger
+    # zone" = stack is non-empty.
+    #
+    # String-literal stripping before brace counting keeps false positives
+    # low on lines like `let s = "}";` — the `}` inside the string is
+    # blanked out by `_strip_strings`.
+    danger_stack: list[int] = []
+    brace_depth = 0
+
     for lineno, line in enumerate(lines, start=1):
         stripped = line.strip()
 
@@ -271,6 +337,51 @@ def scan_file(path: pathlib.Path) -> list[tuple[int, str]]:
         ):
             violations.append((lineno, line.rstrip()))
 
+        # Read-side danger-zone check.
+        #
+        # Flag plain `.get_untracked(` / `.with_untracked(` /
+        # `.read_untracked(` calls anywhere the danger_stack is
+        # non-empty. The line-in-danger check must be done BEFORE the
+        # brace-depth update so that the opening `{` of a zone counts
+        # the current line as inside the zone — but that is handled
+        # naturally below because danger zones are detected on their
+        # opening line and pushed BEFORE the read scan (see order).
+
+        # Detect danger-zone opener(s) on this line. A line can open
+        # multiple zones (rare but possible with chained calls). Push a
+        # marker for each opener at the current brace depth (pre-line).
+        # We then count braces for this line and pop any zone whose
+        # depth equals the new depth once closed.
+        opener_count = len(DANGER_ZONE_START.findall(stripped_code))
+        for _ in range(opener_count):
+            # Each opener introduces exactly one `{` that also counts
+            # toward the brace tally below. Mark the zone as starting
+            # at current `brace_depth` (before we process this line's
+            # braces) so the pop condition `brace_depth == marker` is
+            # the same brace balance as before the opener's `{`.
+            danger_stack.append(brace_depth)
+
+        # Now scan reads on this line — danger_stack reflects whether
+        # we are inside any open zone.
+        in_danger = len(danger_stack) > 0
+        if (
+            in_danger
+            and UNSAFE_READ.search(stripped_code)
+            and ESCAPE_HATCH not in line
+        ):
+            violations.append((lineno, line.rstrip()))
+
+        # Update brace_depth for this line. Count raw `{` and `}` in
+        # the string-stripped code. Line-comment tails are NOT stripped
+        # here, but that's acceptable — braces inside trailing
+        # comments are rare in .rs source, and the worst-case effect
+        # is a slightly off brace_depth, not a crash.
+        brace_depth += stripped_code.count("{") - stripped_code.count("}")
+        # Pop any zones whose start-depth is >= current brace_depth
+        # (i.e. their surrounding `{` has been closed).
+        while danger_stack and brace_depth <= danger_stack[-1]:
+            danger_stack.pop()
+
     return violations
 
 
@@ -287,26 +398,37 @@ def main() -> int:
 
     if all_violations:
         print(
-            "::error::Unsafe Leptos signal writes (disposal race, #153):"
+            "::error::Unsafe Leptos signal accesses (disposal race, #153):"
         )
         for rel, lineno, line in all_violations:
             print(f"  {rel}:{lineno}: {line.strip()}")
         print()
-        print("Fix: replace `.set(x)` with `.try_set(x)` or")
-        print("     `.try_update(|v| *v = x)`. Use `let _ =` to discard")
-        print("     the Option<...> result.")
+        print("Writes: replace `.set(x)` / `.update(|v| ...)` with")
+        print("        `.try_set(x)` / `.try_update(|v| ...)`. Use")
+        print("        `let _ =` to discard the Option<...> result.")
         print()
-        print("This rule is context-free: any `set_*.set(...)` is a violation")
-        print("anywhere in the file, because helper functions called from")
-        print("spawn_local / Closure::wrap / event handlers can race with")
-        print("scope disposal and panic.")
+        print("Reads (inside spawn_local / Closure::wrap / Effect::new):")
+        print("        replace `.get_untracked()` / `.with_untracked(...)` /")
+        print("        `.read_untracked()` with `.try_get_untracked()` /")
+        print("        `.try_with_untracked(...)` / `.try_read_untracked()`,")
+        print("        then handle the `None` case (usually `return;` or a")
+        print("        safe default).")
+        print()
+        print("Rules:")
+        print("  * Writes: context-free — any `set_*.set(...)` anywhere is a")
+        print("    violation, because helpers called from danger zones can")
+        print("    race with scope disposal.")
+        print("  * Reads: only flagged inside `spawn_local(async move {…})`,")
+        print("    `Closure::wrap(Box::new(move |…| {…}))`, or")
+        print("    `Effect::new(move |_| {…})` — these are the contexts that")
+        print("    can outlive the owning scope.")
         print()
         print("Escape hatch: append `// disposal-safe: <reason>` to the line")
-        print("if you can prove the write cannot race with scope disposal.")
+        print("if you can prove the access cannot race with scope disposal.")
         return 1
 
     print(
-        f"OK: no unsafe signal writes found "
+        f"OK: no unsafe signal writes or danger-zone reads found "
         f"({SCAN_ROOT.relative_to(REPO_ROOT)}/**/*.rs)"
     )
     return 0

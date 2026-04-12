@@ -428,7 +428,9 @@ pub fn EQModal(
             return;
         }
 
-        if !local_state_created.get_untracked() {
+        // On disposal, treat as "already created" so the init path
+        // (which further writes signals) is skipped.
+        if !local_state_created.try_get_untracked().unwrap_or(true) {
             // First time: create local signals, sorted by display order
             // Build (reaper_index, band) pairs then sort for display
             let mut indexed: Vec<(usize, &EqBandState)> = parent.iter().enumerate().collect();
@@ -463,7 +465,7 @@ pub fn EQModal(
             wasm_bindgen_futures::spawn_local(async move {
                 let _ = local_state_created.try_set(true);
             });
-        } else if !any_dragging.get_untracked() {
+        } else if !any_dragging.try_get_untracked().unwrap_or(true) {
             // Subsequent: sync values then trigger display update
             let locals = stored_locals.get_value();
             for local in locals.iter() {
@@ -921,7 +923,7 @@ fn EqSlider(
     // Sync from parent when not dragging (e.g., reset button)
     Effect::new(move || {
         let parent_val = value.get();
-        if !is_activated.get_untracked() {
+        if !is_activated.try_get_untracked().unwrap_or(true) {
             let _ = local_value.try_set(parent_val);
             drag_sync.set(parent_val);
         }

@@ -177,7 +177,12 @@ fn connect_websocket(
         reconnect_attempt_msg.set(0);
         if let Some(text) = e.data().as_string() {
             if let Ok(msg) = serde_json::from_str::<iem_core::ServerMsg>(&text) {
-                let touched = fader_touched.get_untracked();
+                // Scope may already be disposed (e.g. frame delivered after
+                // navigate-back tore the mixer down). If so, drop the whole
+                // message — all downstream signal accesses would panic.
+                let Some(touched) = fader_touched.try_get_untracked() else {
+                    return;
+                };
                 match msg {
                     iem_core::ServerMsg::State {
                         channels: new_chs,
@@ -254,13 +259,13 @@ fn connect_websocket(
                         }
                     }
                     iem_core::ServerMsg::GlobalVolumeUpdate { level_db, muted } => {
-                        if !global_touched.get_untracked() {
+                        if !global_touched.try_get_untracked().unwrap_or(true) {
                             let _ = set_global_level.try_set(level_db);
                             let _ = set_global_muted.try_set(muted);
                         }
                     }
                     iem_core::ServerMsg::StemsVolumeUpdate { level_db, muted } => {
-                        if !stems_touched.get_untracked() {
+                        if !stems_touched.try_get_untracked().unwrap_or(true) {
                             let _ = set_stems_level.try_set(level_db);
                             let _ = set_stems_muted.try_set(muted);
                         }
@@ -278,7 +283,9 @@ fn connect_websocket(
                     iem_core::ServerMsg::SoloUpdate { soloed: new_solo } => {
                         let new_soloed: std::collections::HashSet<usize> =
                             new_solo.into_iter().collect();
-                        let current = soloed.get_untracked();
+                        let Some(current) = soloed.try_get_untracked() else {
+                            return;
+                        };
                         // Skip echo from our own command
                         if new_soloed != current {
                             if new_soloed.is_empty() && !current.is_empty() {
@@ -286,7 +293,7 @@ fn connect_websocket(
                                 let _ = set_pre_solo_mutes.try_set(HashMap::new());
                             } else if !new_soloed.is_empty() && current.is_empty() {
                                 // Remote entered solo: save current mute states for restore
-                                let chs = channels.get_untracked();
+                                let chs = channels.try_get_untracked().unwrap_or_default();
                                 let mut saved = HashMap::new();
                                 for ch in &chs {
                                     saved.insert(ch.track_index, ch.muted);
@@ -315,7 +322,10 @@ fn connect_websocket(
                     }
                     iem_core::ServerMsg::AlertCleared { member_id: cleared } => {
                         let _ = set_alert_active.try_set(false);
-                        if let Some((ref m, _)) = alert_data.get_untracked() {
+                        // Double-nested Option: outer is try_get_untracked
+                        // disposal guard, inner is the signal's own
+                        // Option<(String, String)>.
+                        if let Some(Some((ref m, _))) = alert_data.try_get_untracked() {
                             if *m == cleared {
                                 let _ = set_alert_data.try_set(None);
                             }
@@ -875,9 +885,12 @@ pub fn MixerPage() -> impl IntoView {
             return;
         }
 
-        let needs_reconnect = match ws.get_untracked() {
-            Some(ref w) => w.ready_state() == web_sys::WebSocket::CLOSED,
-            None => false,
+        let needs_reconnect = match ws.try_get_untracked() {
+            // Disposal: scope gone → stop reconnecting.
+            None => return,
+            // Signal alive, inner Option empty → nothing to reconnect yet.
+            Some(None) => false,
+            Some(Some(ref w)) => w.ready_state() == web_sys::WebSocket::CLOSED,
         };
         if needs_reconnect {
             let member = reconnect_member_id();
@@ -962,7 +975,8 @@ pub fn MixerPage() -> impl IntoView {
     let last_frame_at_watch = last_frame_at.clone();
     let ws_watch = ws;
     let watchdog_closure = Closure::wrap(Box::new(move || {
-        let Some(socket) = ws_watch.get_untracked() else {
+        // Double-Option: outer = disposal guard, inner = signal value.
+        let Some(Some(socket)) = ws_watch.try_get_untracked() else {
             return;
         };
         if socket.ready_state() != web_sys::WebSocket::OPEN {

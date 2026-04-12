@@ -101,6 +101,13 @@ const NON_DISPOSAL_NOISE_PATTERNS = [
   // (engineer-only, one-shot on mount) prints this warning. Unrelated
   // to #153 — tracked by Chrome bug 401439.
   /Push API in incognito mode/i,
+  // Engineer's subscribe_to_push() logs this when Chromium blocks the
+  // Push subscribe await. Same root cause as "Push API in incognito";
+  // not disposal-related.
+  /\[push\] subscribe await failed/i,
+  // Chromium preload asset warning — the integrity attribute on a
+  // preload link is ignored in some contexts. Not disposal-related.
+  /integrity.*attribute.*ignored/i,
 ];
 
 function filterKnownNoise(messages: string[]): string[] {
