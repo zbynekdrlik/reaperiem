@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.146.0 (2026-04-12)
+
+- **Fix**: Vibration reliability in SOS alerts — replaced interval-based single pulses with browser-native pattern vibration + foreground recovery via visibilitychange listener (#162)
+
 ### v1.145.0 (2026-04-12)
 
 - **Feature**: LIM button now visible to all band members on their IEM Volume fader, not just the engineer — every member can control their own hearing protection threshold (#156)
