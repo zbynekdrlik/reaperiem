@@ -21,6 +21,20 @@ pub fn AlertToast(
     Effect::new(move || {
         let current = alert.get();
         if let Some((_, ref name)) = current {
+            // Clean up previous alert state if Effect re-fires (Some→Some transition)
+            if let Some(ref cb) = *vis_effect.borrow() {
+                if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+                    let _ = doc.remove_event_listener_with_callback(
+                        "visibilitychange",
+                        cb.as_ref().unchecked_ref(),
+                    );
+                }
+            }
+            vib_effect.borrow_mut().take();
+            snd_effect.borrow_mut().take();
+            vis_effect.borrow_mut().take();
+            stop_loops();
+
             // System notification (ask permission if needed)
             let name_clone = name.clone();
             wasm_bindgen_futures::spawn_local(async move {
