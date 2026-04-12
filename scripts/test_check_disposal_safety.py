@@ -410,6 +410,100 @@ fn f() {
 
 
 # ---------------------------------------------------------------------------
+# Pinned invariant: std interior-mutability types do NOT match UNSAFE_READ.
+#
+# The `_untracked` suffix on get/with/read is Leptos-specific; std `Cell`,
+# `RefCell`, thread-local `LocalKey`, `AtomicUsize`, and `OnceCell` do not
+# expose methods by those names, so even a broad `\w+\.\bget_untracked\b`
+# regex inside a danger zone cannot accidentally match them. These tests
+# pin that invariant so a future scanner change can't silently start
+# flagging Cell/RefCell accesses inside spawn_local or Closure::wrap.
+# ---------------------------------------------------------------------------
+
+
+def test_cell_get_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let cell = std::cell::Cell::new(0.0);
+    spawn_local(async move {
+        let v = cell.get();
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "Cell::get() inside spawn_local is not flagged (Cell has no get_untracked)",
+        src,
+    )
+
+
+def test_refcell_borrow_inside_closure_wrap_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let rc = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let rc2 = rc.clone();
+    let cb = Closure::wrap(Box::new(move |_: Event| {
+        let borrow = rc2.borrow();
+        for item in borrow.iter() { use_item(item); }
+    }) as Box<dyn FnMut(_)>);
+}
+"""
+    assert_no_violations(
+        "RefCell::borrow() inside Closure::wrap is not flagged",
+        src,
+    )
+
+
+def test_thread_local_with_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+thread_local! { static COUNTER: std::cell::Cell<u32> = std::cell::Cell::new(0); }
+
+fn f() {
+    spawn_local(async move {
+        COUNTER.with(|c| c.set(c.get() + 1));
+    });
+}
+"""
+    assert_no_violations(
+        "thread-local LocalKey::with() is not flagged (`with`, not `with_untracked`)",
+        src,
+    )
+
+
+def test_rc_cell_get_inside_effect_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let state = std::rc::Rc::new(std::cell::Cell::new(0));
+    let state_e = state.clone();
+    Effect::new(move |_| {
+        let v = state_e.get();
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "Rc<Cell>::get() inside Effect::new is not flagged",
+        src,
+    )
+
+
+def test_atomic_load_inside_spawn_local_is_not_flagged() -> None:
+    src = """
+fn f() {
+    let counter = std::sync::atomic::AtomicUsize::new(0);
+    spawn_local(async move {
+        let v = counter.load(std::sync::atomic::Ordering::Relaxed);
+        do_something(v);
+    });
+}
+"""
+    assert_no_violations(
+        "AtomicUsize::load() inside spawn_local is not flagged",
+        src,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 

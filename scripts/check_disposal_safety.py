@@ -171,6 +171,20 @@ UNSAFE_READ = re.compile(
 #      which *receiver expression* owns that field. In practice, any
 #      `foo.<field>.set(...)` call on a struct with such a field is a
 #      disposal-race candidate and deserves `try_set` anyway.
+#
+# Tradeoff — known limitation of the field-tracking pass:
+#
+#   Field names are added to a file-wide set with no knowledge of which
+#   struct they belong to. If the same file defines two struct literals
+#   where one has a Leptos-signal field `foo: RwSignal::new(...)` and
+#   the other has a non-signal field named `foo` (e.g. `foo: 42`), any
+#   `bar.foo.set(...)` call in the file will be flagged regardless of
+#   which `bar` is the receiver. iem-ui does not currently have such a
+#   collision, but if one appears the correct fix is the
+#   `// disposal-safe:` escape hatch on the specific line, not a wider
+#   relaxation of the tracking. Keeping the false-positive bias over a
+#   false-negative one is deliberate: a spurious try_set conversion is
+#   harmless, a missed disposal race is a production panic.
 RWSIGNAL_BINDING = re.compile(
     r"^\s*let\s+(?:mut\s+)?(\w+)\s*=\s*RwSignal::new\s*\("
 )
@@ -222,6 +236,15 @@ def _collect_rwsignal_names(lines: list[str]) -> set[str]:
     initializers `<field>: RwSignal::new(...)`. Comment-only lines are
     skipped, and string literals are stripped before matching so a
     literal like `"let x = RwSignal::new(0)"` does not pollute the set.
+
+    Field names are added to a single file-wide set with no knowledge
+    of which struct they belong to. If a file defines both a signal
+    field `foo: RwSignal::new(...)` and an unrelated non-signal field
+    named `foo` on a different struct, any `bar.foo.set(...)` in the
+    file will be flagged regardless of which `bar` owns which `foo`.
+    Use the `// disposal-safe:` escape hatch on the specific line if
+    this ever produces a false positive; see the tracked-name tradeoff
+    note near RWSIGNAL_FIELD_BINDING above.
     """
     names: set[str] = set()
     for line in lines:

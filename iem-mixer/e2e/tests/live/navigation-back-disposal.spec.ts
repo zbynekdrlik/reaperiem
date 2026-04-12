@@ -36,9 +36,43 @@ async function loginAs(page: Page, member: string, pin: string): Promise<void> {
         "iem_token",
         JSON.stringify({ token, member, engineer }),
       );
+      // Mark the "I've already seen the landing page this session" flag
+      // that landing.rs checks before its auto-redirect Effect fires.
+      // Without this, the landing page redirects authenticated users
+      // straight to `/<member>` the first time they visit `/`, which
+      // makes navigate-back assertions non-deterministic. Setting the
+      // flag here lets us keep a strict `toHaveURL(/\/$/)` check after
+      // each back navigation.
+      sessionStorage.setItem("iem_redirected", "1");
     },
     { token: data.token, member: data.member, engineer: data.engineer },
   );
+}
+
+async function openEqForEngineer(page: Page): Promise<boolean> {
+  // Find the ENGINEER channel by its name label and click its kebab menu.
+  // Mirrors the helper in eq.spec.ts so the two tests agree on selectors.
+  const channelCards = page.locator(".channel");
+  const count = await channelCards.count();
+  for (let i = 0; i < count; i++) {
+    const card = channelCards.nth(i);
+    const nameText = (await card.locator(".ch-name").textContent().catch(() => "")) || "";
+    if (!nameText.toUpperCase().includes("ENGINEER")) continue;
+    const menuBtn = card.locator(".ch-menu-btn");
+    if (!(await menuBtn.isVisible().catch(() => false))) continue;
+    await menuBtn.click({ force: true });
+    const eqOption = page.locator(".ch-menu-popup").locator("button", { hasText: "EQ" });
+    try {
+      await eqOption.waitFor({ state: "visible", timeout: 3000 });
+    } catch {
+      return false;
+    }
+    await eqOption.click();
+    // Wait for the modal to actually render before returning.
+    await expect(page.locator(".eq-modal")).toBeVisible({ timeout: 5000 });
+    return true;
+  }
+  return false;
 }
 
 async function waitForStreamingMixer(page: Page): Promise<void> {
@@ -165,13 +199,11 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
     await waitForStreamingMixer(page);
 
     // Navigate back via the browser's history API (matches Android back button).
-    // We deliberately do NOT assert on the final URL: landing.rs has an
-    // auto-redirect effect that sends authenticated users straight to
-    // `/<member>` once per session, so the final URL is non-deterministic.
-    // What matters is that the mixer's disposal and whatever landing/redirect
-    // transition follows produces zero panics, zero console noise, and zero
-    // /api/client-error POSTs — which is exactly what the oracles check.
+    // loginAs() pre-set `iem_redirected=1` in sessionStorage, so the
+    // landing page's auto-redirect Effect will NOT fire and the user
+    // actually ends up on `/` — letting us assert the URL strictly.
     await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
 
     await assertCleanSettle(page, noise, posts, 3000);
   });
@@ -189,6 +221,7 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
 
     // The in-page back button is the .back-btn in mixer-header.
     await page.locator(".back-btn").click();
+    await expect(page).toHaveURL(/\/$/);
 
     await assertCleanSettle(page, noise, posts, 3000);
   });
@@ -222,11 +255,43 @@ test.describe("Navigation-back disposal race (#153 follow-up)", () => {
       await page.goto("/engineer");
       await waitForStreamingMixer(page);
       await page.goBack();
-      // Short settle between iterations; the final 3s settle is at the end.
-      // URL after goBack is non-deterministic due to landing.rs auto-redirect —
-      // the oracle is the disposal noise check, not the URL.
+      // loginAs() pre-set iem_redirected=1 so landing.rs doesn't auto-
+      // redirect; the URL genuinely lands on `/` every iteration.
+      await expect(page).toHaveURL(/\/$/);
       await page.waitForTimeout(500);
     }
+
+    await assertCleanSettle(page, noise, posts, 3000);
+  });
+
+  test("EQ modal open → back: no disposal panic", async ({ page }) => {
+    // Regression scenario for the eq_modal.rs read/write sites fixed in
+    // v1.144.0. The EQ modal owns a handful of locally-bound RwSignals
+    // (`local_value`, `any_dragging`, `curve_trigger`, per-band
+    // `freq_norm`/`gain_norm`/…) and had the most concentrated set of
+    // disposal-race-prone writes outside mixer.rs itself. If any of those
+    // writes regressed to a plain `.set()`, navigating away while the
+    // modal is open would surface the panic here.
+    const noise = collectConsoleNoise(page);
+    const posts = await interceptClientErrorPosts(page);
+
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    await waitForStreamingMixer(page);
+
+    const opened = await openEqForEngineer(page);
+    expect(
+      opened,
+      "could not open EQ modal for ENGINEER channel",
+    ).toBe(true);
+
+    // With the modal on screen and its drag/read handlers live, press
+    // back. The mixer AND the modal dispose together — if any signal
+    // write or danger-zone read inside eq_modal.rs is still unguarded,
+    // the panic fires here.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
 
     await assertCleanSettle(page, noise, posts, 3000);
   });
