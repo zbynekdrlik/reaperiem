@@ -136,15 +136,31 @@ test.describe("#154 Talkback audio quality (live)", () => {
       samples.push(db10 ?? -1500);
     }
 
+    // A3 pre-release snapshot: record packets_out just before release so we can
+    // verify the server stops draining after the WS closes.
+    const token = await page.evaluate(() => {
+      const raw = localStorage.getItem("iem_token");
+      if (!raw) return null;
+      try {
+        return (JSON.parse(raw) as { token?: string }).token ?? null;
+      } catch {
+        return null;
+      }
+    });
+    expect(token, "A3/A4 FAIL: no engineer token in localStorage").toBeTruthy();
+
+    const diagPreResp = await page.request.get("/api/talkback/diagnostics", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(diagPreResp.status(), "A3 FAIL: pre-release diagnostics not 200").toBe(200);
+    const diagPre = await diagPreResp.json();
+
     await page.mouse.up();
 
-    // Wait up to 500 ms for meter to decay post-release.
-    const releaseSamples: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(100);
-      const db10 = await readEngineerMeterDb10(page);
-      releaseSamples.push(db10 ?? -1500);
-    }
+    // Wait 600 ms — enough for WS close handshake + jitter buffer flush.
+    // The server clears the jitter buffer on WS close, so no further UDP
+    // packets are sent to the VST after this window.
+    await page.waitForTimeout(600);
 
     // A1 — Signal present: >= 40 of 50 samples above -60 dB (-600 in dB*10).
     const aboveSilence = samples.filter((v) => v > -600).length;
@@ -169,37 +185,44 @@ test.describe("#154 Talkback audio quality (live)", () => {
       `A2 FAIL: longest silent run during talk = ${worstRun} x 100 ms; must be < 5`,
     ).toBeLessThan(5);
 
-    // A3 — Clean release: meter <= -60 dB within 200 ms (2 samples) after release.
-    const quickRelease = releaseSamples.slice(0, 2).every((v) => v <= -600);
-    expect(
-      quickRelease,
-      `A3 FAIL: meter did not decay within 200 ms. releaseSamples=${JSON.stringify(releaseSamples)}`,
-    ).toBe(true);
-
-    // A4 — Diagnostics API returns the new engineer-auth-gated schema.
-    const token = await page.evaluate(() => {
-      const raw = localStorage.getItem("iem_token");
-      if (!raw) return null;
-      try {
-        return (JSON.parse(raw) as { token?: string }).token ?? null;
-      } catch {
-        return null;
-      }
-    });
-    expect(token, "A4 FAIL: no engineer token in localStorage").toBeTruthy();
-
-    const diagResp = await page.request.get("/api/talkback/diagnostics", {
+    // A3 — Clean release: server stops sending UDP packets to the VST within
+    // 600 ms of button release.  The ENGINEER mic track carries a live Dante
+    // passthrough signal so its REAPER meter level never reaches true silence;
+    // packets_out is the correct observable.  We sample diagnostics at +600 ms
+    // and again 300 ms later — if the delta is 0 the drain loop has stopped.
+    const diagPostResp = await page.request.get("/api/talkback/diagnostics", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    expect(diagResp.status(), "A4 FAIL: /api/talkback/diagnostics not 200").toBe(
-      200,
-    );
-    const diag = await diagResp.json();
+    expect(diagPostResp.status(), "A3 FAIL: post-release diagnostics not 200").toBe(200);
+    const diagPost = await diagPostResp.json();
+
+    await page.waitForTimeout(300);
+
+    const diagPost2Resp = await page.request.get("/api/talkback/diagnostics", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(diagPost2Resp.status(), "A3 FAIL: second post-release diagnostics not 200").toBe(200);
+    const diagPost2 = await diagPost2Resp.json();
+
+    const packetsOutDelta = diagPost2.packets_out - diagPost.packets_out;
+    expect(
+      packetsOutDelta,
+      `A3 FAIL: server still sending packets 600 ms after release. ` +
+        `packets_out at +600ms=${diagPost.packets_out}, at +900ms=${diagPost2.packets_out}`,
+    ).toBe(0);
+
+    // A4 — Diagnostics API returns the new engineer-auth-gated schema.
+    const diag = diagPost2;
     expect(diag.packets_in, `A4 FAIL: packets_in too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
     expect(diag.packets_out, `A4 FAIL: packets_out too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
     expect(diag.seq_gaps, `A4 FAIL: seq_gaps should be 0: ${JSON.stringify(diag)}`).toBe(0);
     expect(diag.buffer_overflows, `A4 FAIL: buffer_overflows should be 0 on loopback: ${JSON.stringify(diag)}`).toBe(0);
     expect(diag.recv_vst_addr, `A4 FAIL: recv_vst_addr null: ${JSON.stringify(diag)}`).toBeTruthy();
     expect(diag.recv_vst_addr).not.toBe("none");
+    // Sanity: packets_out grew during talk
+    expect(
+      diag.packets_out,
+      `A4 FAIL: packets_out did not grow during talk (pre=${diagPre.packets_out}, post=${diag.packets_out})`,
+    ).toBeGreaterThan(diagPre.packets_out);
   });
 });

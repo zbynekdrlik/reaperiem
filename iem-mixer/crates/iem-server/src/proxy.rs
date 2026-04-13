@@ -3148,6 +3148,15 @@ async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: App
             .store(age, Ordering::Relaxed);
     }
 
+    // Flush the jitter buffer before aborting the drain loop.
+    // This prevents residual frames from being sent to the VST after the
+    // client releases the talk button — which would cause REAPER to see
+    // a signal tail of up to TARGET_MS (60 ms) after release.
+    {
+        let mut jbg = jb.lock().await;
+        while jbg.pop().is_some() {}
+    }
+
     // Cancel drain loop so it doesn't live past the socket close.
     drain_handle.abort();
 
