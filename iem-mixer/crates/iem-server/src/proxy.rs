@@ -2572,9 +2572,15 @@ pub async fn handle_get_limiter_params(
     {
         let guard = state.limiter_activity.lock().await;
         let ms = guard.get(&track_index).copied().unwrap_or(0);
-        *active_seconds = (ms as f64) / 1000.0;
+        *active_seconds = limiter_ms_to_seconds(ms);
     }
     Some(reply)
+}
+
+/// Convert accumulated limiter-activity milliseconds to seconds.
+#[inline]
+fn limiter_ms_to_seconds(ms: u64) -> f64 {
+    (ms as f64) / 1000.0
 }
 
 /// Parse limiter EXTSTATE response into ServerMsg
@@ -4733,5 +4739,26 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             logs_contain("trace-capture-bt-marker-99"),
             "expected backtrace body to appear in captured logs",
         );
+    }
+
+    // ================================================================
+    // Limiter activity ms → seconds conversion (#145)
+    // ================================================================
+
+    #[test]
+    fn test_limiter_ms_to_seconds_zero() {
+        assert_eq!(limiter_ms_to_seconds(0), 0.0);
+    }
+
+    #[test]
+    fn test_limiter_ms_to_seconds_exact() {
+        // 83_500 ms = 83.5 s; division (not multiplication or modulo)
+        let result = limiter_ms_to_seconds(83_500);
+        assert!((result - 83.5).abs() < 1e-9, "expected 83.5, got {result}");
+    }
+
+    #[test]
+    fn test_limiter_ms_to_seconds_one_second() {
+        assert_eq!(limiter_ms_to_seconds(1000), 1.0);
     }
 }
