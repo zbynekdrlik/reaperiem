@@ -404,7 +404,11 @@ jobs:
   mutation-test:
     name: Mutation Testing
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Budget sized to cover larger feature PRs (baseline build ~3 min +
+    # per-mutant build ~3-5 min). On a typical PR with <8 mutants this
+    # finishes in 10-15 min; bigger surface (new modules + rewritten
+    # handlers) can push into the 25-35 min range.
+    timeout-minutes: 40
     needs: lint
     steps:
       - uses: actions/checkout@v4
@@ -473,7 +477,7 @@ jobs:
             --in-diff pr.diff \
             --package iem-core \
             --timeout 300 \
-            --jobs 4 \
+            --jobs 2 \
             --no-shuffle
           echo "=== Mutating iem-server (--features audio) ==="
           # Exclude axum route handlers and WebSocket handlers that require
@@ -485,7 +489,7 @@ jobs:
             --package iem-server \
             --features audio \
             --timeout 300 \
-            --jobs 4 \
+            --jobs 2 \
             --no-shuffle \
             --exclude-re 'handle_talkback_ws' \
             --exclude-re 'talkback_diagnostics_handler'
