@@ -1115,6 +1115,14 @@ jobs:
           if errorlevel 1 (echo ERROR: Failed to deploy ReaScripts && exit /b 1)
           echo ReaScripts deployed
 
+      - name: Deploy JSFX to REAPER Effects
+        shell: cmd
+        run: |
+          if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\"
+          xcopy /Y scripts\reascripts\jsfx\MGA_JSLimiterST "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\"
+          if errorlevel 1 (echo ERROR: Failed to deploy JSFX && exit /b 1)
+          echo JSFX deployed
+
       - name: Register new ReaScripts in reaper-kb.ini
         shell: powershell
         run: |
