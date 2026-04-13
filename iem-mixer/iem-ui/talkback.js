@@ -56,7 +56,7 @@ export async function startTalkback(wsUrl) {
       setTimeout(() => reject(new Error('Talkback WS connect timeout')), 5000);
     });
 
-    // 4. WebCodecs AudioEncoder (Opus, 64kbps, mono)
+    // 4. WebCodecs AudioEncoder (Opus, 96 kbps mono — #154 quality bump).
     _encoder = new AudioEncoder({
       output: (chunk) => {
         if (_ws && _ws.readyState === WebSocket.OPEN) {
@@ -75,32 +75,48 @@ export async function startTalkback(wsUrl) {
       codec: 'opus',
       sampleRate: 48000,
       numberOfChannels: 1,
-      bitrate: 64000,
+      bitrate: 96000,
     });
 
-    // 5. ScriptProcessor to feed encoder (1024 samples — must be power of two)
-    _sourceNode = _audioCtx.createMediaStreamSource(_stream);
-    _processorNode = _audioCtx.createScriptProcessor(1024, 1, 1);
+    // 5. AudioWorklet feeds the encoder with exact 960-sample (20 ms) frames.
+    //    Replaces deprecated ScriptProcessorNode(1024) which caused Opus
+    //    re-framing jitter and DOM/GC stalls on the main thread.
+    try {
+      await _audioCtx.audioWorklet.addModule('/talkback-worklet.js');
+    } catch (err) {
+      console.error('[talkback] failed to load worklet module:', err);
+      throw err;
+    }
 
-    _processorNode.onaudioprocess = (e) => {
-      if (_encoder && _encoder.state === 'configured') {
-        const input = e.inputBuffer.getChannelData(0);
-        const data = new Float32Array(input);
-        const frame = new AudioData({
-          format: 'f32-planar',
-          sampleRate: 48000,
-          numberOfFrames: data.length,
-          numberOfChannels: 1,
-          timestamp: e.playbackTime * 1_000_000, // microseconds
-          data: data,
-        });
-        _encoder.encode(frame);
-        frame.close();
-      }
+    _sourceNode = _audioCtx.createMediaStreamSource(_stream);
+    _processorNode = new AudioWorkletNode(_audioCtx, 'talkback-worklet', {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1],
+    });
+
+    _processorNode.port.onmessage = (ev) => {
+      if (!_encoder || _encoder.state !== 'configured') return;
+      const data = ev.data; // Float32Array(960)
+      const frame = new AudioData({
+        format: 'f32-planar',
+        sampleRate: 48000,
+        numberOfFrames: data.length,
+        numberOfChannels: 1,
+        timestamp: (performance.now() * 1000) | 0, // microseconds
+        data: data,
+      });
+      _encoder.encode(frame);
+      frame.close();
     };
 
     _sourceNode.connect(_processorNode);
-    _processorNode.connect(_audioCtx.destination); // required for processing
+    // Worklet output is unused — connect to a muted gain so the graph is
+    // fully wired (required on older Safari; harmless elsewhere).
+    const silentGain = _audioCtx.createGain();
+    silentGain.gain.value = 0;
+    _processorNode.connect(silentGain);
+    silentGain.connect(_audioCtx.destination);
     _state = 'active';
     console.log('[talkback] active');
   } catch (err) {
