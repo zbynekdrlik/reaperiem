@@ -942,6 +942,9 @@ jobs:
             #   ERROR: Invalid argument/option - 'Files\REAPER'.
             # Register-ScheduledTask passes the action as a structured
             # object (exe + args) so no shell escaping is involved.
+            # Register with the current-user default principal (no -RunLevel
+            # Highest — that requires admin to register, and the original
+            # schtasks invocation didn't elevate either).
             try {
               $action = New-ScheduledTaskAction `
                 -Execute $reaperExe `
@@ -949,19 +952,10 @@ jobs:
               $trigger = New-ScheduledTaskTrigger `
                 -Once `
                 -At ((Get-Date).AddYears(1))
-              $principal = New-ScheduledTaskPrincipal `
-                -UserId $env:USERNAME `
-                -LogonType Interactive `
-                -RunLevel Highest
-              $settings = New-ScheduledTaskSettingsSet `
-                -AllowStartIfOnBatteries `
-                -DontStopIfGoingOnBatteries
               Register-ScheduledTask `
                 -TaskName "StartREAPER" `
                 -Action $action `
                 -Trigger $trigger `
-                -Principal $principal `
-                -Settings $settings `
                 -Force | Out-Null
               Write-Host "StartREAPER task registered with Register-ScheduledTask"
             } catch {
