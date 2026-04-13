@@ -107,7 +107,7 @@ fn connect_websocket(
     set_limiter_limit_norm: WriteSignal<f32>,
     set_limiter_enabled: WriteSignal<bool>,
     set_limiter_loading: WriteSignal<bool>,
-    /// Limiter activity counter (#145)
+    // Limiter activity counter (#145)
     set_limiter_active_seconds: WriteSignal<f64>,
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
