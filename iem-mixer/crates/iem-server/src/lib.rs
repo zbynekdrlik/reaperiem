@@ -6,8 +6,6 @@
 //! - Proxies requests to REAPER HTTP API
 //! - Provides real-time WebSocket updates
 
-#[cfg(feature = "audio")]
-pub mod audio_stream;
 pub mod auth;
 pub mod backup_capture;
 pub mod backup_daemon;
@@ -26,6 +24,11 @@ pub mod push_store;
 pub mod routes;
 pub mod snapshot_routes;
 pub mod snapshot_store;
+
+#[cfg(feature = "audio")]
+pub mod audio_stream;
+#[cfg(feature = "audio")]
+pub mod talkback_buffer;
 
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue};
@@ -56,6 +59,28 @@ pub struct TalkbackState {
     pub active_talker: Option<String>,
     /// UDP address of the OIEM Receive VST3 (learned from heartbeat packets)
     pub recv_vst_addr: Option<std::net::SocketAddr>,
+}
+
+/// Talkback runtime metrics for #154 diagnostics API.
+#[cfg(feature = "audio")]
+#[derive(Debug, Default)]
+pub struct TalkbackMetrics {
+    /// Opus frames received from the browser WebSocket
+    pub packets_in: std::sync::atomic::AtomicU64,
+    /// OIEM UDP packets sent to the Receive VST (drain-loop pops)
+    pub packets_out: std::sync::atomic::AtomicU64,
+    /// Reserved — WS inbound sequence gaps (not yet tracked; browser does not send seq)
+    pub seq_gaps: std::sync::atomic::AtomicU64,
+    /// Current jitter buffer fill in milliseconds
+    pub buffer_fill_ms: std::sync::atomic::AtomicU32,
+    /// Total drop-oldest events in the jitter buffer
+    pub buffer_overflows: std::sync::atomic::AtomicU64,
+    /// Milliseconds since the most recent WS frame was received
+    pub last_packet_age_ms: std::sync::atomic::AtomicU64,
+    /// Drain-loop ticks that found the buffer empty (emitted keepalive only)
+    pub underruns: std::sync::atomic::AtomicU64,
+    /// Negotiated Opus bitrate (set on session start from client config)
+    pub bitrate_kbps: std::sync::atomic::AtomicU32,
 }
 
 /// Write data to a file atomically by writing to a temp file then renaming.
@@ -111,6 +136,9 @@ pub struct AppState {
     /// UDP socket for sending talkback OIEM packets to receive VST (#123)
     #[cfg(feature = "audio")]
     pub talkback_socket: Arc<tokio::net::UdpSocket>,
+    /// Talkback runtime metrics for diagnostics (#154)
+    #[cfg(feature = "audio")]
+    pub talkback_metrics: Arc<TalkbackMetrics>,
     /// Mutex to serialize EQ EXTSTATE writes (prevents race condition
     /// where concurrent tokio tasks overwrite the shared EXTSTATE key)
     pub eq_write_lock: Arc<tokio::sync::Mutex<()>>,
@@ -211,6 +239,8 @@ impl AppState {
                 sock.set_nonblocking(true).expect("set nonblocking");
                 Arc::new(tokio::net::UdpSocket::from_std(sock).expect("tokio UdpSocket"))
             },
+            #[cfg(feature = "audio")]
+            talkback_metrics: Arc::new(TalkbackMetrics::default()),
             eq_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
             limiter_write_lock: Arc::new(tokio::sync::Mutex::new(())),

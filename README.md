@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.148.0 (2026-04-13)
+
+- **Fix**: Talkback audio quality — eliminated "low quality / hanging / not fluent" by adding a 60 ms server-side jitter buffer with 20 ms drain loop, replacing the deprecated ScriptProcessor with an AudioWorklet that emits exact 20 ms Opus frames, and bumping Opus bitrate 64→96 kbps for voice. Addresses #154.
+- **Feature**: `/api/talkback/diagnostics` (engineer-only) exposes packets_in, packets_out, seq_gaps, buffer_fill_ms, buffer_overflows, last_packet_age_ms, underruns, bitrate_kbps, recv_vst_addr.
+- **Test**: New live Playwright gate `talkback-quality.spec.ts` — fake-audio fixture, REAPER meter polling, asserts continuous signal + no hangs + clean release + sane diagnostics.
+
 ### v1.147.0 (2026-04-12)
 
 - **Fix**: EQ visualization — shelving filters (lowshelf/highshelf) no longer ring near their corner frequencies. Rewrote shelf biquad math to use the Audio EQ Cookbook's S-parameterized formula instead of the peaking-EQ Q formula, eliminating the ~1.4 dB overshoot that made neighbouring peaking bands look "oversaturated" versus REAPER's native ReaEQ display (#167).

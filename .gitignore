@@ -20,6 +20,9 @@ peaks/
 *.RPP-bak
 *.RPP-UNDO
 
+# E2E test fixtures (allow committed WAV files for deterministic tests)
+!iem-mixer/e2e/tests/fixtures/*.wav
+
 # IDE
 .idea/
 .vscode/

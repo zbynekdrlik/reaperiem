@@ -463,22 +463,83 @@ async fn ws_talkback_handler() -> impl IntoResponse {
     (StatusCode::NOT_FOUND, "Talkback not available")
 }
 
-// Talkback diagnostics — shows recv_vst_addr and active_talker (#123)
+// Talkback diagnostics — runtime metrics for #154 quality fix.
+// Engineer-only.
 #[cfg(feature = "audio")]
-async fn talkback_diagnostics_handler(State(state): State<AppState>) -> impl IntoResponse {
+async fn talkback_diagnostics_handler(
+    State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
+) -> Result<axum::Json<serde_json::Value>, (StatusCode, axum::Json<iem_core::ApiError>)> {
+    use std::sync::atomic::Ordering;
+
+    // Engineer auth — same pattern as audio_diagnostics_handler.
+    let config = state.config.read().await;
+    let token = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                axum::Json(iem_core::ApiError::unauthorized()),
+            )
+        })?;
+    let claims = crate::auth::extract_claims(token, &config.jwt_secret).ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            axum::Json(iem_core::ApiError::unauthorized()),
+        )
+    })?;
+    // Token expiry — match the check in ws_talkback for consistency.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if claims.exp < now {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            axum::Json(iem_core::ApiError::new(
+                "TOKEN_EXPIRED",
+                "Token has expired",
+            )),
+        ));
+    }
+    if !claims.engineer {
+        return Err((
+            StatusCode::FORBIDDEN,
+            axum::Json(iem_core::ApiError::new(
+                "FORBIDDEN",
+                "Talkback diagnostics is engineer-only",
+            )),
+        ));
+    }
+    drop(config);
+
     let tb = state.talkback_state.read().await;
-    let addr = tb
+    let recv_vst_addr = tb
         .recv_vst_addr
-        .map(|a| a.to_string())
-        .unwrap_or_else(|| "none".to_string());
-    let talker = tb
+        .map(|a| serde_json::Value::String(a.to_string()))
+        .unwrap_or(serde_json::Value::Null);
+    let active_talker = tb
         .active_talker
         .clone()
-        .unwrap_or_else(|| "none".to_string());
-    Json(serde_json::json!({
-        "recv_vst_addr": addr,
-        "active_talker": talker,
-    }))
+        .map(serde_json::Value::String)
+        .unwrap_or(serde_json::Value::Null);
+    drop(tb);
+
+    let m = &state.talkback_metrics;
+    Ok(axum::Json(serde_json::json!({
+        "recv_vst_addr": recv_vst_addr,
+        "active_talker": active_talker,
+        "packets_in": m.packets_in.load(Ordering::Relaxed),
+        "packets_out": m.packets_out.load(Ordering::Relaxed),
+        "seq_gaps": m.seq_gaps.load(Ordering::Relaxed),
+        "buffer_fill_ms": m.buffer_fill_ms.load(Ordering::Relaxed),
+        "buffer_overflows": m.buffer_overflows.load(Ordering::Relaxed),
+        "last_packet_age_ms": m.last_packet_age_ms.load(Ordering::Relaxed),
+        "underruns": m.underruns.load(Ordering::Relaxed),
+        "bitrate_kbps": m.bitrate_kbps.load(Ordering::Relaxed),
+    })))
 }
 
 #[cfg(not(feature = "audio"))]
