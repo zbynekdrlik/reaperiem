@@ -476,13 +476,19 @@ jobs:
             --jobs 4 \
             --no-shuffle
           echo "=== Mutating iem-server (--features audio) ==="
+          # Exclude axum route handlers and WebSocket handlers that require
+          # a full AppState + WS harness to unit-test meaningfully.  These
+          # functions are covered end-to-end by the live Playwright tests
+          # in e2e/tests/live/ (talkback-quality.spec.ts for #154).
           cargo mutants \
             --in-diff pr.diff \
             --package iem-server \
             --features audio \
             --timeout 300 \
             --jobs 4 \
-            --no-shuffle
+            --no-shuffle \
+            --exclude-re 'handle_talkback_ws' \
+            --exclude-re 'talkback_diagnostics_handler'
 
   # ============================================================
   # CHECK VERSION BUMP - Only on PRs to main
