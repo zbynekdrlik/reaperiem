@@ -99,6 +99,12 @@ pub enum ClientMsg {
     },
     /// Enable/disable limiter (FX bypass toggle) (#72)
     SetLimiterEnabled { track_index: usize, enabled: bool },
+    /// Reset the activity counter for one limiter track (#145).
+    /// Server zeros AppState.limiter_activity[track] AND writes
+    /// EXTSTATE REAPERIEM_LIMITER_ACTIVITY/reset = "<track_index>"
+    /// so meter_bridge.lua zeros its local accumulator (otherwise the
+    /// next poller cycle would re-overwrite the server's zero).
+    ResetLimiterActivity { track_index: usize },
 }
 
 /// Server → Client events (pushed via WebSocket)
@@ -186,6 +192,11 @@ pub enum ServerMsg {
         /// Normalized slider position (0-1)
         limit_norm: f32,
         enabled: bool,
+        /// Cumulative seconds the limiter has been actively reducing gain
+        /// (GR < -1 dB) since the last reset or app restart (#145).
+        /// Default 0.0 for backwards compatibility with older servers.
+        #[serde(default)]
+        active_seconds: f64,
     },
 }
 
@@ -839,12 +850,53 @@ mod tests {
             limit_db: -6.0,
             limit_norm: 0.0,
             enabled: true,
+            active_seconds: 0.0,
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("LimiterParams"));
         assert!(json.contains("PETRONELA inear"));
         assert!(json.contains("-6"));
         let back: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_server_msg_limiter_params_active_seconds_default() {
+        // Older server may emit LimiterParams without active_seconds; new client
+        // must still deserialize it with active_seconds = 0.0.
+        let json = r#"{"event":"LimiterParams","data":{"track_index":23,"track_name":"PETRONELA inear","limit_db":-6.0,"limit_norm":0.0,"enabled":true}}"#;
+        let decoded: ServerMsg = serde_json::from_str(json).unwrap();
+        match decoded {
+            ServerMsg::LimiterParams { active_seconds, .. } => {
+                assert_eq!(active_seconds, 0.0);
+            }
+            _ => panic!("Expected LimiterParams variant"),
+        }
+    }
+
+    #[test]
+    fn test_server_msg_limiter_params_with_active_seconds() {
+        let msg = ServerMsg::LimiterParams {
+            track_index: 23,
+            track_name: "PETRONELA inear".to_string(),
+            limit_db: -6.0,
+            limit_norm: 0.0,
+            enabled: true,
+            active_seconds: 83.5,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"active_seconds\":83.5"));
+        let back: ServerMsg = serde_json::from_str(&json).unwrap();
+        assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_client_msg_reset_limiter_activity_serialization() {
+        let msg = ClientMsg::ResetLimiterActivity { track_index: 23 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"cmd\":\"ResetLimiterActivity\""));
+        assert!(json.contains("\"track_index\":23"));
+        let back: ClientMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, back);
     }
 }
