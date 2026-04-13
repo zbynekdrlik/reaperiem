@@ -961,12 +961,8 @@ jobs:
             # render a few seconds after the process starts.  Observed on run
             # 24340083084 — the modal sat there the entire 30 s wait budget.
             try {
-              Add-Type -Namespace W32 -Name U -MemberDefinition @"
-[System.Runtime.InteropServices.DllImport("user32.dll", CharSet=System.Runtime.InteropServices.CharSet.Auto)]
-public static extern System.IntPtr FindWindow(string cls, string wn);
-[System.Runtime.InteropServices.DllImport("user32.dll")]
-public static extern bool SetForegroundWindow(System.IntPtr h);
-"@ -ErrorAction SilentlyContinue
+              $def = '[System.Runtime.InteropServices.DllImport("user32.dll", CharSet=System.Runtime.InteropServices.CharSet.Auto)] public static extern System.IntPtr FindWindow(string cls, string wn); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);'
+              Add-Type -Namespace W32 -Name U -MemberDefinition $def -ErrorAction SilentlyContinue
               Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
               for ($i = 0; $i -lt 5; $i++) {
                 Start-Sleep -Seconds 2
