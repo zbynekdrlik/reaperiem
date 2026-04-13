@@ -3054,6 +3054,14 @@ async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: App
 
     tracing::info!("Talkback WebSocket connected");
 
+    // Record the negotiated bitrate.  The browser side (talkback.js) is
+    // hardcoded to 96 kbps Opus mono; if that ever becomes client-configured
+    // via a handshake message, wire it in below.
+    state
+        .talkback_metrics
+        .bitrate_kbps
+        .store(96, Ordering::Relaxed);
+
     // Shared jitter buffer between the receive loop and the drain loop.
     let jb = Arc::new(AsyncMutex::new(crate::talkback_buffer::JitterBuffer::new()));
     let last_recv = Arc::new(AsyncMutex::new(std::time::Instant::now()));

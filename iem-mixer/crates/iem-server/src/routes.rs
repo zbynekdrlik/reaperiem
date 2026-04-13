@@ -490,6 +490,20 @@ async fn talkback_diagnostics_handler(
             axum::Json(iem_core::ApiError::unauthorized()),
         )
     })?;
+    // Token expiry — match the check in ws_talkback for consistency.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    if claims.exp < now {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            axum::Json(iem_core::ApiError::new(
+                "TOKEN_EXPIRED",
+                "Token has expired",
+            )),
+        ));
+    }
     if !claims.engineer {
         return Err((
             StatusCode::FORBIDDEN,

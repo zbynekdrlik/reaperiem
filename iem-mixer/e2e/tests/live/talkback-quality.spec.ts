@@ -118,6 +118,19 @@ test.describe("#154 Talkback audio quality (live)", () => {
         "Run against http://localhost on a secure-context-supporting origin.",
     ).not.toContain("unsupported");
 
+    // Preflight: confirm the ENGINEER mic track is reachable and the name
+    // matches our regex. Without this, meter reads silently return null
+    // and A1 fails with a confusing "only 0/50 samples above -60 dB" —
+    // which looks like a talkback bug but is actually a track-name drift.
+    const preflightDb10 = await readEngineerMeterDb10(page);
+    expect(
+      preflightDb10,
+      "setup error: could not read ENGINEER mic track meter from REAPER. " +
+        "Check the track exists and its name matches /^ENGINEER\\s+mic$/i. " +
+        "Also confirm REAPER HTTP API is reachable at " +
+        `${REAPER_URL}/_/NTRACK;TRACK.`,
+    ).not.toBeNull();
+
     // Use a real mouse press — Leptos `on:pointerdown` needs a natural
     // event with a valid pointer_id so set_pointer_capture succeeds.
     // After pointerdown, wait 2.5 s for the WS + getUserMedia + Opus
@@ -129,12 +142,23 @@ test.describe("#154 Talkback audio quality (live)", () => {
     const samples: number[] = [];
     const POLL_MS = 100;
     const POLL_COUNT = 50; // 5 s
+    let nullReads = 0;
 
     for (let i = 0; i < POLL_COUNT; i++) {
       await page.waitForTimeout(POLL_MS);
       const db10 = await readEngineerMeterDb10(page);
+      if (db10 === null) nullReads++;
       samples.push(db10 ?? -1500);
     }
+
+    // If more than half of the samples came back null, the REAPER HTTP
+    // API became unreachable mid-test — fail with that precise reason
+    // rather than letting A1 report "all silent".
+    expect(
+      nullReads,
+      `setup error: ${nullReads}/${POLL_COUNT} REAPER meter reads returned null mid-test. ` +
+        "REAPER HTTP API likely unreachable or the ENGINEER mic track was renamed.",
+    ).toBeLessThan(POLL_COUNT / 2);
 
     // A3 pre-release snapshot: record packets_out just before release so we can
     // verify the server stops draining after the WS closes.
@@ -217,6 +241,7 @@ test.describe("#154 Talkback audio quality (live)", () => {
     expect(diag.packets_out, `A4 FAIL: packets_out too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
     expect(diag.seq_gaps, `A4 FAIL: seq_gaps should be 0: ${JSON.stringify(diag)}`).toBe(0);
     expect(diag.buffer_overflows, `A4 FAIL: buffer_overflows should be 0 on loopback: ${JSON.stringify(diag)}`).toBe(0);
+    expect(diag.bitrate_kbps, `A4 FAIL: bitrate_kbps should be 96: ${JSON.stringify(diag)}`).toBe(96);
     expect(diag.recv_vst_addr, `A4 FAIL: recv_vst_addr null: ${JSON.stringify(diag)}`).toBeTruthy();
     expect(diag.recv_vst_addr).not.toBe("none");
     // Note: diagPre (snapshot at end of talk) and diagPost2 (snapshot after
