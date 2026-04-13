@@ -933,50 +933,43 @@ jobs:
             $reaperExe = "C:\Program Files\REAPER (x64)\reaper.exe"
             $projectPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
 
-            # Create/replace the StartREAPER scheduled task using the
-            # PowerShell ScheduledTasks cmdlets.  The previous implementation
-            # shelled out to `schtasks /create /tr "..."` which relied on
-            # PowerShell's native-exe quoting — fragile for paths containing
-            # spaces ("C:\Program Files\REAPER (x64)\...") and observed to
-            # fail intermittently with
-            #   ERROR: Invalid argument/option - 'Files\REAPER'.
-            # Register-ScheduledTask passes the action as a structured
-            # object (exe + args) so no shell escaping is involved.
-            # Register with the current-user default principal (no -RunLevel
-            # Highest — that requires admin to register, and the original
-            # schtasks invocation didn't elevate either).
-            try {
-              $action = New-ScheduledTaskAction `
-                -Execute $reaperExe `
-                -Argument "`"$projectPath`""
-              $trigger = New-ScheduledTaskTrigger `
-                -Once `
-                -At ((Get-Date).AddYears(1))
-              Register-ScheduledTask `
-                -TaskName "StartREAPER" `
-                -Action $action `
-                -Trigger $trigger `
-                -Force | Out-Null
-              Write-Host "StartREAPER task registered with Register-ScheduledTask"
-            } catch {
-              Write-Host "::error::Failed to register StartREAPER task: $_"
+            # Force-create (or update) the StartREAPER task with the correct project path.
+            # The `schtasks /create /tr $taskTr` call has a known PowerShell native-exe
+            # quoting edge case on the path with spaces — if it fails, we fall back to
+            # the existing task definition (which is already correct from prior deploys).
+            $taskTr = "`"$reaperExe`" `"$projectPath`""
+            $ErrorActionPreference = "Continue"
+            & schtasks /create /tn "StartREAPER" /tr $taskTr /sc once /st 00:00 /f 2>&1 | Out-Null
+            $createExit = $LASTEXITCODE
+            $ErrorActionPreference = "Stop"
+            if ($createExit -ne 0) {
+              Write-Host "::warning::schtasks /create exited $createExit (likely PowerShell quoting of path with spaces); using pre-existing task definition"
+            } else {
+              Write-Host "StartREAPER task created/updated"
+            }
+
+            & schtasks /run /tn "StartREAPER" 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::error::schtasks /run /tn StartREAPER failed (exit $LASTEXITCODE). Task may not exist."
               exit 1
             }
 
+            # After taskkill /f, REAPER can show a "License Key Detected" modal on
+            # startup that blocks project load and the Web API.  Give REAPER a few
+            # seconds to render the dialog, then dismiss via SendKeys ESC.  If no
+            # dialog is present, ESC is a no-op.  Observed on run 24340083084.
+            Start-Sleep -Seconds 5
             try {
-              Start-ScheduledTask -TaskName "StartREAPER"
-              Write-Host "StartREAPER task started"
+              Add-Type -AssemblyName System.Windows.Forms
+              [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+              Write-Host "Sent ESC to dismiss any blocking startup dialog"
             } catch {
-              Write-Host "::error::Failed to start StartREAPER task: $_"
-              exit 1
+              Write-Host "::warning::Could not SendKeys ESC: $_"
             }
 
             # Wait up to 45 seconds for REAPER HTTP API to respond with project loaded.
-            # 45 s covers slow project load + potential "License Key Detected"
-            # modal that appears after a forced taskkill (observed 2026-04-13
-            # on run 24340083084).
             $reaperReady = $false
-            $waited = 0
+            $waited = 5   # account for the 5 s sleep above
             while ($waited -lt 45) {
               Start-Sleep -Seconds 3
               $waited += 3
@@ -995,7 +988,7 @@ jobs:
 
             if (-not $reaperReady) {
               Write-Host "::error::REAPER did not come back with project loaded within 45s after VST3 deploy"
-              Write-Host "::error::Check iem.lan: modal dialog blocking startup? (e.g. 'License Key Detected'). Project path: $projectPath"
+              Write-Host "::error::Check iem.lan for a blocking modal dialog (e.g. 'License Key Detected')"
               exit 1
             }
 
