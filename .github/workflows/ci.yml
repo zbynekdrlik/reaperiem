@@ -954,17 +954,33 @@ jobs:
               exit 1
             }
 
-            # After taskkill /f, REAPER can show a "License Key Detected" modal on
-            # startup that blocks project load and the Web API.  Give REAPER a few
-            # seconds to render the dialog, then dismiss via SendKeys ESC.  If no
-            # dialog is present, ESC is a no-op.  Observed on run 24340083084.
-            Start-Sleep -Seconds 5
+            # After taskkill /f, REAPER can show a "License Key Detected" modal
+            # on startup that blocks project load and the Web API.  Find that
+            # dialog by exact title (via Win32 FindWindow), focus it, and
+            # send ESC.  Runs up to 5 times over 10 s because the dialog may
+            # render a few seconds after the process starts.  Observed on run
+            # 24340083084 — the modal sat there the entire 30 s wait budget.
             try {
-              Add-Type -AssemblyName System.Windows.Forms
-              [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
-              Write-Host "Sent ESC to dismiss any blocking startup dialog"
+              Add-Type -Namespace W32 -Name U -MemberDefinition @"
+[System.Runtime.InteropServices.DllImport("user32.dll", CharSet=System.Runtime.InteropServices.CharSet.Auto)]
+public static extern System.IntPtr FindWindow(string cls, string wn);
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool SetForegroundWindow(System.IntPtr h);
+"@ -ErrorAction SilentlyContinue
+              Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+              for ($i = 0; $i -lt 5; $i++) {
+                Start-Sleep -Seconds 2
+                $h = [W32.U]::FindWindow($null, "REAPER License Key Detected")
+                if ($h -ne [System.IntPtr]::Zero) {
+                  [W32.U]::SetForegroundWindow($h) | Out-Null
+                  Start-Sleep -Milliseconds 300
+                  [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+                  Write-Host "Dismissed 'REAPER License Key Detected' dialog"
+                  break
+                }
+              }
             } catch {
-              Write-Host "::warning::Could not SendKeys ESC: $_"
+              Write-Host "::warning::Dialog-dismiss helper failed: $_"
             }
 
             # Wait up to 45 seconds for REAPER HTTP API to respond with project loaded.
