@@ -7,11 +7,21 @@ const FIXTURE_PATH = path.resolve(
   "../fixtures/talkback-1k-tone.wav",
 );
 
-// Chromium flags that feed our fixture WAV into getUserMedia
+// Chromium flags that feed our fixture WAV into getUserMedia.
+// WebCodecs AudioEncoder requires a secure context (HTTPS / localhost).
+// When E2E_BASE_URL is a plain-http LAN IP (e.g. http://10.77.9.231),
+// Chromium refuses WebCodecs unless we explicitly mark the origin secure.
+// Listing both the LAN IP and localhost covers CI (localhost on runner)
+// and dev-machine ad-hoc runs.
+const BASE_URL = process.env.E2E_BASE_URL || "http://localhost";
+const SECURE_ORIGINS = [BASE_URL, "http://10.77.9.231", "http://localhost"].join(
+  ",",
+);
 const FAKE_MIC_ARGS = [
   "--use-fake-ui-for-media-stream",
   "--use-fake-device-for-media-stream",
   `--use-file-for-fake-audio-capture=${FIXTURE_PATH}`,
+  `--unsafely-treat-insecure-origin-as-secure=${SECURE_ORIGINS}`,
 ];
 
 async function loginAs(page: Page, member: string, pin: string) {
@@ -98,20 +108,35 @@ test.describe("#154 Talkback audio quality (live)", () => {
     const talkBtn = page.locator(".toolbar-btn-talk");
     await expect(talkBtn).toBeVisible({ timeout: 10_000 });
 
-    // Hold the talk button for 5 s while polling REAPER meter.
-    await talkBtn.dispatchEvent("pointerdown");
+    // If the button renders as "unsupported" (e.g. WebCodecs unavailable
+    // because the origin is not a secure context), fail loudly — the test
+    // setup is wrong rather than the feature being broken.
+    const btnClass = await talkBtn.getAttribute("class");
+    expect(
+      btnClass,
+      `setup error: TalkButton rendered as '${btnClass}' — WebCodecs likely blocked. ` +
+        "Run against http://localhost on a secure-context-supporting origin.",
+    ).not.toContain("unsupported");
+
+    // Use a real mouse press — Leptos `on:pointerdown` needs a natural
+    // event with a valid pointer_id so set_pointer_capture succeeds.
+    // After pointerdown, wait 2.5 s for the WS + getUserMedia + Opus
+    // encoder + REAPER VST UDP registration to settle before sampling.
+    await talkBtn.hover();
+    await page.mouse.down();
+    await page.waitForTimeout(2500);
+
     const samples: number[] = [];
     const POLL_MS = 100;
     const POLL_COUNT = 50; // 5 s
 
     for (let i = 0; i < POLL_COUNT; i++) {
-      // Poll every POLL_MS; allow scheduler slack.
       await page.waitForTimeout(POLL_MS);
       const db10 = await readEngineerMeterDb10(page);
       samples.push(db10 ?? -1500);
     }
 
-    await talkBtn.dispatchEvent("pointerup");
+    await page.mouse.up();
 
     // Wait up to 500 ms for meter to decay post-release.
     const releaseSamples: number[] = [];
