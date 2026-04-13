@@ -152,4 +152,21 @@ mod tests {
         assert_eq!(jb.overflows(), 7);
         assert_eq!(jb.depth_frames(), 3);
     }
+
+    #[test]
+    fn next_seq_getter_reflects_state() {
+        let mut jb = JitterBuffer::new();
+        assert_eq!(jb.next_seq(), 0, "empty buffer starts at seq 0");
+        jb.push(vec![10]);
+        assert_eq!(jb.next_seq(), 1, "after 1 push, next_seq is 1");
+        jb.push(vec![20]);
+        jb.push(vec![30]);
+        assert_eq!(jb.next_seq(), 3, "after 3 pushes, next_seq is 3");
+
+        // Force wrap to ensure the getter tracks the underlying field.
+        jb.next_seq = u16::MAX;
+        assert_eq!(jb.next_seq(), u16::MAX);
+        jb.push(vec![40]);
+        assert_eq!(jb.next_seq(), 0, "seq wraps via getter too");
+    }
 }
