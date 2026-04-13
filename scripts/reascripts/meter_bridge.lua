@@ -21,6 +21,22 @@ local KEY = "peaks"
 local FLOOR = -1500
 local RUNNING_KEY = "bridge_running"
 
+-- Limiter activity tracking (#145)
+-- Per-inear-track cumulative active milliseconds where GR < -1.0 dB.
+-- Resets only when EXTSTATE REAPERIEM_LIMITER_ACTIVITY/reset is set to that
+-- track index (the iem-mixer server writes this in response to the user
+-- clicking Reset in the LimiterModal).
+local LIMITER_SECTION = "REAPERIEM_LIMITER_ACTIVITY"
+local LIMITER_TOTALS_KEY = "totals"
+local LIMITER_RESET_KEY = "reset"
+local LIMITER_GR_THRESHOLD_DB = -1.0  -- counts as "active" when slider5 < this
+local LIMITER_FX_NAME_PATTERN = "MGA_JSLimiter"
+
+-- Per-track active_ms accumulator: map<track_index_1based, integer_ms>
+local limiter_active_ms = {}
+-- Tick timestamp tracking (so we attribute exact wall delta, not fixed assumed dt)
+local last_tick_time = nil
+
 -- Prevent duplicate instances
 local already_running = reaper.GetExtState(SECTION, RUNNING_KEY)
 if already_running == "1" then
@@ -71,6 +87,57 @@ function main()
       parts[#parts + 1] = track_idx .. ":" .. l_db10 .. "," .. r_db10
     end
   end
+
+
+  -- Limiter activity polling (#145).
+  -- For every track that has our JS limiter, read slider5 (GR readout in dB,
+  -- written by the JSFX from ext_gr_meter via sliderchange()), accumulate
+  -- elapsed wall time into limiter_active_ms whenever slider5 < threshold.
+  local now = reaper.time_precise()
+  local dt_ms = 0
+  if last_tick_time then
+    dt_ms = math.floor((now - last_tick_time) * 1000.0 + 0.5)
+    -- Clamp huge deltas (defer pause, REAPER backgrounded) so a 30 s pause
+    -- doesn't show up as 30 s of limiter activity.
+    if dt_ms > 250 then dt_ms = 0 end
+  end
+  last_tick_time = now
+
+  -- Reset request handling — server writes track index here when user clicks Reset.
+  local reset_request = reaper.GetExtState(LIMITER_SECTION, LIMITER_RESET_KEY)
+  if reset_request ~= "" then
+    local reset_idx = tonumber(reset_request)
+    if reset_idx then
+      limiter_active_ms[reset_idx] = 0
+    end
+    reaper.SetExtState(LIMITER_SECTION, LIMITER_RESET_KEY, "", false)
+  end
+
+  local lim_parts = {}
+  for i = 0, track_count - 1 do
+    local track = reaper.GetTrack(0, i)
+    if track then
+      local fx_count = reaper.TrackFX_GetCount(track)
+      local fx_idx = -1
+      for f = 0, fx_count - 1 do
+        local _, fx_name = reaper.TrackFX_GetFXName(track, f)
+        if fx_name and fx_name:find(LIMITER_FX_NAME_PATTERN, 1, true) then
+          fx_idx = f
+          break
+        end
+      end
+      if fx_idx >= 0 then
+        local track_idx = i + 1  -- 1-based to match meter convention
+        local gr_db = reaper.TrackFX_GetParam(track, fx_idx, 4)  -- slider5
+        if dt_ms > 0 and gr_db < LIMITER_GR_THRESHOLD_DB then
+          limiter_active_ms[track_idx] = (limiter_active_ms[track_idx] or 0) + dt_ms
+        end
+        local total = limiter_active_ms[track_idx] or 0
+        lim_parts[#lim_parts + 1] = track_idx .. ":" .. total
+      end
+    end
+  end
+  reaper.SetExtState(LIMITER_SECTION, LIMITER_TOTALS_KEY, table.concat(lim_parts, ";"), false)
 
   reaper.SetExtState(SECTION, KEY, table.concat(parts, ";"), false)
 
