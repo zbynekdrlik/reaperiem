@@ -2715,9 +2715,5 @@ body.talk-live-overlay {
 }
 
 .limiter-reset-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.limiter-reset-btn:active {
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--bg-secondary);
 }
