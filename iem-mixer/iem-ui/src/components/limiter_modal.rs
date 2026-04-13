@@ -18,6 +18,48 @@ fn norm_to_db(norm: f32) -> f32 {
     if db == 0.0 { 0.0 } else { db } // eliminate -0.0
 }
 
+/// Format active seconds for display in the modal: "never" when zero,
+/// otherwise "M:SS" with seconds floored. (#145)
+fn format_active(secs: f64) -> String {
+    if secs <= 0.0 {
+        return "never".to_string();
+    }
+    let total_secs = secs.floor() as u64;
+    let m = total_secs / 60;
+    let s = total_secs % 60;
+    format!("{}:{:02}", m, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_active;
+
+    #[test]
+    fn format_active_zero_is_never() {
+        assert_eq!(format_active(0.0), "never");
+    }
+
+    #[test]
+    fn format_active_negative_is_never() {
+        assert_eq!(format_active(-1.0), "never");
+    }
+
+    #[test]
+    fn format_active_under_one_minute() {
+        assert_eq!(format_active(0.5), "0:00");
+        assert_eq!(format_active(1.0), "0:01");
+        assert_eq!(format_active(59.99), "0:59");
+    }
+
+    #[test]
+    fn format_active_minutes() {
+        assert_eq!(format_active(60.0), "1:00");
+        assert_eq!(format_active(83.5), "1:23");
+        assert_eq!(format_active(125.0), "2:05");
+        assert_eq!(format_active(3661.0), "61:01");
+    }
+}
+
 /// Limiter modal for controlling max output level on a member's output bus
 #[component]
 pub fn LimiterModal(
@@ -31,8 +73,12 @@ pub fn LimiterModal(
     enabled: ReadSignal<bool>,
     /// Whether data is loading
     loading: ReadSignal<bool>,
+    /// Cumulative seconds the limiter has actively reduced gain (#145).
+    active_seconds: ReadSignal<f64>,
     /// Callback when a parameter changes: (param_name, normalized_value)
     on_param_change: Callback<(String, f32)>,
+    /// Callback when the user clicks the Reset activity button (#145).
+    on_reset: Callback<()>,
     /// Callback when enabled state changes
     on_enabled_change: Callback<bool>,
     /// Callback to close the modal
@@ -90,6 +136,18 @@ pub fn LimiterModal(
                                             view! {}.into_any()
                                         }
                                     }}
+                                </div>
+                                <div class="limiter-activity-row">
+                                    <span class="limiter-activity-label">
+                                        "Active: "
+                                        {move || format_active(active_seconds.get())}
+                                    </span>
+                                    <button
+                                        class="limiter-reset-btn"
+                                        on:click=move |_| on_reset.run(())
+                                    >
+                                        "Reset"
+                                    </button>
                                 </div>
                             </div>
                         }
