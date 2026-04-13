@@ -1835,7 +1835,8 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::GetLimiterParams { .. }
         | iem_core::ClientMsg::SetLimiterParam { .. }
-        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+        | iem_core::ClientMsg::SetLimiterEnabled { .. }
+        | iem_core::ClientMsg::ResetLimiterActivity { .. } => {
             return Err("Limiter commands handled before apply_command_to_cache".to_string());
         }
     }
@@ -2139,7 +2140,8 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::GetLimiterParams { .. }
         | iem_core::ClientMsg::SetLimiterParam { .. }
-        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+        | iem_core::ClientMsg::SetLimiterEnabled { .. }
+        | iem_core::ClientMsg::ResetLimiterActivity { .. } => {
             unreachable!("Limiter commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
