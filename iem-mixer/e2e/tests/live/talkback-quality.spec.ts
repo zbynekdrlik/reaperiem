@@ -176,16 +176,26 @@ test.describe("#154 Talkback audio quality (live)", () => {
       `A3 FAIL: meter did not decay within 200 ms. releaseSamples=${JSON.stringify(releaseSamples)}`,
     ).toBe(true);
 
-    // A4 — Diagnostics API returns the new schema with sane counters.
-    // Note: on v1.147.0 production this assertion fails because
-    // packets_in is not yet part of the response. Task 7 of the fix
-    // introduces the full schema and adds a Bearer token to this block.
-    const diagResp = await page.request.get("/api/talkback/diagnostics");
+    // A4 — Diagnostics API returns the new engineer-auth-gated schema.
+    const token = await page.evaluate(() => {
+      const raw = localStorage.getItem("iem_token");
+      if (!raw) return null;
+      try {
+        return (JSON.parse(raw) as { token?: string }).token ?? null;
+      } catch {
+        return null;
+      }
+    });
+    expect(token, "A4 FAIL: no engineer token in localStorage").toBeTruthy();
+
+    const diagResp = await page.request.get("/api/talkback/diagnostics", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
     expect(diagResp.status(), "A4 FAIL: /api/talkback/diagnostics not 200").toBe(
       200,
     );
     const diag = await diagResp.json();
-    expect(diag.packets_in, `A4 FAIL: packets_in missing or too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
+    expect(diag.packets_in, `A4 FAIL: packets_in too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
     expect(diag.packets_out, `A4 FAIL: packets_out too low: ${JSON.stringify(diag)}`).toBeGreaterThan(200);
     expect(diag.seq_gaps, `A4 FAIL: seq_gaps should be 0: ${JSON.stringify(diag)}`).toBe(0);
     expect(diag.buffer_overflows, `A4 FAIL: buffer_overflows should be 0 on loopback: ${JSON.stringify(diag)}`).toBe(0);
