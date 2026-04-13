@@ -151,6 +151,11 @@ pub struct AppState {
     pub limiter_write_lock: Arc<tokio::sync::Mutex<()>>,
     /// Mutex to serialize limiter EXTSTATE reads (#72)
     pub limiter_read_lock: Arc<tokio::sync::Mutex<()>>,
+    /// Per-inear-track cumulative active milliseconds from the limiter
+    /// (#145). Populated by the background poller from EXTSTATE
+    /// REAPERIEM_LIMITER_ACTIVITY/totals; zeroed entry-by-entry via the
+    /// ClientMsg::ResetLimiterActivity handler.
+    pub limiter_activity: Arc<tokio::sync::Mutex<std::collections::HashMap<usize, u64>>>,
 }
 
 /// Global IEM output volume state for a member
@@ -245,6 +250,7 @@ impl AppState {
             eq_read_lock: Arc::new(tokio::sync::Mutex::new(())),
             limiter_write_lock: Arc::new(tokio::sync::Mutex::new(())),
             limiter_read_lock: Arc::new(tokio::sync::Mutex::new(())),
+            limiter_activity: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         }
     }
 }
