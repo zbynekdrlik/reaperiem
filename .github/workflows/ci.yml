@@ -905,36 +905,16 @@ jobs:
               $ErrorActionPreference = "Continue"
               taskkill /f /im reaper.exe 2>&1 | Out-Null
               $ErrorActionPreference = "Stop"
-              # Bumped from 3 s to 6 s — Windows takes several seconds to
-              # release DLL handles after a forced kill, and the subsequent
-              # Remove-Item on the VST3 bundle would fail with
-              # UnauthorizedAccessException otherwise.
-              Start-Sleep -Seconds 6
+              Start-Sleep -Seconds 3
             }
             Write-Host "REAPER stopped"
           }
 
-          # Copy each VST3 bundle directory.  Windows may still hold
-          # handles to VST3 DLLs briefly after REAPER exits, so
-          # Remove-Item is retried up to 5 × 2 s before giving up.
+          # Copy each VST3 bundle directory
           foreach ($vst3Source in $vst3Sources) {
             $destPath = Join-Path $vst3Dest $vst3Source.Name
             if (Test-Path $destPath) {
-              $removed = $false
-              for ($try = 1; $try -le 5; $try++) {
-                try {
-                  Remove-Item $destPath -Recurse -Force -ErrorAction Stop
-                  $removed = $true
-                  break
-                } catch {
-                  Write-Host "Remove-Item attempt $try/5 failed: $($_.Exception.Message); retrying in 2 s..."
-                  Start-Sleep -Seconds 2
-                }
-              }
-              if (-not $removed) {
-                Write-Host "::error::Failed to remove $destPath after 5 tries"
-                exit 1
-              }
+              Remove-Item $destPath -Recurse -Force
             }
             Copy-Item $vst3Source.FullName $destPath -Recurse -Force
             Write-Host "VST3 deployed: $destPath"
@@ -950,59 +930,19 @@ jobs:
           if ($reaperRunning) {
             Write-Host "Restarting REAPER..."
 
+            # Force-create (or update) the StartREAPER task with the correct project path
             $reaperExe = "C:\Program Files\REAPER (x64)\reaper.exe"
             $projectPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
-
-            # Force-create (or update) the StartREAPER task with the correct project path.
-            # The `schtasks /create /tr $taskTr` call has a known PowerShell native-exe
-            # quoting edge case on the path with spaces — if it fails, we fall back to
-            # the existing task definition (which is already correct from prior deploys).
             $taskTr = "`"$reaperExe`" `"$projectPath`""
-            $ErrorActionPreference = "Continue"
-            & schtasks /create /tn "StartREAPER" /tr $taskTr /sc once /st 00:00 /f 2>&1 | Out-Null
-            $createExit = $LASTEXITCODE
-            $ErrorActionPreference = "Stop"
-            if ($createExit -ne 0) {
-              Write-Host "::warning::schtasks /create exited $createExit (likely PowerShell quoting of path with spaces); using pre-existing task definition"
-            } else {
-              Write-Host "StartREAPER task created/updated"
-            }
+            & schtasks /create /tn "StartREAPER" /tr $taskTr /sc once /st 00:00 /f
+            Write-Host "StartREAPER task created/updated with project path"
 
             & schtasks /run /tn "StartREAPER" 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::schtasks /run /tn StartREAPER failed (exit $LASTEXITCODE). Task may not exist."
-              exit 1
-            }
 
-            # After taskkill /f, REAPER can show a "License Key Detected" modal
-            # on startup that blocks project load and the Web API.  Find that
-            # dialog by exact title (via Win32 FindWindow), focus it, and
-            # send ESC.  Runs up to 5 times over 10 s because the dialog may
-            # render a few seconds after the process starts.  Observed on run
-            # 24340083084 — the modal sat there the entire 30 s wait budget.
-            try {
-              $def = '[System.Runtime.InteropServices.DllImport("user32.dll", CharSet=System.Runtime.InteropServices.CharSet.Auto)] public static extern System.IntPtr FindWindow(string cls, string wn); [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);'
-              Add-Type -Namespace W32 -Name U -MemberDefinition $def -ErrorAction SilentlyContinue
-              Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
-              for ($i = 0; $i -lt 5; $i++) {
-                Start-Sleep -Seconds 2
-                $h = [W32.U]::FindWindow($null, "REAPER License Key Detected")
-                if ($h -ne [System.IntPtr]::Zero) {
-                  [W32.U]::SetForegroundWindow($h) | Out-Null
-                  Start-Sleep -Milliseconds 300
-                  [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
-                  Write-Host "Dismissed 'REAPER License Key Detected' dialog"
-                  break
-                }
-              }
-            } catch {
-              Write-Host "::warning::Dialog-dismiss helper failed: $_"
-            }
-
-            # Wait up to 45 seconds for REAPER HTTP API to respond with project loaded.
+            # Wait up to 30 seconds for REAPER HTTP API to respond with project loaded
             $reaperReady = $false
-            $waited = 5   # account for the 5 s sleep above
-            while ($waited -lt 45) {
+            $waited = 0
+            while ($waited -lt 30) {
               Start-Sleep -Seconds 3
               $waited += 3
               try {
@@ -1019,8 +959,8 @@ jobs:
             }
 
             if (-not $reaperReady) {
-              Write-Host "::error::REAPER did not come back with project loaded within 45s after VST3 deploy"
-              Write-Host "::error::Check iem.lan for a blocking modal dialog (e.g. 'License Key Detected')"
+              Write-Host "::error::REAPER did not come back with project loaded within 30s after VST3 deploy"
+              Write-Host "::error::Check iem.lan: Is the StartREAPER task configured? Is the project path correct?"
               exit 1
             }
 
