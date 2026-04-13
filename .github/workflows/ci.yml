@@ -905,16 +905,36 @@ jobs:
               $ErrorActionPreference = "Continue"
               taskkill /f /im reaper.exe 2>&1 | Out-Null
               $ErrorActionPreference = "Stop"
-              Start-Sleep -Seconds 3
+              # Bumped from 3 s to 6 s — Windows takes several seconds to
+              # release DLL handles after a forced kill, and the subsequent
+              # Remove-Item on the VST3 bundle would fail with
+              # UnauthorizedAccessException otherwise.
+              Start-Sleep -Seconds 6
             }
             Write-Host "REAPER stopped"
           }
 
-          # Copy each VST3 bundle directory
+          # Copy each VST3 bundle directory.  Windows may still hold
+          # handles to VST3 DLLs briefly after REAPER exits, so
+          # Remove-Item is retried up to 5 × 2 s before giving up.
           foreach ($vst3Source in $vst3Sources) {
             $destPath = Join-Path $vst3Dest $vst3Source.Name
             if (Test-Path $destPath) {
-              Remove-Item $destPath -Recurse -Force
+              $removed = $false
+              for ($try = 1; $try -le 5; $try++) {
+                try {
+                  Remove-Item $destPath -Recurse -Force -ErrorAction Stop
+                  $removed = $true
+                  break
+                } catch {
+                  Write-Host "Remove-Item attempt $try/5 failed: $($_.Exception.Message); retrying in 2 s..."
+                  Start-Sleep -Seconds 2
+                }
+              }
+              if (-not $removed) {
+                Write-Host "::error::Failed to remove $destPath after 5 tries"
+                exit 1
+              }
             }
             Copy-Item $vst3Source.FullName $destPath -Recurse -Force
             Write-Host "VST3 deployed: $destPath"
