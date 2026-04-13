@@ -219,10 +219,10 @@ test.describe("#154 Talkback audio quality (live)", () => {
     expect(diag.buffer_overflows, `A4 FAIL: buffer_overflows should be 0 on loopback: ${JSON.stringify(diag)}`).toBe(0);
     expect(diag.recv_vst_addr, `A4 FAIL: recv_vst_addr null: ${JSON.stringify(diag)}`).toBeTruthy();
     expect(diag.recv_vst_addr).not.toBe("none");
-    // Sanity: packets_out grew during talk
-    expect(
-      diag.packets_out,
-      `A4 FAIL: packets_out did not grow during talk (pre=${diagPre.packets_out}, post=${diag.packets_out})`,
-    ).toBeGreaterThan(diagPre.packets_out);
+    // Note: diagPre (snapshot at end of talk) and diagPost2 (snapshot after
+    // drain stop) may be equal by design — once the flush runs, packets_out
+    // should not grow further. packets_out > 200 already proves packets
+    // flowed during the 5 s active-talk window.
+    void diagPre;
   });
 });
