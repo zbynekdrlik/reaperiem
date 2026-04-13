@@ -1308,6 +1308,17 @@ async fn handle_ws(
                                 }
                                 continue;
                             }
+                            if let iem_core::ClientMsg::ResetLimiterActivity { track_index } = cmd
+                            {
+                                if owns_limiter_track(track_index) {
+                                    let state_clone = state.clone();
+                                    tokio::spawn(async move {
+                                        handle_reset_limiter_activity(&state_clone, track_index)
+                                            .await;
+                                    });
+                                }
+                                continue;
+                            }
 
                             // Handle band member alert to engineer (#125)
                             if let ClientMsg::CallEngineer = cmd {
@@ -2551,7 +2562,17 @@ pub async fn handle_get_limiter_params(
         return None;
     }
 
-    parse_limiter_params_response(track_index, value)
+    let mut reply = parse_limiter_params_response(track_index, value)?;
+    if let iem_core::ServerMsg::LimiterParams {
+        ref mut active_seconds,
+        ..
+    } = reply
+    {
+        let guard = state.limiter_activity.lock().await;
+        let ms = guard.get(&track_index).copied().unwrap_or(0);
+        *active_seconds = (ms as f64) / 1000.0;
+    }
+    Some(reply)
 }
 
 /// Parse limiter EXTSTATE response into ServerMsg
@@ -2566,6 +2587,7 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
             limit_db: 0.0,
             limit_norm: 0.0,
             enabled: false,
+            active_seconds: 0.0,
         });
     }
 
@@ -2599,6 +2621,7 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
         limit_db: get_field("limit="),
         limit_norm: get_field("limit_n="),
         enabled: get_field("enabled=") >= 0.5,
+        active_seconds: 0.0,
     })
 }
 
@@ -2644,6 +2667,35 @@ async fn handle_set_limiter_param(state: &AppState, track_index: usize, param: &
         } else {
             tracing::debug!(track_index, param, result, "Limiter: param set OK");
         }
+    }
+}
+
+/// Reset the activity counter for one limiter track (#145).
+/// Zeros AppState.limiter_activity[track] AND writes
+/// EXTSTATE REAPERIEM_LIMITER_ACTIVITY/reset = "<track_index>"
+/// so meter_bridge.lua zeros its local accumulator on its next tick
+/// (otherwise the next poller cycle would re-overwrite the server zero).
+pub async fn handle_reset_limiter_activity(state: &AppState, track_index: usize) {
+    {
+        let mut guard = state.limiter_activity.lock().await;
+        guard.insert(track_index, 0);
+    }
+
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    let set_url = reaper_api::set_extstate(
+        &reaper_url,
+        "REAPERIEM_LIMITER_ACTIVITY",
+        "reset",
+        &track_index.to_string(),
+    );
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            "Limiter activity reset: failed to write reset EXTSTATE"
+        );
     }
 }
 
