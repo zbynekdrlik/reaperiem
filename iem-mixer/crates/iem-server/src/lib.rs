@@ -6,8 +6,6 @@
 //! - Proxies requests to REAPER HTTP API
 //! - Provides real-time WebSocket updates
 
-#[cfg(feature = "audio")]
-pub mod audio_stream;
 pub mod auth;
 pub mod backup_capture;
 pub mod backup_daemon;
@@ -26,6 +24,11 @@ pub mod push_store;
 pub mod routes;
 pub mod snapshot_routes;
 pub mod snapshot_store;
+
+#[cfg(feature = "audio")]
+pub mod audio_stream;
+#[cfg(feature = "audio")]
+pub mod talkback_buffer;
 
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue};
