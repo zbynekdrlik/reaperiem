@@ -3048,29 +3048,108 @@ pub async fn ws_talkback(
 #[cfg(feature = "audio")]
 async fn handle_talkback_ws(mut socket: axum::extract::ws::WebSocket, state: AppState) {
     use axum::extract::ws::Message;
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering;
+    use tokio::sync::Mutex as AsyncMutex;
 
     tracing::info!("Talkback WebSocket connected");
-    let mut sequence: u16 = 0;
 
+    // Shared jitter buffer between the receive loop and the drain loop.
+    let jb = Arc::new(AsyncMutex::new(crate::talkback_buffer::JitterBuffer::new()));
+    let last_recv = Arc::new(AsyncMutex::new(std::time::Instant::now()));
+
+    // Drain loop: pop one frame every 20 ms, send over UDP.
+    // Runs concurrently with the receive loop below. Aborted on WS close.
+    let jb_drain = jb.clone();
+    let metrics_drain = state.talkback_metrics.clone();
+    let state_drain = state.clone();
+    let drain_handle = tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_millis(
+            crate::talkback_buffer::FRAME_MS as u64,
+        ));
+        ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            ticker.tick().await;
+
+            // Look up current VST address (may not be present yet).
+            let vst_addr = {
+                let tb = state_drain.talkback_state.read().await;
+                tb.recv_vst_addr
+            };
+
+            // Pop next frame (if any) and record fill gauge.
+            let popped = {
+                let mut jbg = jb_drain.lock().await;
+                let p = jbg.pop();
+                metrics_drain
+                    .buffer_fill_ms
+                    .store(jbg.fill_ms(), Ordering::Relaxed);
+                metrics_drain
+                    .buffer_overflows
+                    .store(jbg.overflows(), Ordering::Relaxed);
+                p
+            };
+
+            match popped {
+                Some((seq, payload)) => {
+                    if let Some(addr) = vst_addr {
+                        let mut packet = Vec::with_capacity(8 + payload.len());
+                        packet.extend_from_slice(b"OIEM");
+                        packet.extend_from_slice(&seq.to_le_bytes());
+                        packet.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+                        packet.extend_from_slice(&payload);
+                        let _ = state_drain.talkback_socket.send_to(&packet, addr).await;
+                        metrics_drain.packets_out.fetch_add(1, Ordering::Relaxed);
+                    }
+                    // If no VST addr yet, drop the frame silently — the browser
+                    // should not be hammering us before the VST registers.
+                }
+                None => {
+                    metrics_drain.underruns.fetch_add(1, Ordering::Relaxed);
+                    // No keepalive emitted — VST tolerates silence via its own
+                    // accumulator fallback.
+                }
+            }
+        }
+    });
+
+    // Receive loop: push every binary frame into the jitter buffer.
     loop {
         match socket.recv().await {
             Some(Ok(Message::Binary(data))) => {
-                let tb = state.talkback_state.read().await;
-                if let Some(addr) = tb.recv_vst_addr {
-                    drop(tb);
-                    let mut packet = Vec::with_capacity(8 + data.len());
-                    packet.extend_from_slice(b"OIEM");
-                    packet.extend_from_slice(&sequence.to_le_bytes());
-                    packet.extend_from_slice(&(data.len() as u16).to_le_bytes());
-                    packet.extend_from_slice(&data);
-                    let _ = state.talkback_socket.send_to(&packet, addr).await;
-                    sequence = sequence.wrapping_add(1);
+                state
+                    .talkback_metrics
+                    .packets_in
+                    .fetch_add(1, Ordering::Relaxed);
+                {
+                    let mut lr = last_recv.lock().await;
+                    *lr = std::time::Instant::now();
                 }
+                let mut jbg = jb.lock().await;
+                jbg.push(data.to_vec());
+                state
+                    .talkback_metrics
+                    .buffer_fill_ms
+                    .store(jbg.fill_ms(), Ordering::Relaxed);
+                state
+                    .talkback_metrics
+                    .buffer_overflows
+                    .store(jbg.overflows(), Ordering::Relaxed);
             }
             Some(Ok(Message::Close(_))) | None => break,
             _ => {}
         }
+
+        // Update last_packet_age_ms on every iteration (cheap).
+        let age = last_recv.lock().await.elapsed().as_millis() as u64;
+        state
+            .talkback_metrics
+            .last_packet_age_ms
+            .store(age, Ordering::Relaxed);
     }
+
+    // Cancel drain loop so it doesn't live past the socket close.
+    drain_handle.abort();
 
     tracing::info!("Talkback WebSocket disconnected");
 }
