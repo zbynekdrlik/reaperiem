@@ -44,6 +44,7 @@ Thumbs.db
 *.png
 !web/**/*.png
 !iem-mixer/**/*.png
+!docs/superpowers/specs/**/*.png
 
 # MCP server config (contains bearer tokens)
 .mcp.json

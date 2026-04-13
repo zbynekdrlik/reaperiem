@@ -1309,3 +1309,120 @@ test.describe("EQ value sync - ENGINEER track", () => {
     await page.locator(".eq-close-btn").click();
   });
 });
+
+// Regression test for #167 — EQ curve shape
+//
+// Bug: biquad_low_shelf/high_shelf used the peaking-EQ Q formula instead of
+// the Audio EQ Cookbook's shelf-slope S formula, so shelves rang near their
+// corner frequencies. For MIREC (track 7), band 2 is a +4.3 dB peaking at
+// 640 Hz, but the drawn curve peaked at +5.73 dB because the adjacent
+// lowshelf at 510 Hz rang upward just above its corner.
+//
+// Invariant: the tallest point of the summed response curve cannot exceed
+// the tallest individual band's dot by more than a small tolerance. In
+// SVG coords (±12 dB mapped to 0..300 px, i.e. 12.5 px/dB), 3 px ≈ 0.24 dB
+// is well below REAPER's typical 0.1 dB display resolution but far above
+// numerical noise. On v1.146.0 the MIREC curve peaks at y=78.4 (+5.73 dB)
+// while the tallest band dot (b2 at +4.3 dB) sits at y=96.25 — that's a
+// ~17.85 px excess this test must catch.
+//
+// Why a per-band y-match check is NOT used: shelving bands' dots represent
+// "corner frequency at stated gain", but the cookbook shelf biquad's
+// magnitude at the corner frequency is NOT the stated gain (it's around
+// half, for Butterworth). Additionally, adjacent peaking bands bleed gain
+// into the shelf's corner region. A per-band y-match would fail for shelf
+// dots even with correct math. The summed-peak invariant above is
+// mathematically sound for arbitrary band combinations.
+
+test.describe("#167 EQ curve shape (live MIREC)", () => {
+  test("engineer EQ curve does not overshoot band dots", async ({ page }) => {
+    const consoleMessages: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        // Known-benign browser/runtime noise — same filters used by alert.spec.ts
+        if (
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
+          consoleMessages.push(`[${msg.type()}] ${text}`);
+        }
+      }
+    });
+
+    // Engineer login (PIN 1177). The /api/auth endpoint returns the token.
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    await waitForMixer(page);
+
+    // Switch to Mics tab — MIREC is an input mic, lives there, not on Main.
+    await page.getByRole("button", { name: "Mics" }).click();
+    await page.waitForTimeout(300);
+
+    // Open MIREC's kebab menu and pick EQ.
+    await openKebabMenu(page, "MIREC");
+    await clickEqOption(page);
+
+    // Wait for the SVG curve to render (201 path points).
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+    await page.waitForFunction(
+      () => {
+        const path = document.querySelector(".eq-overlay svg path[d*='M']");
+        const d = path?.getAttribute("d") || "";
+        return (d.match(/[ML]/g) || []).length > 50;
+      },
+      { timeout: 5000 },
+    );
+
+    // Extract path + band dots from the DOM.
+    const geometry = await page.evaluate(() => {
+      const svg = document.querySelector<SVGSVGElement>(".eq-overlay svg");
+      if (!svg) return { error: "no svg" };
+      const pathEl = svg.querySelector<SVGPathElement>("path[d*='M']");
+      const d = pathEl?.getAttribute("d") || "";
+      const points: [number, number][] = [];
+      const regex = /[ML]([\d.]+),([\d.]+)/g;
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(d)) !== null) {
+        points.push([parseFloat(m[1]), parseFloat(m[2])]);
+      }
+      // Stable selector: circles carrying data-band-dot="true" are the band
+      // position dots (added in eq_modal.rs specifically for this test).
+      const dots = Array.from(
+        svg.querySelectorAll<SVGCircleElement>("circle[data-band-dot]"),
+      ).map((c) => ({
+        cx: parseFloat(c.getAttribute("cx") || "0"),
+        cy: parseFloat(c.getAttribute("cy") || "0"),
+        r: parseFloat(c.getAttribute("r") || "0"),
+      }));
+      return { points, dots };
+    });
+
+    if ("error" in geometry) {
+      throw new Error(`EQ modal did not render: ${geometry.error}`);
+    }
+    const { points, dots } = geometry;
+    expect(points.length).toBeGreaterThan(100);
+    expect(dots.length).toBeGreaterThan(0);
+
+    // Pixel tolerance: 3 px ≈ 0.24 dB at 12.5 px/dB. Below user-visible.
+    const TOLERANCE_PX = 3;
+
+    // Main invariant: the tallest point of the summed response curve cannot
+    // exceed the tallest enabled band dot by more than TOLERANCE_PX pixels.
+    // "Tallest" = smallest y in SVG coordinates.
+    const curveMinY = Math.min(...points.map((p) => p[1]));
+    const dotMinY = Math.min(...dots.map((d) => d.cy));
+    expect(
+      curveMinY,
+      `Curve peak y=${curveMinY.toFixed(1)} exceeds tallest dot y=${dotMinY.toFixed(1)} ` +
+        `by ${(dotMinY - curveMinY).toFixed(1)} px (≈ ${((dotMinY - curveMinY) / 12.5).toFixed(2)} dB). ` +
+        `On v1.146.0 curve peaks at y=78.4 while b2 dot is at y=96.25 — #167.`,
+    ).toBeGreaterThanOrEqual(dotMinY - TOLERANCE_PX);
+
+    // Console-clean invariant (airuleset browser-console-zero-errors.md).
+    expect(consoleMessages).toEqual([]);
+  });
+});

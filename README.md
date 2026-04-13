@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.147.0 (2026-04-12)
+
+- **Fix**: EQ visualization — shelving filters (lowshelf/highshelf) no longer ring near their corner frequencies. Rewrote shelf biquad math to use the Audio EQ Cookbook's S-parameterized formula instead of the peaking-EQ Q formula, eliminating the ~1.4 dB overshoot that made neighbouring peaking bands look "oversaturated" versus REAPER's native ReaEQ display (#167).
+
 ### v1.146.0 (2026-04-12)
 
 - **Fix**: Vibration reliability in SOS alerts — replaced interval-based single pulses with browser-native pattern vibration + foreground recovery via visibilitychange listener (#162)
