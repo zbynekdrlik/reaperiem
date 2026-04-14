@@ -55,7 +55,8 @@ iem-mixer-app (iem.lan)
 iem-ui (Leptos WASM)
   └─ components/limiter_modal.rs
        └─ Two new elements above the close button:
-            "Active: 1:23"  (or "Active: never" when zero)
+            "21.3 sec limited"  (or "not limited yet" when zero,
+                                    or "1 min 23 sec limited" at ≥60 s)
             [Reset] button → sends ClientMsg::ResetLimiterActivity
        └─ active_seconds signal updated when LimiterParams arrives
 ```
@@ -156,14 +157,18 @@ row with two elements:
 │                                         │
 │  Limiter   [ ON ]                       │
 │                                         │
-│  Active: 0:23           [ Reset ]       │  ← NEW row
+│  23.4 sec limited      [ Reset ]        │  ← NEW row
 └─────────────────────────────────────────┘
 ```
 
 Format rules:
-- 0 ms → "Active: never"
-- 1 ms to 59,999 ms → "Active: 0:0X" up to "Active: 0:59"
-- ≥ 60 s → "Active: M:SS" (no hours expected for a session-only counter)
+- 0 s → "not limited yet"
+- < 60 s → "X.X sec limited" (one decimal for resolution at short durations)
+- ≥ 60 s → "M min S sec limited" (no decimal; no hours expected in a session)
+
+The phrasing deliberately avoids an opaque "Active: M:SS" display — a user
+opening the modal for the first time must understand the number without
+external context.
 
 The counter does not auto-refresh while the modal is open in v1 (it's set once
 when LimiterParams arrives in response to GetLimiterParams on modal open). If
@@ -191,10 +196,10 @@ E2E live (deploy job, runs on iem.lan with real REAPER):
      the limiter (the existing tone generator already used by audio-pipeline tests)
    - Hold for 5 seconds, stop tone
    - Open that member's limiter modal
-   - Read the `Active:` line, parse `M:SS`, assert total seconds ≥ 5
+   - Read the activity row text, parse the "X.X sec limited" or "M min S sec limited" form, assert total seconds ≥ 5
    - Click Reset
    - Close modal, reopen
-   - Assert `Active: never`
+   - Assert "not limited yet" (or sub-second residual)
 
 ## Failure modes
 

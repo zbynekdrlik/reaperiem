@@ -8,7 +8,7 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ### v1.149.0 (2026-04-13)
 
-- **Feature**: Per-inear-track limiter activation counter (#145). Open the LIM dialog on any channel to see how long that inear's safety limiter has been actively reducing gain since the last reset, plus a Reset button to zero it. Visible to engineer (any track) and to band members on their own track.
+- **Feature**: Per-inear-track limiter activation counter (#145). Open the LIM dialog on any channel to see how long that inear's safety limiter has been actively reducing gain (e.g. "21.3 sec limited" or "1 min 23 sec limited") since the last reset, plus a Reset button to zero it. Visible to engineer (any track) and to band members on their own track.
 - **Note**: Existing limiter instances pick up the new GR readout on next REAPER FX reload (next REAPER restart or project reload).
 
 ### v1.148.0 (2026-04-13)

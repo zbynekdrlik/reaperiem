@@ -18,16 +18,28 @@ fn norm_to_db(norm: f32) -> f32 {
     if db == 0.0 { 0.0 } else { db } // eliminate -0.0
 }
 
-/// Format active seconds for display in the modal: "never" when zero,
-/// otherwise "M:SS" with seconds floored. (#145)
+/// Format active seconds for the limiter-activity row (#145).
+/// The result is a self-explanatory sentence — no separate "Active:" prefix
+/// needed — so a user who has never seen this feature understands the number.
+/// Examples:
+///   0.0  -> "not limited yet"
+///   0.4  -> "0.4 sec limited"
+///   21.3 -> "21.3 sec limited"
+///   59.9 -> "59.9 sec limited"
+///   60.0 -> "1 min 0 sec limited"
+///   83.5 -> "1 min 23 sec limited"
+///   3661.0 -> "61 min 1 sec limited"
 fn format_active(secs: f64) -> String {
     if secs <= 0.0 {
-        return "never".to_string();
+        return "not limited yet".to_string();
+    }
+    if secs < 60.0 {
+        return format!("{:.1} sec limited", secs);
     }
     let total_secs = secs.floor() as u64;
     let m = total_secs / 60;
     let s = total_secs % 60;
-    format!("{}:{:02}", m, s)
+    format!("{} min {} sec limited", m, s)
 }
 
 #[cfg(test)]
@@ -35,28 +47,29 @@ mod tests {
     use super::format_active;
 
     #[test]
-    fn format_active_zero_is_never() {
-        assert_eq!(format_active(0.0), "never");
+    fn format_active_zero_is_not_limited_yet() {
+        assert_eq!(format_active(0.0), "not limited yet");
     }
 
     #[test]
-    fn format_active_negative_is_never() {
-        assert_eq!(format_active(-1.0), "never");
+    fn format_active_negative_is_not_limited_yet() {
+        assert_eq!(format_active(-1.0), "not limited yet");
     }
 
     #[test]
-    fn format_active_under_one_minute() {
-        assert_eq!(format_active(0.5), "0:00");
-        assert_eq!(format_active(1.0), "0:01");
-        assert_eq!(format_active(59.99), "0:59");
+    fn format_active_under_one_minute_shows_decimal_seconds() {
+        assert_eq!(format_active(0.4), "0.4 sec limited");
+        assert_eq!(format_active(1.0), "1.0 sec limited");
+        assert_eq!(format_active(21.3), "21.3 sec limited");
+        assert_eq!(format_active(59.9), "59.9 sec limited");
     }
 
     #[test]
-    fn format_active_minutes() {
-        assert_eq!(format_active(60.0), "1:00");
-        assert_eq!(format_active(83.5), "1:23");
-        assert_eq!(format_active(125.0), "2:05");
-        assert_eq!(format_active(3661.0), "61:01");
+    fn format_active_minutes_no_decimal() {
+        assert_eq!(format_active(60.0), "1 min 0 sec limited");
+        assert_eq!(format_active(83.5), "1 min 23 sec limited");
+        assert_eq!(format_active(125.0), "2 min 5 sec limited");
+        assert_eq!(format_active(3661.0), "61 min 1 sec limited");
     }
 }
 
@@ -139,7 +152,6 @@ pub fn LimiterModal(
                                 </div>
                                 <div class="limiter-activity-row">
                                     <span class="limiter-activity-label">
-                                        "Active: "
                                         {move || format_active(active_seconds.get())}
                                     </span>
                                     <button

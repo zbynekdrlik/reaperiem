@@ -80,14 +80,17 @@ async function readActiveText(page: Page): Promise<string> {
 }
 
 function parseActiveSeconds(text: string): number {
-  // Format: "Active: never" or "Active: M:SS"
-  const stripped = text.replace(/^Active:\s*/, "").trim();
-  if (stripped === "never") return 0;
-  const match = stripped.match(/^(\d+):(\d{2})$/);
-  if (!match) {
-    throw new Error(`Unparseable active text: '${text}'`);
-  }
-  return parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  // format_active() output:
+  //   "not limited yet"              → 0
+  //   "21.3 sec limited"             → 21.3
+  //   "1 min 23 sec limited"         → 83.0
+  const t = text.trim();
+  if (t === "not limited yet") return 0;
+  const secsOnly = t.match(/^(\d+(?:\.\d+)?)\s+sec\s+limited$/);
+  if (secsOnly) return parseFloat(secsOnly[1]);
+  const minSec = t.match(/^(\d+)\s+min\s+(\d+)\s+sec\s+limited$/);
+  if (minSec) return parseInt(minSec[1], 10) * 60 + parseInt(minSec[2], 10);
+  throw new Error(`Unparseable limiter-activity text: '${text}'`);
 }
 
 test.describe("Limiter Activity Counter — Issue #145", () => {
@@ -189,7 +192,7 @@ test.describe("Limiter Activity Counter — Issue #145", () => {
     const afterReset = await readActiveText(page);
     expect(
       parseActiveSeconds(afterReset),
-      `After Reset + tone-off + reopen, expected 'Active: never' or 'Active: 0:00'-'0:01', got '${afterReset}'`,
+      `After Reset + tone-off + reopen, expected 'not limited yet' or '<=1.0 sec limited', got '${afterReset}'`,
     ).toBeLessThanOrEqual(1);
 
     // Cleanly close before afterEach runs the console-error check.
