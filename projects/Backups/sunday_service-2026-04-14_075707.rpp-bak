@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1776025983 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1776146227 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -17,7 +17,7 @@
   PANMODE 3
   CURSOR 3.5
   ZOOM 107.99523359390459 36 0
-  VZOOMEX 6 384
+  VZOOMEX 6 0
   USE_REC_CFG 0
   RECMODE 1
   SMPTESYNC 0 30 100 40 1000 300 0 0 1 0 0
@@ -456,7 +456,7 @@
         IQAAAAUAAAAEAAAAAAAAAAAAAAAAADRAAAAAAAAA8D8AAAAAAAAAQAEAAAAAAQAAAHykGP7C7H9AAAAAgKAx6T8AAAAghevhPwEIAAAAAQAAAD3c/7iqBIRAAAAAwLdb
         +j/NzMyscD3yPwEIAAAAAQAAABF+3VQ9BZdAAAAAYIoA6z8AAADgo3DtPwEBAAAAAQAAACwq7sENYLFAAAAAQHNI+D8AAACgmZnpPwEBAAAAAQAAAAAAAAAAAPA/AAAA
         AKwCAACyAQAAAgAAAA==
-        AAAQAAAA
+        AFByb2dyYW0gMQAQAAAA
       >
       FLOATPOS 100 100 700 500
       FXID {FEF69E88-C6EC-468A-B543-71DE5776E5BC}
@@ -1075,7 +1075,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.13182567 0 -1 -1 1
+    VOLPAN 0.14125374 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1139,10 +1139,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {7BCFF950-3CFC-4D0A-AE4F-55DB7D7FDF96}
+      FXID {7B168032-4243-4F44-9ECA-44088BE72594}
       WAK 0 0
     >
   >
@@ -1207,10 +1207,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {9BFEC782-E593-482F-A7F0-9E9109EE2222}
+      FXID {1D4E9668-5B20-4BB0-9D42-859F60DBC66A}
       WAK 0 0
     >
   >
@@ -1275,10 +1275,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {5D42663A-6524-4234-808F-8ACC09F30537}
+      FXID {149306CF-0B5A-4180-A693-EBAD4BEA27A0}
       WAK 0 0
     >
   >
@@ -1342,10 +1342,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {505CFE64-02C9-4224-AAFF-DFC3D61F9466}
+      FXID {DE66C8C4-5F21-4C53-9271-921DD5B5C21B}
       WAK 0 0
     >
   >
@@ -1410,10 +1410,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {DAAF298A-CE71-4584-A7D3-97D95BA75960}
+      FXID {C465122F-D1D3-4616-BA16-8B5E6CA34A4E}
       WAK 0 0
     >
   >
@@ -1478,10 +1478,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {8DD0B8F2-855B-448D-9E3D-C9766AEF7963}
+      FXID {253D6F2A-9D30-4435-AFE3-B7BADA2ED2BC}
       WAK 0 0
     >
   >
@@ -1546,10 +1546,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {491C2532-AFEF-4D40-B899-1465989A2A9E}
+      FXID {0A5F9C1E-CE06-46FE-B94A-49B9E00E92B1}
       WAK 0 0
     >
   >
@@ -1588,10 +1588,10 @@
     AUXRECV 8 3 0.1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 9 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 18 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 19 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 20 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 18 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 40 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
@@ -1613,10 +1613,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A418A65A-BF6B-4E4F-908D-0A8FE8FBF329}
+      FXID {784E174E-6F16-42FE-A315-8EBC2DAD8174}
       WAK 0 0
     >
   >
@@ -1681,10 +1681,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {88A4C89E-C879-4E36-BA37-526BE9FF8512}
+      FXID {F978FA7B-7B84-4A17-8DC9-7908A9B41FCE}
       WAK 0 0
     >
   >
@@ -1759,10 +1759,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 -5.924347 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {10314FB9-40AB-4E8F-B3DB-D79340F6E8AD}
+      FXID {C9CDFFA4-3D64-4E66-9F2C-A5A75D481807}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
