@@ -2576,7 +2576,6 @@ pub async fn handle_get_limiter_params(
 }
 
 /// Convert accumulated limiter-activity milliseconds to seconds.
-#[inline]
 fn limiter_ms_to_seconds(ms: u64) -> f64 {
     (ms as f64) / 1000.0
 }

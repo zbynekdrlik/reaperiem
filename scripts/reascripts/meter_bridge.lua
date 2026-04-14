@@ -104,7 +104,6 @@ function main()
     end
   end
 
-
   -- Limiter activity polling (#145).
   -- For every track that has our JS limiter, read slider5 (GR readout in dB,
   -- written by the JSFX from ext_gr_meter via sliderchange()), accumulate
@@ -120,11 +119,16 @@ function main()
   last_tick_time = now
 
   -- Reset request handling — server writes track index here when user clicks Reset.
+  -- We remember which track_idx was just reset so the accumulation loop below
+  -- skips it for this tick (otherwise the reset could immediately be undone by
+  -- the current-tick accumulation if GR is still engaging).
+  local just_reset_idx = nil
   local reset_request = reaper.GetExtState(LIMITER_SECTION, LIMITER_RESET_KEY)
   if reset_request ~= "" then
     local reset_idx = tonumber(reset_request)
     if reset_idx then
       limiter_active_ms[reset_idx] = 0
+      just_reset_idx = reset_idx
     end
     reaper.SetExtState(LIMITER_SECTION, LIMITER_RESET_KEY, "", false)
   end
@@ -148,7 +152,12 @@ function main()
       if fx_idx >= 0 then
         local track_idx = i + 1  -- 1-based to match meter convention
         local gr_db = reaper.TrackFX_GetParam(track, fx_idx, 4)  -- slider5
-        if dt_ms > 0 and gr_db < LIMITER_GR_THRESHOLD_DB then
+        -- Skip accumulation on the just-reset track this tick so the reset
+        -- sticks cleanly (otherwise GR still active → counter jumps 0 → dt_ms).
+        if dt_ms > 0
+          and gr_db < LIMITER_GR_THRESHOLD_DB
+          and track_idx ~= just_reset_idx
+        then
           limiter_active_ms[track_idx] = (limiter_active_ms[track_idx] or 0) + dt_ms
         end
         local total = limiter_active_ms[track_idx] or 0

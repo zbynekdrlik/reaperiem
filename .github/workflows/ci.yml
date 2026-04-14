@@ -2186,6 +2186,46 @@ jobs:
             exit 1
           }
 
+      - name: Validate tone_generator action-ID hash (#145 pre-flight)
+        shell: powershell
+        run: |
+          # limiter-activity.spec.ts hardcodes the REAPER action ID hash that
+          # fires tone_generator.lua. If tone_generator.lua is ever moved or
+          # renamed, REAPER recomputes the hash and the test fails with
+          # "tone_generator did not run". Catch the drift here instead.
+          $expected = "RS39188b77eebdd3fcf32cb58063b41d1e3828b057"
+          $specFile = "iem-mixer/e2e/tests/live/limiter-activity.spec.ts"
+          if (-not (Test-Path $specFile)) {
+            Write-Host "::error::Spec file not found: $specFile"
+            exit 1
+          }
+          $specContent = Get-Content $specFile -Raw
+          if ($specContent -notmatch [regex]::Escape($expected)) {
+            Write-Host "::error::Hardcoded tone_generator hash drifted in $specFile. Expected $expected."
+            exit 1
+          }
+          $kbIni = "C:\Users\newlevel\AppData\Roaming\REAPER\reaper-kb.ini"
+          if (-not (Test-Path $kbIni)) {
+            Write-Host "::error::reaper-kb.ini not found on runner"
+            exit 1
+          }
+          $line = Select-String -Pattern "tone_generator\.lua" -Path $kbIni | Select-Object -First 1
+          if (-not $line) {
+            Write-Host "::error::tone_generator.lua not registered in reaper-kb.ini"
+            exit 1
+          }
+          if ($line.Line -match "(RS[0-9a-f]{40})") {
+            $actual = $matches[1]
+            if ($actual -ne $expected) {
+              Write-Host "::error::tone_generator hash drift: reaper-kb.ini has $actual, spec expects $expected. Update TONE_GEN_ACTION_ID in $specFile."
+              exit 1
+            }
+            Write-Host "tone_generator hash OK: $actual"
+          } else {
+            Write-Host "::error::Could not extract RS-hash from reaper-kb.ini line: $($line.Line)"
+            exit 1
+          }
+
       - name: Run post-deploy E2E tests
         shell: powershell
         working-directory: iem-mixer/e2e

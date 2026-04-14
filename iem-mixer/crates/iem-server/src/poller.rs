@@ -509,6 +509,11 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
         // Limiter activity totals (#145) — meter_bridge.lua writes per-track
         // cumulative active milliseconds where the limiter is reducing gain.
+        // Unlike the meter block above, we deliberately do NOT early-return on
+        // an empty value: meter_bridge always writes a non-empty string when
+        // at least one inear track has the limiter inserted, so an empty value
+        // legitimately means "no tracks have a limiter right now" and the
+        // HashMap should be cleared to reflect that.
         let lim_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_LIMITER_ACTIVITY", "totals");
         if let Ok(resp) = state.http_client.get(&lim_url).send().await
             && let Ok(text) = resp.text().await
