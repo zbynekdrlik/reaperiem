@@ -66,6 +66,17 @@ local function linear_to_db10(val)
 end
 
 function main()
+  -- Self-reload request (#145) — CI sets this after deploying new meter_bridge.lua
+  -- so the running instance exits cleanly and the freshly-triggered instance
+  -- picks up the new code. Without this, defer-based scripts keep executing
+  -- the code they were started with even after the file on disk changes.
+  local reload_request = reaper.GetExtState(SECTION, "reload_self")
+  if reload_request == "1" then
+    reaper.SetExtState(SECTION, RUNNING_KEY, "0", false)
+    reaper.SetExtState(SECTION, "reload_self", "", false)
+    return  -- No defer call — instance exits.
+  end
+
   -- Update heartbeat for duplicate detection
   reaper.SetExtState(SECTION, "heartbeat", tostring(reaper.time_precise()), false)
 

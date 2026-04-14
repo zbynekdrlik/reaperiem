@@ -33,9 +33,21 @@ async function loginAsEngineer(page: Page) {
   );
 }
 
-async function triggerToneGenerator(page: Page) {
-  // Toggles the test tone on the engineer track. First call = on, second = off.
-  await page.request.get(`${REAPER_URL}/_/${TONE_GEN_ACTION}`).catch(() => {});
+async function setToneGenerator(page: Page, on: boolean) {
+  // tone_generator.lua reads EXTSTATE reaperiem/tone_gen_action ("start"|"stop")
+  // and acts accordingly. It is NOT a toggle — calling the action without
+  // setting tone_gen_action first is a no-op that writes "ERROR:no_action".
+  const action = on ? "start" : "stop";
+  await page.request
+    .get(
+      `${REAPER_URL}/_/SET/EXTSTATE/reaperiem/tone_gen_action/${action}`,
+    )
+    .catch(() => {});
+  await page.request
+    .get(`${REAPER_URL}/_/${TONE_GEN_ACTION}`)
+    .catch(() => {});
+  // Tone insert/remove + mute toggling needs ~300 ms to stabilise.
+  await page.waitForTimeout(300);
 }
 
 async function readActiveText(page: Page): Promise<string> {
@@ -93,17 +105,14 @@ test.describe("Limiter Activity Counter — Issue #145", () => {
       timeout: 10_000,
     });
 
-    // Make sure no test tone is leaking from a previous run; toggle off-then-on
-    // to ensure we start in a known state. The TONE_GEN action toggles, so we
-    // call once to whatever the current state was, wait, then trigger again to
-    // explicitly turn it ON.
-    await triggerToneGenerator(page);
-    await page.waitForTimeout(800);
+    // Ensure tone is OFF at the start (stop is idempotent — stops whether or
+    // not a tone_generator FX is currently inserted).
+    await setToneGenerator(page, false);
 
-    // Find the LIM button on the engineer's own channel strip.
-    // ENGINEER inear is the engineer's own output bus; the modal we open is
-    // for that track.  We open the FIRST limiter button on the page, which
-    // for the engineer's mixer is their own.
+    // The LIM button on the GlobalVolumeFader opens the limiter for the
+    // logged-in member's OWN output track (ENGINEER inear when logged in
+    // as engineer). The tone_generator drops its audio on the same track,
+    // so the limiter on ENGINEER inear is the one that will engage.
     const limitBtn = page.locator(".limiter-btn-small").first();
     await expect(limitBtn).toBeVisible({ timeout: 10_000 });
 
@@ -119,8 +128,8 @@ test.describe("Limiter Activity Counter — Issue #145", () => {
       timeout: 2000,
     });
 
-    // Now turn the tone ON (it was a no-op previously if it was already off).
-    await triggerToneGenerator(page);
+    // Turn the tone ON.
+    await setToneGenerator(page, true);
 
     // Hold the hot signal long enough for the limiter to engage and accumulate
     // measurable active time.  meter_bridge polls per defer tick (~30 ms);
@@ -144,8 +153,7 @@ test.describe("Limiter Activity Counter — Issue #145", () => {
     // Stop the tone before the next assertion, otherwise meter_bridge will
     // immediately accumulate again on the next tick and the counter will not
     // remain at zero.
-    await triggerToneGenerator(page);
-    await page.waitForTimeout(800);
+    await setToneGenerator(page, false);
 
     // Close + reopen modal to re-fetch active_seconds from the server.
     await page.locator(".limiter-close-btn").click();
