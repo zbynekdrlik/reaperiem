@@ -2699,3 +2699,21 @@ body.talk-live-overlay {
 .limiter-btn-small:active {
   background: rgba(255, 107, 107, 0.35);
 }
+
+.limiter-activity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 6px;
+  font-size: 14px;
+}
+
+.limiter-activity-label {
+  color: #ddd;
+}
+
+.limiter-reset-btn:hover {
+  background: var(--bg-secondary);
+}

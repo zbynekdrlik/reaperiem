@@ -55,6 +55,26 @@ pub fn parse_meter_bridge(text: &str) -> HashMap<usize, [f32; 2]> {
     meters
 }
 
+/// Parse limiter activity EXTSTATE response into per-track active_ms map.
+/// Input format: "23:1230;24:0;25:8470" (track_idx_1based:active_ms_u64)
+/// Skips malformed entries silently.
+pub fn parse_limiter_activity_totals(text: &str) -> HashMap<usize, u64> {
+    let mut totals = HashMap::new();
+    for entry in text.split(';') {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        if let Some((idx_str, ms_str)) = entry.split_once(':')
+            && let Ok(track_idx) = idx_str.parse::<usize>()
+            && let Ok(ms) = ms_str.parse::<u64>()
+        {
+            totals.insert(track_idx, ms);
+        }
+    }
+    totals
+}
+
 /// Discover band members from REAPER by querying tracks ending in " inear".
 /// REAPER is the source of truth for member names.
 /// Returns the list of discovered members, or empty if REAPER is unreachable.
@@ -485,6 +505,23 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                     meters = bridge_meters;
                 }
             }
+        }
+
+        // Limiter activity totals (#145) — meter_bridge.lua writes per-track
+        // cumulative active milliseconds where the limiter is reducing gain.
+        // Unlike the meter block above, we deliberately do NOT early-return on
+        // an empty value: meter_bridge always writes a non-empty string when
+        // at least one inear track has the limiter inserted, so an empty value
+        // legitimately means "no tracks have a limiter right now" and the
+        // HashMap should be cleared to reflect that.
+        let lim_url = reaper_api::get_extstate(&reaper_url, "REAPERIEM_LIMITER_ACTIVITY", "totals");
+        if let Ok(resp) = state.http_client.get(&lim_url).send().await
+            && let Ok(text) = resp.text().await
+            && let Some(value) = text.split('\t').nth(3)
+        {
+            let totals = parse_limiter_activity_totals(value);
+            let mut guard = state.limiter_activity.lock().await;
+            *guard = totals;
         }
     }
 
@@ -1967,5 +2004,29 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
             should_broadcast,
             "Mute changes must always be broadcast (no suppression during listen)"
         );
+    }
+
+    #[test]
+    fn parse_limiter_activity_totals_parses_pairs() {
+        let text = "23:1230;24:0;25:8470";
+        let parsed = super::parse_limiter_activity_totals(text);
+        assert_eq!(parsed.get(&23), Some(&1230));
+        assert_eq!(parsed.get(&24), Some(&0));
+        assert_eq!(parsed.get(&25), Some(&8470));
+        assert_eq!(parsed.len(), 3);
+    }
+
+    #[test]
+    fn parse_limiter_activity_totals_empty_input() {
+        assert!(super::parse_limiter_activity_totals("").is_empty());
+    }
+
+    #[test]
+    fn parse_limiter_activity_totals_skips_malformed_entries() {
+        let text = "23:1230;garbage;24:not_a_number;25:9999";
+        let parsed = super::parse_limiter_activity_totals(text);
+        assert_eq!(parsed.get(&23), Some(&1230));
+        assert_eq!(parsed.get(&25), Some(&9999));
+        assert_eq!(parsed.len(), 2);
     }
 }

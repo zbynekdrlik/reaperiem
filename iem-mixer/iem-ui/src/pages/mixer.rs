@@ -107,6 +107,8 @@ fn connect_websocket(
     set_limiter_limit_norm: WriteSignal<f32>,
     set_limiter_enabled: WriteSignal<bool>,
     set_limiter_loading: WriteSignal<bool>,
+    // Limiter activity counter (#145)
+    set_limiter_active_seconds: WriteSignal<f64>,
     set_alert_data: WriteSignal<Option<(String, String)>>,
     alert_data: ReadSignal<Option<(String, String)>>,
     set_alert_active: WriteSignal<bool>,
@@ -394,10 +396,12 @@ fn connect_websocket(
                         limit_db,
                         limit_norm,
                         enabled,
+                        active_seconds,
                     } => {
                         let _ = set_limiter_limit_db.try_set(limit_db);
                         let _ = set_limiter_limit_norm.try_set(limit_norm);
                         let _ = set_limiter_enabled.try_set(enabled);
+                        let _ = set_limiter_active_seconds.try_set(active_seconds);
                         let _ = set_limiter_loading.try_set(false);
                     }
                 }
@@ -745,6 +749,8 @@ pub fn MixerPage() -> impl IntoView {
     let (limiter_limit_norm, set_limiter_limit_norm) = signal(0.0_f32);
     let (limiter_enabled, set_limiter_enabled) = signal(true);
     let (limiter_loading, set_limiter_loading) = signal(false);
+    // Limiter activity counter (#145) — cumulative seconds since last reset.
+    let (limiter_active_seconds, set_limiter_active_seconds) = signal(0.0_f64);
 
     // Channel customization (pin/hide) — loaded from server via WS
     let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
@@ -854,6 +860,7 @@ pub fn MixerPage() -> impl IntoView {
             set_limiter_limit_norm,
             set_limiter_enabled,
             set_limiter_loading,
+            set_limiter_active_seconds,
             set_alert_data,
             alert_data,
             set_alert_active,
@@ -949,6 +956,7 @@ pub fn MixerPage() -> impl IntoView {
                 set_limiter_limit_norm,
                 set_limiter_enabled,
                 set_limiter_loading,
+                set_limiter_active_seconds,
                 set_alert_data,
                 alert_data,
                 set_alert_active,
@@ -1580,6 +1588,16 @@ pub fn MixerPage() -> impl IntoView {
                             limit_norm=limiter_limit_norm
                             enabled=limiter_enabled
                             loading=limiter_loading
+                            active_seconds=limiter_active_seconds
+                            on_reset=Callback::new(move |_: ()| {
+                                if let Some((ti, _)) = limiter_open.get_untracked() {
+                                    ws_send(ws_for_lim, &iem_core::ClientMsg::ResetLimiterActivity {
+                                        track_index: ti,
+                                    });
+                                    // Optimistic local update so the user sees "never" immediately.
+                                    let _ = set_limiter_active_seconds.try_set(0.0);
+                                }
+                            })
                             on_param_change=Callback::new(move |(param, value): (String, f32)| {
                                 if let Some((ti, _)) = limiter_open.get_untracked() {
                                     // Optimistic local update (no server echo)

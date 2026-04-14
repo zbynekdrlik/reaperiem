@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.149.0 (2026-04-13)
+
+- **Feature**: Per-inear-track limiter activation counter (#145). Open the LIM dialog on any channel to see how long that inear's safety limiter has been actively reducing gain (e.g. "21.3 sec limited" or "1 min 23 sec limited") since the last reset, plus a Reset button to zero it. Visible to engineer (any track) and to band members on their own track.
+- **Note**: Existing limiter instances pick up the new GR readout on next REAPER FX reload (next REAPER restart or project reload).
+
 ### v1.148.0 (2026-04-13)
 
 - **Fix**: Talkback audio quality — eliminated "low quality / hanging / not fluent" by adding a 60 ms server-side jitter buffer with 20 ms drain loop, replacing the deprecated ScriptProcessor with an AudioWorklet that emits exact 20 ms Opus frames, and bumping Opus bitrate 64→96 kbps for voice. Addresses #154.

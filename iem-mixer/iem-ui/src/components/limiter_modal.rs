@@ -18,6 +18,61 @@ fn norm_to_db(norm: f32) -> f32 {
     if db == 0.0 { 0.0 } else { db } // eliminate -0.0
 }
 
+/// Format active seconds for the limiter-activity row (#145).
+/// The result is a self-explanatory sentence — no separate "Active:" prefix
+/// needed — so a user who has never seen this feature understands the number.
+/// Examples:
+///   0.0  -> "not limited yet"
+///   0.4  -> "0.4 sec limited"
+///   21.3 -> "21.3 sec limited"
+///   59.9 -> "59.9 sec limited"
+///   60.0 -> "1 min 0 sec limited"
+///   83.5 -> "1 min 23 sec limited"
+///   3661.0 -> "61 min 1 sec limited"
+fn format_active(secs: f64) -> String {
+    if secs <= 0.0 {
+        return "not limited yet".to_string();
+    }
+    if secs < 60.0 {
+        return format!("{:.1} sec limited", secs);
+    }
+    let total_secs = secs.floor() as u64;
+    let m = total_secs / 60;
+    let s = total_secs % 60;
+    format!("{} min {} sec limited", m, s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_active;
+
+    #[test]
+    fn format_active_zero_is_not_limited_yet() {
+        assert_eq!(format_active(0.0), "not limited yet");
+    }
+
+    #[test]
+    fn format_active_negative_is_not_limited_yet() {
+        assert_eq!(format_active(-1.0), "not limited yet");
+    }
+
+    #[test]
+    fn format_active_under_one_minute_shows_decimal_seconds() {
+        assert_eq!(format_active(0.4), "0.4 sec limited");
+        assert_eq!(format_active(1.0), "1.0 sec limited");
+        assert_eq!(format_active(21.3), "21.3 sec limited");
+        assert_eq!(format_active(59.9), "59.9 sec limited");
+    }
+
+    #[test]
+    fn format_active_minutes_no_decimal() {
+        assert_eq!(format_active(60.0), "1 min 0 sec limited");
+        assert_eq!(format_active(83.5), "1 min 23 sec limited");
+        assert_eq!(format_active(125.0), "2 min 5 sec limited");
+        assert_eq!(format_active(3661.0), "61 min 1 sec limited");
+    }
+}
+
 /// Limiter modal for controlling max output level on a member's output bus
 #[component]
 pub fn LimiterModal(
@@ -31,8 +86,12 @@ pub fn LimiterModal(
     enabled: ReadSignal<bool>,
     /// Whether data is loading
     loading: ReadSignal<bool>,
+    /// Cumulative seconds the limiter has actively reduced gain (#145).
+    active_seconds: ReadSignal<f64>,
     /// Callback when a parameter changes: (param_name, normalized_value)
     on_param_change: Callback<(String, f32)>,
+    /// Callback when the user clicks the Reset activity button (#145).
+    on_reset: Callback<()>,
     /// Callback when enabled state changes
     on_enabled_change: Callback<bool>,
     /// Callback to close the modal
@@ -90,6 +149,17 @@ pub fn LimiterModal(
                                             view! {}.into_any()
                                         }
                                     }}
+                                </div>
+                                <div class="limiter-activity-row">
+                                    <span class="limiter-activity-label">
+                                        {move || format_active(active_seconds.get())}
+                                    </span>
+                                    <button
+                                        class="limiter-reset-btn"
+                                        on:click=move |_| on_reset.run(())
+                                    >
+                                        "Reset"
+                                    </button>
                                 </div>
                             </div>
                         }

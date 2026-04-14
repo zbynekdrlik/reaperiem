@@ -1115,6 +1115,14 @@ jobs:
           if errorlevel 1 (echo ERROR: Failed to deploy ReaScripts && exit /b 1)
           echo ReaScripts deployed
 
+      - name: Deploy JSFX to REAPER Effects
+        shell: cmd
+        run: |
+          if not exist "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\" mkdir "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\"
+          xcopy /Y scripts\reascripts\jsfx\MGA_JSLimiterST "C:\Users\newlevel\AppData\Roaming\REAPER\Effects\loser\"
+          if errorlevel 1 (echo ERROR: Failed to deploy JSFX && exit /b 1)
+          echo JSFX deployed
+
       - name: Register new ReaScripts in reaper-kb.ini
         shell: powershell
         run: |
@@ -1257,6 +1265,15 @@ jobs:
             Write-Host "REAPER not running - dynamic registration will happen on next REAPER start"
             exit 0
           }
+
+          # Force meter_bridge.lua to reload itself so code changes in the deployed
+          # file take effect (#145). Without this, the running instance keeps
+          # executing the code it was started with, ignoring the new file.
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/REAPERIEM_METERS/reload_self/1" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Start-Sleep -Seconds 3  # let the running instance see the flag and exit
+          # Re-trigger meter_bridge so a fresh instance starts with the new code
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/_RS_REAPERIEM_METER_BRIDGE" -UseBasicParsing -TimeoutSec 5 | Out-Null
+          Start-Sleep -Seconds 2
 
           # meter_bridge.lua (running via defer) picks up EXTSTATE requests
           Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/register_scripts/setup_vban.lua|check_vban.lua|tone_generator.lua|setup_input_trim.lua|check_input_trim.lua|setup_input_eq.lua|read_eq_params.lua|set_eq_param.lua|reset_all_eq.lua|cleanup_mix_sends.lua|setup_mix_sends.lua|setup_talkback.lua|setup_output_limiter.lua|read_limiter_params.lua|set_limiter_param.lua|revert_project.lua" -UseBasicParsing -TimeoutSec 5 | Out-Null
@@ -2166,6 +2183,46 @@ jobs:
             Write-Host "REAPER project saved and backed up to $bakPath"
           } catch {
             Write-Host "::error::Failed to save/backup REAPER project: $_"
+            exit 1
+          }
+
+      - name: Validate tone_generator action-ID hash (#145 pre-flight)
+        shell: powershell
+        run: |
+          # limiter-activity.spec.ts hardcodes the REAPER action ID hash that
+          # fires tone_generator.lua. If tone_generator.lua is ever moved or
+          # renamed, REAPER recomputes the hash and the test fails with
+          # "tone_generator did not run". Catch the drift here instead.
+          $expected = "RS39188b77eebdd3fcf32cb58063b41d1e3828b057"
+          $specFile = "iem-mixer/e2e/tests/live/limiter-activity.spec.ts"
+          if (-not (Test-Path $specFile)) {
+            Write-Host "::error::Spec file not found: $specFile"
+            exit 1
+          }
+          $specContent = Get-Content $specFile -Raw
+          if ($specContent -notmatch [regex]::Escape($expected)) {
+            Write-Host "::error::Hardcoded tone_generator hash drifted in $specFile. Expected $expected."
+            exit 1
+          }
+          $kbIni = "C:\Users\newlevel\AppData\Roaming\REAPER\reaper-kb.ini"
+          if (-not (Test-Path $kbIni)) {
+            Write-Host "::error::reaper-kb.ini not found on runner"
+            exit 1
+          }
+          $line = Select-String -Pattern "tone_generator\.lua" -Path $kbIni | Select-Object -First 1
+          if (-not $line) {
+            Write-Host "::error::tone_generator.lua not registered in reaper-kb.ini"
+            exit 1
+          }
+          if ($line.Line -match "(RS[0-9a-f]{40})") {
+            $actual = $matches[1]
+            if ($actual -ne $expected) {
+              Write-Host "::error::tone_generator hash drift: reaper-kb.ini has $actual, spec expects $expected. Update TONE_GEN_ACTION_ID in $specFile."
+              exit 1
+            }
+            Write-Host "tone_generator hash OK: $actual"
+          } else {
+            Write-Host "::error::Could not extract RS-hash from reaper-kb.ini line: $($line.Line)"
             exit 1
           }
 

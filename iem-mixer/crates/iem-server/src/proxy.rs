@@ -1238,17 +1238,15 @@ async fn handle_ws(
                             // Limiter ownership check: non-engineer members can only
                             // control the limiter on their own output track (#156).
                             let owns_limiter_track = |track_index: usize| -> bool {
-                                if is_engineer {
-                                    return true;
-                                }
                                 // Use try_read to avoid holding the lock across an await point.
-                                if let Ok(cache) = state.mixer_cache.try_read() {
-                                    cache
-                                        .output_track_indices
-                                        .get(&member_id)
-                                        .is_some_and(|&idx| idx == track_index)
-                                } else {
-                                    false // Lock contended — deny conservatively
+                                match state.mixer_cache.try_read() {
+                                    Ok(cache) => check_owns_limiter_track(
+                                        is_engineer,
+                                        &member_id,
+                                        &cache.output_track_indices,
+                                        track_index,
+                                    ),
+                                    Err(_) => false, // Lock contended — deny conservatively
                                 }
                             };
 
@@ -1304,6 +1302,17 @@ async fn handle_ws(
                                             if enabled { 1.0 } else { 0.0 },
                                         )
                                         .await;
+                                    });
+                                }
+                                continue;
+                            }
+                            if let iem_core::ClientMsg::ResetLimiterActivity { track_index } = cmd
+                            {
+                                if owns_limiter_track(track_index) {
+                                    let state_clone = state.clone();
+                                    tokio::spawn(async move {
+                                        handle_reset_limiter_activity(&state_clone, track_index)
+                                            .await;
                                     });
                                 }
                                 continue;
@@ -1824,7 +1833,8 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::GetLimiterParams { .. }
         | iem_core::ClientMsg::SetLimiterParam { .. }
-        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+        | iem_core::ClientMsg::SetLimiterEnabled { .. }
+        | iem_core::ClientMsg::ResetLimiterActivity { .. } => {
             return Err("Limiter commands handled before apply_command_to_cache".to_string());
         }
     }
@@ -2128,7 +2138,8 @@ async fn apply_command_to_cache(
         }
         iem_core::ClientMsg::GetLimiterParams { .. }
         | iem_core::ClientMsg::SetLimiterParam { .. }
-        | iem_core::ClientMsg::SetLimiterEnabled { .. } => {
+        | iem_core::ClientMsg::SetLimiterEnabled { .. }
+        | iem_core::ClientMsg::ResetLimiterActivity { .. } => {
             unreachable!("Limiter commands handled before apply_command_to_cache")
         }
         iem_core::ClientMsg::SetGlobalMute { muted } => {
@@ -2551,7 +2562,22 @@ pub async fn handle_get_limiter_params(
         return None;
     }
 
-    parse_limiter_params_response(track_index, value)
+    let mut reply = parse_limiter_params_response(track_index, value)?;
+    if let iem_core::ServerMsg::LimiterParams {
+        ref mut active_seconds,
+        ..
+    } = reply
+    {
+        let guard = state.limiter_activity.lock().await;
+        let ms = guard.get(&track_index).copied().unwrap_or(0);
+        *active_seconds = limiter_ms_to_seconds(ms);
+    }
+    Some(reply)
+}
+
+/// Convert accumulated limiter-activity milliseconds to seconds.
+fn limiter_ms_to_seconds(ms: u64) -> f64 {
+    (ms as f64) / 1000.0
 }
 
 /// Parse limiter EXTSTATE response into ServerMsg
@@ -2566,6 +2592,7 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
             limit_db: 0.0,
             limit_norm: 0.0,
             enabled: false,
+            active_seconds: 0.0,
         });
     }
 
@@ -2599,6 +2626,7 @@ fn parse_limiter_params_response(track_index: usize, value: &str) -> Option<iem_
         limit_db: get_field("limit="),
         limit_norm: get_field("limit_n="),
         enabled: get_field("enabled=") >= 0.5,
+        active_seconds: 0.0,
     })
 }
 
@@ -2644,6 +2672,52 @@ async fn handle_set_limiter_param(state: &AppState, track_index: usize, param: &
         } else {
             tracing::debug!(track_index, param, result, "Limiter: param set OK");
         }
+    }
+}
+
+/// Pure authorization helper for limiter commands (#145 — extracted from the
+/// WS recv-loop closure so it can be unit-tested). Engineer is always allowed;
+/// a band member is allowed only on their own output track.
+fn check_owns_limiter_track(
+    is_engineer: bool,
+    member_id: &str,
+    output_track_indices: &std::collections::HashMap<String, usize>,
+    track_index: usize,
+) -> bool {
+    if is_engineer {
+        return true;
+    }
+    output_track_indices
+        .get(member_id)
+        .is_some_and(|&idx| idx == track_index)
+}
+
+/// Reset the activity counter for one limiter track (#145).
+/// Zeros AppState.limiter_activity[track] AND writes
+/// EXTSTATE REAPERIEM_LIMITER_ACTIVITY/reset = "<track_index>"
+/// so meter_bridge.lua zeros its local accumulator on its next tick
+/// (otherwise the next poller cycle would re-overwrite the server zero).
+pub async fn handle_reset_limiter_activity(state: &AppState, track_index: usize) {
+    {
+        let mut guard = state.limiter_activity.lock().await;
+        guard.insert(track_index, 0);
+    }
+
+    let config = state.config.read().await;
+    let reaper_url = config.reaper_url.clone();
+    drop(config);
+
+    let set_url = reaper_api::set_extstate(
+        &reaper_url,
+        "REAPERIEM_LIMITER_ACTIVITY",
+        "reset",
+        &track_index.to_string(),
+    );
+    if state.http_client.get(&set_url).send().await.is_err() {
+        tracing::error!(
+            track_index,
+            "Limiter activity reset: failed to write reset EXTSTATE"
+        );
     }
 }
 
@@ -4679,5 +4753,69 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             logs_contain("trace-capture-bt-marker-99"),
             "expected backtrace body to appear in captured logs",
         );
+    }
+
+    // ================================================================
+    // Limiter activity ms → seconds conversion (#145)
+    // ================================================================
+
+    #[test]
+    fn test_limiter_ms_to_seconds_zero() {
+        assert_eq!(limiter_ms_to_seconds(0), 0.0);
+    }
+
+    #[test]
+    fn test_limiter_ms_to_seconds_exact() {
+        // 83_500 ms = 83.5 s; division (not multiplication or modulo)
+        let result = limiter_ms_to_seconds(83_500);
+        assert!((result - 83.5).abs() < 1e-9, "expected 83.5, got {result}");
+    }
+
+    #[test]
+    fn test_limiter_ms_to_seconds_one_second() {
+        assert_eq!(limiter_ms_to_seconds(1000), 1.0);
+    }
+
+    // ================================================================
+    // Limiter authorization (#145 / #156)
+    // ================================================================
+
+    #[test]
+    fn test_check_owns_limiter_track_engineer_any_track() {
+        let indices = std::collections::HashMap::new();
+        // Engineer is allowed on any track, even ones not in the index map.
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 1));
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 99));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_own_track() {
+        let mut indices = std::collections::HashMap::new();
+        indices.insert("petronela".to_string(), 23);
+        assert!(check_owns_limiter_track(false, "petronela", &indices, 23));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_other_track() {
+        let mut indices = std::collections::HashMap::new();
+        indices.insert("petronela".to_string(), 23);
+        indices.insert("stevo".to_string(), 24);
+        // Petronela (track 23) must NOT be allowed on Stevo's track (24).
+        assert!(!check_owns_limiter_track(false, "petronela", &indices, 24));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_unknown_id() {
+        let indices = std::collections::HashMap::new();
+        // Unknown member id with empty indices → denied.
+        assert!(!check_owns_limiter_track(false, "nobody", &indices, 23));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_engineer_trumps_missing_entry() {
+        // Engineer id isn't in the output_track_indices map, but is_engineer=true
+        // overrides that check.
+        let indices = std::collections::HashMap::new();
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 32));
     }
 }
