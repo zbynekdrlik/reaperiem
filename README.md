@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.150.0 (2026-04-14)
+
+- **Test**: Fix `openKebabMenu` race in `eq.spec.ts` — the helper now waits for the target channel strip (e.g. MIREC) to render before iterating. Previously caused intermittent `No channel found` failures in post-deploy E2E when the Mics tab render was slightly slower than the fixed 300 ms timeout.
+
 ### v1.149.0 (2026-04-13)
 
 - **Feature**: Per-inear-track limiter activation counter (#145). Open the LIM dialog on any channel to see how long that inear's safety limiter has been actively reducing gain (e.g. "21.3 sec limited" or "1 min 23 sec limited") since the last reset, plus a Reset button to zero it. Visible to engineer (any track) and to band members on their own track.
