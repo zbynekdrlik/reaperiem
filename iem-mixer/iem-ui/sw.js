@@ -40,9 +40,14 @@ self.addEventListener("fetch", (event) => {
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(event.request).then((cached) => {
         if (cached) return cached;
-        return fetch(event.request).then((response) => {
+        return fetch(event.request).then(async (response) => {
+          // Await cache.put so the response the page sees is ONLY delivered
+          // after the asset has been written to cache. Previously this ran
+          // as a detached promise and the page's `networkidle` could fire
+          // before the cache was populated, causing post-reload E2E
+          // assertions to race against an empty cache.
           if (response.ok) {
-            cache.put(event.request, response.clone());
+            await cache.put(event.request, response.clone());
           }
           return response;
         });

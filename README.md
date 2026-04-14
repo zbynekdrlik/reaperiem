@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.151.0 (2026-04-14)
+
+- **CI**: Harden VST3 deploy step against `Remove-Item` file-lock races. After a taskkill, Windows can hold loaded-DLL handles open for several seconds. The previous fixed 3 s `Start-Sleep` was not enough on a loaded runner, causing `Access to the path 'OIEM Receive.vst3' is denied` and red deploys. Now: poll Get-Process up to 30 s before proceeding, and retry `Remove-Item` with exponential backoff (6 attempts, ~31 s total).
+- **Fix**: Service Worker now awaits `cache.put` before returning the response. Previously the detached promise could finish after the page's `networkidle`, causing a rare post-reload cache-empty race (observed as `pwa.spec.ts` intermittent flakes on loaded CI runners). Functional impact is minimal — `cache.put` typically completes in under 1 ms.
+
 ### v1.150.0 (2026-04-14)
 
 - **Test**: Fix `openKebabMenu` race in `eq.spec.ts` — the helper now waits for the target channel strip (e.g. MIREC) to render before iterating. Previously caused intermittent `No channel found` failures in post-deploy E2E when the Mics tab render was slightly slower than the fixed 300 ms timeout.

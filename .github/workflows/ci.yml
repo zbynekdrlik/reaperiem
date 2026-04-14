@@ -905,16 +905,53 @@ jobs:
               $ErrorActionPreference = "Continue"
               taskkill /f /im reaper.exe 2>&1 | Out-Null
               $ErrorActionPreference = "Stop"
-              Start-Sleep -Seconds 3
+              # After a forced taskkill, Windows can hold loaded-DLL file handles
+              # open for several seconds — longer than the previous fixed 3-second
+              # Start-Sleep. Poll Get-Process to confirm the handle table is clear
+              # before proceeding (up to 30 s).
+              $gone = $false
+              for ($i = 0; $i -lt 15; $i++) {
+                Start-Sleep -Seconds 2
+                if (-not (Get-Process -Name "reaper" -ErrorAction SilentlyContinue)) {
+                  $gone = $true
+                  break
+                }
+              }
+              if (-not $gone) {
+                Write-Host "::error::reaper.exe still present 30 s after taskkill"
+                exit 1
+              }
             }
             Write-Host "REAPER stopped"
           }
 
-          # Copy each VST3 bundle directory
+          # Copy each VST3 bundle directory. Remove-Item can fail with
+          # UnauthorizedAccessException for a few seconds after REAPER exit
+          # because the kernel keeps mapped-section handles open until all
+          # references drop. Retry with exponential backoff (up to ~31 s total)
+          # instead of letting a transient file-lock fail the whole deploy.
           foreach ($vst3Source in $vst3Sources) {
             $destPath = Join-Path $vst3Dest $vst3Source.Name
             if (Test-Path $destPath) {
-              Remove-Item $destPath -Recurse -Force
+              $removed = $false
+              $delayMs = 500
+              for ($attempt = 1; $attempt -le 6; $attempt++) {
+                try {
+                  Remove-Item $destPath -Recurse -Force -ErrorAction Stop
+                  $removed = $true
+                  break
+                } catch {
+                  Write-Host "Remove-Item attempt $attempt/6 failed: $($_.Exception.Message)"
+                  if ($attempt -lt 6) {
+                    Start-Sleep -Milliseconds $delayMs
+                    $delayMs = [Math]::Min($delayMs * 2, 8000)
+                  }
+                }
+              }
+              if (-not $removed) {
+                Write-Host "::error::Could not remove $destPath after 6 attempts"
+                exit 1
+              }
             }
             Copy-Item $vst3Source.FullName $destPath -Recurse -Force
             Write-Host "VST3 deployed: $destPath"
