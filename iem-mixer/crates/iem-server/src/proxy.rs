@@ -1238,17 +1238,15 @@ async fn handle_ws(
                             // Limiter ownership check: non-engineer members can only
                             // control the limiter on their own output track (#156).
                             let owns_limiter_track = |track_index: usize| -> bool {
-                                if is_engineer {
-                                    return true;
-                                }
                                 // Use try_read to avoid holding the lock across an await point.
-                                if let Ok(cache) = state.mixer_cache.try_read() {
-                                    cache
-                                        .output_track_indices
-                                        .get(&member_id)
-                                        .is_some_and(|&idx| idx == track_index)
-                                } else {
-                                    false // Lock contended — deny conservatively
+                                match state.mixer_cache.try_read() {
+                                    Ok(cache) => check_owns_limiter_track(
+                                        is_engineer,
+                                        &member_id,
+                                        &cache.output_track_indices,
+                                        track_index,
+                                    ),
+                                    Err(_) => false, // Lock contended — deny conservatively
                                 }
                             };
 
@@ -2676,6 +2674,23 @@ async fn handle_set_limiter_param(state: &AppState, track_index: usize, param: &
             tracing::debug!(track_index, param, result, "Limiter: param set OK");
         }
     }
+}
+
+/// Pure authorization helper for limiter commands (#145 — extracted from the
+/// WS recv-loop closure so it can be unit-tested). Engineer is always allowed;
+/// a band member is allowed only on their own output track.
+fn check_owns_limiter_track(
+    is_engineer: bool,
+    member_id: &str,
+    output_track_indices: &std::collections::HashMap<String, usize>,
+    track_index: usize,
+) -> bool {
+    if is_engineer {
+        return true;
+    }
+    output_track_indices
+        .get(member_id)
+        .is_some_and(|&idx| idx == track_index)
 }
 
 /// Reset the activity counter for one limiter track (#145).
@@ -4760,5 +4775,48 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
     #[test]
     fn test_limiter_ms_to_seconds_one_second() {
         assert_eq!(limiter_ms_to_seconds(1000), 1.0);
+    }
+
+    // ================================================================
+    // Limiter authorization (#145 / #156)
+    // ================================================================
+
+    #[test]
+    fn test_check_owns_limiter_track_engineer_any_track() {
+        let indices = std::collections::HashMap::new();
+        // Engineer is allowed on any track, even ones not in the index map.
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 1));
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 99));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_own_track() {
+        let mut indices = std::collections::HashMap::new();
+        indices.insert("petronela".to_string(), 23);
+        assert!(check_owns_limiter_track(false, "petronela", &indices, 23));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_other_track() {
+        let mut indices = std::collections::HashMap::new();
+        indices.insert("petronela".to_string(), 23);
+        indices.insert("stevo".to_string(), 24);
+        // Petronela (track 23) must NOT be allowed on Stevo's track (24).
+        assert!(!check_owns_limiter_track(false, "petronela", &indices, 24));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_member_unknown_id() {
+        let indices = std::collections::HashMap::new();
+        // Unknown member id with empty indices → denied.
+        assert!(!check_owns_limiter_track(false, "nobody", &indices, 23));
+    }
+
+    #[test]
+    fn test_check_owns_limiter_track_engineer_trumps_missing_entry() {
+        // Engineer id isn't in the output_track_indices map, but is_engineer=true
+        // overrides that check.
+        let indices = std::collections::HashMap::new();
+        assert!(check_owns_limiter_track(true, "engineer", &indices, 32));
     }
 }
