@@ -35,16 +35,28 @@ async function openKebabMenu(
   channelNameContains?: string,
 ): Promise<void> {
   if (channelNameContains) {
+    // Wait for the target channel to render — after a tab switch the channel
+    // list may not be populated yet when this helper is called, which
+    // previously caused a race: the `.channel` locator had count 0 (or only
+    // some channels) and we threw "No channel found" immediately. The CSS
+    // `:has()` selector in Playwright matches an ancestor whose descendant
+    // contains the text, so this waits on the actual element we'll iterate
+    // to rather than just "any .channel exists".
+    const needle = channelNameContains.toUpperCase();
+    await expect(
+      page
+        .locator(".channel")
+        .filter({ has: page.locator(".ch-name", { hasText: needle }) })
+        .first(),
+    ).toBeVisible({ timeout: 10_000 });
+
     const channels = page.locator(".channel");
     const count = await channels.count();
     for (let i = 0; i < count; i++) {
       const card = channels.nth(i);
       const nameEl = card.locator(".ch-name");
       const nameText = await nameEl.textContent().catch(() => "");
-      if (
-        nameText &&
-        nameText.toUpperCase().includes(channelNameContains.toUpperCase())
-      ) {
+      if (nameText && nameText.toUpperCase().includes(needle)) {
         const menuBtn = card.locator(".ch-menu-btn");
         await expect(menuBtn).toBeVisible({ timeout: 5000 });
         await menuBtn.click({ force: true });
