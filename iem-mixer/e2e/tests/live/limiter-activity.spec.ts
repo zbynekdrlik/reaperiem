@@ -14,7 +14,19 @@
 import { test, expect, Page } from "@playwright/test";
 
 const REAPER_URL = "http://iem.lan:8080";
-const TONE_GEN_ACTION = "_RS_REAPERIEM_TONE_GEN";
+
+// tone_generator.lua is registered in reaper-kb.ini with a SHA-based action ID
+// (REAPER computes it from the script path). Only this named ID fires the
+// script via HTTP. The dynamic numeric IDs written to EXTSTATE by meter_bridge
+// via reaper.AddRemoveReaScript() do NOT fire the script via the HTTP API —
+// they're an internal command registry that is separate from HTTP-addressable
+// actions. CLAUDE.md's "_RS_REAPERIEM_TONE_GEN" shorthand is wrong; the real
+// ID is the one in reaper-kb.ini.
+//
+// If tone_generator.lua's path ever changes, this hash will change — update
+// it by grepping reaper-kb.ini for "tone_generator.lua" on iem.lan.
+const TONE_GEN_ACTION_ID =
+  "_RS39188b77eebdd3fcf32cb58063b41d1e3828b057";
 
 async function loginAsEngineer(page: Page) {
   const response = await page.request.post("/api/auth", {
@@ -33,7 +45,7 @@ async function loginAsEngineer(page: Page) {
   );
 }
 
-async function setToneGenerator(page: Page, on: boolean) {
+async function setToneGenerator(page: Page, on: boolean): Promise<void> {
   // tone_generator.lua reads EXTSTATE reaperiem/tone_gen_action ("start"|"stop")
   // and acts accordingly. It is NOT a toggle — calling the action without
   // setting tone_gen_action first is a no-op that writes "ERROR:no_action".
@@ -44,10 +56,21 @@ async function setToneGenerator(page: Page, on: boolean) {
     )
     .catch(() => {});
   await page.request
-    .get(`${REAPER_URL}/_/${TONE_GEN_ACTION}`)
+    .get(`${REAPER_URL}/_/${TONE_GEN_ACTION_ID}`)
     .catch(() => {});
   // Tone insert/remove + mute toggling needs ~300 ms to stabilise.
   await page.waitForTimeout(300);
+  // Verify the script actually ran — its atexit line clears tone_gen_action.
+  const resp = await page.request.get(
+    `${REAPER_URL}/_/GET/EXTSTATE/reaperiem/tone_gen_action`,
+  );
+  const body = await resp.text();
+  const remaining = body.split("\t")[3]?.trim() || "";
+  if (remaining !== "") {
+    throw new Error(
+      `tone_generator did not run: tone_gen_action still '${remaining}'. Check action ID hash.`,
+    );
+  }
 }
 
 async function readActiveText(page: Page): Promise<string> {

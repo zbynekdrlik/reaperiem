@@ -30,7 +30,12 @@ local LIMITER_SECTION = "REAPERIEM_LIMITER_ACTIVITY"
 local LIMITER_TOTALS_KEY = "totals"
 local LIMITER_RESET_KEY = "reset"
 local LIMITER_GR_THRESHOLD_DB = -1.0  -- counts as "active" when slider5 < this
-local LIMITER_FX_NAME_PATTERN = "MGA_JSLimiter"
+-- setup_output_limiter.lua renames the MGA_JSLimiter FX to "LIMITER" via
+-- TrackFX_SetNamedConfigParm("renamed_name", "LIMITER"). TrackFX_GetFXName
+-- returns the renamed display name, so we match on "LIMITER". We also accept
+-- "MGA_JSLimiter" as a fallback in case a rename didn't stick.
+local LIMITER_DISPLAY_NAME = "LIMITER"
+local LIMITER_FALLBACK_PATTERN = "MGA_JSLimiter"
 
 -- Per-track active_ms accumulator: map<track_index_1based, integer_ms>
 local limiter_active_ms = {}
@@ -132,7 +137,10 @@ function main()
       local fx_idx = -1
       for f = 0, fx_count - 1 do
         local _, fx_name = reaper.TrackFX_GetFXName(track, f)
-        if fx_name and fx_name:find(LIMITER_FX_NAME_PATTERN, 1, true) then
+        if fx_name
+          and (fx_name:find(LIMITER_DISPLAY_NAME, 1, true)
+            or fx_name:find(LIMITER_FALLBACK_PATTERN, 1, true))
+        then
           fx_idx = f
           break
         end
