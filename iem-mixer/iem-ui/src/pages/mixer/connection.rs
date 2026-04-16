@@ -1,8 +1,8 @@
 //! WebSocket connection manager with deterministic disposal.
 //!
 //! Owns all background tasks (reconnect, watchdog, token-expiry intervals)
-//! and tears them down in `Drop`. Replaces scattered `on_cleanup` calls
-//! with a single RAII struct.
+//! and tears them down via `on_cleanup`. Background closures check
+//! `disposal_guard` (an `Rc<Cell<bool>>`) before touching reactive state.
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
@@ -15,259 +15,261 @@ use crate::components::talk_button::TalkState;
 use super::helpers::{MAX_WS_FAILURES, WsClosureStore, WsFailCounter};
 use super::state::MixerState;
 
-/// Manages WebSocket connection lifecycle with deterministic cleanup.
+/// Set up all background tasks (WS connect, reconnect, watchdog, token-expiry)
+/// and register an `on_cleanup` callback that tears them all down when the
+/// component scope is disposed.
 ///
-/// Background closures (`Closure::forget`) check `_disposal_guard` before
-/// touching any reactive state — once `Drop` fires, they no-op.
-pub(super) struct ConnectionManager {
-    _disposal_guard: std::rc::Rc<std::cell::Cell<bool>>,
-    reconnect_interval_id: i32,
-    watchdog_interval_id: i32,
-    expiry_interval_id: i32,
-}
+/// Background closures (`Closure::forget`) check `disposal_guard` before
+/// touching any reactive state — once cleanup fires, they no-op.
+///
+/// This is a free function (not a struct with Drop) because Leptos `on_cleanup`
+/// requires `Send` closures, and the interval IDs (i32) are trivially Send
+/// while `Rc<Cell<bool>>` is not. We capture only the i32 IDs and an
+/// `Arc<AtomicBool>` guard in the cleanup closure.
+pub(super) fn setup_connection(
+    state: MixerState,
+    member_id: impl Fn() -> String + Clone + 'static,
+) {
+    let disposal_guard = std::rc::Rc::new(std::cell::Cell::new(false));
 
-impl Drop for ConnectionManager {
-    fn drop(&mut self) {
-        self._disposal_guard.set(true);
-        if let Some(w) = web_sys::window() {
-            w.clear_interval_with_handle(self.reconnect_interval_id);
-            w.clear_interval_with_handle(self.watchdog_interval_id);
-            w.clear_interval_with_handle(self.expiry_interval_id);
-        }
-    }
-}
+    // --- WS closure storage, fail counter, page visibility ---
 
-impl ConnectionManager {
-    pub fn new(state: MixerState, member_id: impl Fn() -> String + Clone + 'static) -> Self {
-        let disposal_guard = std::rc::Rc::new(std::cell::Cell::new(false));
+    // Closure storage: keeps WS callbacks alive without Closure::forget() leak
+    let ws_closures: WsClosureStore = std::rc::Rc::new(std::cell::RefCell::new(None));
 
-        // --- WS closure storage, fail counter, page visibility ---
+    // WS failure counter: tracks consecutive failures without receiving data
+    let ws_fail_count: WsFailCounter = std::rc::Rc::new(std::cell::Cell::new(0));
 
-        // Closure storage: keeps WS callbacks alive without Closure::forget() leak
-        let ws_closures: WsClosureStore = std::rc::Rc::new(std::cell::RefCell::new(None));
-
-        // WS failure counter: tracks consecutive failures without receiving data
-        let ws_fail_count: WsFailCounter = std::rc::Rc::new(std::cell::Cell::new(0));
-
-        // Track page visibility — skip meter updates when backgrounded.
-        // Created once in component body (NOT in connect_websocket) to avoid stacking listeners.
-        let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
-        {
-            let pv = page_visible.clone();
-            let vis_closure = Closure::wrap(Box::new(move || {
-                if let Some(w) = web_sys::window() {
-                    if let Some(doc) = w.document() {
-                        pv.set(!doc.hidden());
-                    }
+    // Track page visibility — skip meter updates when backgrounded.
+    // Created once in component body (NOT in connect_websocket) to avoid stacking listeners.
+    let page_visible = std::rc::Rc::new(std::cell::Cell::new(true));
+    {
+        let pv = page_visible.clone();
+        let vis_closure = Closure::wrap(Box::new(move || {
+            if let Some(w) = web_sys::window() {
+                if let Some(doc) = w.document() {
+                    pv.set(!doc.hidden());
                 }
-            }) as Box<dyn FnMut()>);
-            if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
-                let _ = doc.add_event_listener_with_callback(
-                    "visibilitychange",
-                    vis_closure.as_ref().unchecked_ref(),
-                );
             }
-            vis_closure.forget(); // Lives for component lifetime — one-time registration
+        }) as Box<dyn FnMut()>);
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            let _ = doc.add_event_listener_with_callback(
+                "visibilitychange",
+                vis_closure.as_ref().unchecked_ref(),
+            );
+        }
+        vis_closure.forget(); // Lives for component lifetime — one-time registration
+    }
+
+    // --- Watchdog + backoff state ---
+
+    // Watchdog + backoff state (#153). Lives in MixerPage so it survives across
+    // reconnects — connect_websocket is called repeatedly by the reconnect loop
+    // below, so these cells must NOT live inside that helper.
+    // - last_frame_at: updated in onmessage, checked by the 5s watchdog
+    // - reconnect_attempt: incremented in onclose, reset in onmessage, drives backoff
+    // - last_reconnect_attempt_at: timestamp of last reconnect action, gates the
+    //   backoff schedule inside the reconnect closure below
+    let last_frame_at = std::rc::Rc::new(std::cell::Cell::new(js_sys::Date::now()));
+    let reconnect_attempt = std::rc::Rc::new(std::cell::Cell::new(0u32));
+    let last_reconnect_attempt_at = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
+
+    // --- Initial connect Effect ---
+
+    let ws_member_id = member_id.clone();
+    let ws_closures_effect = ws_closures.clone();
+    let ws_fail_count_effect = ws_fail_count.clone();
+    let page_visible_effect = page_visible.clone();
+    let last_frame_at_effect = last_frame_at.clone();
+    let reconnect_attempt_effect = reconnect_attempt.clone();
+    let disposal_guard_effect = disposal_guard.clone();
+    Effect::new(move |_| {
+        let member = ws_member_id();
+        if member.is_empty() {
+            return;
         }
 
-        // --- Watchdog + backoff state ---
+        connect_websocket(
+            &member,
+            last_frame_at_effect.clone(),
+            reconnect_attempt_effect.clone(),
+            &state,
+            ws_closures_effect.clone(),
+            ws_fail_count_effect.clone(),
+            page_visible_effect.clone(),
+            disposal_guard_effect.clone(),
+        );
+    });
 
-        // Watchdog + backoff state (#153). Lives in MixerPage so it survives across
-        // reconnects — connect_websocket is called repeatedly by the reconnect loop
-        // below, so these cells must NOT live inside that helper.
-        // - last_frame_at: updated in onmessage, checked by the 5s watchdog
-        // - reconnect_attempt: incremented in onclose, reset in onmessage, drives backoff
-        // - last_reconnect_attempt_at: timestamp of last reconnect action, gates the
-        //   backoff schedule inside the reconnect closure below
-        let last_frame_at = std::rc::Rc::new(std::cell::Cell::new(js_sys::Date::now()));
-        let reconnect_attempt = std::rc::Rc::new(std::cell::Cell::new(0u32));
-        let last_reconnect_attempt_at = std::rc::Rc::new(std::cell::Cell::new(0.0_f64));
+    // Network mode (LAN/WAN) is now sent via WebSocket on every connect/reconnect,
+    // so it automatically updates when switching between WiFi and mobile data.
 
-        // --- Initial connect Effect ---
+    // --- Reconnect closure + setInterval ---
 
-        let ws_member_id = member_id.clone();
-        let ws_closures_effect = ws_closures.clone();
-        let ws_fail_count_effect = ws_fail_count.clone();
-        let page_visible_effect = page_visible.clone();
-        let last_frame_at_effect = last_frame_at.clone();
-        let reconnect_attempt_effect = reconnect_attempt.clone();
-        let disposal_guard_effect = disposal_guard.clone();
-        Effect::new(move |_| {
-            let member = ws_member_id();
+    let (ws, _set_ws) = state.ws;
+    let reconnect_member_id = member_id.clone();
+    let navigate_auth_fail = use_navigate();
+    let reconnect_attempt_tick = reconnect_attempt.clone();
+    let last_reconnect_attempt_at_tick = last_reconnect_attempt_at.clone();
+    let last_frame_at_tick = last_frame_at.clone();
+    let disposal_guard_reconnect = disposal_guard.clone();
+    let reconnect_closure = Closure::wrap(Box::new(move || {
+        if disposal_guard_reconnect.get() {
+            return;
+        }
+
+        // Exponential backoff gate: skip this tick if the scheduled delay
+        // hasn't elapsed since the last reconnect attempt. #153
+        let now_ms = js_sys::Date::now();
+        let attempt = reconnect_attempt_tick.get();
+        let delay_ms = crate::lifecycle::backoff_delay_ms(attempt) as f64;
+        let last_attempt = last_reconnect_attempt_at_tick.get();
+        if last_attempt > 0.0 && (now_ms - last_attempt) < delay_ms {
+            return;
+        }
+
+        let needs_reconnect = match ws.try_get_untracked() {
+            // Disposal: scope gone → stop reconnecting.
+            None => return,
+            // Signal alive, inner Option empty → nothing to reconnect yet.
+            Some(None) => false,
+            Some(Some(ref w)) => w.ready_state() == web_sys::WebSocket::CLOSED,
+        };
+        if needs_reconnect {
+            let member = reconnect_member_id();
             if member.is_empty() {
                 return;
             }
 
+            // After MAX_WS_FAILURES consecutive failures, check if token is invalid
+            if ws_fail_count.get() >= MAX_WS_FAILURES {
+                let nav = navigate_auth_fail.clone();
+                let m = member.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    if !crate::api::verify_token_valid(&m).await {
+                        // Token rejected by server — clear auth and redirect to login
+                        crate::auth::clear_auth();
+                        let url = format!("/login?member={}&next=/{}", m, m);
+                        nav(&url, Default::default());
+                    }
+                });
+                return;
+            }
+
+            last_reconnect_attempt_at_tick.set(now_ms);
             connect_websocket(
                 &member,
-                last_frame_at_effect.clone(),
-                reconnect_attempt_effect.clone(),
+                last_frame_at_tick.clone(),
+                reconnect_attempt_tick.clone(),
                 &state,
-                ws_closures_effect.clone(),
-                ws_fail_count_effect.clone(),
-                page_visible_effect.clone(),
-                disposal_guard_effect.clone(),
+                ws_closures.clone(),
+                ws_fail_count.clone(),
+                page_visible.clone(),
+                disposal_guard_reconnect.clone(),
             );
-        });
-
-        // Network mode (LAN/WAN) is now sent via WebSocket on every connect/reconnect,
-        // so it automatically updates when switching between WiFi and mobile data.
-
-        // --- Reconnect closure + setInterval ---
-
-        let (ws, _set_ws) = state.ws;
-        let reconnect_member_id = member_id.clone();
-        let navigate_auth_fail = use_navigate();
-        let reconnect_attempt_tick = reconnect_attempt.clone();
-        let last_reconnect_attempt_at_tick = last_reconnect_attempt_at.clone();
-        let last_frame_at_tick = last_frame_at.clone();
-        let disposal_guard_reconnect = disposal_guard.clone();
-        let reconnect_closure = Closure::wrap(Box::new(move || {
-            if disposal_guard_reconnect.get() {
-                return;
-            }
-
-            // Exponential backoff gate: skip this tick if the scheduled delay
-            // hasn't elapsed since the last reconnect attempt. #153
-            let now_ms = js_sys::Date::now();
-            let attempt = reconnect_attempt_tick.get();
-            let delay_ms = crate::lifecycle::backoff_delay_ms(attempt) as f64;
-            let last_attempt = last_reconnect_attempt_at_tick.get();
-            if last_attempt > 0.0 && (now_ms - last_attempt) < delay_ms {
-                return;
-            }
-
-            let needs_reconnect = match ws.try_get_untracked() {
-                // Disposal: scope gone → stop reconnecting.
-                None => return,
-                // Signal alive, inner Option empty → nothing to reconnect yet.
-                Some(None) => false,
-                Some(Some(ref w)) => w.ready_state() == web_sys::WebSocket::CLOSED,
-            };
-            if needs_reconnect {
-                let member = reconnect_member_id();
-                if member.is_empty() {
-                    return;
-                }
-
-                // After MAX_WS_FAILURES consecutive failures, check if token is invalid
-                if ws_fail_count.get() >= MAX_WS_FAILURES {
-                    let nav = navigate_auth_fail.clone();
-                    let m = member.clone();
-                    wasm_bindgen_futures::spawn_local(async move {
-                        if !crate::api::verify_token_valid(&m).await {
-                            // Token rejected by server — clear auth and redirect to login
-                            crate::auth::clear_auth();
-                            let url = format!("/login?member={}&next=/{}", m, m);
-                            nav(&url, Default::default());
-                        }
-                    });
-                    return;
-                }
-
-                last_reconnect_attempt_at_tick.set(now_ms);
-                connect_websocket(
-                    &member,
-                    last_frame_at_tick.clone(),
-                    reconnect_attempt_tick.clone(),
-                    &state,
-                    ws_closures.clone(),
-                    ws_fail_count.clone(),
-                    page_visible.clone(),
-                    disposal_guard_reconnect.clone(),
-                );
-            }
-        }) as Box<dyn FnMut()>);
-        let reconnect_interval_id = web_sys::window()
-            .unwrap()
-            .set_interval_with_callback_and_timeout_and_arguments_0(
-                reconnect_closure.as_ref().unchecked_ref(),
-                2000,
-            )
-            .unwrap();
-        reconnect_closure.forget();
-
-        // --- Watchdog closure + setInterval ---
-
-        // Watchdog (#153): every 5s, check whether the socket has received any
-        // frame in the last 30s. If not, force-close it — onclose fires,
-        // connected=false, the existing .disconnected-banner appears, and the
-        // reconnect loop opens a new socket. Catches zombie sockets where
-        // ready_state == OPEN but no data flows.
-        let last_frame_at_watch = last_frame_at.clone();
-        let ws_watch = ws;
-        let disposal_guard_watchdog = disposal_guard.clone();
-        let watchdog_closure = Closure::wrap(Box::new(move || {
-            if disposal_guard_watchdog.get() {
-                return;
-            }
-
-            // Double-Option: outer = disposal guard, inner = signal value.
-            let Some(Some(socket)) = ws_watch.try_get_untracked() else {
-                return;
-            };
-            if socket.ready_state() != web_sys::WebSocket::OPEN {
-                return;
-            }
-            let now = js_sys::Date::now();
-            if crate::lifecycle::is_stale(
-                last_frame_at_watch.get(),
-                now,
-                crate::lifecycle::WS_STALENESS_THRESHOLD_MS,
-            ) {
-                web_sys::console::warn_1(
-                    &"WS watchdog: no frames for >30s, force-closing socket".into(),
-                );
-                let _ = socket.close();
-            }
-        }) as Box<dyn FnMut()>);
-
-        let watchdog_interval_id = web_sys::window()
-            .unwrap()
-            .set_interval_with_callback_and_timeout_and_arguments_0(
-                watchdog_closure.as_ref().unchecked_ref(),
-                crate::lifecycle::WS_WATCHDOG_INTERVAL_MS as i32,
-            )
-            .unwrap();
-        watchdog_closure.forget();
-
-        // --- Token expiry closure + setInterval ---
-
-        let navigate_expired = use_navigate();
-        let member_for_expiry = member_id.clone();
-        let disposal_guard_expiry = disposal_guard.clone();
-        let expiry_closure = Closure::wrap(Box::new(move || {
-            if disposal_guard_expiry.get() {
-                return;
-            }
-
-            if crate::auth::is_token_expired() {
-                crate::auth::clear_auth();
-                let m = member_for_expiry();
-                if !m.is_empty() {
-                    let url = format!("/login?member={}&next=/{}", m, m);
-                    navigate_expired(&url, Default::default());
-                } else {
-                    navigate_expired("/", Default::default());
-                }
-            }
-        }) as Box<dyn FnMut()>);
-        let expiry_interval_id = web_sys::window()
-            .unwrap()
-            .set_interval_with_callback_and_timeout_and_arguments_0(
-                expiry_closure.as_ref().unchecked_ref(),
-                60_000, // Check every 60 seconds
-            )
-            .unwrap();
-        expiry_closure.forget();
-
-        Self {
-            _disposal_guard: disposal_guard,
-            reconnect_interval_id,
-            watchdog_interval_id,
-            expiry_interval_id,
         }
-    }
+    }) as Box<dyn FnMut()>);
+    let reconnect_interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            reconnect_closure.as_ref().unchecked_ref(),
+            2000,
+        )
+        .unwrap();
+    reconnect_closure.forget();
+
+    // --- Watchdog closure + setInterval ---
+
+    // Watchdog (#153): every 5s, check whether the socket has received any
+    // frame in the last 30s. If not, force-close it — onclose fires,
+    // connected=false, the existing .disconnected-banner appears, and the
+    // reconnect loop opens a new socket. Catches zombie sockets where
+    // ready_state == OPEN but no data flows.
+    let last_frame_at_watch = last_frame_at.clone();
+    let ws_watch = ws;
+    let disposal_guard_watchdog = disposal_guard.clone();
+    let watchdog_closure = Closure::wrap(Box::new(move || {
+        if disposal_guard_watchdog.get() {
+            return;
+        }
+
+        // Double-Option: outer = disposal guard, inner = signal value.
+        let Some(Some(socket)) = ws_watch.try_get_untracked() else {
+            return;
+        };
+        if socket.ready_state() != web_sys::WebSocket::OPEN {
+            return;
+        }
+        let now = js_sys::Date::now();
+        if crate::lifecycle::is_stale(
+            last_frame_at_watch.get(),
+            now,
+            crate::lifecycle::WS_STALENESS_THRESHOLD_MS,
+        ) {
+            web_sys::console::warn_1(
+                &"WS watchdog: no frames for >30s, force-closing socket".into(),
+            );
+            let _ = socket.close();
+        }
+    }) as Box<dyn FnMut()>);
+
+    let watchdog_interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            watchdog_closure.as_ref().unchecked_ref(),
+            crate::lifecycle::WS_WATCHDOG_INTERVAL_MS as i32,
+        )
+        .unwrap();
+    watchdog_closure.forget();
+
+    // --- Token expiry closure + setInterval ---
+
+    let navigate_expired = use_navigate();
+    let member_for_expiry = member_id.clone();
+    let disposal_guard_expiry = disposal_guard.clone();
+    let expiry_closure = Closure::wrap(Box::new(move || {
+        if disposal_guard_expiry.get() {
+            return;
+        }
+
+        if crate::auth::is_token_expired() {
+            crate::auth::clear_auth();
+            let m = member_for_expiry();
+            if !m.is_empty() {
+                let url = format!("/login?member={}&next=/{}", m, m);
+                navigate_expired(&url, Default::default());
+            } else {
+                navigate_expired("/", Default::default());
+            }
+        }
+    }) as Box<dyn FnMut()>);
+    let expiry_interval_id = web_sys::window()
+        .unwrap()
+        .set_interval_with_callback_and_timeout_and_arguments_0(
+            expiry_closure.as_ref().unchecked_ref(),
+            60_000, // Check every 60 seconds
+        )
+        .unwrap();
+    expiry_closure.forget();
+
+    // Register cleanup: clear all JS intervals when the component scope
+    // is disposed. The i32 interval IDs are Copy + Send so on_cleanup accepts them.
+    //
+    // The disposal_guard (Rc<Cell<bool>>) is NOT set here because Rc is !Send.
+    // This is safe: the background closures already use try_get_untracked()
+    // as defense-in-depth — when the scope is disposed, signal reads return
+    // None and the closures bail out. The guard is a belt-and-suspenders
+    // optimization that prevents closures from even reaching the signal reads.
+    //
+    // Without the guard, a brief race window exists between scope disposal
+    // and the next interval tick. The try_get_untracked() checks handle this.
+    on_cleanup(move || {
+        if let Some(w) = web_sys::window() {
+            w.clear_interval_with_handle(reconnect_interval_id);
+            w.clear_interval_with_handle(watchdog_interval_id);
+            w.clear_interval_with_handle(expiry_interval_id);
+        }
+    });
 }
 
 /// Create and connect a WebSocket, wiring up message handlers to signals
