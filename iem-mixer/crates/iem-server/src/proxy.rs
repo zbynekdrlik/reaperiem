@@ -4412,16 +4412,22 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
                 name: "PETKA mic".to_string(),
                 dante_input: 1,
                 default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
             },
             iem_core::config::InputTrack {
                 name: "STEVO mic".to_string(),
                 dante_input: 2,
                 default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
             },
             iem_core::config::InputTrack {
                 name: "DRUMS".to_string(),
                 dante_input: 3,
                 default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
             },
         ]
     }
