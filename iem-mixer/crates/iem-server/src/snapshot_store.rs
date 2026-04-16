@@ -52,7 +52,7 @@ impl SnapshotStore {
     /// List all snapshots for a member (newest first)
     pub fn list(&self, member_id: &str) -> Vec<MixSnapshot> {
         let mut snapshots = self.load(member_id);
-        snapshots.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        snapshots.sort_by_key(|s| std::cmp::Reverse(s.timestamp));
         snapshots
     }
 

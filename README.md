@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.152.0 (2026-04-16)
+
+- **Refactor**: MixerPage decomposed from single 2865-line file into module directory with 7 files (#165)
+- **Arch**: `ConnectionManager` with deterministic `Drop` — all background tasks (WebSocket, reconnect, watchdog, token expiry) torn down in one place
+- **Arch**: `MixerState` struct — `connect_websocket` reduced from 44 parameters to 7
+- **Arch**: `disposal_guard` replaces per-signal scope-alive checks
+
 ### v1.151.0 (2026-04-14)
 
 - **CI**: Harden VST3 deploy step against `Remove-Item` file-lock races. After a taskkill, Windows can hold loaded-DLL handles open for several seconds. The previous fixed 3 s `Start-Sleep` was not enough on a loaded runner, causing `Access to the path 'OIEM Receive.vst3' is denied` and red deploys. Now: poll Get-Process up to 30 s before proceeding, and retry `Remove-Item` with exponential backoff (6 attempts, ~31 s total).

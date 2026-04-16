@@ -76,7 +76,7 @@ impl BackupStore {
             .collect();
 
         // Sort newest-first by filename (YYYYMMDD_HHMMSS lexicographic order)
-        infos.sort_by(|a, b| b.filename.cmp(&a.filename));
+        infos.sort_by_key(|i| std::cmp::Reverse(i.filename.clone()));
 
         infos
     }
