@@ -86,7 +86,7 @@ pub fn MixerPage() -> impl IntoView {
     let pin_modal_visible = state.pin_modal_visible.0;
     let settings_modal_visible = state.settings_modal_visible.0;
     let snapshot_modal_visible = state.snapshot_modal_visible.0;
-    let has_photo = state.has_photo.0;
+    let (has_photo, set_has_photo) = state.has_photo;
     let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
     let set_fader_touched = state.fader_touched.1;
     let loading = state.loading.0;
