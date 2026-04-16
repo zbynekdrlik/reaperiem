@@ -50,9 +50,12 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
     }
 
     // Assert the channel exists with exact name "ALEX kl"
+    // The UI splits track names: ".ch-name" shows the first word ("ALEX")
+    // and ".ch-type" shows the instrument suffix ("kl"). Match both.
     const alexKl = page
       .locator(".channel")
-      .filter({ has: page.locator(".ch-name", { hasText: /^ALEX kl$/ }) });
+      .filter({ has: page.locator(".ch-name", { hasText: /^ALEX$/ }) })
+      .filter({ has: page.locator(".ch-type", { hasText: /^kl/ }) });
     await expect(alexKl).toHaveCount(1, { timeout: 10000 });
     await expect(alexKl.first()).toBeVisible();
 
@@ -75,10 +78,11 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
       await page.waitForTimeout(200);
     }
 
-    // Locate the ALEX kl channel and its fader track
+    // Locate the ALEX kl channel (split as ch-name="ALEX" + ch-type="kl")
     const alexKl = page
       .locator(".channel")
-      .filter({ has: page.locator(".ch-name", { hasText: /^ALEX kl$/ }) })
+      .filter({ has: page.locator(".ch-name", { hasText: /^ALEX$/ }) })
+      .filter({ has: page.locator(".ch-type", { hasText: /^kl/ }) })
       .first();
     await expect(alexKl).toBeVisible({ timeout: 10000 });
 
