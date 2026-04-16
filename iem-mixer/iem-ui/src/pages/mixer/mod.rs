@@ -105,7 +105,7 @@ pub fn MixerPage() -> impl IntoView {
     let (limiter_limit_db, _set_limiter_limit_db) = state.limiter_limit_db;
     let (limiter_limit_norm, _set_limiter_limit_norm) = state.limiter_limit_norm;
     let (limiter_enabled, _set_limiter_enabled) = state.limiter_enabled;
-    let (limiter_loading, _set_limiter_loading) = state.limiter_loading;
+    let (limiter_loading, set_limiter_loading) = state.limiter_loading;
     let (limiter_active_seconds, _set_limiter_active_seconds) = state.limiter_active_seconds;
     let (pinned_channels, set_pinned_channels) = state.pinned_channels;
     let (hidden_channels, set_hidden_channels) = state.hidden_channels;
