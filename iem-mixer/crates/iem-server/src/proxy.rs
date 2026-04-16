@@ -629,7 +629,18 @@ pub(crate) fn build_channel_templates(
             let track_index = resolved_indices
                 .and_then(|m| m.get(&input.name).copied())
                 .unwrap_or(i + 1);
-            let (category, stereo_pair, stereo_side) = categorize_track(&input.name);
+            // Prefer explicit config fields; fall back to name-based derivation for
+            // configs that lack category/stereo_pair (REAPER-discovered tracks,
+            // legacy configs).
+            let (category, stereo_pair, stereo_side) = if let Some(cat) = &input.category {
+                (
+                    cat.clone(),
+                    input.stereo_pair.clone(),
+                    derive_stereo_side(&input.name),
+                )
+            } else {
+                categorize_track(&input.name)
+            };
             iem_core::Channel {
                 track_index,
                 name: input.name.clone(),
@@ -673,6 +684,18 @@ pub(crate) fn build_mix_channel_templates(
             }
         })
         .collect()
+}
+
+/// Extract trailing " L" or " R" stereo-side suffix from a track name.
+/// Returns None when no suffix is present.
+pub(crate) fn derive_stereo_side(name: &str) -> Option<String> {
+    if name.ends_with(" L") {
+        Some("L".to_string())
+    } else if name.ends_with(" R") {
+        Some("R".to_string())
+    } else {
+        None
+    }
 }
 
 /// Categorize a track by name
@@ -3924,6 +3947,48 @@ mod tests {
 
         let (cat, _, _) = categorize_track("ENGINEER mic");
         assert_eq!(cat, "tech", "ENGINEER mic must be tech, not mics");
+    }
+
+    #[test]
+    fn test_build_channel_templates_uses_config_category() {
+        // When InputTrack has Some(category), it wins over name-based derivation.
+        let inputs = vec![iem_core::config::InputTrack {
+            name: "ALEX kl L".to_string(),
+            dante_input: 13,
+            default_level_db: 0.0,
+            category: Some("mics".to_string()),
+            stereo_pair: Some("alex kl".to_string()),
+        }];
+        let channels = build_channel_templates(&inputs, None);
+        assert_eq!(channels.len(), 1);
+        assert_eq!(channels[0].category, "mics");
+        assert_eq!(channels[0].stereo_pair, Some("alex kl".to_string()));
+        assert_eq!(channels[0].stereo_side, Some("L".to_string()));
+    }
+
+    #[test]
+    fn test_build_channel_templates_fallback_when_no_config_category() {
+        // When InputTrack has None category, falls back to categorize_track().
+        let inputs = vec![iem_core::config::InputTrack {
+            name: "MAREK mic".to_string(),
+            dante_input: 5,
+            default_level_db: 0.0,
+            category: None,
+            stereo_pair: None,
+        }];
+        let channels = build_channel_templates(&inputs, None);
+        assert_eq!(channels[0].category, "mics");
+        assert_eq!(channels[0].stereo_pair, None);
+        assert_eq!(channels[0].stereo_side, None);
+    }
+
+    #[test]
+    fn test_derive_stereo_side() {
+        assert_eq!(derive_stereo_side("ALEX kl L"), Some("L".to_string()));
+        assert_eq!(derive_stereo_side("ALEX kl R"), Some("R".to_string()));
+        assert_eq!(derive_stereo_side("ALEX kl"), None);
+        assert_eq!(derive_stereo_side("MAREK mic"), None);
+        assert_eq!(derive_stereo_side("DRUMS L"), Some("L".to_string()));
     }
 
     #[test]
