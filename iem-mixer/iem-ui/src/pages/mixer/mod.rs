@@ -14,7 +14,7 @@ use crate::components::eq_modal::{EQModal, EqBandState};
 use crate::components::limiter_modal::LimiterModal;
 use crate::components::pin_change_modal::PinChangeModal;
 use crate::components::preset_modal::{ChannelState, PresetData, PresetModal};
-use crate::components::settings_modal::{SettingsModal, UserSettings};
+use crate::components::settings_modal::SettingsModal;
 use crate::components::snapshot_modal::SnapshotModal;
 use crate::components::talk_button::TalkState;
 use crate::components::toolbar::Toolbar;
@@ -22,58 +22,58 @@ use crate::components::toolbar::Toolbar;
 mod components;
 mod helpers;
 mod push;
+mod state;
 
 use components::{ChannelList, GlobalVolumeFader, StemsVolumeFader};
 use helpers::*;
 use push::subscribe_to_push;
+use state::MixerState;
 
 /// Create and connect a WebSocket, wiring up message handlers to signals
-#[allow(clippy::too_many_arguments)]
 fn connect_websocket(
     member: &str,
     last_frame_at: std::rc::Rc<std::cell::Cell<f64>>,
     reconnect_attempt: std::rc::Rc<std::cell::Cell<u32>>,
-    ws: ReadSignal<Option<web_sys::WebSocket>>,
-    set_ws: WriteSignal<Option<web_sys::WebSocket>>,
-    set_channels: WriteSignal<Vec<Channel>>,
-    set_meters: WriteSignal<HashMap<usize, [f32; 2]>>,
-    set_connected: WriteSignal<bool>,
-    set_loading: WriteSignal<bool>,
-    fader_touched: ReadSignal<HashMap<usize, bool>>,
-    set_global_level: WriteSignal<f32>,
-    set_global_muted: WriteSignal<bool>,
-    global_touched: ReadSignal<bool>,
-    set_data_pulse: WriteSignal<bool>,
-    set_pinned_channels: WriteSignal<Vec<usize>>,
-    set_hidden_channels: WriteSignal<Vec<usize>>,
-    set_network_mode: WriteSignal<String>,
-    set_output_track_idx: WriteSignal<Option<usize>>,
-    set_soloed: WriteSignal<std::collections::HashSet<usize>>,
-    set_pre_solo_mutes: WriteSignal<HashMap<usize, bool>>,
-    channels: ReadSignal<Vec<Channel>>,
-    soloed: ReadSignal<std::collections::HashSet<usize>>,
+    state: &MixerState,
     ws_closures: WsClosureStore,
     ws_fail_count: WsFailCounter,
-    set_stems_level: WriteSignal<f32>,
-    set_stems_muted: WriteSignal<bool>,
-    stems_touched: ReadSignal<bool>,
-    set_stems_bus_idx: WriteSignal<Option<usize>>,
-    set_eq_bands: WriteSignal<Vec<EqBandState>>,
-    set_eq_loading: WriteSignal<bool>,
-    // Limiter signals (#72) — single "max level" control
-    set_limiter_limit_db: WriteSignal<f32>,
-    set_limiter_limit_norm: WriteSignal<f32>,
-    set_limiter_enabled: WriteSignal<bool>,
-    set_limiter_loading: WriteSignal<bool>,
-    // Limiter activity counter (#145)
-    set_limiter_active_seconds: WriteSignal<f64>,
-    set_alert_data: WriteSignal<Option<(String, String)>>,
-    alert_data: ReadSignal<Option<(String, String)>>,
-    set_alert_active: WriteSignal<bool>,
-    set_talk_state: WriteSignal<TalkState>,
-    set_engineer_talking: WriteSignal<bool>,
     page_visible: std::rc::Rc<std::cell::Cell<bool>>,
 ) {
+    // Destructure state into local signal bindings (ReadSignal/WriteSignal are Copy)
+    let (ws, set_ws) = state.ws;
+    let set_channels = state.channels.1;
+    let set_meters = state.meters.1;
+    let set_connected = state.connected.1;
+    let set_loading = state.loading.1;
+    let fader_touched = state.fader_touched.0;
+    let set_global_level = state.global_level.1;
+    let set_global_muted = state.global_muted.1;
+    let global_touched = state.global_touched.0;
+    let set_data_pulse = state.data_pulse.1;
+    let set_pinned_channels = state.pinned_channels.1;
+    let set_hidden_channels = state.hidden_channels.1;
+    let set_network_mode = state.network_mode.1;
+    let set_output_track_idx = state.output_track_idx.1;
+    let set_soloed = state.soloed.1;
+    let set_pre_solo_mutes = state.pre_solo_mutes.1;
+    let channels = state.channels.0;
+    let soloed = state.soloed.0;
+    let set_stems_level = state.stems_level.1;
+    let set_stems_muted = state.stems_muted.1;
+    let stems_touched = state.stems_touched.0;
+    let set_stems_bus_idx = state.stems_bus_idx.1;
+    let set_eq_bands = state.eq_bands.1;
+    let set_eq_loading = state.eq_loading.1;
+    let set_limiter_limit_db = state.limiter_limit_db.1;
+    let set_limiter_limit_norm = state.limiter_limit_norm.1;
+    let set_limiter_enabled = state.limiter_enabled.1;
+    let set_limiter_loading = state.limiter_loading.1;
+    let set_limiter_active_seconds = state.limiter_active_seconds.1;
+    let set_alert_data = state.alert_data.1;
+    let alert_data = state.alert_data.0;
+    let set_alert_active = state.alert_active.1;
+    let set_talk_state = state.talk_state.1;
+    let set_engineer_talking = state.engineer_talking.1;
     // Close previous WebSocket if exists (prevents closure leak on reconnect)
     if let Some(Some(old_ws)) = ws.try_get_untracked() {
         old_ws.set_onmessage(None);
@@ -429,16 +429,49 @@ pub fn MixerPage() -> impl IntoView {
             .unwrap_or_default()
     };
 
-    // Reactive state
-    let (channels, set_channels) = signal(Vec::<Channel>::new());
-    let (meters, set_meters) = signal(HashMap::<usize, [f32; 2]>::new());
-    let (connected, set_connected) = signal(false);
-    let (active_category, set_active_category) = signal(Category::Main);
-    let (preset_modal_visible, set_preset_modal_visible) = signal(false);
-    let (pin_modal_visible, set_pin_modal_visible) = signal(false);
-    let (settings_modal_visible, set_settings_modal_visible) = signal(false);
-    let (snapshot_modal_visible, set_snapshot_modal_visible) = signal(false);
-    let (has_photo, set_has_photo) = signal(false);
+    let state = MixerState::new(&member_id());
+
+    // Destructure all signals into local variables for use throughout MixerPage body
+    let (channels, set_channels) = state.channels;
+    let (meters, set_meters) = state.meters;
+    let (connected, set_connected) = state.connected;
+    let (active_category, set_active_category) = state.active_category;
+    let (preset_modal_visible, set_preset_modal_visible) = state.preset_modal_visible;
+    let (pin_modal_visible, set_pin_modal_visible) = state.pin_modal_visible;
+    let (settings_modal_visible, set_settings_modal_visible) = state.settings_modal_visible;
+    let (snapshot_modal_visible, set_snapshot_modal_visible) = state.snapshot_modal_visible;
+    let (has_photo, set_has_photo) = state.has_photo;
+    let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
+    let (fader_touched, set_fader_touched) = state.fader_touched;
+    let (loading, set_loading) = state.loading;
+    let (soloed, set_soloed) = state.soloed;
+    let (pre_solo_mutes, set_pre_solo_mutes) = state.pre_solo_mutes;
+    let (data_pulse, set_data_pulse) = state.data_pulse;
+    let (global_level, set_global_level) = state.global_level;
+    let (global_muted, set_global_muted) = state.global_muted;
+    let (global_touched, set_global_touched) = state.global_touched;
+    let (stems_level, set_stems_level) = state.stems_level;
+    let (stems_muted, set_stems_muted) = state.stems_muted;
+    let (stems_touched, set_stems_touched) = state.stems_touched;
+    let (stems_bus_idx, set_stems_bus_idx) = state.stems_bus_idx;
+    let (eq_open, set_eq_open) = state.eq_open;
+    let (eq_bands, set_eq_bands) = state.eq_bands;
+    let (eq_loading, set_eq_loading) = state.eq_loading;
+    let (limiter_open, set_limiter_open) = state.limiter_open;
+    let (limiter_limit_db, set_limiter_limit_db) = state.limiter_limit_db;
+    let (limiter_limit_norm, set_limiter_limit_norm) = state.limiter_limit_norm;
+    let (limiter_enabled, set_limiter_enabled) = state.limiter_enabled;
+    let (limiter_loading, set_limiter_loading) = state.limiter_loading;
+    let (limiter_active_seconds, set_limiter_active_seconds) = state.limiter_active_seconds;
+    let (pinned_channels, set_pinned_channels) = state.pinned_channels;
+    let (hidden_channels, set_hidden_channels) = state.hidden_channels;
+    let (network_mode, set_network_mode) = state.network_mode;
+    let (output_track_idx, set_output_track_idx) = state.output_track_idx;
+    let (alert_data, set_alert_data) = state.alert_data;
+    let (alert_active, set_alert_active) = state.alert_active;
+    let (talk_state, set_talk_state) = state.talk_state;
+    let (engineer_talking, set_engineer_talking) = state.engineer_talking;
+    let (ws, set_ws) = state.ws;
 
     // Check if member has photo on mount (#16)
     // Use try_update to guard against disposal race — if the user navigates
@@ -454,64 +487,6 @@ pub fn MixerPage() -> impl IntoView {
             }
         });
     }
-
-    // Load user settings from localStorage
-    let user_settings = UserSettings::load(&member_id());
-    let (double_tap_fader, set_double_tap_fader) = signal(user_settings.double_tap_fader);
-    let (fader_touched, set_fader_touched) = signal(HashMap::<usize, bool>::new());
-    let (loading, set_loading) = signal(true);
-    let (soloed, set_soloed) = signal(std::collections::HashSet::<usize>::new());
-    let (pre_solo_mutes, set_pre_solo_mutes) = signal(HashMap::<usize, bool>::new());
-
-    // Status dot pulse — toggles on each Meters message to restart CSS animation
-    let (data_pulse, set_data_pulse) = signal(false);
-
-    // Global IEM output volume state
-    let (global_level, set_global_level) = signal(0.0_f32);
-    let (global_muted, set_global_muted) = signal(false);
-    let (global_touched, set_global_touched) = signal(false);
-
-    // Stems group bus volume state
-    let (stems_level, set_stems_level) = signal(0.0_f32);
-    let (stems_muted, set_stems_muted) = signal(false);
-    let (stems_touched, set_stems_touched) = signal(false);
-    let (stems_bus_idx, set_stems_bus_idx) = signal(Option::<usize>::None);
-
-    // EQ modal state
-    let (eq_open, set_eq_open) = signal(Option::<(usize, String)>::None);
-    let (eq_bands, set_eq_bands) = signal(Vec::<EqBandState>::new());
-    let (eq_loading, set_eq_loading) = signal(false);
-
-    // Limiter modal state (#72) — single "max level" control
-    let (limiter_open, set_limiter_open) = signal(Option::<(usize, String)>::None);
-    let (limiter_limit_db, set_limiter_limit_db) = signal(-6.0_f32);
-    let (limiter_limit_norm, set_limiter_limit_norm) = signal(0.0_f32);
-    let (limiter_enabled, set_limiter_enabled) = signal(true);
-    let (limiter_loading, set_limiter_loading) = signal(false);
-    // Limiter activity counter (#145) — cumulative seconds since last reset.
-    let (limiter_active_seconds, set_limiter_active_seconds) = signal(0.0_f64);
-
-    // Channel customization (pin/hide) — loaded from server via WS
-    let (pinned_channels, set_pinned_channels) = signal(Vec::<usize>::new());
-    let (hidden_channels, set_hidden_channels) = signal(Vec::<usize>::new());
-
-    // Network mode indicator (local LAN vs remote internet)
-    let (network_mode, set_network_mode) = signal(String::new());
-
-    // Output track index for global volume metering (set from ServerMsg::State)
-    let (output_track_idx, set_output_track_idx) = signal(Option::<usize>::None);
-
-    // Alert data for engineer toast (member_id, display_name) (#125)
-    let (alert_data, set_alert_data) = signal(Option::<(String, String)>::None);
-    let (alert_active, set_alert_active) = signal(false);
-
-    // Talkback state for engineer push-to-talk (#123)
-    let (talk_state, set_talk_state) = signal(TalkState::Idle);
-    // Engineer speaking indicator for band members (#123)
-    let (engineer_talking, set_engineer_talking) = signal(false);
-
-    // WebSocket connection
-    let (ws, set_ws) = signal(Option::<web_sys::WebSocket>::None);
 
     // Closure storage: keeps WS callbacks alive without Closure::forget() leak
     let ws_closures: WsClosureStore = std::rc::Rc::new(std::cell::RefCell::new(None));
@@ -568,43 +543,9 @@ pub fn MixerPage() -> impl IntoView {
             &member,
             last_frame_at_effect.clone(),
             reconnect_attempt_effect.clone(),
-            ws,
-            set_ws,
-            set_channels,
-            set_meters,
-            set_connected,
-            set_loading,
-            fader_touched,
-            set_global_level,
-            set_global_muted,
-            global_touched,
-            set_data_pulse,
-            set_pinned_channels,
-            set_hidden_channels,
-            set_network_mode,
-            set_output_track_idx,
-            set_soloed,
-            set_pre_solo_mutes,
-            channels,
-            soloed,
+            &state,
             ws_closures_effect.clone(),
             ws_fail_count_effect.clone(),
-            set_stems_level,
-            set_stems_muted,
-            stems_touched,
-            set_stems_bus_idx,
-            set_eq_bands,
-            set_eq_loading,
-            set_limiter_limit_db,
-            set_limiter_limit_norm,
-            set_limiter_enabled,
-            set_limiter_loading,
-            set_limiter_active_seconds,
-            set_alert_data,
-            alert_data,
-            set_alert_active,
-            set_talk_state,
-            set_engineer_talking,
             page_visible_effect.clone(),
         );
     });
@@ -664,43 +605,9 @@ pub fn MixerPage() -> impl IntoView {
                 &member,
                 last_frame_at_tick.clone(),
                 reconnect_attempt_tick.clone(),
-                ws,
-                set_ws,
-                set_channels,
-                set_meters,
-                set_connected,
-                set_loading,
-                fader_touched,
-                set_global_level,
-                set_global_muted,
-                global_touched,
-                set_data_pulse,
-                set_pinned_channels,
-                set_hidden_channels,
-                set_network_mode,
-                set_output_track_idx,
-                set_soloed,
-                set_pre_solo_mutes,
-                channels,
-                soloed,
+                &state,
                 ws_closures.clone(),
                 ws_fail_count.clone(),
-                set_stems_level,
-                set_stems_muted,
-                stems_touched,
-                set_stems_bus_idx,
-                set_eq_bands,
-                set_eq_loading,
-                set_limiter_limit_db,
-                set_limiter_limit_norm,
-                set_limiter_enabled,
-                set_limiter_loading,
-                set_limiter_active_seconds,
-                set_alert_data,
-                alert_data,
-                set_alert_active,
-                set_talk_state,
-                set_engineer_talking,
                 page_visible.clone(),
             );
         }
