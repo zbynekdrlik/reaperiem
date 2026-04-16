@@ -53,6 +53,18 @@ input_tracks:
     category: mics
     default_level_db: 0.0
 
+  - name: "ALEX kl L"
+    dante_input: 13
+    category: mics
+    default_level_db: 0.0
+    stereo_pair: "alex kl"
+
+  - name: "ALEX kl R"
+    dante_input: 14
+    category: mics
+    default_level_db: 0.0
+    stereo_pair: "alex kl"
+
   - name: "PATRIKA mic"
     dante_input: 11
     category: mics
