@@ -2,11 +2,6 @@
 //!
 //! Uses WebSocket for real-time bidirectional communication with REAPER.
 
-use leptos::prelude::*;
-use leptos_router::hooks::{use_navigate, use_params_map};
-use std::collections::HashMap;
-use wasm_bindgen::prelude::*;
-
 use crate::components::alert_toast::AlertToast;
 use crate::components::category_tabs::{Category, CategoryTabs};
 use crate::components::eq_modal::EQModal;
@@ -16,6 +11,8 @@ use crate::components::preset_modal::PresetModal;
 use crate::components::settings_modal::SettingsModal;
 use crate::components::snapshot_modal::SnapshotModal;
 use crate::components::toolbar::Toolbar;
+use leptos::prelude::*;
+use leptos_router::hooks::{use_navigate, use_params_map};
 
 mod components;
 mod connection;
@@ -82,11 +79,11 @@ pub fn MixerPage() -> impl IntoView {
     let (channels, set_channels) = state.channels;
     let (meters, _set_meters) = state.meters;
     let (connected, _set_connected) = state.connected;
-    let (active_category, set_active_category) = state.active_category;
-    let (preset_modal_visible, set_preset_modal_visible) = state.preset_modal_visible;
-    let (pin_modal_visible, set_pin_modal_visible) = state.pin_modal_visible;
-    let (settings_modal_visible, set_settings_modal_visible) = state.settings_modal_visible;
-    let (snapshot_modal_visible, set_snapshot_modal_visible) = state.snapshot_modal_visible;
+    let (active_category, _set_active_category) = state.active_category;
+    let (preset_modal_visible, _set_preset_modal_visible) = state.preset_modal_visible;
+    let (pin_modal_visible, _set_pin_modal_visible) = state.pin_modal_visible;
+    let (settings_modal_visible, _set_settings_modal_visible) = state.settings_modal_visible;
+    let (snapshot_modal_visible, _set_snapshot_modal_visible) = state.snapshot_modal_visible;
     let (has_photo, set_has_photo) = state.has_photo;
     let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
     let (_fader_touched, set_fader_touched) = state.fader_touched;
@@ -105,11 +102,11 @@ pub fn MixerPage() -> impl IntoView {
     let (eq_bands, set_eq_bands) = state.eq_bands;
     let (eq_loading, set_eq_loading) = state.eq_loading;
     let (limiter_open, set_limiter_open) = state.limiter_open;
-    let (limiter_limit_db, set_limiter_limit_db) = state.limiter_limit_db;
-    let (limiter_limit_norm, set_limiter_limit_norm) = state.limiter_limit_norm;
-    let (limiter_enabled, set_limiter_enabled) = state.limiter_enabled;
-    let (limiter_loading, set_limiter_loading) = state.limiter_loading;
-    let (limiter_active_seconds, set_limiter_active_seconds) = state.limiter_active_seconds;
+    let (limiter_limit_db, _set_limiter_limit_db) = state.limiter_limit_db;
+    let (limiter_limit_norm, _set_limiter_limit_norm) = state.limiter_limit_norm;
+    let (limiter_enabled, _set_limiter_enabled) = state.limiter_enabled;
+    let (limiter_loading, _set_limiter_loading) = state.limiter_loading;
+    let (limiter_active_seconds, _set_limiter_active_seconds) = state.limiter_active_seconds;
     let (pinned_channels, set_pinned_channels) = state.pinned_channels;
     let (hidden_channels, set_hidden_channels) = state.hidden_channels;
     let (network_mode, _set_network_mode) = state.network_mode;
@@ -121,15 +118,15 @@ pub fn MixerPage() -> impl IntoView {
     let (ws, _set_ws) = state.ws;
 
     // Check if member has photo on mount (#16)
-    // Use try_update to guard against disposal race — if the user navigates
-    // away while `get_members` is still in flight, the await resumes on a
-    // disposed signal and Leptos panics. See #153.
+    // Use try_set (via state method) to guard against disposal race — if the
+    // user navigates away while `get_members` is still in flight, the await
+    // resumes on a disposed signal and Leptos panics. See #153.
     {
         let mid = member_id();
         wasm_bindgen_futures::spawn_local(async move {
             if let Ok(members) = crate::api::get_members().await {
                 if let Some(m) = members.iter().find(|m| m.id == mid) {
-                    let _ = set_has_photo.try_set(m.has_photo);
+                    state.update_has_photo(m.has_photo);
                 }
             }
         });
@@ -178,17 +175,17 @@ pub fn MixerPage() -> impl IntoView {
     }
 
     let on_presets = Callback::new(move |_: ()| {
-        let _ = set_preset_modal_visible.try_set(true);
+        state.open_preset_modal();
     });
 
     let on_history = Callback::new(move |_: ()| {
-        let _ = set_snapshot_modal_visible.try_set(true);
+        state.open_snapshot_modal();
     });
 
     let on_mute_all = handlers::make_on_mute_all(member_id_signal);
 
     let on_close_modal = Callback::new(move |_: ()| {
-        let _ = set_preset_modal_visible.try_set(false);
+        state.close_preset_modal();
     });
 
     view! {
@@ -222,15 +219,7 @@ pub fn MixerPage() -> impl IntoView {
                                 return;
                             }
                             // Optimistic UI: restore pre-solo mutes locally
-                            let saved = pre_solo_mutes.get();
-                            let _ = set_channels.try_update(|chs| {
-                                for c in chs.iter_mut() {
-                                    let should_be_muted = saved.get(&c.track_index).copied().unwrap_or(false);
-                                    c.muted = should_be_muted;
-                                }
-                            });
-                            let _ = set_pre_solo_mutes.try_set(HashMap::new());
-                            let _ = set_soloed.try_set(std::collections::HashSet::new());
+                            state.clear_solo();
                             // Send empty SetSolo — server restores REAPER mutes and broadcasts
                             ws_send(ws, &iem_core::ClientMsg::SetSolo { soloed: vec![] });
                         }
@@ -239,7 +228,7 @@ pub fn MixerPage() -> impl IntoView {
                         <span class="solo-close">"\u{2715}"</span>
                     </button>
                 </Show>
-                <button class="settings-btn" on:click=move |_| { let _ = set_settings_modal_visible.try_set(true); }>
+                <button class="settings-btn" on:click=move |_| { state.open_settings_modal(); }>
                     "\u{2699}"
                 </button>
                 <Show
@@ -270,7 +259,7 @@ pub fn MixerPage() -> impl IntoView {
 
             <CategoryTabs
                 active=active_category.into()
-                on_select=move |cat| { let _ = set_active_category.try_set(cat); }
+                on_select=move |cat| { state.select_category(cat); }
                 show_hidden=Signal::derive(move || !hidden_channels.get().is_empty())
                 show_mixes=Signal::derive(move || channels.get().iter().any(|ch| ch.category == "mixes"))
             />
@@ -413,8 +402,8 @@ pub fn MixerPage() -> impl IntoView {
 
             <SettingsModal
                 visible=settings_modal_visible.into()
-                on_close=Callback::new(move |_: ()| { let _ = set_settings_modal_visible.try_set(false); })
-                on_open_pin_change=Callback::new(move |_: ()| { let _ = set_pin_modal_visible.try_set(true); })
+                on_close=Callback::new(move |_: ()| { state.close_settings_modal(); })
+                on_open_pin_change=Callback::new(move |_: ()| { state.open_pin_change_modal(); })
                 double_tap_fader=double_tap_fader
                 set_double_tap_fader=set_double_tap_fader
                 member_id=member_id()
@@ -425,14 +414,14 @@ pub fn MixerPage() -> impl IntoView {
 
             <PinChangeModal
                 visible=pin_modal_visible.into()
-                on_close=Callback::new(move |_: ()| { let _ = set_pin_modal_visible.try_set(false); })
+                on_close=Callback::new(move |_: ()| { state.close_pin_change_modal(); })
                 member_id=member_id()
             />
 
             <SnapshotModal
                 visible=snapshot_modal_visible.into()
                 member_id=member_id()
-                on_close=Callback::new(move |_: ()| { let _ = set_snapshot_modal_visible.try_set(false); })
+                on_close=Callback::new(move |_: ()| { state.close_snapshot_modal(); })
             />
 
             // EQ Modal (full-screen, shown when eq_open is Some)
@@ -461,14 +450,7 @@ pub fn MixerPage() -> impl IntoView {
                                 // destroys the EQ modal DOM. This must happen AFTER the current
                                 // event handler stack fully unwinds (including microtasks), or
                                 // Leptos reactive graph teardown hits dropped closures.
-                                let cb = Closure::once_into_js(move || {
-                                    let _ = set_eq_open.try_set(None);
-                                    let _ = set_eq_bands.try_set(Vec::new());
-                                });
-                                web_sys::window()
-                                    .unwrap()
-                                    .set_timeout_with_callback(cb.as_ref().unchecked_ref())
-                                    .unwrap();
+                                state.close_eq();
                             })
                         />
                     }
@@ -494,14 +476,13 @@ pub fn MixerPage() -> impl IntoView {
                                         track_index: ti,
                                     });
                                     // Optimistic local update so the user sees "never" immediately.
-                                    let _ = set_limiter_active_seconds.try_set(0.0);
+                                    state.reset_limiter_activity();
                                 }
                             })
                             on_param_change=Callback::new(move |(param, value): (String, f32)| {
                                 if let Some((ti, _)) = limiter_open.get_untracked() {
                                     // Optimistic local update (no server echo)
-                                    let _ = set_limiter_limit_norm.try_set(value);
-                                    let _ = set_limiter_limit_db.try_set(value * 6.0 - 6.0);
+                                    state.set_limiter_param(value);
                                     ws_send(ws_for_lim, &iem_core::ClientMsg::SetLimiterParam {
                                         track_index: ti,
                                         param,
@@ -515,17 +496,11 @@ pub fn MixerPage() -> impl IntoView {
                                         track_index: ti,
                                         enabled: en,
                                     });
-                                    let _ = set_limiter_enabled.try_set(en);
+                                    state.set_limiter_enabled_state(en);
                                 }
                             })
                             on_close=Callback::new(move |_: ()| {
-                                let cb = Closure::once_into_js(move || {
-                                    let _ = set_limiter_open.try_set(None);
-                                });
-                                web_sys::window()
-                                    .unwrap()
-                                    .set_timeout_with_callback(cb.as_ref().unchecked_ref())
-                                    .unwrap();
+                                state.close_limiter();
                             })
                         />
                     }

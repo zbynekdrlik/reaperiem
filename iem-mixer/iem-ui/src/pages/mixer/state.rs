@@ -5,6 +5,7 @@
 
 use leptos::prelude::*;
 use std::collections::{HashMap, HashSet};
+use wasm_bindgen::prelude::*;
 
 use crate::api::Channel;
 use crate::components::category_tabs::Category;
@@ -79,6 +80,100 @@ pub(super) struct MixerState {
 }
 
 impl MixerState {
+    // --- Modal toggles ---
+
+    pub fn open_preset_modal(&self) {
+        let _ = self.preset_modal_visible.1.try_set(true);
+    }
+    pub fn close_preset_modal(&self) {
+        let _ = self.preset_modal_visible.1.try_set(false);
+    }
+    pub fn open_snapshot_modal(&self) {
+        let _ = self.snapshot_modal_visible.1.try_set(true);
+    }
+    pub fn close_snapshot_modal(&self) {
+        let _ = self.snapshot_modal_visible.1.try_set(false);
+    }
+    pub fn open_settings_modal(&self) {
+        let _ = self.settings_modal_visible.1.try_set(true);
+    }
+    pub fn close_settings_modal(&self) {
+        let _ = self.settings_modal_visible.1.try_set(false);
+    }
+    pub fn open_pin_change_modal(&self) {
+        let _ = self.pin_modal_visible.1.try_set(true);
+    }
+    pub fn close_pin_change_modal(&self) {
+        let _ = self.pin_modal_visible.1.try_set(false);
+    }
+
+    // --- Category ---
+
+    pub fn select_category(&self, cat: crate::components::category_tabs::Category) {
+        let _ = self.active_category.1.try_set(cat);
+    }
+
+    // --- Photo ---
+
+    pub fn update_has_photo(&self, has: bool) {
+        let _ = self.has_photo.1.try_set(has);
+    }
+
+    // --- Solo clear ---
+
+    pub fn clear_solo(&self) {
+        let saved = self.pre_solo_mutes.0.get();
+        let _ = self.channels.1.try_update(|chs| {
+            for c in chs.iter_mut() {
+                let should_be_muted = saved.get(&c.track_index).copied().unwrap_or(false);
+                c.muted = should_be_muted;
+            }
+        });
+        let _ = self.pre_solo_mutes.1.try_set(HashMap::new());
+        let _ = self.soloed.1.try_set(HashSet::new());
+    }
+
+    // --- EQ close (deferred to next macrotask) ---
+
+    pub fn close_eq(&self) {
+        let set_eq_open = self.eq_open.1;
+        let set_eq_bands = self.eq_bands.1;
+        let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
+            let _ = set_eq_open.try_set(None);
+            let _ = set_eq_bands.try_set(Vec::new());
+        });
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback(cb.as_ref().unchecked_ref())
+            .unwrap();
+    }
+
+    // --- Limiter ---
+
+    pub fn reset_limiter_activity(&self) {
+        let _ = self.limiter_active_seconds.1.try_set(0.0);
+    }
+
+    pub fn set_limiter_param(&self, value: f32) {
+        let _ = self.limiter_limit_norm.1.try_set(value);
+        let _ = self.limiter_limit_db.1.try_set(value * 6.0 - 6.0);
+    }
+
+    pub fn set_limiter_enabled_state(&self, en: bool) {
+        let _ = self.limiter_enabled.1.try_set(en);
+    }
+
+    pub fn close_limiter(&self) {
+        let set_limiter_open = self.limiter_open.1;
+        let cb = wasm_bindgen::closure::Closure::once_into_js(move || {
+            let _ = set_limiter_open.try_set(None);
+        });
+        web_sys::window()
+            .unwrap()
+            .set_timeout_with_callback(cb.as_ref().unchecked_ref())
+            .unwrap();
+    }
+
     pub fn new(member_id: &str) -> Self {
         let user_settings = UserSettings::load(member_id);
         Self {

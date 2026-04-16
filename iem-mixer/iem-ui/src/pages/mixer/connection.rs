@@ -2,7 +2,7 @@
 //!
 //! Owns all background tasks (reconnect, watchdog, token-expiry intervals)
 //! and tears them down via `on_cleanup`. Background closures check
-//! `disposal_guard` (an `Rc<Cell<bool>>`) before touching reactive state.
+//! `disposal_guard` (an `Arc<AtomicBool>`) before touching reactive state.
 
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
@@ -23,14 +23,13 @@ use super::state::MixerState;
 /// touching any reactive state — once cleanup fires, they no-op.
 ///
 /// This is a free function (not a struct with Drop) because Leptos `on_cleanup`
-/// requires `Send` closures, and the interval IDs (i32) are trivially Send
-/// while `Rc<Cell<bool>>` is not. We capture only the i32 IDs and an
-/// `Arc<AtomicBool>` guard in the cleanup closure.
+/// requires `Send` closures. We capture the i32 interval IDs and the
+/// `Arc<AtomicBool>` guard in a single cleanup closure.
 pub(super) fn setup_connection(
     state: MixerState,
     member_id: impl Fn() -> String + Clone + 'static,
 ) {
-    let disposal_guard = std::rc::Rc::new(std::cell::Cell::new(false));
+    let disposal_guard = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
     // --- WS closure storage, fail counter, page visibility ---
 
@@ -114,7 +113,7 @@ pub(super) fn setup_connection(
     let last_frame_at_tick = last_frame_at.clone();
     let disposal_guard_reconnect = disposal_guard.clone();
     let reconnect_closure = Closure::wrap(Box::new(move || {
-        if disposal_guard_reconnect.get() {
+        if disposal_guard_reconnect.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
 
@@ -189,7 +188,7 @@ pub(super) fn setup_connection(
     let ws_watch = ws;
     let disposal_guard_watchdog = disposal_guard.clone();
     let watchdog_closure = Closure::wrap(Box::new(move || {
-        if disposal_guard_watchdog.get() {
+        if disposal_guard_watchdog.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
 
@@ -228,7 +227,7 @@ pub(super) fn setup_connection(
     let member_for_expiry = member_id.clone();
     let disposal_guard_expiry = disposal_guard.clone();
     let expiry_closure = Closure::wrap(Box::new(move || {
-        if disposal_guard_expiry.get() {
+        if disposal_guard_expiry.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
 
@@ -252,18 +251,12 @@ pub(super) fn setup_connection(
         .unwrap();
     expiry_closure.forget();
 
-    // Register cleanup: clear all JS intervals when the component scope
-    // is disposed. The i32 interval IDs are Copy + Send so on_cleanup accepts them.
-    //
-    // The disposal_guard (Rc<Cell<bool>>) is NOT set here because Rc is !Send.
-    // This is safe: the background closures already use try_get_untracked()
-    // as defense-in-depth — when the scope is disposed, signal reads return
-    // None and the closures bail out. The guard is a belt-and-suspenders
-    // optimization that prevents closures from even reaching the signal reads.
-    //
-    // Without the guard, a brief race window exists between scope disposal
-    // and the next interval tick. The try_get_untracked() checks handle this.
+    // Register cleanup: set the disposal guard and clear all JS intervals
+    // when the component scope is disposed. Arc<AtomicBool> is Send so it
+    // can be captured directly in the on_cleanup closure.
+    let guard_for_cleanup = disposal_guard.clone();
     on_cleanup(move || {
+        guard_for_cleanup.store(true, std::sync::atomic::Ordering::Relaxed);
         if let Some(w) = web_sys::window() {
             w.clear_interval_with_handle(reconnect_interval_id);
             w.clear_interval_with_handle(watchdog_interval_id);
@@ -281,7 +274,7 @@ fn connect_websocket(
     ws_closures: WsClosureStore,
     ws_fail_count: WsFailCounter,
     page_visible: std::rc::Rc<std::cell::Cell<bool>>,
-    disposal_guard: std::rc::Rc<std::cell::Cell<bool>>,
+    disposal_guard: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     // Destructure state into local signal bindings (ReadSignal/WriteSignal are Copy)
     let (ws, set_ws) = state.ws;
@@ -376,7 +369,7 @@ fn connect_websocket(
     // Handle incoming messages
     let onmessage = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
         // Disposal guard: if the ConnectionManager has been dropped, no-op.
-        if disposal_guard_msg.get() {
+        if disposal_guard_msg.load(std::sync::atomic::Ordering::Relaxed) {
             return;
         }
 
