@@ -137,9 +137,13 @@ pub fn MixerPage() -> impl IntoView {
 
     // ConnectionManager owns all background tasks (WS connect, reconnect,
     // watchdog, token-expiry). Dropping it clears all JS intervals and sets
-    // the disposal_guard so forgotten closures no-op. The _connection binding
-    // keeps it alive for the component's lifetime.
-    let _connection = ConnectionManager::new(state, member_id.clone());
+    // the disposal_guard so forgotten closures no-op.
+    //
+    // CRITICAL: A local `let _connection = ...` would be dropped when MixerPage()
+    // returns (Rust drops locals at end of function). We need it to live until the
+    // component scope is disposed, so we move it into on_cleanup.
+    let connection = ConnectionManager::new(state, member_id.clone());
+    on_cleanup(move || drop(connection));
 
     // Signal::derive wraps the member ID so it can be passed into Memo/Callback
     // closures that require Send + Sync bounds, while staying reactive (tracks
