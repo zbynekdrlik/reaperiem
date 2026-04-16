@@ -80,8 +80,8 @@ pub fn MixerPage() -> impl IntoView {
 
     // Destructure all signals into local variables for use throughout MixerPage body
     let (channels, set_channels) = state.channels;
-    let (meters, set_meters) = state.meters;
-    let (connected, set_connected) = state.connected;
+    let (meters, _set_meters) = state.meters;
+    let (connected, _set_connected) = state.connected;
     let (active_category, set_active_category) = state.active_category;
     let (preset_modal_visible, set_preset_modal_visible) = state.preset_modal_visible;
     let (pin_modal_visible, set_pin_modal_visible) = state.pin_modal_visible;
@@ -89,17 +89,17 @@ pub fn MixerPage() -> impl IntoView {
     let (snapshot_modal_visible, set_snapshot_modal_visible) = state.snapshot_modal_visible;
     let (has_photo, set_has_photo) = state.has_photo;
     let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
-    let (fader_touched, set_fader_touched) = state.fader_touched;
-    let (loading, set_loading) = state.loading;
+    let (_fader_touched, set_fader_touched) = state.fader_touched;
+    let (loading, _set_loading) = state.loading;
     let (soloed, set_soloed) = state.soloed;
     let (pre_solo_mutes, set_pre_solo_mutes) = state.pre_solo_mutes;
-    let (data_pulse, set_data_pulse) = state.data_pulse;
+    let (data_pulse, _set_data_pulse) = state.data_pulse;
     let (global_level, set_global_level) = state.global_level;
     let (global_muted, set_global_muted) = state.global_muted;
-    let (global_touched, set_global_touched) = state.global_touched;
+    let (_global_touched, set_global_touched) = state.global_touched;
     let (stems_level, set_stems_level) = state.stems_level;
     let (stems_muted, set_stems_muted) = state.stems_muted;
-    let (stems_touched, set_stems_touched) = state.stems_touched;
+    let (_stems_touched, set_stems_touched) = state.stems_touched;
     let (stems_bus_idx, _set_stems_bus_idx) = state.stems_bus_idx;
     let (eq_open, set_eq_open) = state.eq_open;
     let (eq_bands, set_eq_bands) = state.eq_bands;
