@@ -45,7 +45,7 @@ end
 
 -- Main merge operation
 local function merge_stereo_pairs()
-    local base_names = {"DRUMS", "BASS", "INST", "OTHER", "BGVS", "IEMONLY"}
+    local base_names = {"DRUMS", "BASS", "INST", "OTHER", "BGVS", "IEMONLY", "ALEX kl"}
     local merged_count = 0
     local tracks_to_delete = {}
 
