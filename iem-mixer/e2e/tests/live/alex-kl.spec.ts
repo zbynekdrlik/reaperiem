@@ -109,8 +109,8 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
     await page.waitForTimeout(500);
 
     // Verify the level dropped from the UI's perspective by re-reading
-    // the channel's dB label.
-    const dbLabel = alexKl.locator(".ch-db");
+    // the channel's dB label (".db-display" is the mixer's convention).
+    const dbLabel = alexKl.locator(".db-display");
     const dbText = await dbLabel.textContent();
     const dbValue = parseFloat((dbText || "0").replace(/[^-\d.]/g, ""));
     // Moving left on the fader means lower dB. Anything < 0 dB proves
