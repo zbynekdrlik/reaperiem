@@ -141,9 +141,10 @@ pub fn MixerPage() -> impl IntoView {
     // keeps it alive for the component's lifetime.
     let _connection = ConnectionManager::new(state, member_id.clone());
 
-    // StoredValue wraps the member ID so it can be passed into Memo/Callback
-    // closures that require Send + Sync bounds.
-    let member_id_stored = StoredValue::new(member_id());
+    // Signal::derive wraps the member ID so it can be passed into Memo/Callback
+    // closures that require Send + Sync bounds, while staying reactive (tracks
+    // route params changes — StoredValue was a snapshot that missed late params).
+    let member_id_signal = Signal::derive(member_id.clone());
 
     // Handle back button
     let on_back = move |_| {
@@ -154,7 +155,7 @@ pub fn MixerPage() -> impl IntoView {
     // Memoized to avoid recomputation on every meter update
     let display_channels = handlers::make_display_channels(
         channels,
-        member_id_stored,
+        member_id_signal,
         active_category,
         pinned_channels,
         hidden_channels,
@@ -185,7 +186,7 @@ pub fn MixerPage() -> impl IntoView {
         let _ = set_snapshot_modal_visible.try_set(true);
     });
 
-    let on_mute_all = handlers::make_on_mute_all(member_id_stored);
+    let on_mute_all = handlers::make_on_mute_all(member_id_signal);
 
     let on_close_modal = Callback::new(move |_: ()| {
         let _ = set_preset_modal_visible.try_set(false);

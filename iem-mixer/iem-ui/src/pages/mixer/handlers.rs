@@ -13,14 +13,14 @@ use super::helpers::{DisplayChannel, ws_send};
 /// Create the display_channels Memo — filters/sorts channels for the active tab.
 pub(super) fn make_display_channels(
     channels: ReadSignal<Vec<Channel>>,
-    member_id: StoredValue<String>,
+    member_id: Signal<String>,
     active_category: ReadSignal<Category>,
     pinned_channels: ReadSignal<Vec<usize>>,
     hidden_channels: ReadSignal<Vec<usize>>,
 ) -> Memo<Vec<DisplayChannel>> {
     Memo::new(move |_| {
         let chs = channels.get();
-        let member = member_id.get_value();
+        let member = member_id.get();
         let my_input = format!("{} MIC", member.to_uppercase());
         let active_cat = active_category.get();
         let pinned = pinned_channels.get();
@@ -235,9 +235,9 @@ pub(super) fn make_on_load_preset(
 }
 
 /// Create the on_mute_all Callback.
-pub(super) fn make_on_mute_all(member_id: StoredValue<String>) -> Callback<(), ()> {
+pub(super) fn make_on_mute_all(member_id: Signal<String>) -> Callback<(), ()> {
     Callback::new(move |_: ()| {
-        let member = member_id.get_value();
+        let member = member_id.get();
         wasm_bindgen_futures::spawn_local(async move {
             if let Err(e) = crate::api::batch_mute_all(&member).await {
                 web_sys::console::error_1(&format!("Mute all failed: {}", e).into());
