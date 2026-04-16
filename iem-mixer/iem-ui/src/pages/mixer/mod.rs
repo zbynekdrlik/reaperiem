@@ -100,7 +100,7 @@ pub fn MixerPage() -> impl IntoView {
     let (stems_level, set_stems_level) = state.stems_level;
     let (stems_muted, set_stems_muted) = state.stems_muted;
     let (stems_touched, set_stems_touched) = state.stems_touched;
-    let (stems_bus_idx, set_stems_bus_idx) = state.stems_bus_idx;
+    let (stems_bus_idx, _set_stems_bus_idx) = state.stems_bus_idx;
     let (eq_open, set_eq_open) = state.eq_open;
     let (eq_bands, set_eq_bands) = state.eq_bands;
     let (eq_loading, set_eq_loading) = state.eq_loading;
@@ -112,13 +112,13 @@ pub fn MixerPage() -> impl IntoView {
     let (limiter_active_seconds, set_limiter_active_seconds) = state.limiter_active_seconds;
     let (pinned_channels, set_pinned_channels) = state.pinned_channels;
     let (hidden_channels, set_hidden_channels) = state.hidden_channels;
-    let (network_mode, set_network_mode) = state.network_mode;
-    let (output_track_idx, set_output_track_idx) = state.output_track_idx;
-    let (alert_data, set_alert_data) = state.alert_data;
-    let (alert_active, set_alert_active) = state.alert_active;
+    let (network_mode, _set_network_mode) = state.network_mode;
+    let (output_track_idx, _set_output_track_idx) = state.output_track_idx;
+    let (alert_data, _set_alert_data) = state.alert_data;
+    let (alert_active, _set_alert_active) = state.alert_active;
     let (talk_state, set_talk_state) = state.talk_state;
-    let (engineer_talking, set_engineer_talking) = state.engineer_talking;
-    let (ws, set_ws) = state.ws;
+    let (engineer_talking, _set_engineer_talking) = state.engineer_talking;
+    let (ws, _set_ws) = state.ws;
 
     // Check if member has photo on mount (#16)
     // Use try_update to guard against disposal race — if the user navigates
@@ -141,6 +141,10 @@ pub fn MixerPage() -> impl IntoView {
     // keeps it alive for the component's lifetime.
     let _connection = ConnectionManager::new(state, member_id.clone());
 
+    // StoredValue wraps the member ID so it can be passed into Memo/Callback
+    // closures that require Send + Sync bounds.
+    let member_id_stored = StoredValue::new(member_id());
+
     // Handle back button
     let on_back = move |_| {
         navigate_back("/", Default::default());
@@ -150,7 +154,7 @@ pub fn MixerPage() -> impl IntoView {
     // Memoized to avoid recomputation on every meter update
     let display_channels = handlers::make_display_channels(
         channels,
-        member_id.clone(),
+        member_id_stored,
         active_category,
         pinned_channels,
         hidden_channels,
@@ -181,7 +185,7 @@ pub fn MixerPage() -> impl IntoView {
         let _ = set_snapshot_modal_visible.try_set(true);
     });
 
-    let on_mute_all = handlers::make_on_mute_all(member_id.clone());
+    let on_mute_all = handlers::make_on_mute_all(member_id_stored);
 
     let on_close_modal = Callback::new(move |_: ()| {
         let _ = set_preset_modal_visible.try_set(false);
