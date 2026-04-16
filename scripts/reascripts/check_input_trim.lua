@@ -9,9 +9,12 @@
 
 local section = "reaperiem"
 
-local function is_mic_or_gtr(name)
+local function is_input_track(name)
     local lower = name:lower()
-    return lower:match("mic") or lower:match("gtr")
+    if lower:match("inear$") or lower:match("stems$") then return false end
+    if name == "MASTER" or name == "TRANSLATOR" then return false end
+    if lower:match("^hand") or lower:match("^engineer") then return false end
+    return true
 end
 
 local function check_trim()
@@ -23,7 +26,7 @@ local function check_trim()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if is_mic_or_gtr(name) then
+        if is_input_track(name) then
             local fx_count = reaper.TrackFX_GetCount(track)
             local has_trim = false
 
