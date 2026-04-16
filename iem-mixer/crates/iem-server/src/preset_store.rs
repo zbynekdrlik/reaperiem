@@ -57,7 +57,7 @@ impl PresetStore {
     pub fn list(&self, member_id: &str) -> Vec<PresetEntry> {
         let presets = self.load_all(member_id);
         let mut list: Vec<PresetEntry> = presets.into_values().collect();
-        list.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        list.sort_by_key(|p| std::cmp::Reverse(p.updated_at));
         list
     }
 
