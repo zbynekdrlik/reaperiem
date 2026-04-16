@@ -75,47 +75,49 @@ pub fn MixerPage() -> impl IntoView {
 
     let state = MixerState::new(&member_id());
 
-    // Destructure all signals into local variables for use throughout MixerPage body
+    // Destructure signals used in the view template.
+    // Read-only signals use .0; read+write use tuple destructuring.
+    // Signals only used by ConnectionManager or MixerState methods are not listed.
     let (channels, set_channels) = state.channels;
-    let (meters, _set_meters) = state.meters;
-    let (connected, _set_connected) = state.connected;
-    let (active_category, _set_active_category) = state.active_category;
-    let (preset_modal_visible, _set_preset_modal_visible) = state.preset_modal_visible;
-    let (pin_modal_visible, _set_pin_modal_visible) = state.pin_modal_visible;
-    let (settings_modal_visible, _set_settings_modal_visible) = state.settings_modal_visible;
-    let (snapshot_modal_visible, _set_snapshot_modal_visible) = state.snapshot_modal_visible;
-    let (has_photo, set_has_photo) = state.has_photo;
+    let meters = state.meters.0;
+    let connected = state.connected.0;
+    let active_category = state.active_category.0;
+    let preset_modal_visible = state.preset_modal_visible.0;
+    let pin_modal_visible = state.pin_modal_visible.0;
+    let settings_modal_visible = state.settings_modal_visible.0;
+    let snapshot_modal_visible = state.snapshot_modal_visible.0;
+    let has_photo = state.has_photo.0;
     let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
-    let (_fader_touched, set_fader_touched) = state.fader_touched;
-    let (loading, _set_loading) = state.loading;
+    let set_fader_touched = state.fader_touched.1;
+    let loading = state.loading.0;
     let (soloed, set_soloed) = state.soloed;
     let (pre_solo_mutes, set_pre_solo_mutes) = state.pre_solo_mutes;
-    let (data_pulse, _set_data_pulse) = state.data_pulse;
+    let data_pulse = state.data_pulse.0;
     let (global_level, set_global_level) = state.global_level;
     let (global_muted, set_global_muted) = state.global_muted;
-    let (_global_touched, set_global_touched) = state.global_touched;
+    let set_global_touched = state.global_touched.1;
     let (stems_level, set_stems_level) = state.stems_level;
     let (stems_muted, set_stems_muted) = state.stems_muted;
-    let (_stems_touched, set_stems_touched) = state.stems_touched;
-    let (stems_bus_idx, _set_stems_bus_idx) = state.stems_bus_idx;
+    let set_stems_touched = state.stems_touched.1;
+    let stems_bus_idx = state.stems_bus_idx.0;
     let (eq_open, set_eq_open) = state.eq_open;
     let (eq_bands, set_eq_bands) = state.eq_bands;
     let (eq_loading, set_eq_loading) = state.eq_loading;
     let (limiter_open, set_limiter_open) = state.limiter_open;
-    let (limiter_limit_db, _set_limiter_limit_db) = state.limiter_limit_db;
-    let (limiter_limit_norm, _set_limiter_limit_norm) = state.limiter_limit_norm;
-    let (limiter_enabled, _set_limiter_enabled) = state.limiter_enabled;
+    let limiter_limit_db = state.limiter_limit_db.0;
+    let limiter_limit_norm = state.limiter_limit_norm.0;
+    let limiter_enabled = state.limiter_enabled.0;
     let (limiter_loading, set_limiter_loading) = state.limiter_loading;
-    let (limiter_active_seconds, _set_limiter_active_seconds) = state.limiter_active_seconds;
+    let limiter_active_seconds = state.limiter_active_seconds.0;
     let (pinned_channels, set_pinned_channels) = state.pinned_channels;
     let (hidden_channels, set_hidden_channels) = state.hidden_channels;
-    let (network_mode, _set_network_mode) = state.network_mode;
-    let (output_track_idx, _set_output_track_idx) = state.output_track_idx;
-    let (alert_data, _set_alert_data) = state.alert_data;
-    let (alert_active, _set_alert_active) = state.alert_active;
+    let network_mode = state.network_mode.0;
+    let output_track_idx = state.output_track_idx.0;
+    let alert_data = state.alert_data.0;
+    let alert_active = state.alert_active.0;
     let (talk_state, set_talk_state) = state.talk_state;
-    let (engineer_talking, _set_engineer_talking) = state.engineer_talking;
-    let (ws, _set_ws) = state.ws;
+    let engineer_talking = state.engineer_talking.0;
+    let ws = state.ws.0;
 
     // Check if member has photo on mount (#16)
     // Use try_set (via state method) to guard against disposal race — if the

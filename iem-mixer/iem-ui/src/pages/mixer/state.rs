@@ -154,6 +154,7 @@ impl MixerState {
         let _ = self.limiter_active_seconds.1.try_set(0.0);
     }
 
+    /// Limiter range: normalized 0.0–1.0 maps to -6 dB to 0 dB (value * 6.0 - 6.0).
     pub fn set_limiter_param(&self, value: f32) {
         let _ = self.limiter_limit_norm.1.try_set(value);
         let _ = self.limiter_limit_db.1.try_set(value * 6.0 - 6.0);
