@@ -7,10 +7,20 @@
 
 local section = "reaperiem"
 
+-- EQ applies to all input tracks AND to output submixes (inear, stems).
+-- Tech tracks (HAND*, ENGINEER*) and routing tracks (MASTER, TRANSLATOR)
+-- do not get EQ.
+local function is_input_track(name)
+    local lower = name:lower()
+    if lower:match("inear$") or lower:match("stems$") then return false end
+    if name == "MASTER" or name == "TRANSLATOR" then return false end
+    if lower:match("^hand") or lower:match("^engineer") then return false end
+    return true
+end
+
 local function needs_eq(name)
     local lower = name:lower()
-    return lower:match("mic") or lower:match("gtr")
-        or lower:match("inear") or lower:match("stems")
+    return is_input_track(name) or lower:match("inear$") or lower:match("stems$")
 end
 
 local function is_reaeq(fx_name)
