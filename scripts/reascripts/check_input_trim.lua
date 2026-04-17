@@ -9,6 +9,9 @@
 
 local section = "reaperiem"
 
+-- NOTE: `is_input_track` is inlined (not `require`d) in every setup_input_*/
+-- check_input_* script — REAPER's Lua `require` path doesn't reliably include
+-- the reaperiem script folder, so duplication is the safer option.
 local function is_input_track(name)
     local lower = name:lower()
     if lower:match("inear$") or lower:match("stems$") then return false end

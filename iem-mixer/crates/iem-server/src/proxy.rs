@@ -712,16 +712,10 @@ pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<St
         "stems"
     };
 
-    // Check for stereo pair
-    let (stereo_pair, stereo_side) = if name.ends_with(" L") {
-        let pair_name = name.trim_end_matches(" L").to_string();
-        (Some(pair_name.to_lowercase()), Some("L".to_string()))
-    } else if name.ends_with(" R") {
-        let pair_name = name.trim_end_matches(" R").to_string();
-        (Some(pair_name.to_lowercase()), Some("R".to_string()))
-    } else {
-        (None, None)
-    };
+    let stereo_side = derive_stereo_side(name);
+    let stereo_pair = stereo_side
+        .as_ref()
+        .map(|side| name.trim_end_matches(&format!(" {}", side)).to_lowercase());
 
     (category.to_string(), stereo_pair, stereo_side)
 }

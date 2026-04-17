@@ -1,9 +1,12 @@
+-- ONE-SHOT migration script — DO NOT USE AS A TEMPLATE FOR OTHER INSTRUMENTS.
+-- The Dante channel number and track name are HARDCODED. Each new instrument
+-- needs its own ad-hoc setup script OR a generalized helper (not yet built).
+--
 -- One-shot setup for ALEX kl (stereo keyboard input).
 -- Idempotent: safe to re-run. Does nothing if ALEX kl already exists.
 --
 -- Creates:
 --   1. A stereo REAPER track named "ALEX kl" at the end of the track list
---      (operator can reposition later if desired)
 --   2. Hardware input = Dante RX 13-14 stereo (channel 12 + 1024 for stereo)
 --   3. Sends from ALEX kl to every <MEMBER> inear track found in the project
 --   4. Saves the project
@@ -11,13 +14,17 @@
 -- Does NOT insert TRIM IN or ReaEQ FX — caller must run
 -- _RS_REAPERIEM_SETUP_TRIM and _RS_REAPERIEM_SETUP_EQ after this script.
 --
+-- Pre-flight: aborts with ERROR if no <MEMBER> inear tracks are found
+-- (indicates an empty/broken project — creating an isolated ALEX kl track
+-- with no destinations would silently produce a useless setup).
+--
 -- Action ID: _RS_REAPERIEM_SETUP_ALEX_KL
 -- Result written to EXTSTATE: reaperiem/alex_kl_setup_result
 
 local section = "reaperiem"
 local TRACK_NAME = "ALEX kl"
-local DANTE_RX_L = 13  -- 1-indexed Dante channel; REAPER input is (N-1) + 1024 for stereo
-local STEREO_INPUT = (DANTE_RX_L - 1) + 1024  -- = 12 + 1024 = 1036
+local DANTE_RX_L = 13  -- HARDCODED: 1-indexed Dante RX channel
+local STEREO_INPUT = (DANTE_RX_L - 1) + 1024  -- = 12 + 1024 = 1036 (REAPER stereo input encoding)
 
 local function find_track_by_name(name)
     local count = reaper.CountTracks(0)
@@ -52,6 +59,14 @@ local function has_send_to(src_track, dest_track)
 end
 
 local function setup()
+    -- Pre-flight: abort if the project has no <MEMBER> inear tracks.
+    -- Creating ALEX kl with zero send destinations is useless and almost
+    -- always indicates the script ran against an empty or broken project.
+    local inears_preflight = find_all_inear_tracks()
+    if #inears_preflight == 0 then
+        error("no '<MEMBER> inear' tracks found — refusing to create ALEX kl with no destinations")
+    end
+
     reaper.Undo_BeginBlock()
     reaper.PreventUIRefresh(1)
 
@@ -76,8 +91,10 @@ local function setup()
     -- Monitor off (input monitor not needed for send pipeline)
     reaper.SetMediaTrackInfo_Value(alex_kl, "I_RECMON", 0)
 
-    -- Step 3: Create sends to every <MEMBER> inear track
-    local inears = find_all_inear_tracks()
+    -- Step 3: Create sends to every <MEMBER> inear track.
+    -- Reuse the preflight list — track pointers remain valid after inserting
+    -- ALEX kl at the end (indices would shift but MediaTrack refs don't).
+    local inears = inears_preflight
     local sends_created = 0
     local sends_skipped = 0
     for _, ie in ipairs(inears) do

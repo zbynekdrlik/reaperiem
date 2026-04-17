@@ -14,6 +14,12 @@ local section = "reaperiem"
 -- Returns true if the track name identifies an input (instrument/mic) track
 -- as opposed to an output (inear), submix (stems), routing (MASTER,
 -- TRANSLATOR), or tech (HAND*, ENGINEER*) track.
+--
+-- NOTE: This predicate is intentionally inlined (not `require`d) in each
+-- setup_input_*/check_input_* script. REAPER's Lua `require` path does not
+-- include the reaperiem script folder reliably, and deploying a shared
+-- library file would require patching package.path at runtime for every
+-- script. Keeping the ~5 lines duplicated is simpler than the alternative.
 local function is_input_track(name)
     local lower = name:lower()
     if lower:match("inear$") or lower:match("stems$") then return false end

@@ -86,13 +86,22 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
       .first();
     await expect(alexKl).toBeVisible({ timeout: 10000 });
 
+    // Read starting dB so we can assert relative change after the drag.
+    const dbLabel = alexKl.locator(".db-display");
+    const parseDb = async () => {
+      const txt = (await dbLabel.textContent()) || "0";
+      // Normalise "-∞" and "-inf" variants before parseFloat
+      if (/[\u221E]|inf/i.test(txt)) return -Infinity;
+      return parseFloat(txt.replace(/[^-\d.]/g, ""));
+    };
+    const dbStart = await parseDb();
+
     const fader = alexKl.locator(".fader-track");
     const box = await fader.boundingBox();
     expect(box).not.toBeNull();
 
-    // Drag fader from current position toward the LEFT (lower volume).
-    // Incremental moves are required — single-jump moves don't trigger
-    // pointer events on this fader component.
+    // Drag from ~70% of fader to ~30% — incremental moves are required,
+    // single-jump moves don't trigger pointer events on this component.
     const startX = box!.x + box!.width * 0.7;
     const endX = box!.x + box!.width * 0.3;
     const y = box!.y + box!.height / 2;
@@ -108,13 +117,13 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
     await page.mouse.up();
     await page.waitForTimeout(500);
 
-    // Verify the level dropped from the UI's perspective by re-reading
-    // the channel's dB label (".db-display" is the mixer's convention).
-    const dbLabel = alexKl.locator(".db-display");
-    const dbText = await dbLabel.textContent();
-    const dbValue = parseFloat((dbText || "0").replace(/[^-\d.]/g, ""));
-    // Moving left on the fader means lower dB. Anything < 0 dB proves
-    // the drag was registered.
-    expect(dbValue).toBeLessThan(0);
+    // Verify the drag produced a measurable dB drop via the WebSocket
+    // round-trip (.db-display reflects the poller's snapshot of REAPER).
+    const dbEnd = await parseDb();
+    // Moving left on the fader lowers dB. A 40%-of-width drag must produce
+    // at least a 3 dB drop — anything less means the drag wasn't registered
+    // or the WS round-trip didn't propagate the change.
+    expect(dbEnd).toBeLessThan(dbStart - 3);
+    expect(dbEnd).toBeLessThan(0);
   });
 });
