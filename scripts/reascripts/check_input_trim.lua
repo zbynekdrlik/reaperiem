@@ -12,7 +12,12 @@ local section = "reaperiem"
 -- NOTE: `is_input_track` is inlined (not `require`d) in every setup_input_*/
 -- check_input_* script — REAPER's Lua `require` path doesn't reliably include
 -- the reaperiem script folder, so duplication is the safer option.
-local function is_input_track(name)
+local function is_input_track(track, name)
+    -- Folder parent tracks (INPUTS, MICS, TECH, OUTPUTS, BAND) have
+    -- I_FOLDERDEPTH > 0. Skip them — they're organisational buses.
+    if reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") > 0 then
+        return false
+    end
     local lower = name:lower()
     if lower:match("inear$") or lower:match("stems$") then return false end
     if name == "MASTER" or name == "TRANSLATOR" then return false end
@@ -29,7 +34,7 @@ local function check_trim()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if is_input_track(name) then
+        if is_input_track(track, name) then
             local fx_count = reaper.TrackFX_GetCount(track)
             local has_trim = false
 

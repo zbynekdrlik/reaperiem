@@ -153,6 +153,14 @@ jobs:
           # can never silently pass a violation through.
           python3 scripts/test_check_disposal_safety.py
 
+      - name: Self-test the deploy config merger (atomic-write contract)
+        run: |
+          # Guards the invariants that (a) auto-generated secrets
+          # (jwt_secret, vapid_private_key) survive config refreshes and
+          # (b) writes are atomic so a crash mid-deploy can't wipe them.
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/test_merge_deployed_config.py
+
       - name: Ban unsafe signal writes inside danger zones (#153)
         run: |
           # Prevents the Leptos "reactive value has already been disposed"
@@ -691,6 +699,31 @@ jobs:
           } else {
             Write-Host "::warning::REAPER not running before deploy"
             echo "was_running=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Ensure python + pyyaml available (fail-fast BEFORE stopping app)
+        shell: powershell
+        run: |
+          # merge_deployed_config.py runs later in this job and needs
+          # pyyaml. We install it here, BEFORE the app is stopped, so a
+          # missing dependency can't strand production with no running
+          # binary. If install fails, we bail out while the old app is
+          # still serving members.
+          $ErrorActionPreference = "Stop"
+          & python --version
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::python is not on PATH on this self-hosted runner"
+            exit 1
+          }
+          & python -m pip install --quiet --disable-pip-version-check pyyaml
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::pip install pyyaml failed (exit $LASTEXITCODE)"
+            exit 1
+          }
+          & python -c "import yaml; print('pyyaml', yaml.__version__)"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::pyyaml import failed after install"
+            exit 1
           }
 
       - name: Stop running IEM Mixer

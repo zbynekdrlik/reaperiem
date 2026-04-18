@@ -14,7 +14,12 @@ local section = "reaperiem"
 -- NOTE: `is_input_track` is inlined (not `require`d) in every setup_input_*/
 -- check_input_* script — REAPER's Lua `require` path doesn't reliably include
 -- the reaperiem script folder, so duplication is the safer option.
-local function is_input_track(name)
+local function is_input_track(track, name)
+    -- Folder parent tracks (INPUTS, MICS, TECH, OUTPUTS, BAND) have
+    -- I_FOLDERDEPTH > 0. Skip them — they're organisational buses.
+    if reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") > 0 then
+        return false
+    end
     local lower = name:lower()
     if lower:match("inear$") or lower:match("stems$") then return false end
     if name == "MASTER" or name == "TRANSLATOR" then return false end
@@ -22,9 +27,14 @@ local function is_input_track(name)
     return true
 end
 
-local function needs_eq(name)
+local function needs_eq(track, name)
+    -- Folder parents are excluded (see is_input_track) — inear/stems are
+    -- leaf tracks so they pass the folder check automatically.
+    if reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") > 0 then
+        return false
+    end
     local lower = name:lower()
-    return is_input_track(name) or lower:match("inear$") or lower:match("stems$")
+    return is_input_track(track, name) or lower:match("inear$") or lower:match("stems$")
 end
 
 local function is_reaeq(fx_name)
@@ -77,7 +87,7 @@ local function setup_eq()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if needs_eq(name) then
+        if needs_eq(track, name) then
             -- Clean up any duplicate ReaEQ instances first
             remove_duplicate_reaeq(track)
 

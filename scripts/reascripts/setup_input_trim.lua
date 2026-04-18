@@ -20,7 +20,14 @@ local section = "reaperiem"
 -- include the reaperiem script folder reliably, and deploying a shared
 -- library file would require patching package.path at runtime for every
 -- script. Keeping the ~5 lines duplicated is simpler than the alternative.
-local function is_input_track(name)
+local function is_input_track(track, name)
+    -- Folder parent tracks (INPUTS, MICS, TECH, OUTPUTS, BAND) have
+    -- I_FOLDERDEPTH > 0. Skip them — they're organisational buses and
+    -- inserting TRIM IN / ReaEQ on them would double-process audio
+    -- if routing is ever reconfigured.
+    if reaper.GetMediaTrackInfo_Value(track, "I_FOLDERDEPTH") > 0 then
+        return false
+    end
     local lower = name:lower()
     if lower:match("inear$") or lower:match("stems$") then return false end
     if name == "MASTER" or name == "TRANSLATOR" then return false end
@@ -50,7 +57,7 @@ local function setup_trim()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if is_input_track(name) then
+        if is_input_track(track, name) then
             if has_trim_at_pos0(track) then
                 skipped = skipped + 1
                 table.insert(skipped_names, name)

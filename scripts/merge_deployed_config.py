@@ -21,6 +21,7 @@ Exit codes:
   0 on success, 1 on any error.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -67,7 +68,15 @@ def merge(src_path: Path, dest_path: Path) -> str:
     if not updated:
         return "No changes: inputs/members/dante_outputs already match source"
 
-    with dest_path.open("w", encoding="utf-8") as f:
+    # Atomic write: dump to a sibling .tmp file and os.replace() onto the
+    # destination. If the process is killed mid-write (CI cancel, runner
+    # reboot, disk full), the destination is either the old valid file or
+    # the new valid file — never a truncated intermediate state. This
+    # matters because dest_path holds auto-generated secrets (jwt_secret,
+    # vapid_private_key) that are NOT in the source and would be lost
+    # irrecoverably if the file were corrupted.
+    tmp_path = dest_path.with_suffix(dest_path.suffix + ".tmp")
+    with tmp_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(
             dest,
             f,
@@ -75,6 +84,9 @@ def merge(src_path: Path, dest_path: Path) -> str:
             default_flow_style=False,
             allow_unicode=True,
         )
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, dest_path)
     return f"Merged: refreshed {', '.join(updated)} (secrets preserved)"
 
 

@@ -106,7 +106,10 @@ inputs:
     dante_input: 13
     default_level_db: 0.0
     category: mics
-    stereo_pair: "alex kl"
+    # Intentionally no `stereo_pair`: this entry represents ALEX kl already
+    # merged as a single stereo channel (the "kl" suffix needs explicit
+    # `category` because categorize_track() can't derive it from the name).
+    # `stereo_pair` is only meaningful on " L"/" R" entries (see input_tracks.yaml).
 
   - name: "PATRIKA mic"
     dante_input: 11

@@ -6,6 +6,16 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.154.0 (2026-04-18)
+
+- **Fix**: ALEX kl `I_RECMON=1` — keyboard now passes audio to member IEMs during live services (was silent with RECMON=0).
+- **Fix**: ALEX kl sends use `I_SENDMODE=3` (pre-fader post-FX) so TRIM IN + ReaEQ actually affect member mixes.
+- **Fix**: ALEX kl → ENGINEER inear send is muted by default, matching the existing `create_sends_for_member` convention — no more keyboard in the engineer's solo bus.
+- **Fix**: `is_input_track` (Lua) excludes REAPER folder parents (INPUTS, MICS, TECH, OUTPUTS, BAND) via `I_FOLDERDEPTH>0` — TRIM IN / ReaEQ no longer get inserted on folders.
+- **Fix**: Deploy config merger writes atomically (tmp+`os.replace`) so a crash mid-deploy can't wipe `jwt_secret` / `vapid_private_key`.
+- **CI**: Explicit `pip install pyyaml` precheck runs BEFORE stopping the app — a missing runner dependency can't leave production offline.
+- **Test**: `alex-kl.spec.ts` restores the fader position in a `finally` block so the test doesn't walk ALEX kl toward silence across CI runs.
+
 ### v1.153.0 (2026-04-16)
 
 - **Feature**: Added ALEX kl stereo keyboard input (Dante RX 13/14) routable to all band member mixes.
