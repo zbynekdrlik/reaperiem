@@ -37,6 +37,10 @@ local function find_track_by_name(name)
 end
 
 local function find_all_inear_tracks()
+    -- Include ENGINEER inear. Match the existing convention in
+    -- create_sends_for_member.lua: every member-inear-destined send
+    -- exists on all input tracks, but sends to ENGINEER are muted by
+    -- default (engineer unmutes selectively on their own cue).
     local result = {}
     local count = reaper.CountTracks(0)
     for i = 0, count - 1 do
@@ -88,8 +92,11 @@ local function setup()
     reaper.SetMediaTrackInfo_Value(alex_kl, "I_RECINPUT", STEREO_INPUT)
     -- Arm for recording so input levels are visible on meters
     reaper.SetMediaTrackInfo_Value(alex_kl, "I_RECARM", 1)
-    -- Monitor off (input monitor not needed for send pipeline)
-    reaper.SetMediaTrackInfo_Value(alex_kl, "I_RECMON", 0)
+    -- Monitor on: when transport is idle (the live IEM scenario), REAPER
+    -- only routes the hardware input through the track's signal chain
+    -- with I_RECMON=1. RECMON=0 would leave members hearing silence from
+    -- ALEX kl during services. Matches set_hw_input_mono in setup_iem_project.lua.
+    reaper.SetMediaTrackInfo_Value(alex_kl, "I_RECMON", 1)
 
     -- Step 3: Create sends to every <MEMBER> inear track.
     -- Reuse the preflight list — track pointers remain valid after inserting
@@ -103,9 +110,13 @@ local function setup()
         else
             local send_idx = reaper.CreateTrackSend(alex_kl, ie.track)
             if send_idx >= 0 then
-                -- Pre-FX (I_SENDMODE = 1 means pre-FX post-envelopes; 3 means pre-fader)
-                -- Use pre-FX post-envelopes (1) to match existing sends convention.
-                reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "I_SENDMODE", 1)
+                -- Pre-fader post-FX (mode 3). TRIM IN + ReaEQ are inserted
+                -- on ALEX kl by setup_input_trim / setup_input_eq; mode 3
+                -- taps the signal AFTER those FX but BEFORE the fader,
+                -- matching check_send_modes.lua's invariant for input
+                -- tracks. Mode 1 (pre-FX) would bypass trim/EQ entirely
+                -- AND trigger FAIL:N from check_send_modes.
+                reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "I_SENDMODE", 3)
                 -- Volume = unity (1.0)
                 reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "D_VOL", 1.0)
                 -- Pan = center (0.0)
@@ -114,6 +125,11 @@ local function setup()
                 reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "I_SRCCHAN", 0)
                 -- Dest channel = stereo 1-2 (same convention)
                 reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "I_DSTCHAN", 0)
+                -- Mute sends to ENGINEER by default (engineer unmutes selectively).
+                -- Matches create_sends_for_member.lua:35-38 convention.
+                if ie.name:lower():find("engineer") then
+                    reaper.SetTrackSendInfo_Value(alex_kl, 0, send_idx, "B_MUTE", 1)
+                end
                 sends_created = sends_created + 1
             end
         end
