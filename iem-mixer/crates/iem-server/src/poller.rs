@@ -1439,11 +1439,15 @@ TRACK\t23\tPETKA inear\t0\t1.000000\t0.000000\t-50\t-60\t1.000000\t0\t0\t22\t0\t
                 name: "PETKA mic".to_string(),
                 dante_input: 1,
                 default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
             },
             iem_core::config::InputTrack {
                 name: "STEVO mic".to_string(),
                 dante_input: 2,
                 default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
             },
         ];
 

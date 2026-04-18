@@ -32,6 +32,8 @@ local INPUT_MICS = {
     { name = "TINA mic",     dante_rx = 8 },
     { name = "MIREC mic",    dante_rx = 9 },
     { name = "ALEX mic",     dante_rx = 10 },
+    { name = "ALEX kl L",    dante_rx = 13 },
+    { name = "ALEX kl R",    dante_rx = 14 },
     { name = "PATRIKA mic",  dante_rx = 11 },
     { name = "ANI mic",      dante_rx = 12 },
 }

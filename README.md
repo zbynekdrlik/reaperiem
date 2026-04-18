@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.153.0 (2026-04-16)
+
+- **Feature**: Added ALEX kl stereo keyboard input (Dante RX 13/14) routable to all band member mixes.
+- **Refactor**: `InputTrack` config struct now honors `category` and `stereo_pair` fields from `input_tracks.yaml` (were previously ignored by serde).
+- **Refactor**: REAPER FX setup scripts (`setup_input_trim`, `setup_input_eq`, `check_input_trim`) use a category-agnostic `is_input_track` predicate — future instruments need no Lua changes.
+
 ### v1.152.0 (2026-04-16)
 
 - **Refactor**: MixerPage decomposed from single 2865-line file into module directory with 7 files (#165)

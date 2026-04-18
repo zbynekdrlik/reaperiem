@@ -11,9 +11,21 @@
 
 local section = "reaperiem"
 
-local function is_mic_or_gtr(name)
+-- Returns true if the track name identifies an input (instrument/mic) track
+-- as opposed to an output (inear), submix (stems), routing (MASTER,
+-- TRANSLATOR), or tech (HAND*, ENGINEER*) track.
+--
+-- NOTE: This predicate is intentionally inlined (not `require`d) in each
+-- setup_input_*/check_input_* script. REAPER's Lua `require` path does not
+-- include the reaperiem script folder reliably, and deploying a shared
+-- library file would require patching package.path at runtime for every
+-- script. Keeping the ~5 lines duplicated is simpler than the alternative.
+local function is_input_track(name)
     local lower = name:lower()
-    return lower:match("mic") or lower:match("gtr")
+    if lower:match("inear$") or lower:match("stems$") then return false end
+    if name == "MASTER" or name == "TRANSLATOR" then return false end
+    if lower:match("^hand") or lower:match("^engineer") then return false end
+    return true
 end
 
 local function has_trim_at_pos0(track)
@@ -38,7 +50,7 @@ local function setup_trim()
         local track = reaper.GetTrack(0, i)
         local _, name = reaper.GetTrackName(track)
 
-        if is_mic_or_gtr(name) then
+        if is_input_track(name) then
             if has_trim_at_pos0(track) then
                 skipped = skipped + 1
                 table.insert(skipped_names, name)

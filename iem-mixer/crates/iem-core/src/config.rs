@@ -380,6 +380,16 @@ pub struct InputTrack {
     /// Default send level in dB
     #[serde(default)]
     pub default_level_db: f32,
+
+    /// Category override: "mics", "stems", or "tech".
+    /// When present, takes precedence over name-based derivation in proxy.rs.
+    #[serde(default)]
+    pub category: Option<String>,
+
+    /// Stereo pair key. Tracks sharing this key are merged into one stereo
+    /// REAPER track (e.g., "alex kl" for "ALEX kl L" + "ALEX kl R").
+    #[serde(default)]
+    pub stereo_pair: Option<String>,
 }
 
 /// A band member discovered from REAPER at runtime.

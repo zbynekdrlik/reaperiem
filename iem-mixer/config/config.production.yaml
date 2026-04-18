@@ -102,6 +102,12 @@ inputs:
     dante_input: 10
     default_level_db: 0.0
 
+  - name: "ALEX kl"
+    dante_input: 13
+    default_level_db: 0.0
+    category: mics
+    stereo_pair: "alex kl"
+
   - name: "PATRIKA mic"
     dante_input: 11
     default_level_db: 0.0

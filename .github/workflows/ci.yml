@@ -778,18 +778,21 @@ jobs:
           }
           Write-Host "Installed: $exePath"
 
-          # Deploy config (only if not present — never overwrite, preserves
-          # auto-generated secrets like jwt_secret and vapid_private_key)
+          # Deploy config: fresh-copy on first install, merge on subsequent
+          # deploys. The merge script refreshes inputs/members/dante_outputs
+          # from the source file while preserving secrets (jwt_secret,
+          # vapid_private_key) and operational state (pins). See
+          # scripts/merge_deployed_config.py for the exact contract.
           $configDir = [Environment]::GetFolderPath('ApplicationData') + "\iem-mixer"
           if (-not (Test-Path $configDir)) {
             New-Item -ItemType Directory -Path $configDir -Force | Out-Null
           }
-          if (-not (Test-Path "$configDir\config.yaml")) {
-            Copy-Item "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" -Force
-            Write-Host "Config: deployed fresh config.yaml"
-          } else {
-            Write-Host "Config: $configDir\config.yaml already exists, preserving secrets"
+          $mergeOutput = & python "scripts\merge_deployed_config.py" "iem-mixer\config\config.production.yaml" "$configDir\config.yaml" 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::config merge failed: $mergeOutput"
+            exit 1
           }
+          Write-Host "Config: $mergeOutput"
 
           # Deploy TLS certificates
           $tlsCert = "$env:TLS_CERT_PEM"
