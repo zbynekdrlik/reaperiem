@@ -618,6 +618,14 @@ fn parse_reaper_value(text: &str) -> Option<f32> {
 /// Build channel templates from config inputs with category and stereo info.
 /// If `resolved_indices` is provided, track indices are looked up by name
 /// (handling REAPER track insertions/reordering). Falls back to sequential i+1.
+///
+/// **The `i+1` fallback must stay symmetric with `collect_valid_input_indices`.**
+/// During the startup window before the poller runs (or if REAPER is
+/// unreachable), both functions apply the same fallback so the validator
+/// and the client agree on indices — even though those fallback indices do
+/// NOT address the right REAPER track for any input that isn't in its
+/// natural 1..N position. See `collect_valid_input_indices` for the full
+/// startup-window caveat.
 pub(crate) fn build_channel_templates(
     inputs: &[iem_core::config::InputTrack],
     resolved_indices: Option<&HashMap<String, usize>>,
@@ -697,6 +705,19 @@ pub(crate) fn build_mix_channel_templates(
 /// membership set) — REAPER indices can exceed the input count when tracks
 /// are added out-of-position (e.g. ALEX kl at REAPER track 44 with only 23
 /// input entries).
+///
+/// **Startup-window caveat.** The `position+1` fallback is intended only for
+/// the brief window on process startup before the poller has had a chance
+/// to query REAPER. During that window, validator and channel-builder share
+/// the SAME fallback so they agree with each other — but the indices they
+/// agree on are wrong (e.g. ALEX kl would be "track 23" rather than "track
+/// 44"). The poller overwrites the cache with real REAPER indices on its
+/// first successful tick (~150 ms), and the app's job at that point is to
+/// prefer "agree with client but address wrong REAPER track briefly" over
+/// "reject everything". If the poller NEVER succeeds (REAPER unreachable),
+/// the fallback persists and commands reach wrong REAPER tracks — that is
+/// a pre-existing behaviour inherited from `build_channel_templates` and
+/// is tracked separately from #179.
 pub(crate) fn collect_valid_input_indices(
     inputs: &[iem_core::config::InputTrack],
     resolved: &HashMap<String, usize>,
@@ -724,10 +745,15 @@ pub(crate) fn is_valid_track_index(
 
 /// Reverse-lookup an input track's name from its REAPER index, falling back
 /// to the 1-based config-position convention when the index is not yet
-/// resolved by the poller. Used for log-message enrichment on the REST
-/// level/pan/mute endpoints. Extracted (vs. inlined) so the primary match
-/// (`**idx == track_index`) is unit-testable — a stray `==`→`!=` mutation
-/// would silently return a WRONG track name, masking real bugs in log output.
+/// resolved by the poller.
+///
+/// **Single caller.** Used only by `set_send_level` for log-message
+/// enrichment (the WS `SetLevel` handler logs its own track name via a
+/// different path). It exists as a free function — rather than inlined
+/// into that one caller — specifically so cargo-mutants can prove the
+/// primary match (`**idx == track_index`) is exercised by a test: a
+/// silent `==`→`!=` mutation would return a wrong name in logs, confusing
+/// future incident response.
 pub(crate) fn lookup_input_name(
     resolved: &HashMap<String, usize>,
     track_index: usize,
@@ -827,6 +853,9 @@ pub async fn set_send_level(
     headers: axum::http::HeaderMap,
     Json(payload): Json<SetLevelRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    // Lock acquisition order for this handler: config → discovered → cache.
+    // Any writer that takes these locks in a different order risks a future
+    // deadlock; keep the same ordering in set_send_pan / set_send_mute too.
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member_id, &config.jwt_secret)?;
 
@@ -839,9 +868,16 @@ pub async fn set_send_level(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     drop(discovered);
 
-    // Validate inputs
-    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    // Validate inputs. Read the precomputed valid-input-index set from the
+    // cache — populated by the poller (poller.rs) each time REAPER resolves
+    // the input track list. O(1) membership test, no per-command allocation.
+    let (valid, resolved) = {
+        let cache = state.mixer_cache.read().await;
+        (
+            cache.valid_input_track_indices.clone(),
+            cache.input_track_indices.clone(),
+        )
+    };
     validate_track_index(track_index, &valid)?;
     validate_level_db(payload.level_db)?;
 
@@ -903,9 +939,13 @@ pub async fn set_send_pan(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     drop(discovered);
 
-    // Validate inputs
-    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    // Validate inputs via the poller-maintained cache (see set_send_level).
+    let valid = state
+        .mixer_cache
+        .read()
+        .await
+        .valid_input_track_indices
+        .clone();
     validate_track_index(track_index, &valid)?;
     validate_pan(payload.pan)?;
 
@@ -953,9 +993,13 @@ pub async fn set_send_mute(
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
     drop(discovered);
 
-    // Validate track index
-    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
-    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    // Validate track index via the poller-maintained cache (see set_send_level).
+    let valid = state
+        .mixer_cache
+        .read()
+        .await
+        .valid_input_track_indices
+        .clone();
     validate_track_index(track_index, &valid)?;
 
     let reaper_url = config.reaper_url.clone();
@@ -1823,14 +1867,20 @@ async fn apply_command_to_cache(
 
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
-    // Resolve REAPER track indices by input name — matches what
-    // build_channel_templates used to construct the client-visible channel
-    // list. Must NOT use inputs.len() as an upper bound: REAPER indices can
-    // exceed the input count when tracks are added out-of-position (e.g.
-    // ALEX kl at REAPER track 44 with only 23 input entries — see #179).
-    let resolved_inputs = state.mixer_cache.read().await.input_track_indices.clone();
-    let valid_input_indices = collect_valid_input_indices(&config.inputs, &resolved_inputs);
     drop(config);
+
+    // Read the precomputed valid-input-index set from the cache. The poller
+    // (re)populates it whenever REAPER resolves the input tracks (see
+    // poller.rs), so per-command validation is O(1) without per-call rebuild.
+    // Note: config.read was dropped above before touching mixer_cache — hold
+    // at most one of (config, mixer_cache) at a time to avoid lock-inversion
+    // hazards with future writers.
+    let valid_input_indices = state
+        .mixer_cache
+        .read()
+        .await
+        .valid_input_track_indices
+        .clone();
 
     // Helper: check if a track_index is valid (input track OR engineer mix channel)
     let is_valid_track =
@@ -5149,5 +5199,159 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         // overrides that check.
         let indices = std::collections::HashMap::new();
         assert!(check_owns_limiter_track(true, "engineer", &indices, 32));
+    }
+
+    /// End-to-end regression test for #179 against the real `apply_command_to_cache`.
+    /// Builds a minimal AppState that reproduces the live-service topology:
+    ///   - config.inputs has 23 entries including "ALEX kl"
+    ///   - mixer_cache.valid_input_track_indices includes REAPER track 44
+    ///   - discovered_members contains stevo at send_index 1
+    /// Then sends a `SetMute { track_index: 44, muted: true }` and asserts
+    /// the handler returns Ok with a REAPER URL targeting TRACK/44/SEND/1/MUTE/1.
+    ///
+    /// Before the fix: the old `ti <= inputs.len()` (23) validator rejected
+    /// track 44 and this test would fail with "track_index 44 out of range"
+    /// — the exact failure mode members saw during the live service.
+    #[tokio::test]
+    async fn test_apply_command_to_cache_mutes_alex_kl_at_reaper_track_44() {
+        use crate::AppState;
+        use iem_core::config::{Config, InputTrack};
+        use iem_core::{ClientMsg, DiscoveredMember};
+        use std::collections::{HashMap, HashSet};
+
+        // Minimal config with 23 inputs — matching live-service shape where
+        // ALEX kl is the 23rd entry and therefore would be index 23 under
+        // the buggy `inputs.len()` validator, but is actually at REAPER
+        // track 44.
+        let mut config = Config {
+            inputs: (0..22)
+                .map(|i| InputTrack {
+                    name: format!("MIC{} mic", i + 1),
+                    dante_input: (i + 1) as u8,
+                    default_level_db: 0.0,
+                    category: None,
+                    stereo_pair: None,
+                })
+                .collect(),
+            ..Config::default()
+        };
+        config.inputs.push(InputTrack {
+            name: "ALEX kl".to_string(),
+            dante_input: 13,
+            default_level_db: 0.0,
+            category: Some("mics".to_string()),
+            stereo_pair: None,
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(config, dir.path());
+
+        // Populate the cache exactly as the poller would after discovering
+        // ALEX kl at REAPER track 44.
+        {
+            let mut cache = state.mixer_cache.write().await;
+            let mut input_track_indices: HashMap<String, usize> = (0..22)
+                .map(|i| (format!("MIC{} mic", i + 1), i + 1))
+                .collect();
+            input_track_indices.insert("ALEX kl".to_string(), 44);
+            cache.input_track_indices = input_track_indices;
+
+            let mut valid: HashSet<usize> = (1..=22).collect();
+            valid.insert(44);
+            cache.valid_input_track_indices = valid;
+
+            // The WS handler looks up channels by track_index in member_states
+            // to update cached state alongside the REAPER call — seed one
+            // channel for ALEX kl on stevo's state so the handler reaches
+            // the REAPER-URL branch, not an early-exit.
+            cache.member_states.insert(
+                "stevo".to_string(),
+                vec![iem_core::Channel {
+                    track_index: 44,
+                    name: "ALEX kl".to_string(),
+                    level_db: 0.0,
+                    pan: 0.5,
+                    muted: false,
+                    category: "mics".to_string(),
+                    stereo_pair: None,
+                    stereo_side: None,
+                }],
+            );
+        }
+
+        // stevo at send_index=1 — matches live routing (send 0 → PETRONELA,
+        // send 1 → STEVO, etc.)
+        {
+            let mut discovered = state.discovered_members.write().await;
+            discovered.push(DiscoveredMember {
+                name: "STEVO".to_string(),
+                track_index: 24,
+                dante_output_l: 3,
+                dante_output_r: 4,
+                send_index: 1,
+                mix_send_index: Some(1),
+                mix_send_indices: std::collections::HashMap::new(),
+            });
+        }
+
+        let cmd = ClientMsg::SetMute {
+            track_index: 44,
+            muted: true,
+        };
+        let result = apply_command_to_cache(&state, "stevo", &cmd).await;
+
+        assert!(
+            result.is_ok(),
+            "apply_command_to_cache must ACCEPT SetMute for ALEX kl (track 44). \
+             Got Err: {:?}. Under the pre-#179 validator, this returned \
+             'track_index 44 out of range 1..23'.",
+            result.as_ref().err()
+        );
+        let (url, _event) = result.unwrap();
+        assert!(
+            url.contains("/SET/TRACK/44/SEND/1/MUTE/1"),
+            "Expected REAPER URL to target TRACK/44/SEND/1/MUTE/1 — got: {}",
+            url
+        );
+    }
+
+    /// Inverse guard: if cache's valid_input_track_indices does NOT contain
+    /// the track, the handler must reject — proves validation is still
+    /// active, not stripped out by a future refactor.
+    #[tokio::test]
+    async fn test_apply_command_to_cache_rejects_unknown_track() {
+        use crate::AppState;
+        use iem_core::ClientMsg;
+        use iem_core::config::Config;
+
+        let config = Config::default();
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::new(config, dir.path());
+
+        // Seed a discovered member so we don't trip the "unknown member"
+        // early-exit; the test is about track_index rejection specifically.
+        {
+            let mut discovered = state.discovered_members.write().await;
+            discovered.push(iem_core::DiscoveredMember {
+                name: "STEVO".to_string(),
+                track_index: 24,
+                dante_output_l: 3,
+                dante_output_r: 4,
+                send_index: 1,
+                mix_send_index: Some(1),
+                mix_send_indices: std::collections::HashMap::new(),
+            });
+        }
+
+        let cmd = ClientMsg::SetMute {
+            track_index: 999,
+            muted: true,
+        };
+        let result = apply_command_to_cache(&state, "stevo", &cmd).await;
+        assert!(
+            result.is_err(),
+            "track_index 999 (not in valid set) must be rejected — got Ok: {:?}",
+            result.ok()
+        );
     }
 }

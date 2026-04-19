@@ -185,6 +185,13 @@ pub struct MixerCache {
     pub output_track_indices: HashMap<String, usize>,
     /// Input track indices resolved by name from REAPER (track_name -> 1-based track index)
     pub input_track_indices: HashMap<String, usize>,
+    /// Authoritative set of REAPER track indices that represent valid input
+    /// tracks. Precomputed by the poller whenever `input_track_indices` or
+    /// `config.inputs` changes (see `poller::recompute_valid_input_indices`),
+    /// so per-command handlers can validate in O(1) without rebuilding the
+    /// set. Mirrors what `build_channel_templates` sends to clients — see
+    /// #179 for why `inputs.len()` cannot substitute.
+    pub valid_input_track_indices: std::collections::HashSet<usize>,
     /// Last known REAPER track count (for change detection)
     pub last_track_count: Option<usize>,
     /// Date of last auto-snapshot per member (member_id -> "YYYY-MM-DD")
@@ -214,6 +221,18 @@ impl AppState {
         let (event_tx, _) = broadcast::channel(256);
         #[cfg(feature = "audio")]
         let (audio_tx, _) = broadcast::channel(8);
+        // Seed the validator's index set with the position-fallback view
+        // (i+1 for each input) so commands arriving BEFORE the first
+        // successful poller tick are validated against the same set of
+        // indices that build_channel_templates would send to the client.
+        // The poller overwrites this with the real REAPER-resolved set on
+        // its first cycle (see poller.rs `input_track_indices` update).
+        let initial_valid = crate::proxy::collect_valid_input_indices(
+            &config.inputs,
+            &std::collections::HashMap::new(),
+        );
+        let mut initial_cache = MixerCache::new();
+        initial_cache.valid_input_track_indices = initial_valid;
         Self {
             config: Arc::new(RwLock::new(config)),
             http_client: reqwest::Client::builder()
@@ -222,7 +241,7 @@ impl AppState {
                 .build()
                 .expect("failed to build HTTP client"),
             event_tx,
-            mixer_cache: Arc::new(RwLock::new(MixerCache::new())),
+            mixer_cache: Arc::new(RwLock::new(initial_cache)),
             pin_store: Arc::new(RwLock::new(pin_store::PinStore::load(config_dir))),
             snapshot_store: Arc::new(snapshot_store::SnapshotStore::new(config_dir)),
             backup_store: Arc::new(backup_store::BackupStore::new(config_dir)),
