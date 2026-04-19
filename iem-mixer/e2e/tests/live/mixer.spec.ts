@@ -1568,66 +1568,76 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     await page.goto("/petronela");
     await waitForMixer(page);
 
-    // Wait for channels and WS to connect
-    const meterFill = page.locator(".meter-fill").nth(2);
+    // Target PETRONELA's own mic meter (track 1) via a stable channel-
+    // scoped selector. The historical `.meter-fill:nth(2)` worked by
+    // coincidence (DOM order) and broke as soon as the top-bar/stems layout
+    // shifted meter-fill indices — use the owning channel's class instead.
+    const meterFill = page
+      .locator(".channel")
+      .filter({ has: page.locator(".ch-name", { hasText: /^PETRONELA$/ }) })
+      .filter({ has: page.locator(".ch-type", { hasText: /^mic/ }) })
+      .locator(".meter-fill")
+      .first();
     await expect(meterFill).toBeAttached({ timeout: 5000 });
 
+    // Wait for channels + WS to connect and initial poller snapshot to land.
     await page.waitForTimeout(500);
 
-    // Inject TWO different meter messages with the SAME signal level (0.5),
-    // but manipulate channel state between them. If meters are independent
-    // of fader/pan, both should produce the same fill width.
-    const firstWidth = await page.evaluate(() => {
-      const ws = (window as any).__iem_ws as WebSocket | undefined;
-      if (!ws || !ws.onmessage) return -1;
+    // Inject [0.5, 0.5] for all 22 input tracks and verify the PETRONELA mic
+    // meter-fill width reflects the synthetic signal (not a fader-scaled
+    // value). Repeat the inject in a tight loop so the live REAPER poller
+    // (which fires every ~150 ms and overwrites the synthetic signal with
+    // real meter values — 0 when no audio is playing on the track) cannot
+    // erase the inject before we read. Each iteration re-applies the
+    // synthetic peak; the 50 ms meter-update throttle in the WS handler
+    // still lets one inject per cycle land.
+    const injectOnce = () =>
+      page.evaluate(() => {
+        const ws = (window as any).__iem_ws as WebSocket | undefined;
+        if (!ws || !ws.onmessage) return false;
+        const meters: Record<string, [number, number]> = {};
+        for (let i = 1; i <= 22; i++) {
+          meters[String(i)] = [0.5, 0.5];
+        }
+        const msg = JSON.stringify({ event: "Meters", data: { meters } });
+        ws.onmessage(new MessageEvent("message", { data: msg }));
+        return true;
+      });
 
-      const meters: Record<string, [number, number]> = {};
-      for (let i = 1; i <= 22; i++) {
-        meters[String(i)] = [0.5, 0.5];
-      }
-      const msg = JSON.stringify({ event: "Meters", data: { meters } });
-      ws.onmessage(new MessageEvent("message", { data: msg }));
-      return 0; // Will read width after animation tick
-    });
+    const readWidth = () =>
+      meterFill.evaluate((el) => {
+        const style = el.getAttribute("style") || "";
+        const match = style.match(/width:\s*([\d.]+)%/);
+        return match ? parseFloat(match[1]) : 0;
+      });
 
-    expect(firstWidth).not.toBe(-1);
+    // Inject ~6× over ~350 ms so at least one inject outruns every poller
+    // overwrite during the read window.
+    let widthBefore = 0;
+    for (let i = 0; i < 6; i++) {
+      const ok = await injectOnce();
+      expect(ok).toBe(true);
+      await page.waitForTimeout(60);
+      const w = await readWidth();
+      if (w > widthBefore) widthBefore = w;
+    }
 
-    // Wait for animation tick to process
-    await page.waitForTimeout(200);
+    // Second-phase inject — width should remain within tolerance whatever
+    // the fader/pan values are in the channel state.
+    let widthAfter = 0;
+    for (let i = 0; i < 6; i++) {
+      await injectOnce();
+      await page.waitForTimeout(60);
+      const w = await readWidth();
+      if (w > widthAfter) widthAfter = w;
+    }
 
-    // Read meter width after first injection
-    const widthBefore = await meterFill.evaluate((el) => {
-      const style = el.getAttribute("style") || "";
-      const match = style.match(/width:\s*([\d.]+)%/);
-      return match ? parseFloat(match[1]) : 0;
-    });
-
-    // Now inject the SAME meter signal — width should remain the same
-    // regardless of what the fader/pan values are in the channel state.
-    await page.evaluate(() => {
-      const ws = (window as any).__iem_ws as WebSocket | undefined;
-      if (!ws || !ws.onmessage) return;
-
-      const meters: Record<string, [number, number]> = {};
-      for (let i = 1; i <= 22; i++) {
-        meters[String(i)] = [0.5, 0.5];
-      }
-      const msg = JSON.stringify({ event: "Meters", data: { meters } });
-      ws.onmessage(new MessageEvent("message", { data: msg }));
-    });
-
-    await page.waitForTimeout(200);
-
-    const widthAfter = await meterFill.evaluate((el) => {
-      const style = el.getAttribute("style") || "";
-      const match = style.match(/width:\s*([\d.]+)%/);
-      return match ? parseFloat(match[1]) : 0;
-    });
-
-    // Both widths should be non-zero and equal (same raw input = same meter)
+    // Both widths should be non-zero (the injected synthetic signal rendered
+    // at least once in each phase) and within tolerance of each other.
     expect(widthBefore).toBeGreaterThan(0);
-    // Allow 10% tolerance — live REAPER injects real meter values between
-    // synthetic ones, causing drift on production systems
+    expect(widthAfter).toBeGreaterThan(0);
+    // 10% tolerance absorbs residual drift from live REAPER real-meter
+    // overwrites between injects.
     expect(Math.abs(widthAfter - widthBefore)).toBeLessThanOrEqual(10);
   });
 

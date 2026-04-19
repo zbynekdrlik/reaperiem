@@ -93,10 +93,13 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
     await page.reload({ waitUntil: "networkidle" });
 
     // Poll for SW cache to be populated (SW may take several seconds after
-    // activation). 20 × 1 s allows for slow CI runners — the cache DOES
-    // eventually populate, but observed flakes at 10 s (< 5 % on ubuntu-latest).
+    // activation). 40 × 1 s allows for slow CI runners — the cache DOES
+    // eventually populate, but observed flakes at 10 s (< 5 % on
+    // ubuntu-latest) and 20 s under heavier runner load. Bumping to 40 s
+    // keeps the test real (no mocking) while tolerating GitHub Actions
+    // queue variance.
     let cacheInfo = { exists: false, keys: [] as string[] };
-    for (let attempt = 0; attempt < 20; attempt++) {
+    for (let attempt = 0; attempt < 40; attempt++) {
       await page.waitForTimeout(1000);
       cacheInfo = await page.evaluate(async () => {
         const names = await caches.keys();

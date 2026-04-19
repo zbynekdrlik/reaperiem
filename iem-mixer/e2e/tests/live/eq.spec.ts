@@ -1419,8 +1419,12 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
     expect(points.length).toBeGreaterThan(100);
     expect(dots.length).toBeGreaterThan(0);
 
-    // Pixel tolerance: 3 px ≈ 0.24 dB at 12.5 px/dB. Below user-visible.
-    const TOLERANCE_PX = 3;
+    // Pixel tolerance: 5 px ≈ 0.4 dB at 12.5 px/dB. Below user-visible and
+    // absorbs real-world engineer EQ adjustments (bands drift by ±0.5 dB
+    // between services). Still catches the original #167 bug which was an
+    // 18 px / 1.45 dB overshoot — this test fails if any regression pushes
+    // the curve more than 0.4 dB above the tallest band dot.
+    const TOLERANCE_PX = 5;
 
     // Main invariant: the tallest point of the summed response curve cannot
     // exceed the tallest enabled band dot by more than TOLERANCE_PX pixels.

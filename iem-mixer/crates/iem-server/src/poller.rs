@@ -679,6 +679,15 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 cache.member_states.clear();
             }
             cache.input_track_indices = input_indices;
+            // Recompute the authoritative valid-input-index set at exactly
+            // the same moment — this is the set that per-command validators
+            // read on hot paths. Mirrors build_channel_templates' resolution
+            // so the set the client was sent agrees with what the server
+            // will accept. See #179: using inputs.len() here silently
+            // rejected every ALEX kl (track 44) command during a live
+            // service.
+            cache.valid_input_track_indices =
+                crate::proxy::collect_valid_input_indices(&inputs, &cache.input_track_indices);
         }
     }
 
