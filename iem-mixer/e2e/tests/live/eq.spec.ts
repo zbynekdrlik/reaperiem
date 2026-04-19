@@ -1503,6 +1503,12 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
       await openKebabMenu(page, "MIREC");
       await clickEqOption(page);
       await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      // Bands render asynchronously after REAPER responds with EQ state —
+      // wait for at least 2 cards to be in the DOM before measuring.
+      await page.waitForFunction(
+        () => document.querySelectorAll(".eq-band-card").length >= 2,
+        { timeout: 5000 },
+      );
 
       // With pointer:coarse + orientation:portrait, every .eq-band-card
       // should occupy the full row. We assert by measuring widths of the
@@ -1587,9 +1593,9 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
       .evaluate((el) => getComputedStyle(el).boxShadow);
     expect(
       baselineShadow,
-      `baseline .eq-modal box-shadow should not contain 'inset ... 4px'. ` +
+      `baseline .eq-modal box-shadow should not contain '4px inset'. ` +
         `Got: ${baselineShadow}`,
-    ).not.toMatch(/inset[\s\S]*4px/);
+    ).not.toMatch(/4px\s+inset/);
 
     // Force-activate a slider by adding the `active` class directly. We don't
     // need to simulate the full long-press gesture — the :has() rule is what
@@ -1606,9 +1612,9 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
       .evaluate((el) => getComputedStyle(el).boxShadow);
     expect(
       activeShadow,
-      `active .eq-modal box-shadow must contain 'inset ... 4px' for the ` +
+      `active .eq-modal box-shadow must contain '4px inset' for the ` +
         `fullscreen movement-mode cue. Got: ${activeShadow}`,
-    ).toMatch(/inset[\s\S]*4px/);
+    ).toMatch(/4px\s+inset/);
 
     // Remove the active class and verify the cue clears.
     await page.locator(".eq-slider-track").first().evaluate((el) => {
@@ -1618,7 +1624,7 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
     const clearedShadow = await page
       .locator(".eq-modal")
       .evaluate((el) => getComputedStyle(el).boxShadow);
-    expect(clearedShadow).not.toMatch(/inset[\s\S]*4px/);
+    expect(clearedShadow).not.toMatch(/4px\s+inset/);
 
     // Self-clean.
     await page.locator(".eq-close-btn").click();
