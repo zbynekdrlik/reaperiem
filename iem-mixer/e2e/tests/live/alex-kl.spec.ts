@@ -159,12 +159,25 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
       await page.mouse.up();
       await page.waitForTimeout(500);
 
-      // Verify the drag produced a measurable dB drop via the WebSocket
-      // round-trip (.db-display reflects the poller's snapshot of REAPER).
+      // PRIMARY: verify REAPER actually received the change. The UI's
+      // .db-display reflects the optimistic Leptos signal and updates
+      // client-side on drag whether or not the WS command was applied —
+      // that optimism masked #179 (is_valid_track rejected ALEX kl's
+      // track_index=44 silently, so no REAPER call was ever made yet
+      // tests passed). So the authoritative check must be a direct
+      // REAPER HTTP roundtrip, not the UI readout.
+      const postDragResp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${alexIdx}/SEND/${stevoSendIdx}`,
+      );
+      const postDragParts = (await postDragResp.text()).trim().split("\t");
+      const postDragVol = parseFloat(postDragParts[4]);
+      expect(
+        postDragVol,
+        `REAPER send D_VOL must drop after UI drag — was ${volBefore}, got ${postDragVol}. If volBefore and postDragVol are equal, the UI command did not reach REAPER.`,
+      ).toBeLessThan(volBefore * 0.7);
+
+      // SECONDARY: UI reflects the same state (poller round-trip worked)
       const dbEnd = await parseDb();
-      // Moving left on the fader lowers dB. A 40%-of-width drag must produce
-      // at least a 3 dB drop — anything less means the drag wasn't registered
-      // or the WS round-trip didn't propagate the change.
       expect(dbEnd).toBeLessThan(dbStart - 3);
       expect(dbEnd).toBeLessThan(0);
     } finally {
@@ -174,6 +187,105 @@ test.describe("ALEX kl (keyboard stereo input)", () => {
       // unsatisfiable — and band members hear Alex too quietly in real use.
       await request.get(
         `http://iem.lan:8080/_/SET/TRACK/${alexIdx}/SEND/${stevoSendIdx}/VOL/${volBefore}`,
+      );
+    }
+  });
+
+  test("muting ALEX kl mutes the REAPER send — not just the UI (#179)", async ({
+    page,
+    request,
+  }) => {
+    // Regression test for the April 2026 live-event bug: members could see
+    // the ALEX kl channel and the mute button, but clicking mute did
+    // nothing at REAPER level because apply_command_to_cache's validator
+    // rejected track_index=44 (the real REAPER track) as "out of range"
+    // when it exceeded the input count (23). The UI showed muted=true
+    // optimistically; REAPER never received the command; the keyboard
+    // stayed audible at unity in every member's IEM.
+    //
+    // The only authoritative check is REAPER's send mute flag — NOT the
+    // UI button class.
+    const tracksResp = await request.get("http://iem.lan:8080/_/NTRACK;TRACK");
+    const tracksText = await tracksResp.text();
+    const lines = tracksText.split("\n");
+    const findRow = (needle: string) =>
+      lines.find((l) => {
+        const parts = l.split("\t");
+        return parts[0] === "TRACK" && parts[2] === needle;
+      });
+    const alexRow = findRow("ALEX kl");
+    const stevoInearRow = findRow("STEVO inear");
+    expect(alexRow, "ALEX kl track not found").toBeTruthy();
+    expect(stevoInearRow, "STEVO inear track not found").toBeTruthy();
+    const alexIdx = parseInt(alexRow!.split("\t")[1], 10);
+    const stevoInearIdx = parseInt(stevoInearRow!.split("\t")[1], 10);
+
+    // Locate the ALEX kl → STEVO inear send by walking ALEX kl's send list
+    let stevoSendIdx = -1;
+    let muteBefore = 0;
+    for (let s = 0; s < 20; s++) {
+      const r = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${alexIdx}/SEND/${s}`,
+      );
+      const line = (await r.text()).trim();
+      if (!line.startsWith("SEND")) break;
+      const p = line.split("\t");
+      if (p.length >= 7 && parseInt(p[6], 10) === stevoInearIdx) {
+        stevoSendIdx = s;
+        muteBefore = parseInt(p[3], 10);
+        break;
+      }
+    }
+    expect(stevoSendIdx).toBeGreaterThanOrEqual(0);
+
+    // Ensure starting state is UNMUTED so we can observe a mute transition.
+    if (muteBefore !== 0) {
+      await request.get(
+        `http://iem.lan:8080/_/SET/TRACK/${alexIdx}/SEND/${stevoSendIdx}/MUTE/0`,
+      );
+    }
+
+    try {
+      await page.goto("/");
+      await loginAs(page, "stevo");
+      await page.goto("/stevo");
+      await waitForMixer(page);
+
+      const micsTab = page.locator("text=Mics").first();
+      if ((await micsTab.count()) > 0) {
+        await micsTab.click();
+        await page.waitForTimeout(200);
+      }
+
+      const alexKl = page
+        .locator(".channel")
+        .filter({ has: page.locator(".ch-name", { hasText: /^ALEX$/ }) })
+        .filter({ has: page.locator(".ch-type", { hasText: /^kl/ }) })
+        .first();
+      await expect(alexKl).toBeVisible({ timeout: 10000 });
+
+      // Click the mute button for ALEX kl. Pattern matches other channel
+      // tests in this suite (.mute-btn inside the channel row).
+      const muteBtn = alexKl.locator(".mute-btn").first();
+      await expect(muteBtn).toBeVisible();
+      await muteBtn.click();
+      await page.waitForTimeout(700); // WS roundtrip + REAPER apply
+
+      // Authoritative check: REAPER send mute flag must be set (8 = muted
+      // in REAPER's bitfield). Mute flag values: 0 = unmuted, 8 = muted.
+      const afterResp = await request.get(
+        `http://iem.lan:8080/_/GET/TRACK/${alexIdx}/SEND/${stevoSendIdx}`,
+      );
+      const afterParts = (await afterResp.text()).trim().split("\t");
+      const muteAfter = parseInt(afterParts[3], 10);
+      expect(
+        muteAfter,
+        "REAPER send MUTE flag must be 8 (muted) after UI mute click. If it's 0, the command did not reach REAPER — the #179 regression is back.",
+      ).toBe(8);
+    } finally {
+      // Restore unmuted state so this live test doesn't leak
+      await request.get(
+        `http://iem.lan:8080/_/SET/TRACK/${alexIdx}/SEND/${stevoSendIdx}/MUTE/${muteBefore}`,
       );
     }
   });

@@ -161,6 +161,20 @@ jobs:
           python3 -m pip install --quiet pyyaml
           python3 scripts/test_merge_deployed_config.py
 
+      - name: Self-test the track_index validator guard (#179)
+        run: |
+          # Run scanner's own tests first so a broken scanner cannot
+          # silently pass the very regression it is supposed to catch.
+          python3 scripts/test_check_track_index_validator.py
+
+      - name: Ban track_index <= inputs.len() validators (#179)
+        run: |
+          # Regression from the live service: ALEX kl at REAPER track 44
+          # was silently un-mute-able because is_valid_track used
+          # `ti <= inputs.len()` (23). Validators MUST use the resolved
+          # REAPER index set from collect_valid_input_indices() instead.
+          python3 scripts/check_track_index_validator.py
+
       - name: Ban unsafe signal writes inside danger zones (#153)
         run: |
           # Prevents the Leptos "reactive value has already been disposed"

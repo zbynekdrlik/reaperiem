@@ -686,6 +686,28 @@ pub(crate) fn build_mix_channel_templates(
         .collect()
 }
 
+/// Collect the set of REAPER track indices that represent valid input tracks.
+///
+/// Mirrors the index resolution used by `build_channel_templates`: each input
+/// resolves to its REAPER-discovered track index (by name), falling back to
+/// `position+1` when discovery has not yet populated the map.
+///
+/// This is the authoritative set for validating `track_index` arguments on
+/// incoming WS commands. Callers must NOT use `inputs.len()` (a count, not a
+/// membership set) — REAPER indices can exceed the input count when tracks
+/// are added out-of-position (e.g. ALEX kl at REAPER track 44 with only 23
+/// input entries).
+pub(crate) fn collect_valid_input_indices(
+    inputs: &[iem_core::config::InputTrack],
+    resolved: &HashMap<String, usize>,
+) -> std::collections::HashSet<usize> {
+    inputs
+        .iter()
+        .enumerate()
+        .map(|(i, input)| resolved.get(&input.name).copied().unwrap_or(i + 1))
+        .collect()
+}
+
 /// Extract trailing " L" or " R" stereo-side suffix from a track name.
 /// Returns None when no suffix is present.
 pub(crate) fn derive_stereo_side(name: &str) -> Option<String> {
@@ -720,17 +742,20 @@ pub(crate) fn categorize_track(name: &str) -> (String, Option<String>, Option<St
     (category.to_string(), stereo_pair, stereo_side)
 }
 
-/// Validate track_index is within the configured input count
+/// Validate track_index is a valid REAPER track index for an input track.
+///
+/// Must use the set of resolved REAPER indices (see
+/// `collect_valid_input_indices`), NOT `inputs.len()` — see #179.
 fn validate_track_index(
     track_index: usize,
-    input_count: usize,
+    valid_input_indices: &std::collections::HashSet<usize>,
 ) -> Result<(), (StatusCode, Json<ApiError>)> {
-    if track_index < 1 || track_index > input_count {
+    if !valid_input_indices.contains(&track_index) {
         return Err((
             StatusCode::BAD_REQUEST,
             Json(ApiError::bad_request(&format!(
-                "track_index {} out of range 1..{}",
-                track_index, input_count
+                "track_index {} is not a known input track",
+                track_index
             ))),
         ));
     }
@@ -779,16 +804,25 @@ pub async fn set_send_level(
     drop(discovered);
 
     // Validate inputs
-    validate_track_index(track_index, config.inputs.len())?;
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    validate_track_index(track_index, &valid)?;
     validate_level_db(payload.level_db)?;
 
     let reaper_url = config.reaper_url.clone();
 
-    // Get track name for debugging (owned String to avoid borrow issues)
-    let track_name = config
-        .inputs
-        .get(track_index.saturating_sub(1))
-        .map(|i| i.name.clone())
+    // Get track name for debugging: reverse-lookup by REAPER index, then
+    // fall back to config-position (legacy 1:1 mapping).
+    let track_name = resolved
+        .iter()
+        .find(|(_, idx)| **idx == track_index)
+        .map(|(name, _)| name.clone())
+        .or_else(|| {
+            config
+                .inputs
+                .get(track_index.saturating_sub(1))
+                .map(|i| i.name.clone())
+        })
         .unwrap_or_else(|| "unknown".to_string());
 
     drop(config);
@@ -843,7 +877,9 @@ pub async fn set_send_pan(
     drop(discovered);
 
     // Validate inputs
-    validate_track_index(track_index, config.inputs.len())?;
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    validate_track_index(track_index, &valid)?;
     validate_pan(payload.pan)?;
 
     let reaper_url = config.reaper_url.clone();
@@ -891,7 +927,9 @@ pub async fn set_send_mute(
     drop(discovered);
 
     // Validate track index
-    validate_track_index(track_index, config.inputs.len())?;
+    let resolved = state.mixer_cache.read().await.input_track_indices.clone();
+    let valid = collect_valid_input_indices(&config.inputs, &resolved);
+    validate_track_index(track_index, &valid)?;
 
     let reaper_url = config.reaper_url.clone();
 
@@ -1758,12 +1796,19 @@ async fn apply_command_to_cache(
 
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
-    let input_count = config.inputs.len();
+    // Resolve REAPER track indices by input name — matches what
+    // build_channel_templates used to construct the client-visible channel
+    // list. Must NOT use inputs.len() as an upper bound: REAPER indices can
+    // exceed the input count when tracks are added out-of-position (e.g.
+    // ALEX kl at REAPER track 44 with only 23 input entries — see #179).
+    let resolved_inputs = state.mixer_cache.read().await.input_track_indices.clone();
+    let valid_input_indices = collect_valid_input_indices(&config.inputs, &resolved_inputs);
     drop(config);
 
-    // Helper: check if a track_index is valid (input range OR engineer mix channel)
-    let is_valid_track =
-        |ti: usize| -> bool { (ti >= 1 && ti <= input_count) || mix_track_indices.contains(&ti) };
+    // Helper: check if a track_index is valid (input track OR engineer mix channel)
+    let is_valid_track = |ti: usize| -> bool {
+        valid_input_indices.contains(&ti) || mix_track_indices.contains(&ti)
+    };
 
     // Helper: determine REAPER send_index for a given track_index.
     // Mix channels use their discovered mix_send_index (NOT hardcoded 0!).
@@ -3983,6 +4028,86 @@ mod tests {
         assert_eq!(derive_stereo_side("ALEX kl"), None);
         assert_eq!(derive_stereo_side("MAREK mic"), None);
         assert_eq!(derive_stereo_side("DRUMS L"), Some("L".to_string()));
+    }
+
+    /// Regression test for #179: ALEX kl was added to the REAPER project at
+    /// track index 44 (after 10 inears + TRANSLATOR + 10 stems) but it is
+    /// the 23rd entry in config.inputs. The old validator used
+    /// `ti <= inputs.len()` (23), which silently rejected every SetMute /
+    /// SetLevel / SetPan for ALEX kl during a live service — members could
+    /// not mute or adjust the keyboard, it stayed audibly pinned at unity.
+    /// The fix validates against REAPER-resolved indices instead of the
+    /// input count.
+    #[test]
+    fn test_collect_valid_input_indices_accepts_out_of_position_reaper_index() {
+        let inputs = vec![
+            iem_core::config::InputTrack {
+                name: "PETKA mic".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
+            },
+            iem_core::config::InputTrack {
+                name: "ALEX kl".to_string(),
+                dante_input: 13,
+                default_level_db: 0.0,
+                category: Some("mics".to_string()),
+                stereo_pair: None,
+            },
+        ];
+        let mut resolved = HashMap::new();
+        resolved.insert("PETKA mic".to_string(), 1);
+        resolved.insert("ALEX kl".to_string(), 44);
+
+        let valid = collect_valid_input_indices(&inputs, &resolved);
+
+        assert!(
+            valid.contains(&1),
+            "PETKA mic at REAPER track 1 must be valid"
+        );
+        assert!(
+            valid.contains(&44),
+            "ALEX kl at REAPER track 44 must be valid — regression from #179"
+        );
+        assert!(
+            !valid.contains(&2),
+            "REAPER track 2 (not an input track in this setup) must NOT be valid"
+        );
+        // A validator that used `ti <= inputs.len()` would accept 2 and
+        // reject 44 — exact inverse of what's correct. Guard against that:
+        assert!(
+            valid.len() == 2 && valid.contains(&1) && valid.contains(&44),
+            "validator must match discovered REAPER indices, not config position count"
+        );
+    }
+
+    #[test]
+    fn test_collect_valid_input_indices_falls_back_to_position_when_unresolved() {
+        // Before the poller has populated input_track_indices, inputs
+        // resolve to their 1-based config position (matches
+        // build_channel_templates fallback).
+        let inputs = vec![
+            iem_core::config::InputTrack {
+                name: "PETKA mic".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
+            },
+            iem_core::config::InputTrack {
+                name: "STEVO mic".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
+            },
+        ];
+        let resolved = HashMap::new();
+        let valid = collect_valid_input_indices(&inputs, &resolved);
+        assert!(valid.contains(&1));
+        assert!(valid.contains(&2));
+        assert_eq!(valid.len(), 2);
     }
 
     #[test]

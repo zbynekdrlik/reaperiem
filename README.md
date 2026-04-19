@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.155.0 (2026-04-19)
+
+- **Fix (critical)**: ALEX kl mute / fader / pan were silently dropped at the server — every WS command for track_index=44 failed the `is_valid_track` check because it compared against `inputs.len()` (23) instead of the resolved REAPER track indices. The keyboard was uncontrollable for members during the April live service; REAPER never received the commands even though the UI showed them applied. (#179)
+- **Fix**: `validate_track_index` (REST endpoints for level/pan/mute) now also uses the resolved REAPER index set.
+- **Test**: `alex-kl.spec.ts` fader + new mute test assert against REAPER HTTP directly (`GET /TRACK/N/SEND/M`), not the UI's optimistic `.db-display`. Bug reproduces deterministically with the old validator.
+- **CI**: New scanner `scripts/check_track_index_validator.py` fails CI if any code compares `track_index` / `ti` against `inputs.len()` / `input_count` — prevents silent recurrence.
+
 ### v1.154.0 (2026-04-18)
 
 - **Fix**: ALEX kl `I_RECMON=1` — keyboard now passes audio to member IEMs during live services (was silent with RECMON=0).
