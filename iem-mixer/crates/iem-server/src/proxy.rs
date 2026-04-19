@@ -708,6 +708,42 @@ pub(crate) fn collect_valid_input_indices(
         .collect()
 }
 
+/// Returns true when `ti` is a valid track index to mutate: either a
+/// REAPER-resolved input track (from `valid_input_indices`) or an engineer
+/// mix channel (from `mix_track_indices`). Separate function so it can be
+/// unit-tested directly — both a deleted `!` in the REST validator and a
+/// `||`→`&&` mutation in this OR-clause survived cargo-mutants until we
+/// extracted it.
+pub(crate) fn is_valid_track_index(
+    ti: usize,
+    valid_input_indices: &std::collections::HashSet<usize>,
+    mix_track_indices: &[usize],
+) -> bool {
+    valid_input_indices.contains(&ti) || mix_track_indices.contains(&ti)
+}
+
+/// Reverse-lookup an input track's name from its REAPER index, falling back
+/// to the 1-based config-position convention when the index is not yet
+/// resolved by the poller. Used for log-message enrichment on the REST
+/// level/pan/mute endpoints. Extracted (vs. inlined) so the primary match
+/// (`**idx == track_index`) is unit-testable — a stray `==`→`!=` mutation
+/// would silently return a WRONG track name, masking real bugs in log output.
+pub(crate) fn lookup_input_name(
+    resolved: &HashMap<String, usize>,
+    track_index: usize,
+    fallback_inputs: &[iem_core::config::InputTrack],
+) -> Option<String> {
+    resolved
+        .iter()
+        .find(|(_, idx)| **idx == track_index)
+        .map(|(name, _)| name.clone())
+        .or_else(|| {
+            fallback_inputs
+                .get(track_index.saturating_sub(1))
+                .map(|i| i.name.clone())
+        })
+}
+
 /// Extract trailing " L" or " R" stereo-side suffix from a track name.
 /// Returns None when no suffix is present.
 pub(crate) fn derive_stereo_side(name: &str) -> Option<String> {
@@ -813,16 +849,7 @@ pub async fn set_send_level(
 
     // Get track name for debugging: reverse-lookup by REAPER index, then
     // fall back to config-position (legacy 1:1 mapping).
-    let track_name = resolved
-        .iter()
-        .find(|(_, idx)| **idx == track_index)
-        .map(|(name, _)| name.clone())
-        .or_else(|| {
-            config
-                .inputs
-                .get(track_index.saturating_sub(1))
-                .map(|i| i.name.clone())
-        })
+    let track_name = lookup_input_name(&resolved, track_index, &config.inputs)
         .unwrap_or_else(|| "unknown".to_string());
 
     drop(config);
@@ -1806,9 +1833,8 @@ async fn apply_command_to_cache(
     drop(config);
 
     // Helper: check if a track_index is valid (input track OR engineer mix channel)
-    let is_valid_track = |ti: usize| -> bool {
-        valid_input_indices.contains(&ti) || mix_track_indices.contains(&ti)
-    };
+    let is_valid_track =
+        |ti: usize| -> bool { is_valid_track_index(ti, &valid_input_indices, &mix_track_indices) };
 
     // Helper: determine REAPER send_index for a given track_index.
     // Mix channels use their discovered mix_send_index (NOT hardcoded 0!).
@@ -4079,6 +4105,122 @@ mod tests {
         assert!(
             valid.len() == 2 && valid.contains(&1) && valid.contains(&44),
             "validator must match discovered REAPER indices, not config position count"
+        );
+    }
+
+    /// cargo-mutants MISSED: `|| → &&` in is_valid_track's OR-clause. This
+    /// set of tests pins down the exact truth table so any single-operator
+    /// mutation flips at least one case.
+    #[test]
+    fn test_is_valid_track_index_input_only() {
+        let mut inputs = std::collections::HashSet::new();
+        inputs.insert(5usize);
+        let mixes: Vec<usize> = vec![];
+        assert!(is_valid_track_index(5, &inputs, &mixes));
+        assert!(!is_valid_track_index(6, &inputs, &mixes));
+    }
+
+    #[test]
+    fn test_is_valid_track_index_mix_only() {
+        let inputs = std::collections::HashSet::new();
+        let mixes: Vec<usize> = vec![42, 43];
+        assert!(is_valid_track_index(42, &inputs, &mixes));
+        assert!(!is_valid_track_index(5, &inputs, &mixes));
+    }
+
+    #[test]
+    fn test_is_valid_track_index_or_not_and() {
+        // Regression guard for cargo-mutants `|| → &&`: with && the truth
+        // table flips — a track in ONLY the input set would be rejected.
+        // ALEX kl (track 44) is in valid_input_indices but NOT in
+        // mix_track_indices for a regular member; the fix MUST accept it.
+        let mut inputs = std::collections::HashSet::new();
+        inputs.insert(44usize);
+        let mixes: Vec<usize> = vec![50, 51];
+        assert!(
+            is_valid_track_index(44, &inputs, &mixes),
+            "ALEX kl in inputs only MUST be accepted — && instead of || would reject it"
+        );
+        assert!(
+            is_valid_track_index(50, &inputs, &mixes),
+            "mix track 50 in mixes only MUST be accepted"
+        );
+        assert!(
+            !is_valid_track_index(99, &inputs, &mixes),
+            "track 99 in neither set MUST be rejected"
+        );
+    }
+
+    /// cargo-mutants MISSED: `== → !=` in the `find` predicate of the
+    /// track_name reverse-lookup. With `!=`, find returns the first
+    /// non-matching entry — a wrong name that flows into tracing logs.
+    #[test]
+    fn test_lookup_input_name_returns_correct_name_for_reaper_index() {
+        let mut resolved = HashMap::new();
+        resolved.insert("PETRONELA mic".to_string(), 1);
+        resolved.insert("ALEX kl".to_string(), 44);
+        resolved.insert("ENGINEER mic".to_string(), 22);
+        let inputs: Vec<iem_core::config::InputTrack> = vec![];
+
+        assert_eq!(
+            lookup_input_name(&resolved, 44, &inputs),
+            Some("ALEX kl".to_string()),
+            "must return exact match for track 44 — `!=` mutation returns a different entry"
+        );
+        assert_eq!(
+            lookup_input_name(&resolved, 1, &inputs),
+            Some("PETRONELA mic".to_string())
+        );
+        assert_eq!(
+            lookup_input_name(&resolved, 22, &inputs),
+            Some("ENGINEER mic".to_string())
+        );
+    }
+
+    #[test]
+    fn test_lookup_input_name_falls_back_to_position_when_not_resolved() {
+        let resolved = HashMap::new();
+        let inputs = vec![
+            iem_core::config::InputTrack {
+                name: "A".to_string(),
+                dante_input: 1,
+                default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
+            },
+            iem_core::config::InputTrack {
+                name: "B".to_string(),
+                dante_input: 2,
+                default_level_db: 0.0,
+                category: None,
+                stereo_pair: None,
+            },
+        ];
+        assert_eq!(
+            lookup_input_name(&resolved, 1, &inputs),
+            Some("A".to_string())
+        );
+        assert_eq!(
+            lookup_input_name(&resolved, 2, &inputs),
+            Some("B".to_string())
+        );
+        assert_eq!(lookup_input_name(&resolved, 99, &inputs), None);
+    }
+
+    /// cargo-mutants MISSED: `!` deletion in validate_track_index — the
+    /// inverted branch would reject every valid index and accept every
+    /// invalid one. Test both branches to pin the `!`.
+    #[test]
+    fn test_validate_track_index_accepts_member_and_rejects_non_member() {
+        let mut valid = std::collections::HashSet::new();
+        valid.insert(44usize);
+        assert!(
+            validate_track_index(44, &valid).is_ok(),
+            "track 44 in the valid set must validate OK — `!` deletion would return Err"
+        );
+        assert!(
+            validate_track_index(99, &valid).is_err(),
+            "track 99 not in the valid set must validate Err — `!` deletion would return Ok"
         );
     }
 
