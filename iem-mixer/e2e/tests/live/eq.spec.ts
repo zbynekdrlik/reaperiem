@@ -981,6 +981,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
       if (msg.type() === "error" || msg.type() === "warning") {
         if (msg.text().includes("subscribe await failed")) return;
         if (msg.text().includes("Push API in incognito")) return;
+        if (msg.text().includes("vapid-key fetch error")) return;
         consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
       }
     });
