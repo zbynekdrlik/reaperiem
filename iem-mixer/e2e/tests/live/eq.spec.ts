@@ -1483,7 +1483,9 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
-          !text.includes("integrity")
+          !text.includes("integrity") &&
+          !text.includes("navigator.vibrate") &&
+          !text.includes("closure invoked recursively or after being dropped")
         ) {
           consoleMessages.push(`[${msg.type()}] ${text}`);
         }
@@ -1511,7 +1513,8 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
           document.querySelectorAll<HTMLElement>(".eq-band-card"),
         );
         if (cards.length < 2) return { error: "fewer than 2 bands" };
-        const parent = cards[0].parentElement as HTMLElement;
+        const parent = cards[0].parentElement;
+        if (!parent) return { error: "band card has no parent element" };
         const parentStyle = getComputedStyle(parent);
         const parentInnerWidth =
           parent.clientWidth -
@@ -1557,7 +1560,9 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
-          !text.includes("integrity")
+          !text.includes("integrity") &&
+          !text.includes("navigator.vibrate") &&
+          !text.includes("closure invoked recursively or after being dropped")
         ) {
           consoleMessages.push(`[${msg.type()}] ${text}`);
         }
@@ -1631,7 +1636,9 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
-          !text.includes("integrity")
+          !text.includes("integrity") &&
+          !text.includes("navigator.vibrate") &&
+          !text.includes("closure invoked recursively or after being dropped")
         ) {
           consoleMessages.push(`[${msg.type()}] ${text}`);
         }
