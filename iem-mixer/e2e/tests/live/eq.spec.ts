@@ -1,4 +1,4 @@
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, Page, devices } from "@playwright/test";
 
 // Helper to login and set auth in localStorage
 async function loginAs(page: Page, member: string, pin: string = "7711") {
@@ -1439,6 +1439,235 @@ test.describe("#167 EQ curve shape (live MIREC)", () => {
     ).toBeGreaterThanOrEqual(dotMinY - TOLERANCE_PX);
 
     // Console-clean invariant (airuleset browser-console-zero-errors.md).
+    expect(consoleMessages).toEqual([]);
+  });
+});
+
+
+// -----------------------------------------------------------------------------
+// #179 EQ usability fixes — iPhone 17 Pro reported issues.
+//
+// Three tests verify the v1.156.0 CSS changes:
+//   1. Portrait-phone stacking — iPhone 14 Pro Max device emulation (430×932
+//      with hasTouch + isMobile, which makes Chromium report pointer=coarse)
+//      must render EQ band cards one per row, not two per row.
+//   2. Activation cue — when any EQ slider is active, .eq-modal must render
+//      an inset cyan border (box-shadow: inset 0px 0px 0px 4px <accent>).
+//   3. Contrast regression — .eq-param-label must NOT be the old #555. Belt-
+//      and-braces against the color being reverted.
+//
+// All three reuse the engineer→MIREC→EQ path already exercised by the existing
+// #167 test above. The stacking test uses its own browser context with mobile
+// emulation because the new CSS rule keys off (pointer:coarse); plain
+// setViewportSize on a Desktop Chrome context reports pointer=fine and would
+// not trigger the rule. Each test self-cleans (closes the EQ modal on
+// teardown) so live REAPER state isn't left dirty for subsequent tests.
+// -----------------------------------------------------------------------------
+
+test.describe("#179 EQ iPhone 17 Pro usability", () => {
+  test("band cards stack vertically on iPhone 17 Pro portrait viewport", async ({
+    browser,
+  }) => {
+    // Manual mobile context so Chromium reports pointer:coarse and matches
+    // the new @media rule. iPhone 14 Pro Max has the same 430×932 portrait
+    // geometry as iPhone 17 Pro.
+    const context = await browser.newContext({
+      ...devices["iPhone 14 Pro Max"],
+    });
+    const page = await context.newPage();
+
+    const consoleMessages: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        if (
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
+          consoleMessages.push(`[${msg.type()}] ${text}`);
+        }
+      }
+    });
+
+    try {
+      await page.goto("/");
+      await loginAs(page, "engineer", "1177");
+      await page.goto("/engineer");
+      await waitForMixer(page);
+
+      await page.getByRole("button", { name: "Mics" }).click();
+      await page.waitForTimeout(300);
+      await openKebabMenu(page, "MIREC");
+      await clickEqOption(page);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+      // With pointer:coarse + orientation:portrait, every .eq-band-card
+      // should occupy the full row. We assert by measuring widths of the
+      // first two cards: if they're equal AND each is > 90% of their common
+      // parent's inner width, they're stacked (not side-by-side).
+      const geom = await page.evaluate(() => {
+        const cards = Array.from(
+          document.querySelectorAll<HTMLElement>(".eq-band-card"),
+        );
+        if (cards.length < 2) return { error: "fewer than 2 bands" };
+        const parent = cards[0].parentElement as HTMLElement;
+        const parentStyle = getComputedStyle(parent);
+        const parentInnerWidth =
+          parent.clientWidth -
+          parseFloat(parentStyle.paddingLeft) -
+          parseFloat(parentStyle.paddingRight);
+        return {
+          card0: cards[0].getBoundingClientRect().width,
+          card1: cards[1].getBoundingClientRect().width,
+          parentInnerWidth,
+        };
+      });
+      if ("error" in geom) throw new Error(geom.error);
+
+      // Equal widths (rounding tolerance 2 px).
+      expect(
+        Math.abs(geom.card0 - geom.card1),
+        `cards have unequal widths: ${geom.card0} vs ${geom.card1}`,
+      ).toBeLessThan(2);
+      // Each card ≥ 90% of the parent's inner width ⇒ full-width ⇒ stacked.
+      expect(
+        geom.card0 / geom.parentInnerWidth,
+        `card width ${geom.card0} / parent inner ${geom.parentInnerWidth} = ` +
+          `${(geom.card0 / geom.parentInnerWidth).toFixed(2)}. If < 0.9, ` +
+          `cards are still rendering side-by-side at iPhone 17 Pro viewport.`,
+      ).toBeGreaterThan(0.9);
+
+      // Self-clean: close the EQ modal.
+      await page.locator(".eq-close-btn").click();
+
+      expect(consoleMessages).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test("active EQ slider triggers fullscreen movement-mode cue on modal", async ({
+    page,
+  }) => {
+    const consoleMessages: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        if (
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
+          consoleMessages.push(`[${msg.type()}] ${text}`);
+        }
+      }
+    });
+
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    await waitForMixer(page);
+
+    await page.getByRole("button", { name: "Mics" }).click();
+    await page.waitForTimeout(300);
+    await openKebabMenu(page, "MIREC");
+    await clickEqOption(page);
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    // Baseline: .eq-modal should NOT have the inset 4px box-shadow when no
+    // slider is active.
+    const baselineShadow = await page
+      .locator(".eq-modal")
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(
+      baselineShadow,
+      `baseline .eq-modal box-shadow should not contain 'inset ... 4px'. ` +
+        `Got: ${baselineShadow}`,
+    ).not.toMatch(/inset[\s\S]*4px/);
+
+    // Force-activate a slider by adding the `active` class directly. We don't
+    // need to simulate the full long-press gesture — the :has() rule is what
+    // we're testing, and it keys off the class, not the gesture. This keeps
+    // the test deterministic (no gesture timing).
+    await page.locator(".eq-slider-track").first().evaluate((el) => {
+      el.classList.add("active");
+    });
+    // Give the transition a frame to apply.
+    await page.waitForTimeout(200);
+
+    const activeShadow = await page
+      .locator(".eq-modal")
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(
+      activeShadow,
+      `active .eq-modal box-shadow must contain 'inset ... 4px' for the ` +
+        `fullscreen movement-mode cue. Got: ${activeShadow}`,
+    ).toMatch(/inset[\s\S]*4px/);
+
+    // Remove the active class and verify the cue clears.
+    await page.locator(".eq-slider-track").first().evaluate((el) => {
+      el.classList.remove("active");
+    });
+    await page.waitForTimeout(200);
+    const clearedShadow = await page
+      .locator(".eq-modal")
+      .evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(clearedShadow).not.toMatch(/inset[\s\S]*4px/);
+
+    // Self-clean.
+    await page.locator(".eq-close-btn").click();
+
+    expect(consoleMessages).toEqual([]);
+  });
+
+  test("EQ parameter labels use readable contrast (not #555)", async ({
+    page,
+  }) => {
+    const consoleMessages: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        if (
+          !text.includes("Push API in incognito") &&
+          !text.includes("[push] subscribe await failed") &&
+          !text.includes("integrity")
+        ) {
+          consoleMessages.push(`[${msg.type()}] ${text}`);
+        }
+      }
+    });
+
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
+    await page.goto("/engineer");
+    await waitForMixer(page);
+
+    await page.getByRole("button", { name: "Mics" }).click();
+    await page.waitForTimeout(300);
+    await openKebabMenu(page, "MIREC");
+    await clickEqOption(page);
+    await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+
+    const labelColor = await page
+      .locator(".eq-param-label")
+      .first()
+      .evaluate((el) => getComputedStyle(el).color);
+
+    // Reject the exact #555 that the old spec used. This is a regression
+    // sentinel — any color darker than the new #bbb would still pass rgb
+    // parsing but fail readability. Keep the check minimal: the old value
+    // must never reappear.
+    expect(
+      labelColor,
+      `.eq-param-label color is rgb(85, 85, 85) (#555). The spec in ` +
+        `docs/superpowers/specs/2026-04-19-eq-iphone17-usability-design.md ` +
+        `requires #bbb or brighter for readability.`,
+    ).not.toBe("rgb(85, 85, 85)");
+
+    // Self-clean.
+    await page.locator(".eq-close-btn").click();
+
     expect(consoleMessages).toEqual([]);
   });
 });
