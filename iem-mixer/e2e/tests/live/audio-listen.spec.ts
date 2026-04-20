@@ -61,16 +61,17 @@ test.describe("Audio Listen Button (#90)", () => {
   test("clicking Listen button opens audio WebSocket without errors", async ({
     page,
   }) => {
-    // Capture browser console errors related to audio
-    const audioErrors: string[] = [];
+    // Collect ALL browser console errors and warnings (airuleset browser-console-zero-errors)
+    const consoleMessages: string[] = [];
     page.on("console", (msg) => {
       if (msg.type() === "error" || msg.type() === "warning") {
         const text = msg.text();
-        if (
-          text.match(/AudioDecoder|opus|decode|NotSupportedError|AudioContext/i)
-        ) {
-          audioErrors.push(text);
-        }
+        // Ignore known-benign warnings that appear on every page load
+        if (text.includes("apple-mobile-web-app-capable")) return;
+        if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("integrity")) return;
+        if (text.includes("vapid-key fetch error")) return;
+        consoleMessages.push(`[${msg.type()}] ${text}`);
       }
     });
 
@@ -87,19 +88,27 @@ test.describe("Audio Listen Button (#90)", () => {
     // Click the Listen button — this should open a WebSocket to /ws/audio
     await listenBtn.click();
 
-    // Wait for the WebSocket to connect and status to update
-    await page.waitForTimeout(3000);
+    // Wait up to 8s for the button to reach a terminal state (listening OR no-source).
+    // No catch{} — if the button never transitions, the test MUST fail.
+    await page.waitForFunction(
+      () => {
+        const b = document.querySelector(".toolbar-btn-listen");
+        if (!b) return false;
+        return (
+          b.classList.contains("listening") ||
+          b.classList.contains("no-source")
+        );
+      },
+      { timeout: 8000 },
+    );
 
-    // Button should have changed state (either listening or no-source)
-    const btnClass = await listenBtn.getAttribute("class");
-    expect(btnClass).toBeTruthy();
-    const hasStateChange =
-      btnClass?.includes("listening") || btnClass?.includes("no-source");
-    // In CI without REAPER/VBAN, we expect no-source or the WS may fail
-    // The key test is that the button click doesn't crash and changes state
+    // Hard assert: button MUST be in `listening` state — tone generator is active
+    // during post-deploy E2E (see ci.yml). A real signal source should reach the browser.
+    const finalClass = await listenBtn.getAttribute("class");
+    expect(finalClass).toContain("listening");
 
-    // No audio-related errors should appear in the browser console
-    expect(audioErrors).toEqual([]);
+    // Zero browser console errors/warnings during the flow
+    expect(consoleMessages).toEqual([]);
   });
 
   test("audio WebSocket route exists and rejects plain HTTP", async ({

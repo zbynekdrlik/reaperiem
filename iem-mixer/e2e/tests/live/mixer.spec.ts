@@ -2076,8 +2076,9 @@ test.describe("Main tab channel ordering", () => {
     await expect(page.locator(".channel").first()).toBeVisible({ timeout: 15000 });
 
     // Switch to Mics tab (NOT Main — Main doesn't filter hidden channels)
+    // Mics tab MUST exist — no silent skip (airuleset test-strictness).
     const micsTab = page.locator(".category-tab.mics");
-    if (!(await micsTab.count())) return;
+    await expect(micsTab).toBeVisible({ timeout: 5000 });
     await micsTab.click();
     await page.waitForTimeout(500);
     const initialChannels = await page.locator(".channel").count();
