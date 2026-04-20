@@ -29,7 +29,8 @@ test.describe("Listen Stream Quality (#113)", () => {
     page,
   }) => {
     // Load audio_player.js via the app
-    await loginAs(page, "engineer");
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
@@ -54,7 +55,8 @@ test.describe("Listen Stream Quality (#113)", () => {
   test("stream stats element appears when Listen is active", async ({
     page,
   }) => {
-    await loginAs(page, "engineer");
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
@@ -64,14 +66,14 @@ test.describe("Listen Stream Quality (#113)", () => {
       .count();
     expect(statsBefore).toBe(0);
 
-    // Click listen button
+    // Click listen button — MUST exist on engineer page
     const listenBtn = page.locator(".toolbar-btn-listen");
-    if (!(await listenBtn.count())) return;
+    await expect(listenBtn).toBeVisible({ timeout: 5000 });
 
     await listenBtn.click();
 
-    // Wait for listening state (needs REAPER audio pipeline)
-    await expect(page.locator(".toolbar-btn-listen.listening")).toBeVisible({ timeout: 5000 });
+    // Wait for listening state (needs REAPER audio pipeline — tone generator active during E2E)
+    await expect(page.locator(".toolbar-btn-listen.listening")).toBeVisible({ timeout: 8000 });
 
     // Stream stats should now be visible
     const statsEl = page.locator('[data-testid="stream-stats"]');
@@ -88,7 +90,8 @@ test.describe("Listen Stream Quality (#113)", () => {
   });
 
   test("dropout counter increments on frame gaps", async ({ page }) => {
-    await loginAs(page, "engineer");
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
@@ -121,7 +124,8 @@ test.describe("Listen Stream Quality (#113)", () => {
   });
 
   test("jitter buffer depth starts at 150ms", async ({ page }) => {
-    await loginAs(page, "engineer");
+    await page.goto("/");
+    await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 

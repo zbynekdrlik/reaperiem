@@ -220,7 +220,11 @@ impl AppState {
     pub fn new(config: Config, config_dir: &std::path::Path) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         #[cfg(feature = "audio")]
-        let (audio_tx, _) = broadcast::channel(8);
+        // Capacity 64 (was 8): a shallow channel caused stale state under
+        // sustained uptime. At 50 pps, 8 slots = only 160 ms slack —
+        // Windows scheduling jitter can stall the producer beyond that and
+        // trap new subscribers in persistent Lagged. 64 gives 1.28 s slack.
+        let (audio_tx, _) = broadcast::channel(64);
         // Seed the validator's index set with the position-fallback view
         // (i+1 for each input) so commands arriving BEFORE the first
         // successful poller tick are validated against the same set of

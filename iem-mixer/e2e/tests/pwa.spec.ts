@@ -47,11 +47,9 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
       }
     });
 
-    if (swRegistered === "unsupported") {
-      console.log("[SKIP] Service workers not supported in this browser");
-      return;
-    }
-
+    // Service Workers MUST be supported in the target browser (Chromium).
+    // No silent skip — if the browser somehow lacks SW support, fail loudly.
+    expect(swRegistered).not.toBe("unsupported");
     expect(swRegistered).toBe("active");
   });
 
@@ -82,10 +80,8 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
       }
       return "active";
     });
-    if (swActivated === "unsupported") {
-      console.log("[SKIP] Service workers not supported in this browser");
-      return;
-    }
+    // Service Workers MUST be supported in the target browser (Chromium).
+    expect(swActivated).not.toBe("unsupported");
     expect(swActivated).toBe("active");
 
     // Reload with the SW guaranteed to be active — it will now intercept

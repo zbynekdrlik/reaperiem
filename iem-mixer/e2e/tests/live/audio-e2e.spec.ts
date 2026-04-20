@@ -35,10 +35,7 @@ async function getEngineerToken(
 test.describe("Audio Pipeline Diagnostics", () => {
   test("diagnostics endpoint returns valid structure", async ({ request }) => {
     const token = await getEngineerToken(request);
-    if (!token) {
-      console.log("[SKIP] Cannot authenticate as engineer");
-      return;
-    }
+    expect(token).toBeTruthy();
 
     const response = await request.get(`${BASE_URL}/api/audio/diagnostics`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -61,22 +58,16 @@ test.describe("Audio Pipeline Diagnostics", () => {
     request,
   }) => {
     const token = await getEngineerToken(request);
-    if (!token) {
-      console.log("[SKIP] Cannot authenticate as engineer");
-      return;
-    }
+    expect(token).toBeTruthy();
 
     const response = await request.get(`${BASE_URL}/api/audio/diagnostics`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     const diag = await response.json();
 
-    if (!diag.receiving_oiem) {
-      console.log(
-        "[SKIP] No OIEM packets — REAPER not running or VST not active",
-      );
-      return;
-    }
+    // Tone generator is active during post-deploy E2E (see ci.yml).
+    // OIEM packets MUST be flowing — if not, the VST / pipeline / tone trigger is broken.
+    expect(diag.receiving_oiem).toBe(true);
 
     // If OIEM is receiving, the pipeline must be producing real audio
     expect(diag.packets_per_second).toBeGreaterThan(10);
@@ -98,10 +89,7 @@ test.describe("Audio Pipeline Diagnostics", () => {
     const authResp = await request.post(`${BASE_URL}/api/auth`, {
       data: { member: "petronela", pin: "7711" },
     });
-    if (authResp.status() !== 200) {
-      console.log("[SKIP] Cannot authenticate as member");
-      return;
-    }
+    expect(authResp.status()).toBe(200);
     const { token } = await authResp.json();
 
     const response = await request.get(`${BASE_URL}/api/audio/diagnostics`, {
@@ -131,15 +119,9 @@ test.describe("Browser Audio Playback", () => {
     // Wait for navigation to mixer page
     await page.waitForURL("**/engineer", { timeout: 10000 });
 
-    // Check if Listen button exists
+    // Listen button MUST exist on engineer page — no silent skip
     const listenBtn = page.locator(".toolbar-btn-listen");
-    const btnCount = await listenBtn.count();
-    if (btnCount === 0) {
-      console.log("[SKIP] Listen button not found on engineer page");
-      return;
-    }
-
-    await expect(listenBtn).toBeVisible();
+    await expect(listenBtn).toBeVisible({ timeout: 5000 });
     const btnText = await listenBtn.textContent();
 
     // WebCodecs must be supported in Chromium
@@ -168,27 +150,22 @@ test.describe("Browser Audio Playback", () => {
     // Now wait for state change (up to 10s for audio frames to start arriving)
     // With no VBAN source, it will go to "No Source" after ~5s
     // With a VBAN source, it will get .listening class when first frame arrives
-    try {
-      await page.waitForFunction(
-        () => {
-          const btn = document.querySelector(".toolbar-btn-listen");
-          return (
-            btn &&
-            (btn.classList.contains("listening") ||
-              btn.textContent?.includes("No Source"))
-          );
-        },
-        { timeout: 10000 },
-      );
-    } catch {
-      // Timeout is OK — might not have audio source in CI
-      console.log("[INFO] Listen button did not transition within 10s");
-    }
+    // No catch — waitForFunction MUST succeed. Tone generator is active during
+    // post-deploy E2E, so the button must reach `listening` state within 10 s.
+    await page.waitForFunction(
+      () => {
+        const btn = document.querySelector(".toolbar-btn-listen");
+        if (!btn) return false;
+        return (
+          btn.classList.contains("listening") ||
+          btn.textContent?.includes("No Source")
+        );
+      },
+      { timeout: 10000 },
+    );
 
     const afterClick = await listenBtn.textContent();
-    console.log(`Listen button state after click: "${afterClick}"`);
-
-    // Audio source must be available (REAPER running)
+    // Audio source MUST be available (REAPER + tone generator running during E2E)
     expect(afterClick).not.toContain("No Source");
 
     const isListening = await listenBtn.evaluate((el) =>
