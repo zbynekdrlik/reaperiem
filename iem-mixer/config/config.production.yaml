@@ -167,6 +167,15 @@ inputs:
     dante_input: 52
     default_level_db: 0.0
 
+  - name: "CG"
+    dante_input: 53
+    default_level_db: 0.0
+    category: tech
+    # Stereo content-playback input (YouTube, music, etc.) for LED wall
+    # presentations. Routed to all 10 member inears, default-muted.
+    # Like ALEX kl above, this entry represents the pre-merged stereo track —
+    # `stereo_pair` is only meaningful in config/input_tracks.yaml (MCP-side).
+
 # HTTPS for PWA installability (cert deployed by CI from GitHub secrets)
 tls: true
 https_port: 443
