@@ -2170,25 +2170,6 @@ jobs:
           }
           Write-Host "AUDIO DIAGNOSTICS: PASS (peak=$($diag.peak_db)dB, $($diag.opus_frames_per_second) opus/s)"
 
-      - name: Deactivate tone generator
-        if: always() && steps.reaper-pre.outputs.was_running == 'true'
-        shell: powershell
-        run: |
-          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/stop" -UseBasicParsing | Out-Null
-          try {
-            # Use dynamically-registered action ID
-            $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
-            $toneActionId = ($toneIdResp -split "`t")[-1]
-            if ($toneActionId) {
-              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
-            }
-          } catch {
-            Write-Host "::warning::Could not trigger tone gen stop: $_"
-          }
-          Start-Sleep -Seconds 1
-          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
-          Write-Host "Tone generator cleanup: $result"
-
       - name: Verify deployment
         shell: powershell
         run: |
@@ -2350,6 +2331,25 @@ jobs:
         run: npx playwright test --config=playwright.live.config.ts --reporter=list
         env:
           E2E_BASE_URL: http://localhost
+
+      - name: Deactivate tone generator
+        if: always() && steps.reaper-pre.outputs.was_running == 'true'
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/stop" -UseBasicParsing | Out-Null
+          try {
+            # Use dynamically-registered action ID
+            $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+            $toneActionId = ($toneIdResp -split "`t")[-1]
+            if ($toneActionId) {
+              Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
+            }
+          } catch {
+            Write-Host "::warning::Could not trigger tone gen stop: $_"
+          }
+          Start-Sleep -Seconds 1
+          $result = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
+          Write-Host "Tone generator cleanup: $result"
 
       - name: Restore REAPER project after E2E
         if: always()
