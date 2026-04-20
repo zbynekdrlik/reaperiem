@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.157.0 (2026-04-20)
+
+- **Fix**: Engineer "Listen" button — restore binary audio streaming to the browser (regression: server accepted ListenStart but forwarded zero Opus frames, leaving the button stuck on "No Source" after 5 s timeout).
+- **CI hardening**: extend `test-integrity` to reject silent-skip patterns in live E2E tests (`console.log("[SKIP]"`, `return;` after `count()`/auth guards, `catch {}` around `waitForFunction`).
+- **E2E**: new binary-frames-or-die test `audio-listen-e2e.spec.ts` asserts ≥30 Opus frames within a 3 s ListenStart window against live REAPER with the tone generator active.
+- **Diagnostics**: `/api/audio/diagnostics` now reports `frames_forwarded` (count of Opus frames sent on `/ws/audio` since app start) to catch pipeline breaks in production between deploys.
+
 ### v1.156.0 (2026-04-19)
 
 - **Fix**: EQ band cards stack vertically on phones in portrait — previously iPhone 17 Pro (430 px viewport) rendered two bands per row, leaving ~58 px of horizontal space for FREQ/Q/GAIN sliders. Cards now go full-width on any touch device in portrait. (#179)
