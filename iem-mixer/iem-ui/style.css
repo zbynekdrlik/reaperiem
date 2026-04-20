@@ -2025,6 +2025,10 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* #179: transition declared on the base element so the movement-mode
+     cue fades both IN (when :has() starts matching) and OUT (when it
+     stops matching) at the same 120ms ease-out rate. */
+  transition: box-shadow 120ms ease-out;
 }
 
 .eq-header {
@@ -2253,11 +2257,11 @@ body {
 /* #179: fullscreen movement-mode cue — when any slider enters active or
    activating state, the EQ modal gets a cyan inset border. Visible
    regardless of haptic settings. Uses CSS :has() (iOS Safari 15.4+,
-   Chromium 105+, Firefox 121+). */
+   Chromium 105+, Firefox 121+). The transition is declared on the base
+   .eq-modal rule above so the cue fades smoothly both on and off. */
 .eq-modal:has(.eq-slider-track.active),
 .eq-modal:has(.eq-slider-track.activating) {
   box-shadow: inset 0 0 0 4px var(--accent);
-  transition: box-shadow 120ms ease-in;
 }
 
 /* Gain slider variant: yellow thumb */
