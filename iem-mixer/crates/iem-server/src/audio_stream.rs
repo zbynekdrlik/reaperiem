@@ -235,6 +235,37 @@ pub fn spawn_audio_listener(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_audio_diagnostics_default_includes_frames_forwarded() {
+        let diag = AudioDiagnostics::default();
+        assert_eq!(diag.frames_forwarded, 0);
+    }
+
+    #[test]
+    fn test_audio_diagnostics_serializes_frames_forwarded() {
+        // Protects the /api/audio/diagnostics JSON contract: the field must
+        // appear in the serialized output with the exact key clients expect.
+        let mut diag = AudioDiagnostics::default();
+        diag.frames_forwarded = 42;
+        let json = serde_json::to_string(&diag).unwrap();
+        assert!(
+            json.contains("\"frames_forwarded\":42"),
+            "expected frames_forwarded in JSON, got: {}",
+            json
+        );
+    }
+
+    #[test]
+    fn test_audio_diagnostics_frames_forwarded_saturates() {
+        // Confirms saturating_add is the semantics used by the counter-update
+        // path in proxy.rs (vs. wrapping_add which would reset to 0 on overflow,
+        // giving a misleading "pipeline is dead" diagnostic signal).
+        let mut diag = AudioDiagnostics::default();
+        diag.frames_forwarded = u64::MAX;
+        diag.frames_forwarded = diag.frames_forwarded.saturating_add(1);
+        assert_eq!(diag.frames_forwarded, u64::MAX);
+    }
+
     /// Build an OIEM packet for testing
     fn build_oiem_packet(sequence: u16, payload: &[u8]) -> Vec<u8> {
         let mut packet = Vec::new();

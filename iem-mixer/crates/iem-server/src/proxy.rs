@@ -3110,6 +3110,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                     );
                                     producer_handle = Some(tokio::spawn(async move {
                                         let mut first_frame_logged = false;
+                                        let mut first_lagged_logged = false;
                                         loop {
                                             match broadcast_rx.recv().await {
                                                 Ok(frame) => {
@@ -3126,7 +3127,15 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                                     }
                                                 }
                                                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                                    tracing::info!("audio broadcast Lagged: skipped {} stale frames", n);
+                                                    // First Lagged at INFO so a recurring Scenario B regression surfaces
+                                                    // immediately in logs. Subsequent Lagged events at DEBUG to avoid
+                                                    // log spam under sustained backpressure.
+                                                    if !first_lagged_logged {
+                                                        tracing::info!("audio broadcast Lagged: skipped {} stale frames (first occurrence)", n);
+                                                        first_lagged_logged = true;
+                                                    } else {
+                                                        tracing::debug!("audio broadcast Lagged: skipped {} stale frames", n);
+                                                    }
                                                 }
                                                 Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                                                     tracing::info!("audio broadcast Closed — producer exiting");
