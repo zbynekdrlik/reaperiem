@@ -190,63 +190,26 @@ test.describe("Audio Pipeline (OIEM UDP → WebSocket)", () => {
     expect(gotNoSource).toBe(false);
 
     // === Frame size validation ===
-    // Server relays the Opus payload directly — should match our synthetic 200 bytes
-    for (const size of frameSizes) {
-      expect(size).toBe(200);
-    }
+    // Server relays payloads directly. Our synthetic frames are exactly 200 bytes.
+    // Real audio frames from the tone generator (active during post-deploy E2E per
+    // ci.yml's tone-active-through-E2E ordering) may interleave at ~350 bytes.
+    // Assert our synthetic payloads made it through by counting exact 200-byte frames.
+    const syntheticFrames = frameSizes.filter((s) => s === 200);
+    expect(syntheticFrames.length).toBeGreaterThanOrEqual(5);
 
     const avgSize = frameSizes.reduce((a, b) => a + b, 0) / frameSizes.length;
     console.log(
-      `PASS: ${binaryFrames} frames relayed, avg=${avgSize.toFixed(0)}B`,
+      `PASS: ${binaryFrames} frames relayed (${syntheticFrames.length} synthetic 200B), avg=${avgSize.toFixed(0)}B`,
     );
   });
 
-  test("audio WebSocket returns no_source without UDP packets", async () => {
-    // NO UDP sender — should get no_source after 5s timeout
-
-    const token = await getEngineerToken();
-    const wsUrl = `${BASE_URL.replace("http", "ws")}/ws/audio?token=${token}`;
-    const ws = new WebSocket(wsUrl);
-
-    let gotNoSource = false;
-    let gotListening = false;
-
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error("Timeout waiting for no_source status"));
-      }, 10000);
-
-      ws.on("open", () => {
-        ws.send(JSON.stringify({ cmd: "ListenStart", member_id: "engineer" }));
-      });
-
-      ws.on("message", (data: Buffer, isBinary: boolean) => {
-        if (!isBinary) {
-          try {
-            const msg = JSON.parse(data.toString("utf-8"));
-            if (msg?.data?.status === "listening") gotListening = true;
-            if (msg?.data?.status === "no_source") {
-              gotNoSource = true;
-              clearTimeout(timeout);
-              resolve();
-            }
-          } catch {
-            /* not JSON */
-          }
-        }
-      });
-
-      ws.on("error", (err) => {
-        clearTimeout(timeout);
-        reject(new Error(`WebSocket error: ${err.message}`));
-      });
-    });
-
-    ws.close();
-
-    expect(gotListening).toBe(true);
-    expect(gotNoSource).toBe(true);
-  });
+  // Removed "audio WebSocket returns no_source without UDP packets": the test
+  // requires UDP silence to trigger the server's 5-second no_source timeout,
+  // but the tone generator now runs throughout post-deploy E2E (ci.yml
+  // ordering moved Deactivate after E2E), so UDP packets always flow. The
+  // 5s-timeout path is still covered by the server's own unit tests, and
+  // binary-frames-or-die (audio-listen-e2e.spec.ts) already asserts the
+  // POSITIVE path: no_source is NEVER emitted while ListenStart is active.
 
   test("audio WebSocket rejects non-engineer token", async () => {
     // Login as regular member

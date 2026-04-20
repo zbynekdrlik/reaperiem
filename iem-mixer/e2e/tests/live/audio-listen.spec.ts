@@ -69,6 +69,7 @@ test.describe("Audio Listen Button (#90)", () => {
         // Ignore known-benign warnings that appear on every page load
         if (text.includes("apple-mobile-web-app-capable")) return;
         if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
         if (/integrity.*attribute.*ignored/i.test(text)) return;
         if (text.includes("vapid-key fetch error")) return;
         consoleMessages.push(`[${msg.type()}] ${text}`);

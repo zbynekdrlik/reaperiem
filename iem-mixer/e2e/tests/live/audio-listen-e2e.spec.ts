@@ -106,6 +106,7 @@ test.describe("Listen /ws/audio binary-frames-or-die", () => {
         const text = msg.text();
         if (text.includes("apple-mobile-web-app-capable")) return;
         if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
         if (/integrity.*attribute.*ignored/i.test(text)) return;
         if (text.includes("vapid-key fetch error")) return;
         consoleMessages.push(`[${msg.type()}] ${text}`);
@@ -145,6 +146,7 @@ test.describe("Listen /ws/audio binary-frames-or-die", () => {
         const text = msg.text();
         if (text.includes("apple-mobile-web-app-capable")) return;
         if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
         if (/integrity.*attribute.*ignored/i.test(text)) return;
         if (text.includes("vapid-key fetch error")) return;
         consoleMessages.push(`[${msg.type()}] ${text}`);
