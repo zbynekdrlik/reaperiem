@@ -153,10 +153,13 @@ jobs:
             FOUND=1
           fi
 
-          # Regex: catch { ... } swallowing a waitForFunction timeout (look for 'catch' within 5 lines after 'waitForFunction(')
-          CATCH_HITS=$(grep -rnPzo '(?s)waitForFunction\([^)]*\)[^}]{0,400}\}\s*catch\s*\{[^}]*\}' iem-mixer/e2e/tests/ 2>/dev/null || true)
+          # Regex: try { ... waitForFunction ... } catch — this is the
+          # pattern that swallows waitForFunction timeouts. Requires `try {`
+          # before the waitForFunction to avoid false positives on the word
+          # "catch" in unrelated comments/strings.
+          CATCH_HITS=$(grep -rnPzo '(?s)try\s*\{[\s\S]{0,1000}?waitForFunction[\s\S]{0,1000}?\}\s*catch' iem-mixer/e2e/tests/ 2>/dev/null || true)
           if [ -n "$CATCH_HITS" ]; then
-            echo "BANNED pattern: catch {} around waitForFunction() swallows timeout"
+            echo "BANNED pattern: try { ... waitForFunction ... } catch swallows timeout"
             echo "$CATCH_HITS"
             FOUND=1
           fi
