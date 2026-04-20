@@ -133,19 +133,47 @@ jobs:
         run: |
           echo "Checking for banned skip patterns in E2E tests..."
           FOUND=0
-          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer" "ASSUME SKIP"; do
-            HITS=$(grep -rn "$pattern" iem-mixer/e2e/tests/ 2>/dev/null || true)
+
+          # Literal-string patterns (fast grep pass)
+          for pattern in "function assume(" "if (!assume(" "if (!(await waitForMixer" "ASSUME SKIP" 'console.log("[SKIP]' 'console.log("[INFO] Listen button did not transition'; do
+            HITS=$(grep -rn -F "$pattern" iem-mixer/e2e/tests/ 2>/dev/null || true)
             if [ -n "$HITS" ]; then
               echo "BANNED pattern found: $pattern"
               echo "$HITS"
               FOUND=1
             fi
           done
+
+          # Regex patterns — silent "return;" after guard expressions
+          # Matches: if (!(await X.count())) return;  | if (btnCount === 0) { ... return; }  | if (!resp.ok) return;
+          REGEX_HITS=$(grep -rnE 'if \(!\(await [A-Za-z_]+\.(count|status)\(\)\)\) return;' iem-mixer/e2e/tests/ 2>/dev/null || true)
+          if [ -n "$REGEX_HITS" ]; then
+            echo "BANNED pattern: silent return after count()/status() guard"
+            echo "$REGEX_HITS"
+            FOUND=1
+          fi
+
+          # Regex: catch { ... } swallowing a waitForFunction timeout (look for 'catch' within 5 lines after 'waitForFunction(')
+          CATCH_HITS=$(grep -rnPzo '(?s)waitForFunction\([^)]*\)[^}]{0,400}\}\s*catch\s*\{[^}]*\}' iem-mixer/e2e/tests/ 2>/dev/null || true)
+          if [ -n "$CATCH_HITS" ]; then
+            echo "BANNED pattern: catch {} around waitForFunction() swallows timeout"
+            echo "$CATCH_HITS"
+            FOUND=1
+          fi
+
+          # Regex: unused hasStateChange-style variables (pattern check on button class without assertion)
+          UNUSED_HITS=$(grep -rnE 'const hasStateChange\s*=' iem-mixer/e2e/tests/ 2>/dev/null || true)
+          if [ -n "$UNUSED_HITS" ]; then
+            echo "BANNED pattern: hasStateChange computed without expect() assertion"
+            echo "$UNUSED_HITS"
+            FOUND=1
+          fi
+
           if [ "$FOUND" = "1" ]; then
-            echo "::error::E2E tests contain banned assume/skip patterns. Tests must use expect() and fail loudly."
+            echo "::error::E2E tests contain banned assume/skip/silent-guard patterns. Tests must use expect() and fail loudly."
             exit 1
           fi
-          echo "OK: No assume/skip patterns found in E2E tests"
+          echo "OK: No assume/skip/silent-guard patterns found in E2E tests"
 
       - name: Self-test the disposal safety scanner (#153)
         run: |
