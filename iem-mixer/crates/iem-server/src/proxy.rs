@@ -3042,6 +3042,7 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
     let mut producer_handle: Option<tokio::task::JoinHandle<()>> = None;
     let mut last_audio_time = Instant::now();
     let mut is_listening = false;
+    let mut first_frame_forwarded_logged = false;
 
     loop {
         tokio::select! {
@@ -3102,17 +3103,35 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                                     // Spawn frame dropper producer: reads broadcast, drops stale on backpressure
                                     let mut broadcast_rx = state.audio_tx.subscribe();
                                     let dropper_tx = frame_tx.clone();
+                                    let sub_count = state.audio_tx.receiver_count();
+                                    tracing::info!(
+                                        subscriber_count = sub_count,
+                                        "audio producer spawned for /ws/audio listener"
+                                    );
                                     producer_handle = Some(tokio::spawn(async move {
+                                        let mut first_frame_logged = false;
                                         loop {
                                             match broadcast_rx.recv().await {
                                                 Ok(frame) => {
+                                                    if !first_frame_logged {
+                                                        tracing::info!(
+                                                            frame_size = frame.len(),
+                                                            "audio producer received first broadcast frame"
+                                                        );
+                                                        first_frame_logged = true;
+                                                    }
                                                     // try_send: if channel full (TCP backpressure), drop this frame
-                                                    let _ = dropper_tx.try_send(frame);
+                                                    if let Err(e) = dropper_tx.try_send(frame) {
+                                                        tracing::debug!("audio dropper try_send failed: {}", e);
+                                                    }
                                                 }
                                                 Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                                                    tracing::debug!("Audio dropper skipped {} stale frames", n);
+                                                    tracing::info!("audio broadcast Lagged: skipped {} stale frames", n);
                                                 }
-                                                Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                                                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                                    tracing::info!("audio broadcast Closed — producer exiting");
+                                                    break;
+                                                }
                                             }
                                         }
                                     }));
@@ -3163,12 +3182,26 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                 match frame {
                     Some(data) => {
                         last_audio_time = Instant::now();
-                        if socket.send(Message::Binary(data.to_vec().into())).await.is_err() {
+                        let size = data.len();
+                        if let Err(e) = socket.send(Message::Binary(data.to_vec().into())).await {
+                            tracing::info!("audio binary send failed: {} — closing /ws/audio", e);
                             break;
+                        }
+                        if !first_frame_forwarded_logged {
+                            tracing::info!(
+                                frame_size = size,
+                                "first binary frame forwarded on /ws/audio"
+                            );
+                            first_frame_forwarded_logged = true;
+                        }
+                        // Bump diagnostic counter (shared across all listeners).
+                        if let Ok(mut diag) = state.audio_diagnostics.lock() {
+                            diag.frames_forwarded = diag.frames_forwarded.saturating_add(1);
                         }
                     }
                     None => {
                         // Channel closed — producer died
+                        tracing::info!("audio frame_rx closed — producer task died");
                         break;
                     }
                 }

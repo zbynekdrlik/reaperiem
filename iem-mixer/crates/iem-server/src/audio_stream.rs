@@ -37,6 +37,10 @@ pub struct AudioDiagnostics {
     pub last_sequence: u16,
     /// Sequence gaps detected (dropped UDP packets)
     pub sequence_gaps: u64,
+    /// Total Opus frames forwarded over /ws/audio since app start (counts
+    /// successful `Message::Binary` sends across all concurrent listeners).
+    /// Used to detect pipeline breaks between deploys.
+    pub frames_forwarded: u64,
 }
 
 impl Default for AudioDiagnostics {
@@ -50,6 +54,7 @@ impl Default for AudioDiagnostics {
             peak_db: -150.0,
             last_sequence: 0,
             sequence_gaps: 0,
+            frames_forwarded: 0,
         }
     }
 }
