@@ -107,6 +107,13 @@ test.describe("CG (stereo content-playback input)", () => {
     page,
     request,
   }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(`[error] ${msg.text()}`);
+      }
+    });
+
     const {
       cgIdx,
       stevoSendIdx,
@@ -138,6 +145,17 @@ test.describe("CG (stereo content-playback input)", () => {
         .filter({ has: page.locator(".ch-name", { hasText: /^CG$/ }) })
         .first();
       await expect(cg).toBeVisible({ timeout: 10000 });
+
+      // If we forced an unmute above, wait for the WS poller to reflect
+      // the unmuted state in the UI before interacting — the poller ticks
+      // at ~150ms; without this wait the UI can race and the click lands
+      // before the mute button's visual state is in sync.
+      if (muteBefore !== 0) {
+        await expect(cg.locator(".mute-btn").first()).not.toHaveClass(
+          /muted/,
+          { timeout: 3000 },
+        );
+      }
 
       const dbLabel = cg.locator(".db-display");
       const parseDb = async () => {
@@ -185,6 +203,8 @@ test.describe("CG (stereo content-playback input)", () => {
       const dbEnd = await parseDb();
       expect(dbEnd).toBeLessThan(dbStart - 3);
       expect(dbEnd).toBeLessThan(0);
+
+      expect(consoleErrors).toEqual([]);
     } finally {
       // Restore starting state — both volume and mute — so this live test
       // doesn't leak state between runs.
@@ -201,6 +221,13 @@ test.describe("CG (stereo content-playback input)", () => {
     page,
     request,
   }) => {
+    const consoleErrors: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push(`[error] ${msg.text()}`);
+      }
+    });
+
     const { cgIdx, stevoSendIdx, muteBefore } = await resolveCgStevoSend(
       request,
     );
@@ -231,6 +258,17 @@ test.describe("CG (stereo content-playback input)", () => {
         .first();
       await expect(cg).toBeVisible({ timeout: 10000 });
 
+      // If we forced an unmute above, wait for the WS poller to reflect
+      // the unmuted state in the UI before interacting — the poller ticks
+      // at ~150ms; without this wait the UI can race and the click lands
+      // before the mute button's visual state is in sync.
+      if (muteBefore !== 0) {
+        await expect(cg.locator(".mute-btn").first()).not.toHaveClass(
+          /muted/,
+          { timeout: 3000 },
+        );
+      }
+
       const muteBtn = cg.locator(".mute-btn").first();
       await expect(muteBtn).toBeVisible();
       await muteBtn.click();
@@ -246,6 +284,8 @@ test.describe("CG (stereo content-playback input)", () => {
         muteAfter,
         "REAPER send MUTE flag must be 8 (muted) after UI mute click. If 0, command did not reach REAPER.",
       ).toBe(8);
+
+      expect(consoleErrors).toEqual([]);
     } finally {
       // Restore the original mute state (likely muted=8 for CG default)
       await request.get(
