@@ -733,31 +733,38 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     // Click Mute All
     await muteAllBtn.click();
 
-    // Poll until all channel mute buttons settle on "on" (muted). When the
-    // tone generator is streaming, the 150 ms poller can briefly overwrite
-    // the optimistic UI update before REAPER confirms, so waitForFunction
-    // is more reliable than a fixed sleep. 8 s covers the full batch of
-    // 22 input send-mutes + mix-channel mutes.
+    // Exclude the master .channel.global-volume (IEM VOL) — Mute All
+    // intentionally never mutes the engineer's master output (would
+    // deafen them). Before T5 kept the tone generator off during E2E
+    // the master was often already muted, so the old selector
+    // `.channel .mute-btn` happened to pass; now that audio flows, the
+    // master is "off" by default and the assertion must exclude it.
+    const muteSelector = ".channel:not(.global-volume) .mute-btn";
+
+    // Poll for state convergence — with audio flowing the 150 ms poller
+    // can briefly overwrite the optimistic UI update. 8 s covers the
+    // full batch of input + mix-channel mutes under tone-active load.
     await page.waitForFunction(
-      () => {
-        const buttons = document.querySelectorAll(".channel .mute-btn");
+      (sel) => {
+        const buttons = document.querySelectorAll(sel);
         if (buttons.length === 0) return false;
         return Array.from(buttons).every((btn) =>
           btn.className.includes(" on"),
         );
       },
+      muteSelector,
       { timeout: 8000 },
     );
 
-    // Final snapshot for the assertion error message to include the real
-    // state if the waitForFunction ever (e.g., under extreme load) races.
-    const muteStates = await page.evaluate(() => {
-      const buttons = document.querySelectorAll(".channel .mute-btn");
+    // Final snapshot for descriptive assertion failure if the wait ever
+    // races out under extreme load.
+    const muteStates = await page.evaluate((sel) => {
+      const buttons = document.querySelectorAll(sel);
       return Array.from(buttons).map((btn) => ({
         text: btn.textContent?.trim() || "",
         classes: btn.className,
       }));
-    });
+    }, muteSelector);
 
     expect(muteStates.length).toBeGreaterThan(0);
     for (let i = 0; i < muteStates.length; i++) {
