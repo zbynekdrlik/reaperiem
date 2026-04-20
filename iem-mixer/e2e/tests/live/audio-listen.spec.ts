@@ -58,7 +58,7 @@ test.describe("Audio Listen Button (#90)", () => {
     await expect(listenBtn).toHaveCount(0);
   });
 
-  test("clicking Listen button opens audio WebSocket without errors", async ({
+  test("clicking Listen button reaches listening state without console errors", async ({
     page,
   }) => {
     // Collect ALL browser console errors and warnings (airuleset browser-console-zero-errors)
@@ -69,7 +69,7 @@ test.describe("Audio Listen Button (#90)", () => {
         // Ignore known-benign warnings that appear on every page load
         if (text.includes("apple-mobile-web-app-capable")) return;
         if (text.includes("[push] subscribe await failed")) return;
-        if (text.includes("integrity")) return;
+        if (/integrity.*attribute.*ignored/i.test(text)) return;
         if (text.includes("vapid-key fetch error")) return;
         consoleMessages.push(`[${msg.type()}] ${text}`);
       }
