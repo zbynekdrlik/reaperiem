@@ -732,9 +732,25 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
 
     // Click Mute All
     await muteAllBtn.click();
-    await page.waitForTimeout(2000);
 
-    // Assert all mix channel mute buttons show muted state
+    // Poll until all channel mute buttons settle on "on" (muted). When the
+    // tone generator is streaming, the 150 ms poller can briefly overwrite
+    // the optimistic UI update before REAPER confirms, so waitForFunction
+    // is more reliable than a fixed sleep. 8 s covers the full batch of
+    // 22 input send-mutes + mix-channel mutes.
+    await page.waitForFunction(
+      () => {
+        const buttons = document.querySelectorAll(".channel .mute-btn");
+        if (buttons.length === 0) return false;
+        return Array.from(buttons).every((btn) =>
+          btn.className.includes(" on"),
+        );
+      },
+      { timeout: 8000 },
+    );
+
+    // Final snapshot for the assertion error message to include the real
+    // state if the waitForFunction ever (e.g., under extreme load) races.
     const muteStates = await page.evaluate(() => {
       const buttons = document.querySelectorAll(".channel .mute-btn");
       return Array.from(buttons).map((btn) => ({
@@ -744,8 +760,6 @@ test.describe("Engineer Listen on Member Mixes (#99)", () => {
     });
 
     expect(muteStates.length).toBeGreaterThan(0);
-
-    // Every mute button should have the muted class (class "on" = muted)
     for (let i = 0; i < muteStates.length; i++) {
       expect(
         muteStates[i].classes,
