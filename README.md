@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.156.0 (2026-04-19)
+
+- **Fix**: EQ band cards stack vertically on phones in portrait — previously iPhone 17 Pro (430 px viewport) rendered two bands per row, leaving ~58 px of horizontal space for FREQ/Q/GAIN sliders. Cards now go full-width on any touch device in portrait. (#179)
+- **Fix**: EQ parameter labels and values now use higher-contrast text — FREQ/Q/GAIN labels went from `#555` to `#bbb`, values went from `#888` to `#eaeaea`.
+- **Fix**: EQ row chrome compressed — label width 32→24 px, value width 60→44 px, card padding 12→10 px, row gap 8→6 px. Combined with portrait stacking, slider real estate on iPhone 17 Pro goes from ~58 px to ~290 px.
+- **Feature**: Fullscreen movement-mode indicator — when an EQ slider enters active/activating state, the whole modal gets a cyan inset border via CSS `:has()`. Visible regardless of whether haptics are enabled.
+
 ### v1.155.0 (2026-04-19)
 
 - **Fix (critical)**: ALEX kl mute / fader / pan were silently dropped at the server — every WS command for track_index=44 failed the `is_valid_track` check because it compared against `inputs.len()` (23) instead of the resolved REAPER track indices. The keyboard was uncontrollable for members during the April live service; REAPER never received the commands even though the UI showed them applied. (#179)
