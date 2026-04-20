@@ -3195,9 +3195,12 @@ async fn handle_audio_ws(mut socket: axum::extract::ws::WebSocket, state: AppSta
                             first_frame_forwarded_logged = true;
                         }
                         // Bump diagnostic counter (shared across all listeners).
-                        if let Ok(mut diag) = state.audio_diagnostics.lock() {
-                            diag.frames_forwarded = diag.frames_forwarded.saturating_add(1);
-                        }
+                        // Recover from Mutex poisoning (matches routes.rs:588 handler style).
+                        let mut diag = state
+                            .audio_diagnostics
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        diag.frames_forwarded = diag.frames_forwarded.saturating_add(1);
                     }
                     None => {
                         // Channel closed — producer died
