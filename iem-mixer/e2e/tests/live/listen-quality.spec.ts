@@ -29,6 +29,7 @@ test.describe("Listen Stream Quality (#113)", () => {
     page,
   }) => {
     // Load audio_player.js via the app
+    await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
@@ -54,6 +55,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   test("stream stats element appears when Listen is active", async ({
     page,
   }) => {
+    await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
@@ -88,6 +90,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   });
 
   test("dropout counter increments on frame gaps", async ({ page }) => {
+    await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
@@ -121,6 +124,7 @@ test.describe("Listen Stream Quality (#113)", () => {
   });
 
   test("jitter buffer depth starts at 150ms", async ({ page }) => {
+    await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
