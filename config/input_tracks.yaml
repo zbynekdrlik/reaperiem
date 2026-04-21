@@ -183,3 +183,15 @@ input_tracks:
     dante_input: 52
     category: tech
     default_level_db: 0.0
+
+  - name: "CG L"
+    dante_input: 53
+    category: tech
+    default_level_db: 0.0
+    stereo_pair: "cg"
+
+  - name: "CG R"
+    dante_input: 54
+    category: tech
+    default_level_db: 0.0
+    stereo_pair: "cg"

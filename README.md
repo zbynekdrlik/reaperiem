@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.158.0 (2026-04-20)
+
+- **Feature**: New stereo input `CG` (Dante RX 53/54) for content playback (YouTube videos, music) during presentations — routed to all 10 member inears, default-muted. Members unmute individually when content plays.
+
 ### v1.157.0 (2026-04-20)
 
 - **Fix**: Engineer "Listen" button — restore binary audio streaming to the browser (regression: server accepted ListenStart but forwarded zero Opus frames, leaving the button stuck on "No Source" after 5 s timeout).
