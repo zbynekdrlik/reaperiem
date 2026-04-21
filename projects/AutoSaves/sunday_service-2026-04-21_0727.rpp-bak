@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1776632890 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1776749221 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1213,7 +1213,7 @@
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
-        IQAAAAUAAAAEAAAAAQAAAJ5ban2JsnVAAAAAAITkBkAAAAAAAAAAQAEAAAAAAQAAAAQEaDDZCWlAAAAAAIEj/D8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
+        IQAAAAUAAAAEAAAAAQAAAEBSjCbVAndAAAAAYGwF/j8AAAAAAAAAQAEAAAAAAQAAABZkQsiKQJpAAAAAAMGq8T8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
         8D8AAAAAAADwPwEIAAAAAAAAAFGWRbb4i59AAAAAIDZY7D8AAACgR+HyPwEBAAAAAAAAADsQR1uB9rhAAAAAYB0A9T8AAAAAAAAAQAEBAAAAAQAAAAAAAAAAAPA/AAAA
         AP0BAABcAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
@@ -1283,6 +1283,7 @@
     AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 33 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 2 0 1 0 0 0 0 -1:U -1
@@ -1307,7 +1308,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {C21410A5-4ABE-4D34-BD13-4BD4D693261F}
+      FXID {56A470C2-C452-4DED-96E9-A3FB637493C7}
       WAK 0 0
     >
   >
@@ -1352,6 +1353,7 @@
     AUXRECV 21 3 0.035481334 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 34 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 4 0 1 0 0 0 0 -1:U -1
@@ -1376,7 +1378,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {DE004E8A-4FF9-4106-94D8-5284187ABCE5}
+      FXID {3768D7A8-1266-4107-BBC0-E51D26B70F43}
       WAK 0 0
     >
   >
@@ -1421,6 +1423,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 35 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 6 0 1 0 0 0 0 -1:U -1
@@ -1445,7 +1448,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {BD9D645B-0977-4A73-80A8-C7952E000861}
+      FXID {769BDA51-B6FA-42B4-AA2A-83DB693172A4}
       WAK 0 0
     >
   >
@@ -1490,6 +1493,7 @@
     AUXRECV 21 3 0.057543993 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 36 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 8 0 1 0 0 0 0 -1:U -1
@@ -1513,7 +1517,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {9D6D10E7-63F9-4054-A9D6-34E7A928BB53}
+      FXID {146197CA-F544-40B1-9734-7AD1F2B31B83}
       WAK 0 0
     >
   >
@@ -1558,6 +1562,7 @@
     AUXRECV 21 3 0.11220185 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 37 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 10 0 1 0 0 0 0 -1:U -1
@@ -1582,7 +1587,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {22D23D82-0AF2-415B-A7EA-43019FFBC2CB}
+      FXID {4AF46867-F071-48A0-9E4B-BC773B9F9F80}
       WAK 0 0
     >
   >
@@ -1627,6 +1632,7 @@
     AUXRECV 21 3 0.15848932 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 38 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 12 0 1 0 0 0 0 -1:U -1
@@ -1651,7 +1657,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {E901223B-35BE-469A-8DA9-D5AD84BFE87A}
+      FXID {AEE8CB13-78B9-44D7-BDD8-578050E17A65}
       WAK 0 0
     >
   >
@@ -1696,6 +1702,7 @@
     AUXRECV 21 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 39 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 14 0 1 0 0 0 0 -1:U -1
@@ -1720,7 +1727,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {DF6A6643-C7C8-4FA2-98B6-14CFE272BED3}
+      FXID {707267A4-3945-4DE7-8297-B398B1797218}
       WAK 0 0
     >
   >
@@ -1765,6 +1772,7 @@
     AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 40 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 16 0 1 0 0 0 0 -1:U -1
@@ -1788,7 +1796,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {78628C23-4020-4097-835E-62E5FC476AD7}
+      FXID {27B73ED9-9B3F-4704-91DC-FB59CA4F02FB}
       WAK 0 0
     >
   >
@@ -1833,6 +1841,7 @@
     AUXRECV 21 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 41 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 18 0 1 0 0 0 0 -1:U -1
@@ -1857,7 +1866,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {589F013B-D197-4BB7-93E3-7F6102C7F48B}
+      FXID {CCB69014-45E6-493F-AE80-38E9EF450B4F}
       WAK 0 0
     >
   >
@@ -1868,7 +1877,7 @@
     AUTOMODE 0
     PANLAWFLAGS 3
     VOLPAN 1.7782794 0 -1 -1 1
-    MUTESOLO 1 0 1
+    MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
     ISBUS 0 0
@@ -1912,6 +1921,7 @@
     AUXRECV 30 0 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 42 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 32 0 1 0 0 0 0 -1:U -1
@@ -1920,6 +1930,13 @@
       SHOW 0
       LASTSEL 0
       DOCKED 0
+      BYPASS 0 0 0
+      <JS synthesis/tonegenerator ""
+        6 0 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS 0 0 0 0
+      FXID {E94841AF-9DAB-495D-BB51-D53CFF114A22}
+      WAK 0 0
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
@@ -1933,10 +1950,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 -5.240201 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 -10.397178 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {AFAA5606-69AB-4C97-9128-18508871FD79}
+      FXID {78283DC1-6BD5-47AF-9E13-DC65B6B5953B}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
@@ -2535,6 +2552,56 @@
       >
       FLOATPOS 0 0 0 0
       FXID {D58A97AE-E6BF-4E59-8986-A7245C3D6109}
+      WAK 0 0
+    >
+  >
+  <TRACK {10955320-8E1B-4AC9-A671-504C3EE257D0}
+    NAME CG
+    PEAKCOL 16576
+    BEAT -1
+    AUTOMODE 0
+    PANLAWFLAGS 3
+    VOLPAN 1 0 -1 -1 1
+    MUTESOLO 0 0 0
+    IPHASE 0
+    PLAYOFFS 0 1
+    ISBUS 0 0
+    BUSCOMP 0 0 0 0 0
+    SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
+    FIXEDLANES 9 0 0 0 0
+    LANEREC -1 -1 -1 0
+    SEL 0
+    REC 1 1076 1 0 0 0 0 0
+    VU 64
+    TRACKHEIGHT 0 0 0 0 0 0 0
+    INQ 0 0 0 0.5 100 0 0 100
+    NCHAN 2
+    FX 1
+    TRACKID {10955320-8E1B-4AC9-A671-504C3EE257D0}
+    PERF 0
+    MIDIOUT -1
+    MAINSEND 1 0
+    <FXCHAIN
+      SHOW 0
+      LASTSEL 0
+      DOCKED 0
+      BYPASS 0 0 0
+      <JS utility/volume_pan "TRIM IN"
+        0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+      >
+      FLOATPOS 0 0 0 0
+      FXID {DE9D7B41-47C3-432F-AC5C-71F2EC0B673E}
+      WAK 0 0
+      BYPASS 0 0 0
+      <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
+        cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
+        IQAAAAUAAAAEAAAAAAAAAA9hXXhVDVRAAAAAAAAA8D8AAAAAAAAAQAEAAAAAAAAAAAQEaDDZCWlAAAAAAAAA8D8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
+        8D8AAAAAAADwPwEIAAAAAAAAAHfH++l3aKdAAAAAAAAA8D8AAAAAAADwPwEBAAAAAAAAAKWt3qUPUL9AAAAAAAAA8D8AAAAAAAAAQAEBAAAAAQAAAAAAAAAAAPA/AAAA
+        AAAAAAAAAAAAAgAAAA==
+        AFByb2dyYW0gMQAQAAAA
+      >
+      FLOATPOS 0 0 0 0
+      FXID {8A7FFC43-7FCB-4AEB-BD4B-02E9EA40709D}
       WAK 0 0
     >
   >
