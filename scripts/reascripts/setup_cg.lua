@@ -12,7 +12,7 @@
 --   1. A stereo REAPER track named "CG" at the end of the track list
 --   2. Hardware input = Dante RX 53-54 stereo (channel 52 + 1024 for stereo)
 --   3. Sends from CG to every <MEMBER> inear track found in the project, all MUTED
---   4. Saves the project
+--   4. Saves the project (only on success)
 --
 -- Does NOT insert TRIM IN or ReaEQ FX — caller must run
 -- _RS_REAPERIEM_SETUP_TRIM and _RS_REAPERIEM_SETUP_EQ after this script.
@@ -20,6 +20,11 @@
 -- (PR #176) and will pick up CG automatically.
 --
 -- Pre-flight: aborts with ERROR if no <MEMBER> inear tracks are found.
+--
+-- Error safety: Undo_BeginBlock / PreventUIRefresh are opened OUTSIDE the
+-- pcall'd setup body and their matching close calls are in an always-run
+-- cleanup block. A mid-setup Lua error therefore cannot leave the undo
+-- stack open or the UI refresh suspended.
 --
 -- Action ID: _RS_REAPERIEM_SETUP_CG
 -- Result written to EXTSTATE: reaperiem/cg_setup_result
@@ -62,15 +67,9 @@ local function has_send_to(src_track, dest_track)
     return false
 end
 
-local function setup()
-    local inears_preflight = find_all_inear_tracks()
-    if #inears_preflight == 0 then
-        error("no '<MEMBER> inear' tracks found — refusing to create CG with no destinations")
-    end
-
-    reaper.Undo_BeginBlock()
-    reaper.PreventUIRefresh(1)
-
+-- Pure body — no undo/UI state management, no save. Caller owns those.
+-- Returns the OK result string on success; throws on failure.
+local function setup(inears)
     -- Step 1: Ensure CG track exists
     local cg, cg_idx = find_track_by_name(TRACK_NAME)
     local track_created = false
@@ -90,7 +89,6 @@ local function setup()
     reaper.SetMediaTrackInfo_Value(cg, "I_RECMON", 1)
 
     -- Step 3: Create sends to every <MEMBER> inear track, ALL MUTED by default.
-    local inears = inears_preflight
     local sends_created = 0
     local sends_skipped = 0
     for _, ie in ipairs(inears) do
@@ -115,21 +113,41 @@ local function setup()
         end
     end
 
-    reaper.PreventUIRefresh(-1)
-    reaper.TrackList_AdjustWindows(false)
-    reaper.UpdateArrange()
-    reaper.Undo_EndBlock("Setup CG", -1)
-
-    reaper.Main_SaveProject(0, false)
-
-    local result = string.format(
+    return string.format(
         "OK:track_created=%s,track_idx=%d,sends_created=%d,sends_skipped=%d,inears_found=%d",
         tostring(track_created), cg_idx + 1, sends_created, sends_skipped, #inears
     )
-    reaper.SetExtState(section, "cg_setup_result", result, false)
 end
 
-local ok, err = pcall(setup)
-if not ok then
-    reaper.SetExtState(section, "cg_setup_result", "ERROR:" .. tostring(err), false)
+-- Pre-flight outside any undo/UI guard — failure here leaks nothing.
+local inears_preflight = find_all_inear_tracks()
+if #inears_preflight == 0 then
+    reaper.SetExtState(section, "cg_setup_result",
+        "ERROR:no '<MEMBER> inear' tracks found — refusing to create CG with no destinations",
+        false)
+    return
 end
+
+-- Open undo + UI guards. Both MUST be closed in all paths, so cleanup is
+-- written once and runs regardless of pcall outcome.
+reaper.Undo_BeginBlock()
+reaper.PreventUIRefresh(1)
+
+local ok, result_or_err = pcall(setup, inears_preflight)
+
+-- Always-run cleanup (the "finally" block). Order mirrors setup_alex_kl.lua
+-- but now guaranteed to execute even on a mid-setup Lua error.
+reaper.PreventUIRefresh(-1)
+reaper.TrackList_AdjustWindows(false)
+reaper.UpdateArrange()
+reaper.Undo_EndBlock("Setup CG", -1)
+
+if not ok then
+    reaper.SetExtState(section, "cg_setup_result",
+        "ERROR:" .. tostring(result_or_err), false)
+    return
+end
+
+-- Success: save project and record the OK result.
+reaper.Main_SaveProject(0, false)
+reaper.SetExtState(section, "cg_setup_result", result_or_err, false)

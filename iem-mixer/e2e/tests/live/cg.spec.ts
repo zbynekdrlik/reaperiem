@@ -76,8 +76,18 @@ test.describe("CG (stereo content-playback input)", () => {
   }) => {
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        consoleErrors.push(`[error] ${msg.text()}`);
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        // Known-benign browser notices on iem.newlevel.media — filter
+        // mirrors audio-listen-e2e.spec.ts (PR #182). Keeps airuleset
+        // browser-console-zero-errors strict while allowing benign PWA
+        // platform warnings.
+        if (text.includes("apple-mobile-web-app-capable")) return;
+        if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
+        if (/integrity.*attribute.*ignored/i.test(text)) return;
+        if (text.includes("vapid-key fetch error")) return;
+        consoleErrors.push(`[${msg.type()}] ${text}`);
       }
     });
 
@@ -109,8 +119,18 @@ test.describe("CG (stereo content-playback input)", () => {
   }) => {
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        consoleErrors.push(`[error] ${msg.text()}`);
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        // Known-benign browser notices on iem.newlevel.media — filter
+        // mirrors audio-listen-e2e.spec.ts (PR #182). Keeps airuleset
+        // browser-console-zero-errors strict while allowing benign PWA
+        // platform warnings.
+        if (text.includes("apple-mobile-web-app-capable")) return;
+        if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
+        if (/integrity.*attribute.*ignored/i.test(text)) return;
+        if (text.includes("vapid-key fetch error")) return;
+        consoleErrors.push(`[${msg.type()}] ${text}`);
       }
     });
 
@@ -223,8 +243,18 @@ test.describe("CG (stereo content-playback input)", () => {
   }) => {
     const consoleErrors: string[] = [];
     page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        consoleErrors.push(`[error] ${msg.text()}`);
+      if (msg.type() === "error" || msg.type() === "warning") {
+        const text = msg.text();
+        // Known-benign browser notices on iem.newlevel.media — filter
+        // mirrors audio-listen-e2e.spec.ts (PR #182). Keeps airuleset
+        // browser-console-zero-errors strict while allowing benign PWA
+        // platform warnings.
+        if (text.includes("apple-mobile-web-app-capable")) return;
+        if (text.includes("[push] subscribe await failed")) return;
+        if (text.includes("Push API in incognito mode")) return;
+        if (/integrity.*attribute.*ignored/i.test(text)) return;
+        if (text.includes("vapid-key fetch error")) return;
+        consoleErrors.push(`[${msg.type()}] ${text}`);
       }
     });
 
