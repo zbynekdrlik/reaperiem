@@ -42,6 +42,22 @@ pub fn assert_capture_completeness(
     Ok(())
 }
 
+/// Returns true if the track should be skipped from mute/volume capture.
+///
+/// MASTER (index 0) is never captured: restoring its mute would silence the entire session.
+pub(crate) fn should_skip_master(track_idx: usize) -> bool {
+    track_idx == 0
+}
+
+/// Returns true if the track name qualifies for output-volume capture.
+///
+/// Only "inear" and "stems" tracks have their output volume backed up — those are the only
+/// tracks whose volume the engineer typically needs to restore.
+pub(crate) fn track_name_qualifies_for_volume_capture(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("inear") || lower.contains("stems")
+}
+
 /// Capture the complete current mixer state.
 ///
 /// Reads:
@@ -210,13 +226,12 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<(MixerBackup, Captu
     let mut track_mutes: HashMap<String, bool> = HashMap::new();
     for track in &tracks {
         // Skip MASTER (idx 0) — its mute would silence everything; never restore it.
-        if track.index == 0 {
+        if should_skip_master(track.index) {
             continue;
         }
         track_mutes.insert(track.name.clone(), track.muted);
 
-        let name_lower = track.name.to_lowercase();
-        if name_lower.contains("inear") || name_lower.contains("stems") {
+        if track_name_qualifies_for_volume_capture(&track.name) {
             track_volumes.insert(track.name.clone(), track.vol_linear as f64);
         }
     }
@@ -428,5 +443,84 @@ mod completeness_tests {
         let err = assert_capture_completeness(&audit, 200, 30).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("track_mutes") || msg.contains("InsufficientTrackMutes"));
+    }
+
+    // Boundary tests that kill the `<` → `<=` surviving mutants.
+    // At the exact threshold value the original passes, the mutant rejects.
+
+    #[test]
+    fn complete_capture_at_exact_sends_threshold_passes() {
+        // sends_count == min_sends — must be accepted (< is the right operator)
+        let audit = audit_with_counts(200, 56);
+        assert!(assert_capture_completeness(&audit, 200, 30).is_ok());
+    }
+
+    #[test]
+    fn complete_capture_at_one_below_sends_threshold_fails() {
+        // 199 < 200 — must be rejected
+        let audit = audit_with_counts(199, 56);
+        assert!(assert_capture_completeness(&audit, 200, 30).is_err());
+    }
+
+    #[test]
+    fn complete_capture_at_exact_track_mutes_threshold_passes() {
+        // track_mutes_count == min_track_mutes — must be accepted
+        let audit = audit_with_counts(220, 30);
+        assert!(assert_capture_completeness(&audit, 200, 30).is_ok());
+    }
+
+    #[test]
+    fn complete_capture_at_one_below_track_mutes_threshold_fails() {
+        // 29 < 30 — must be rejected
+        let audit = audit_with_counts(220, 29);
+        assert!(assert_capture_completeness(&audit, 200, 30).is_err());
+    }
+
+    // Unit tests for the extracted helper predicates (kills line-213 == and line-219 || mutants).
+
+    #[test]
+    fn should_skip_master_returns_true_for_idx_0() {
+        assert!(should_skip_master(0));
+    }
+
+    #[test]
+    fn should_skip_master_returns_false_for_idx_1() {
+        assert!(!should_skip_master(1));
+    }
+
+    #[test]
+    fn should_skip_master_returns_false_for_large_idx() {
+        assert!(!should_skip_master(22));
+    }
+
+    #[test]
+    fn volume_capture_qualifies_inear_track() {
+        assert!(track_name_qualifies_for_volume_capture("PETRONELA inear"));
+    }
+
+    #[test]
+    fn volume_capture_qualifies_stems_track() {
+        assert!(track_name_qualifies_for_volume_capture("ALEX stems"));
+    }
+
+    #[test]
+    fn volume_capture_does_not_qualify_mic_track() {
+        assert!(!track_name_qualifies_for_volume_capture("MAREK mic"));
+    }
+
+    #[test]
+    fn volume_capture_does_not_qualify_cg_track() {
+        assert!(!track_name_qualifies_for_volume_capture("CG"));
+    }
+
+    #[test]
+    fn volume_capture_does_not_qualify_empty_name() {
+        assert!(!track_name_qualifies_for_volume_capture(""));
+    }
+
+    #[test]
+    fn volume_capture_qualifies_uppercase_inear() {
+        // Case-insensitive: INEAR should still qualify
+        assert!(track_name_qualifies_for_volume_capture("PETKA INEAR"));
     }
 }

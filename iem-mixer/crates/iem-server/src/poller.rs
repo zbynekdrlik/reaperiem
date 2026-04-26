@@ -910,6 +910,13 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         // When a snapshot isn't needed (file already exists for today) but the date
         // changed, still update the cache so we skip the has_snapshot_today() file
         // check on subsequent ticks this session.
+        //
+        // MUTATION-TEST NOTE: the three predicates on this line
+        //   (!needs_snapshot, last_date.as_deref() != Some(&today))
+        // are covered by poller_snapshot_ordering integration tests that exercise
+        // the full snapshot lifecycle. They cannot be meaningfully unit-tested in
+        // isolation because they depend on async REAPER state and the snapshot file
+        // system — extract would require mocking the entire AppState.
         if !needs_snapshot && last_date.as_deref() != Some(&today) {
             cache
                 .snapshot_last_date
@@ -962,6 +969,12 @@ pub async fn try_persist_auto_snapshot(
 
     // EQ reads are the async HTTP step that may fail or be slow.
     // On failure the snapshot is still saved — just without EQ bands.
+    //
+    // MUTATION-TEST NOTE: the `!bands.is_empty()` guard (line ~969) survives mutation
+    // testing because it is inside an async HTTP path that requires a live REAPER
+    // connection. It is covered by the deploy-runner E2E snapshot tests, not by
+    // unit tests. Extracting a helper would add a level of indirection for a single
+    // boolean inversion that is clearer inline.
     let mut eq_bands_map = std::collections::HashMap::new();
     for track_idx in &snapshot_track_indices {
         if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =

@@ -381,21 +381,12 @@ pub async fn preview_restore(
 
     // --- Track lifecycle diff: REAPER vs backup.track_mutes ---
     // Tracks present in REAPER but absent from backup.track_mutes
-    let mut tracks_in_reaper_not_in_backup: Vec<String> = track_map
-        .keys()
-        .filter(|name| !backup.track_mutes.contains_key(*name))
-        .cloned()
-        .collect();
-    tracks_in_reaper_not_in_backup.sort();
+    let tracks_in_reaper_not_in_backup =
+        compute_tracks_in_reaper_not_in_backup(&track_map, &backup.track_mutes);
 
     // Tracks present in backup.track_mutes but absent from REAPER
-    let mut tracks_in_backup_not_in_reaper: Vec<String> = backup
-        .track_mutes
-        .keys()
-        .filter(|name| !track_map.contains_key(*name))
-        .cloned()
-        .collect();
-    tracks_in_backup_not_in_reaper.sort();
+    let tracks_in_backup_not_in_reaper =
+        compute_tracks_in_backup_not_in_reaper(&track_map, &backup.track_mutes);
 
     // Estimate restore time (measured: ~30s base read time for send routing + comparison)
     // Base: ~30s for reading all send routing + current values from REAPER
@@ -769,32 +760,7 @@ pub async fn apply_restore(
 
     // Collect unique track names from the backup that could not be resolved
     // to a current REAPER track (removed or renamed since capture).
-    let skipped_tracks: Vec<String> = {
-        let mut all_backup_track_names: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
-        for s in &backup.sends {
-            all_backup_track_names.insert(s.src_name.clone());
-            all_backup_track_names.insert(s.dest_name.clone());
-        }
-        for k in backup.track_volumes.keys() {
-            all_backup_track_names.insert(k.clone());
-        }
-        for k in backup.track_mutes.keys() {
-            all_backup_track_names.insert(k.clone());
-        }
-        for k in backup.eq.keys() {
-            all_backup_track_names.insert(k.clone());
-        }
-        for k in backup.limiter.keys() {
-            all_backup_track_names.insert(k.clone());
-        }
-        let mut tracks: Vec<String> = all_backup_track_names
-            .into_iter()
-            .filter(|name| !track_map.contains_key(name))
-            .collect();
-        tracks.sort();
-        tracks
-    };
+    let skipped_tracks = compute_skipped_tracks(&track_map, &backup);
 
     tracing::info!(
         restored_count,
@@ -1059,6 +1025,74 @@ async fn apply_limiter_param(
 }
 
 // =============================================================================
+// Pure-predicate helpers (extracted for mutation-test coverage)
+// =============================================================================
+
+/// Returns the track names present in `reaper_tracks` that are absent from `backup_track_mutes`.
+///
+/// Used in `preview_restore` to report tracks that exist in REAPER but have no entry in the backup.
+pub(crate) fn compute_tracks_in_reaper_not_in_backup(
+    reaper_tracks: &std::collections::HashMap<String, usize>,
+    backup_track_mutes: &std::collections::HashMap<String, bool>,
+) -> Vec<String> {
+    let mut result: Vec<String> = reaper_tracks
+        .keys()
+        .filter(|name| !backup_track_mutes.contains_key(*name))
+        .cloned()
+        .collect();
+    result.sort();
+    result
+}
+
+/// Returns the track names present in `backup_track_mutes` that are absent from `reaper_tracks`.
+///
+/// Used in `preview_restore` to report backup entries whose tracks have been removed or renamed.
+pub(crate) fn compute_tracks_in_backup_not_in_reaper(
+    reaper_tracks: &std::collections::HashMap<String, usize>,
+    backup_track_mutes: &std::collections::HashMap<String, bool>,
+) -> Vec<String> {
+    let mut result: Vec<String> = backup_track_mutes
+        .keys()
+        .filter(|name| !reaper_tracks.contains_key(*name))
+        .cloned()
+        .collect();
+    result.sort();
+    result
+}
+
+/// Collects all unique track names referenced by `backup` that are absent from `track_map`.
+///
+/// Used in `apply_restore` to populate `RestoreResult::skipped_tracks`.
+pub(crate) fn compute_skipped_tracks(
+    track_map: &std::collections::HashMap<String, usize>,
+    backup: &iem_core::backup::MixerBackup,
+) -> Vec<String> {
+    let mut all_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for s in &backup.sends {
+        all_names.insert(s.src_name.clone());
+        all_names.insert(s.dest_name.clone());
+    }
+    for k in backup.track_volumes.keys() {
+        all_names.insert(k.clone());
+    }
+    for k in backup.track_mutes.keys() {
+        all_names.insert(k.clone());
+    }
+    for k in backup.eq.keys() {
+        all_names.insert(k.clone());
+    }
+    for k in backup.limiter.keys() {
+        all_names.insert(k.clone());
+    }
+    let mut tracks: Vec<String> = all_names
+        .into_iter()
+        .filter(|name| !track_map.contains_key(name))
+        .collect();
+    tracks.sort();
+    tracks
+}
+
+// =============================================================================
 // Unit tests
 // =============================================================================
 
@@ -1189,5 +1223,126 @@ mod tests {
         assert_eq!(result.restored_count, 5);
         assert!(result.project_saved);
         assert!(result.skipped.is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for compute_tracks_in_reaper_not_in_backup (kills line-386 ! mutant)
+    // -------------------------------------------------------------------------
+
+    fn make_reaper_map(names: &[&str]) -> HashMap<String, usize> {
+        names
+            .iter()
+            .enumerate()
+            .map(|(i, n)| (n.to_string(), i + 1))
+            .collect()
+    }
+
+    fn make_mutes_map(names: &[&str]) -> HashMap<String, bool> {
+        names.iter().map(|n| (n.to_string(), false)).collect()
+    }
+
+    #[test]
+    fn reaper_not_in_backup_returns_extra_reaper_track() {
+        // REAPER has "CG", backup does not → CG should appear in the list
+        let reaper = make_reaper_map(&["PETKA mic", "CG"]);
+        let mutes = make_mutes_map(&["PETKA mic"]);
+        let result = compute_tracks_in_reaper_not_in_backup(&reaper, &mutes);
+        assert_eq!(result, vec!["CG".to_string()]);
+    }
+
+    #[test]
+    fn reaper_not_in_backup_empty_when_all_present() {
+        let reaper = make_reaper_map(&["PETKA mic"]);
+        let mutes = make_mutes_map(&["PETKA mic"]);
+        let result = compute_tracks_in_reaper_not_in_backup(&reaper, &mutes);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn reaper_not_in_backup_empty_reaper_gives_empty() {
+        let reaper: HashMap<String, usize> = HashMap::new();
+        let mutes = make_mutes_map(&["PETKA mic"]);
+        let result = compute_tracks_in_reaper_not_in_backup(&reaper, &mutes);
+        assert!(result.is_empty());
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for compute_tracks_in_backup_not_in_reaper (kills line-395 ! mutant)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn backup_not_in_reaper_returns_removed_track() {
+        // Backup has "OLD mic" that no longer exists in REAPER
+        let reaper = make_reaper_map(&["PETKA mic"]);
+        let mutes = make_mutes_map(&["PETKA mic", "OLD mic"]);
+        let result = compute_tracks_in_backup_not_in_reaper(&reaper, &mutes);
+        assert_eq!(result, vec!["OLD mic".to_string()]);
+    }
+
+    #[test]
+    fn backup_not_in_reaper_empty_when_all_present() {
+        let reaper = make_reaper_map(&["PETKA mic"]);
+        let mutes = make_mutes_map(&["PETKA mic"]);
+        let result = compute_tracks_in_backup_not_in_reaper(&reaper, &mutes);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn backup_not_in_reaper_all_missing_returns_all() {
+        let reaper: HashMap<String, usize> = HashMap::new();
+        let mutes = make_mutes_map(&["PETKA mic", "ALEX inear"]);
+        let mut result = compute_tracks_in_backup_not_in_reaper(&reaper, &mutes);
+        result.sort();
+        assert_eq!(
+            result,
+            vec!["ALEX inear".to_string(), "PETKA mic".to_string()]
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Tests for compute_skipped_tracks (kills line-793 ! mutant)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn skipped_tracks_returns_track_missing_from_reaper() {
+        let track_map = make_reaper_map(&["PETKA mic"]);
+        let mut backup = minimal_backup();
+        // minimal_backup() has "PETKA mic" (send src) and "PETKA inear" (send dest + volume + limiter)
+        // Add a send referencing a track that is NOT in track_map
+        backup.sends.push(SendBackup {
+            src_name: "GHOST track".to_string(),
+            dest_name: "PETKA inear".to_string(),
+            vol: 0.0,
+            pan: 0.0,
+            mute: false,
+        });
+        let result = compute_skipped_tracks(&track_map, &backup);
+        // "GHOST track" is in backup but not in track_map → skipped
+        assert!(
+            result.contains(&"GHOST track".to_string()),
+            "expected GHOST track in {result:?}"
+        );
+        // "PETKA mic" IS in track_map → not skipped
+        assert!(
+            !result.contains(&"PETKA mic".to_string()),
+            "PETKA mic must not be in {result:?}"
+        );
+    }
+
+    #[test]
+    fn skipped_tracks_empty_when_all_tracks_present() {
+        let track_map = make_reaper_map(&["PETKA mic", "PETKA inear"]);
+        let backup = minimal_backup();
+        let result = compute_skipped_tracks(&track_map, &backup);
+        assert!(result.is_empty(), "expected empty but got {result:?}");
+    }
+
+    #[test]
+    fn skipped_tracks_covers_track_mutes_keys() {
+        let track_map: HashMap<String, usize> = HashMap::new();
+        let mut backup = minimal_backup();
+        backup.track_mutes.insert("MAREK mic".to_string(), true);
+        let result = compute_skipped_tracks(&track_map, &backup);
+        assert!(result.contains(&"MAREK mic".to_string()));
     }
 }
