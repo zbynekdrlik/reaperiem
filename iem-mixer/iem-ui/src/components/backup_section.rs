@@ -151,6 +151,36 @@ pub fn BackupSection() -> impl IntoView {
                                     </div>
                                 }
                             })}
+                            {(!p.tracks_in_reaper_not_in_backup.is_empty()).then(|| {
+                                let names = p.tracks_in_reaper_not_in_backup.clone();
+                                view! {
+                                    <div class="preview-panel preview-warning">
+                                        <div style="color: #f0ad4e; font-weight: bold; margin-top: 6px; margin-bottom: 2px;">
+                                            "⚠ Will NOT restore (tracks not in this backup)"
+                                        </div>
+                                        <ul style="margin: 0; padding-left: 1.4em; color: #c8a050; font-size: 0.85em;">
+                                            {names.into_iter().map(|name| view! {
+                                                <li>{name}" — its current state will be unchanged"</li>
+                                            }).collect_view()}
+                                        </ul>
+                                    </div>
+                                }
+                            })}
+                            {(!p.tracks_in_backup_not_in_reaper.is_empty()).then(|| {
+                                let names = p.tracks_in_backup_not_in_reaper.clone();
+                                view! {
+                                    <div class="preview-panel preview-warning">
+                                        <div style="color: #f0ad4e; font-weight: bold; margin-top: 6px; margin-bottom: 2px;">
+                                            "⚠ Will skip (tracks in backup but not in REAPER)"
+                                        </div>
+                                        <ul style="margin: 0; padding-left: 1.4em; color: #c8a050; font-size: 0.85em;">
+                                            {names.into_iter().map(|name| view! {
+                                                <li>{name}</li>
+                                            }).collect_view()}
+                                        </ul>
+                                    </div>
+                                }
+                            })}
                         </div>
                         <button
                             class="settings-action-btn"
