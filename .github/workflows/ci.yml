@@ -564,7 +564,7 @@ jobs:
         # of --fail-under-lines because cargo-llvm-cov applies that flag to
         # ALL covered files, not just the files we care about.
         run: |
-          cargo llvm-cov nextest \
+          cargo llvm-cov \
             --package iem-server \
             --features "audio,test-helpers" \
             --lcov \
