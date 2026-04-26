@@ -30,7 +30,7 @@ pub mod audio_stream;
 #[cfg(feature = "audio")]
 pub mod talkback_buffer;
 
-#[cfg(any(test, feature = "test-helpers"))]
+#[cfg(feature = "test-helpers")]
 pub mod test_helpers;
 
 use axum::Router;
@@ -287,8 +287,8 @@ impl AppState {
     /// - All stores backed by `data_dir` (a temp directory in tests)
     /// - No background daemons spawned
     ///
-    /// Only compiled under `#[cfg(any(test, feature = "test-helpers"))]`.
-    #[cfg(any(test, feature = "test-helpers"))]
+    /// Only compiled under `#[cfg(feature = "test-helpers")]`.
+    #[cfg(feature = "test-helpers")]
     pub fn new_for_test(reaper_url: String, data_dir: std::path::PathBuf) -> Self {
         let mut config = iem_core::Config::default();
         config.reaper_url = reaper_url;
