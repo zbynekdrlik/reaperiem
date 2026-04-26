@@ -948,7 +948,7 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 /// The cache flag `snapshot_last_date` is set only after a successful save, ensuring
 /// that any failure leaves the day un-claimed so the next tick can retry.
 pub async fn try_persist_auto_snapshot(
-    state: &std::sync::Arc<crate::AppState>,
+    state: &crate::AppState,
     member_id: &str,
     today: &str,
     channel_map: std::collections::HashMap<usize, iem_core::ChannelSnapshot>,

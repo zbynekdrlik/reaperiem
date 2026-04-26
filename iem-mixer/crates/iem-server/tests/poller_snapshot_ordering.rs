@@ -61,7 +61,8 @@ async fn snapshot_cache_not_marked_on_save_failure() {
     // No track indices → no EQ reads attempted; failure will come from save_snapshot.
     let track_indices: Vec<usize> = vec![];
 
-    let result = try_persist_auto_snapshot(&state, member_id, today, channels, track_indices).await;
+    let result =
+        try_persist_auto_snapshot(&*state, member_id, today, channels, track_indices).await;
 
     // The save should have failed (permission denied).
     assert!(
