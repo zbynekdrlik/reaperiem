@@ -136,14 +136,14 @@ async fn restore_backup(
 
 /// `POST /api/backups/capture` — capture current mixer state and save as backup.
 ///
-/// Returns the `BackupInfo` for the newly created backup file.
+/// Returns the `BackupInfo` plus a `CaptureAudit` for the newly created backup file.
 async fn trigger_capture(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
-) -> Result<Json<BackupInfo>, (StatusCode, Json<ApiError>)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     verify_engineer(&state, &headers).await?;
 
-    let backup = crate::backup_capture::capture_mixer_state(&state)
+    let (backup, audit) = crate::backup_capture::capture_mixer_state(&state)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "backup capture failed");
@@ -178,5 +178,12 @@ async fn trigger_capture(
         track_count: backup.track_layout.len(),
     };
 
-    Ok(Json(info))
+    Ok(Json(serde_json::json!({
+        "filename": info.filename,
+        "timestamp": info.timestamp,
+        "size_bytes": info.size_bytes,
+        "send_count": info.send_count,
+        "track_count": info.track_count,
+        "audit": audit,
+    })))
 }

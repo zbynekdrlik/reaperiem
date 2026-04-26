@@ -3,12 +3,44 @@
 //! Used by backup operations to snapshot the full system state into a `MixerBackup`.
 
 use iem_core::{
-    ServerMsg,
+    CaptureAudit, ServerMsg,
     backup::{BACKUP_VERSION, EqBandBackup, LimiterBackup, MixerBackup, SendBackup},
 };
 use std::collections::HashMap;
+use std::time::Instant;
 
 use crate::{AppState, proxy};
+
+#[derive(Debug, thiserror::Error)]
+pub enum CaptureError {
+    #[error("capture incomplete: sends_count={got} below minimum={min}")]
+    InsufficientSends { got: usize, min: usize },
+    #[error("capture incomplete: track_mutes_count={got} below minimum={min}")]
+    InsufficientTrackMutes { got: usize, min: usize },
+}
+
+/// Refuses to accept a capture whose entry counts fall below operational minimums.
+/// A capture below threshold likely means REAPER was unresponsive for some queries
+/// and the resulting backup would be silently corrupt — fail loudly instead.
+pub fn assert_capture_completeness(
+    audit: &CaptureAudit,
+    min_sends: usize,
+    min_track_mutes: usize,
+) -> Result<(), CaptureError> {
+    if audit.sends_count < min_sends {
+        return Err(CaptureError::InsufficientSends {
+            got: audit.sends_count,
+            min: min_sends,
+        });
+    }
+    if audit.track_mutes_count < min_track_mutes {
+        return Err(CaptureError::InsufficientTrackMutes {
+            got: audit.track_mutes_count,
+            min: min_track_mutes,
+        });
+    }
+    Ok(())
+}
 
 /// Capture the complete current mixer state.
 ///
@@ -20,12 +52,13 @@ use crate::{AppState, proxy};
 /// - Limiter params for "inear" tracks
 /// - Per-member UI customizations
 /// - Per-member PINs
-pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String> {
+pub async fn capture_mixer_state(state: &AppState) -> Result<(MixerBackup, CaptureAudit), String> {
     let reaper_url = {
         let config = state.config.read().await;
         config.reaper_url.clone()
     };
 
+    let capture_started = Instant::now();
     tracing::info!("Backup capture: starting full mixer state snapshot");
 
     // --- 1. Query all tracks ---
@@ -314,7 +347,7 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         track_mutes.len()
     );
 
-    Ok(MixerBackup {
+    let backup = MixerBackup {
         version: BACKUP_VERSION,
         timestamp,
         track_layout,
@@ -325,7 +358,33 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         customizations,
         pins,
         track_mutes,
-    })
+    };
+
+    let audit = CaptureAudit {
+        tracks_total: backup.track_layout.len(),
+        tracks_named: backup.track_layout.values().cloned().collect::<Vec<_>>(),
+        sends_count: backup.sends.len(),
+        track_mutes_count: backup.track_mutes.len(),
+        track_volumes_count: backup.track_volumes.len(),
+        eq_count: backup.eq.len(),
+        limiter_count: backup.limiter.len(),
+        customizations_count: backup.customizations.len(),
+        pins_count: backup.pins.len(),
+        reaper_query_duration_ms: capture_started.elapsed().as_millis() as u64,
+        warnings: vec![],
+    };
+
+    assert_capture_completeness(&audit, 200, 30).map_err(|e| e.to_string())?;
+
+    tracing::info!(
+        sends = audit.sends_count,
+        track_mutes = audit.track_mutes_count,
+        eq = audit.eq_count,
+        duration_ms = audit.reaper_query_duration_ms,
+        "Backup capture complete"
+    );
+
+    Ok((backup, audit))
 }
 
 #[cfg(test)]

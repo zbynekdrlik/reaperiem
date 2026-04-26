@@ -187,6 +187,28 @@ pub struct RestoreResult {
     pub project_saved: bool,
 }
 
+/// Counts and timing metadata about a capture run. Embedded in the
+/// `/api/backups/capture` response (and in v2 file format in Phase 2)
+/// so the engineer can verify the capture is complete before relying on it.
+///
+/// Used by `assert_capture_completeness` (in backup_capture.rs) to refuse
+/// captures that fall below operational minimums — silent partial captures
+/// are the most dangerous failure mode for restore.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CaptureAudit {
+    pub tracks_total: usize,
+    pub tracks_named: Vec<String>,
+    pub sends_count: usize,
+    pub track_mutes_count: usize,
+    pub track_volumes_count: usize,
+    pub eq_count: usize,
+    pub limiter_count: usize,
+    pub customizations_count: usize,
+    pub pins_count: usize,
+    pub reaper_query_duration_ms: u64,
+    pub warnings: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -50,7 +50,7 @@ async fn run(state: AppState) {
             tracing::info!(time = %hhmm, "Backup daemon: scheduled capture starting");
 
             match backup_capture::capture_mixer_state(&state).await {
-                Ok(backup) => match state.backup_store.save(&backup) {
+                Ok((backup, _audit)) => match state.backup_store.save(&backup) {
                     Ok(filename) => {
                         tracing::info!(
                             filename = %filename,
