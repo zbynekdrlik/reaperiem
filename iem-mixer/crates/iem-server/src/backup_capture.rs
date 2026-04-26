@@ -327,3 +327,47 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         track_mutes,
     })
 }
+
+#[cfg(test)]
+mod completeness_tests {
+    use super::*;
+    use iem_core::CaptureAudit;
+
+    fn audit_with_counts(sends: usize, track_mutes: usize) -> CaptureAudit {
+        CaptureAudit {
+            tracks_total: 56,
+            tracks_named: vec![],
+            sends_count: sends,
+            track_mutes_count: track_mutes,
+            track_volumes_count: 10,
+            eq_count: 22,
+            limiter_count: 10,
+            customizations_count: 10,
+            pins_count: 10,
+            reaper_query_duration_ms: 1000,
+            warnings: vec![],
+        }
+    }
+
+    #[test]
+    fn complete_capture_passes_assertion() {
+        let audit = audit_with_counts(220, 56);
+        assert!(assert_capture_completeness(&audit, 200, 30).is_ok());
+    }
+
+    #[test]
+    fn capture_below_sends_threshold_fails() {
+        let audit = audit_with_counts(150, 56);
+        let err = assert_capture_completeness(&audit, 200, 30).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("sends_count") || msg.contains("InsufficientSends"));
+    }
+
+    #[test]
+    fn capture_below_track_mutes_threshold_fails() {
+        let audit = audit_with_counts(220, 5);
+        let err = assert_capture_completeness(&audit, 200, 30).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("track_mutes") || msg.contains("InsufficientTrackMutes"));
+    }
+}
