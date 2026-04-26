@@ -10,7 +10,7 @@ use crate::{Customization, EqBand};
 pub const BACKUP_VERSION: u32 = 1;
 
 /// Complete mixer backup snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct MixerBackup {
     /// Schema version (always BACKUP_VERSION)
     pub version: u32,
@@ -36,7 +36,7 @@ pub struct MixerBackup {
 }
 
 /// State of a single send at backup time
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SendBackup {
     /// Source track name
     pub src_name: String,
@@ -51,7 +51,7 @@ pub struct SendBackup {
 }
 
 /// EQ band state at backup time (serialisable, band-index aware copy of EqBand)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EqBandBackup {
     /// 0-based band index within the track's EQ
     pub band: u8,
@@ -90,7 +90,7 @@ impl From<(u8, &EqBand)> for EqBandBackup {
 }
 
 /// Limiter state for a single output track
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LimiterBackup {
     /// Max output level in dB (-6 to 0)
     pub limit_db: f32,

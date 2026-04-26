@@ -92,3 +92,4 @@ test-helpers = []  # exposes AppState::new_for_test and test_helpers module for 
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
 tracing-test = "0.2"
+proptest = "1"
