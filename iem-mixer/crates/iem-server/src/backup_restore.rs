@@ -769,7 +769,7 @@ pub async fn apply_restore(
 
     // Collect unique track names from the backup that could not be resolved
     // to a current REAPER track (removed or renamed since capture).
-    let mut skipped_tracks: Vec<String> = {
+    let skipped_tracks: Vec<String> = {
         let mut all_backup_track_names: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         for s in &backup.sends {

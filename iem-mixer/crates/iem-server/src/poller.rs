@@ -926,8 +926,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         drop(cache);
 
         // Save auto-snapshot with EQ data (outside lock — EQ reads are async HTTP calls)
-        if let Some(channel_map) = snapshot_channels {
-            if let Err(e) = try_persist_auto_snapshot(
+        if let Some(channel_map) = snapshot_channels
+            && let Err(e) = try_persist_auto_snapshot(
                 state,
                 &snapshot_member_id,
                 &today,
@@ -935,9 +935,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
                 snapshot_track_indices,
             )
             .await
-            {
-                tracing::error!(member = %snapshot_member_id, error = %e, "auto-snapshot persistence failed");
-            }
+        {
+            tracing::error!(member = %snapshot_member_id, error = %e, "auto-snapshot persistence failed");
         }
     }
 }
