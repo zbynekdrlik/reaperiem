@@ -1183,6 +1183,7 @@ mod tests {
         let result = RestoreResult {
             restored_count: 5,
             skipped: vec![],
+            skipped_tracks: vec![],
             project_saved: true,
         };
         assert_eq!(result.restored_count, 5);
