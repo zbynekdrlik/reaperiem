@@ -760,7 +760,7 @@ pub async fn apply_restore(
 
     // Collect unique track names from the backup that could not be resolved
     // to a current REAPER track (removed or renamed since capture).
-    let skipped_tracks = compute_skipped_tracks(&track_map, &backup);
+    let skipped_tracks = compute_skipped_tracks(&track_map, backup);
 
     tracing::info!(
         restored_count,
