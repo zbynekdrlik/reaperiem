@@ -2,118 +2,129 @@
   "Tina 19.3.": {
     "name": "Tina 19.3.",
     "channels": {
-      "10": {
-        "vol": -37.4,
-        "mute": true,
-        "pan": 1.0
-      },
-      "19": {
-        "vol": -22.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": -24.0,
-        "mute": true,
-        "pan": 1.0
-      },
-      "20": {
-        "vol": -25.4,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": -22.4,
-        "mute": true,
-        "pan": 0.5
-      },
       "12": {
-        "vol": -30.0,
-        "mute": true,
-        "pan": 0.5
+        "vol": -21.399979,
+        "mute": false,
+        "pan": 0.75
       },
-      "17": {
-        "vol": -33.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": -29.8,
+      "1": {
+        "vol": -25.400028,
         "mute": false,
         "pan": 0.5
       },
+      "8": {
+        "vol": -52.99892,
+        "mute": true,
+        "pan": 0.75
+      },
       "3": {
-        "vol": -36.6,
-        "mute": true,
-        "pan": 0.5
+        "vol": -33.000084,
+        "mute": false,
+        "pan": 0.5916665
       },
-      "14": {
-        "vol": -27.0,
-        "mute": true,
-        "pan": 0.5
+      "13": {
+        "vol": -27.39999,
+        "mute": false,
+        "pan": 0.75
       },
-      "16": {
-        "vol": -37.0,
+      "20": {
+        "vol": -25.400028,
         "mute": true,
-        "pan": 0.5
+        "pan": 0.75
       },
-      "11": {
-        "vol": -29.6,
-        "mute": true,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": -19.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": -29.6,
+      "45": {
+        "vol": 0.0,
         "mute": true,
         "pan": 0.5
       },
       "21": {
-        "vol": -14.4,
+        "vol": -14.400003,
         "mute": true,
-        "pan": 0.5
+        "pan": 0.75
       },
-      "7": {
-        "vol": -32.6,
-        "mute": true,
-        "pan": 0.5
+      "6": {
+        "vol": -24.600056,
+        "mute": false,
+        "pan": 0.75
       },
-      "8": {
-        "vol": -53.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": -30.4,
-        "mute": true,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": -26.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": -33.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": -40.4,
-        "mute": true,
-        "pan": 0.5
+      "22": {
+        "vol": -18.999989,
+        "mute": false,
+        "pan": 0.75
       },
       "18": {
-        "vol": -29.4,
+        "vol": -30.199987,
+        "mute": false,
+        "pan": 0.75
+      },
+      "4": {
+        "vol": -25.800022,
+        "mute": false,
+        "pan": 1.0
+      },
+      "9": {
+        "vol": -40.399933,
         "mute": true,
+        "pan": 0.75
+      },
+      "2": {
+        "vol": -21.800005,
+        "mute": false,
         "pan": 0.5
+      },
+      "15": {
+        "vol": -30.999947,
+        "mute": false,
+        "pan": 0.75
+      },
+      "19": {
+        "vol": -21.99998,
+        "mute": false,
+        "pan": 0.75
+      },
+      "17": {
+        "vol": -38.399742,
+        "mute": false,
+        "pan": 0.75
+      },
+      "44": {
+        "vol": 0.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": -38.19978,
+        "mute": false,
+        "pan": 0.75
+      },
+      "11": {
+        "vol": -25.200014,
+        "mute": false,
+        "pan": 0.75
+      },
+      "16": {
+        "vol": -41.40039,
+        "mute": false,
+        "pan": 0.75
+      },
+      "10": {
+        "vol": -37.39976,
+        "mute": true,
+        "pan": 1.0
+      },
+      "5": {
+        "vol": -33.19985,
+        "mute": true,
+        "pan": 0.75
+      },
+      "7": {
+        "vol": -32.600105,
+        "mute": false,
+        "pan": 0.75
       }
     },
     "created_at": 1773938340,
-    "updated_at": 1773938340
+    "updated_at": 1777186913,
+    "stems_level_db": 0.0
   }
 }
