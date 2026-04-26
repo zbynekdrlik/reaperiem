@@ -1233,7 +1233,7 @@ mod tests {
         names
             .iter()
             .enumerate()
-            .map(|(i, n)| (n.to_string(), i + 1))
+            .map(|(i, n)| (n.to_string(), (i + 1) as u32))
             .collect()
     }
 
