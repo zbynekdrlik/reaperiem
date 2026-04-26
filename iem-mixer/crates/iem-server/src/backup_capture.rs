@@ -163,15 +163,28 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<MixerBackup, String
         sends.len()
     );
 
-    // --- 3. Collect track output volumes and mute states for "inear" and "stems" tracks ---
+    // --- 3. Collect track mute state for ALL tracks (volume only for inear/stems) ---
+    //
+    // Why: track-level mute applies to any track (CG, hand mics, BGV bus, etc).
+    // Filtering by name silently excluded CG and broke the 2026-04-26 morning restore —
+    // the engineer expected restore to re-mute CG and it didn't, because CG was never
+    // in the backup. See docs/superpowers/investigation/2026-04-26-incident.md.
+    //
+    // Track output VOLUMES are still captured only for inear/stems — those are the only
+    // tracks whose volume the engineer typically restores. Mute is the safety-critical
+    // dimension; volume restoration on every track has no use case.
     let mut track_volumes: HashMap<String, f64> = HashMap::new();
     let mut track_mutes: HashMap<String, bool> = HashMap::new();
     for track in &tracks {
+        // Skip MASTER (idx 0) — its mute would silence everything; never restore it.
+        if track.index == 0 {
+            continue;
+        }
+        track_mutes.insert(track.name.clone(), track.muted);
+
         let name_lower = track.name.to_lowercase();
         if name_lower.contains("inear") || name_lower.contains("stems") {
-            // Store LINEAR volume directly (same as REAPER API)
             track_volumes.insert(track.name.clone(), track.vol_linear as f64);
-            track_mutes.insert(track.name.clone(), track.muted);
         }
     }
 
