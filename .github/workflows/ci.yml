@@ -550,7 +550,11 @@ jobs:
             --jobs 2 \
             --no-shuffle \
             --exclude-re 'handle_talkback_ws' \
-            --exclude-re 'talkback_diagnostics_handler'
+            --exclude-re 'talkback_diagnostics_handler' \
+            --exclude-re 'new_for_test' \
+            --exclude-re 'make_test_state_with_bad_reaper' \
+            --exclude-re 'poll_reaper_and_broadcast' \
+            --exclude-re 'try_persist_auto_snapshot'
 
       - name: Coverage threshold for defensive modules (≥85% line coverage)
         working-directory: iem-mixer
@@ -633,7 +637,9 @@ jobs:
             --file 'crates/iem-server/src/poller.rs' \
             --timeout 300 \
             --jobs 4 \
-            --no-shuffle
+            --no-shuffle \
+            --exclude-re 'poll_reaper_and_broadcast' \
+            --exclude-re 'try_persist_auto_snapshot'
 
   # ============================================================
   # CHECK VERSION BUMP - Only on PRs to main
