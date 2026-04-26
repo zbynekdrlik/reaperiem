@@ -379,6 +379,24 @@ pub async fn preview_restore(
     // Suppress unused-variable warning for index_to_name (kept for potential future use)
     let _ = index_to_name;
 
+    // --- Track lifecycle diff: REAPER vs backup.track_mutes ---
+    // Tracks present in REAPER but absent from backup.track_mutes
+    let mut tracks_in_reaper_not_in_backup: Vec<String> = track_map
+        .keys()
+        .filter(|name| !backup.track_mutes.contains_key(*name))
+        .cloned()
+        .collect();
+    tracks_in_reaper_not_in_backup.sort();
+
+    // Tracks present in backup.track_mutes but absent from REAPER
+    let mut tracks_in_backup_not_in_reaper: Vec<String> = backup
+        .track_mutes
+        .keys()
+        .filter(|name| !track_map.contains_key(*name))
+        .cloned()
+        .collect();
+    tracks_in_backup_not_in_reaper.sort();
+
     // Estimate restore time (measured: ~30s base read time for send routing + comparison)
     // Base: ~30s for reading all send routing + current values from REAPER
     // EQ writes: ~0.24s per band (4 params × 0.06s each)
@@ -413,6 +431,8 @@ pub async fn preview_restore(
         unchanged_count,
         skipped,
         estimated_seconds,
+        tracks_in_reaper_not_in_backup,
+        tracks_in_backup_not_in_reaper,
     })
 }
 
@@ -747,9 +767,39 @@ pub async fn apply_restore(
         tracing::warn!("apply_restore: failed to save REAPER project");
     }
 
+    // Collect unique track names from the backup that could not be resolved
+    // to a current REAPER track (removed or renamed since capture).
+    let mut skipped_tracks: Vec<String> = {
+        let mut all_backup_track_names: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for s in &backup.sends {
+            all_backup_track_names.insert(s.src_name.clone());
+            all_backup_track_names.insert(s.dest_name.clone());
+        }
+        for k in backup.track_volumes.keys() {
+            all_backup_track_names.insert(k.clone());
+        }
+        for k in backup.track_mutes.keys() {
+            all_backup_track_names.insert(k.clone());
+        }
+        for k in backup.eq.keys() {
+            all_backup_track_names.insert(k.clone());
+        }
+        for k in backup.limiter.keys() {
+            all_backup_track_names.insert(k.clone());
+        }
+        let mut tracks: Vec<String> = all_backup_track_names
+            .into_iter()
+            .filter(|name| !track_map.contains_key(name))
+            .collect();
+        tracks.sort();
+        tracks
+    };
+
     tracing::info!(
         restored_count,
         skipped = skipped.len(),
+        skipped_tracks = skipped_tracks.len(),
         project_saved,
         "apply_restore: complete"
     );
@@ -758,6 +808,7 @@ pub async fn apply_restore(
         restored_count,
         skipped,
         project_saved,
+        skipped_tracks,
     })
 }
 

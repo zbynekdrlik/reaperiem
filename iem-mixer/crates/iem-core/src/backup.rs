@@ -127,6 +127,14 @@ pub struct RestorePreview {
     /// Estimated restore time in seconds (EQ is slow: ~0.24s per band)
     #[serde(default)]
     pub estimated_seconds: u32,
+    /// REAPER tracks that exist now but were not in the backup's track_mutes.
+    /// These tracks were added after the backup was captured.
+    #[serde(default)]
+    pub tracks_in_reaper_not_in_backup: Vec<String>,
+    /// Backup track_mutes keys that no longer exist in REAPER.
+    /// These tracks were removed or renamed since the backup was captured.
+    #[serde(default)]
+    pub tracks_in_backup_not_in_reaper: Vec<String>,
 }
 
 /// A single proposed change from a restore
@@ -185,6 +193,11 @@ pub struct RestoreResult {
     pub skipped: Vec<SkippedEntry>,
     /// Whether the REAPER project was saved after the restore
     pub project_saved: bool,
+    /// Track names from the backup that could not be resolved to a current
+    /// REAPER track (missing in any category: sends, track_mutes, track_volumes,
+    /// EQ, or limiter).
+    #[serde(default)]
+    pub skipped_tracks: Vec<String>,
 }
 
 /// Counts and timing metadata about a capture run. Embedded in the
