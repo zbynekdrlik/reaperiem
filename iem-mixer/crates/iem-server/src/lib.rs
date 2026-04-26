@@ -30,6 +30,9 @@ pub mod audio_stream;
 #[cfg(feature = "audio")]
 pub mod talkback_buffer;
 
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod test_helpers;
+
 use axum::Router;
 use axum::http::{HeaderName, HeaderValue};
 use iem_core::{Config, DiscoveredMember, ServerMsg};
@@ -275,6 +278,21 @@ impl AppState {
             limiter_read_lock: Arc::new(tokio::sync::Mutex::new(())),
             limiter_activity: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
         }
+    }
+
+    /// Construct a minimal `AppState` for testing purposes.
+    ///
+    /// Builds a fully-valid `AppState` with:
+    /// - `reaper_url` pointing at the given URL (typically a closed port)
+    /// - All stores backed by `data_dir` (a temp directory in tests)
+    /// - No background daemons spawned
+    ///
+    /// Only compiled under `#[cfg(any(test, feature = "test-helpers"))]`.
+    #[cfg(any(test, feature = "test-helpers"))]
+    pub fn new_for_test(reaper_url: String, data_dir: std::path::PathBuf) -> Self {
+        let mut config = iem_core::Config::default();
+        config.reaper_url = reaper_url;
+        Self::new(config, &data_dir)
     }
 }
 

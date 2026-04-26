@@ -75,12 +75,18 @@ name = "iem-server"
 path = "src/bin/server.rs"
 required-features = ["standalone"]
 
+[[test]]
+name = "poller_snapshot_ordering"
+path = "tests/poller_snapshot_ordering.rs"
+required-features = ["test-helpers"]
+
 [features]
 default = []
 standalone = ["tracing-subscriber"]
 tls = ["axum-server", "rustls", "dirs"]
 audio = ["dep:bytes"]
 integration = []  # gates live REAPER integration tests in tests/reaper_live.rs
+test-helpers = []  # exposes AppState::new_for_test and test_helpers module for integration tests
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

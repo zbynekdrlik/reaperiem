@@ -900,15 +900,21 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         } else {
             vec![]
         };
-        if last_date.as_deref() != Some(&today) {
-            cache.snapshot_last_date.insert(member_id.clone(), today);
-        }
         let snapshot_channels = if needs_snapshot {
             Some(SnapshotStore::channels_from_state(&result_channels))
         } else {
             None
         };
         let snapshot_member_id = member_id.clone();
+
+        // When a snapshot isn't needed (file already exists for today) but the date
+        // changed, still update the cache so we skip the has_snapshot_today() file
+        // check on subsequent ticks this session.
+        if !needs_snapshot && last_date.as_deref() != Some(&today) {
+            cache
+                .snapshot_last_date
+                .insert(member_id.clone(), today.clone());
+        }
 
         // Periodic cleanup of stale command timestamps (>2s old)
         let stale_cutoff = Duration::from_secs(2);
@@ -921,31 +927,74 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 
         // Save auto-snapshot with EQ data (outside lock — EQ reads are async HTTP calls)
         if let Some(channel_map) = snapshot_channels {
-            let mut eq_bands_map = std::collections::HashMap::new();
-            for track_idx in &snapshot_track_indices {
-                if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
-                    crate::proxy::handle_get_eq_params(state, *track_idx).await
-                    && !bands.is_empty()
-                {
-                    eq_bands_map.insert(*track_idx, bands);
-                }
-            }
-            let eq_bands = if eq_bands_map.is_empty() {
-                None
-            } else {
-                Some(eq_bands_map)
-            };
-            let snapshot = MixSnapshot::new_auto(channel_map, eq_bands);
-            if let Err(e) = state
-                .snapshot_store
-                .save_snapshot(&snapshot_member_id, snapshot)
+            if let Err(e) = try_persist_auto_snapshot(
+                state,
+                &snapshot_member_id,
+                &today,
+                channel_map,
+                snapshot_track_indices,
+            )
+            .await
             {
-                tracing::error!(member = %snapshot_member_id, error = %e, "Failed to save daily auto-snapshot");
-            } else {
-                tracing::info!(member = %snapshot_member_id, "Saved daily auto-snapshot with EQ");
+                tracing::error!(member = %snapshot_member_id, error = %e, "auto-snapshot persistence failed");
             }
         }
     }
+}
+
+/// Persist an auto-snapshot for a member, collecting EQ data via async HTTP reads.
+///
+/// Returns `Ok(())` on successful save, or an error if the snapshot could not be written.
+///
+/// # ⚠️ Defensive hardening (T8 target) — buggy ordering preserved on purpose
+///
+/// This function sets `cache.snapshot_last_date` **before** the `save_snapshot` I/O
+/// call.  If the save fails (disk error, I/O permission, etc.) the day is already
+/// "claimed" in the in-memory cache, silently blocking retry for the rest of the
+/// session.
+///
+/// T8 will reverse the ordering: mark the date only on successful save.
+/// This function is exposed at module level so the integration test in
+/// `tests/poller_snapshot_ordering.rs` can demonstrate the (buggy) current
+/// ordering as a RED test that goes GREEN after T8.
+pub async fn try_persist_auto_snapshot(
+    state: &std::sync::Arc<crate::AppState>,
+    member_id: &str,
+    today: &str,
+    channel_map: std::collections::HashMap<usize, iem_core::ChannelSnapshot>,
+    snapshot_track_indices: Vec<usize>,
+) -> Result<(), anyhow::Error> {
+    // ⚠️ BUGGY ORDERING — cache flag set BEFORE save (T8 fixes this).
+    {
+        let mut cache = state.mixer_cache.write().await;
+        cache
+            .snapshot_last_date
+            .insert(member_id.to_string(), today.to_string());
+    }
+
+    // EQ reads are the async HTTP step that may fail or be slow.
+    // On failure the snapshot is still saved — just without EQ bands.
+    let mut eq_bands_map = std::collections::HashMap::new();
+    for track_idx in &snapshot_track_indices {
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            crate::proxy::handle_get_eq_params(state, *track_idx).await
+            && !bands.is_empty()
+        {
+            eq_bands_map.insert(*track_idx, bands);
+        }
+    }
+    let eq_bands = if eq_bands_map.is_empty() {
+        None
+    } else {
+        Some(eq_bands_map)
+    };
+    let snapshot = MixSnapshot::new_auto(channel_map, eq_bands);
+    state
+        .snapshot_store
+        .save_snapshot(member_id, snapshot)
+        .map_err(|e| anyhow::anyhow!("Failed to save daily auto-snapshot: {e}"))?;
+    tracing::info!(member = %member_id, "Saved daily auto-snapshot with EQ");
+    Ok(())
 }
 
 #[cfg(test)]
