@@ -301,7 +301,7 @@ jobs:
         working-directory: iem-mixer
         run: |
           cargo test -p iem-core
-          cargo test -p iem-server --features audio
+          cargo test -p iem-server --features "audio,test-helpers"
 
   # ============================================================
   # BUILD WASM - Frontend must build

@@ -945,18 +945,8 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
 /// Persist an auto-snapshot for a member, collecting EQ data via async HTTP reads.
 ///
 /// Returns `Ok(())` on successful save, or an error if the snapshot could not be written.
-///
-/// # ⚠️ Defensive hardening (T8 target) — buggy ordering preserved on purpose
-///
-/// This function sets `cache.snapshot_last_date` **before** the `save_snapshot` I/O
-/// call.  If the save fails (disk error, I/O permission, etc.) the day is already
-/// "claimed" in the in-memory cache, silently blocking retry for the rest of the
-/// session.
-///
-/// T8 will reverse the ordering: mark the date only on successful save.
-/// This function is exposed at module level so the integration test in
-/// `tests/poller_snapshot_ordering.rs` can demonstrate the (buggy) current
-/// ordering as a RED test that goes GREEN after T8.
+/// The cache flag `snapshot_last_date` is set only after a successful save, ensuring
+/// that any failure leaves the day un-claimed so the next tick can retry.
 pub async fn try_persist_auto_snapshot(
     state: &std::sync::Arc<crate::AppState>,
     member_id: &str,
@@ -964,13 +954,12 @@ pub async fn try_persist_auto_snapshot(
     channel_map: std::collections::HashMap<usize, iem_core::ChannelSnapshot>,
     snapshot_track_indices: Vec<usize>,
 ) -> Result<(), anyhow::Error> {
-    // ⚠️ BUGGY ORDERING — cache flag set BEFORE save (T8 fixes this).
-    {
-        let mut cache = state.mixer_cache.write().await;
-        cache
-            .snapshot_last_date
-            .insert(member_id.to_string(), today.to_string());
-    }
+    // Why this ordering is critical:
+    //   The cache flag `snapshot_last_date` gates retries — once set for `today`, the
+    //   next channel-change tick won't try again. If we set it BEFORE save and save
+    //   fails (EQ HTTP errors, disk full, etc.), the day is silently "claimed" with
+    //   no file written, and no retry happens until tomorrow. Setting it AFTER save
+    //   ensures failures stay retryable.
 
     // EQ reads are the async HTTP step that may fail or be slow.
     // On failure the snapshot is still saved — just without EQ bands.
@@ -994,6 +983,16 @@ pub async fn try_persist_auto_snapshot(
         .save_snapshot(member_id, snapshot)
         .map_err(|e| anyhow::anyhow!("Failed to save daily auto-snapshot: {e}"))?;
     tracing::info!(member = %member_id, "Saved daily auto-snapshot with EQ");
+
+    // Only NOW mark the day as "done" — failure above leaves the cache un-claimed
+    // so the next channel change retries on the same day.
+    {
+        let mut cache = state.mixer_cache.write().await;
+        cache
+            .snapshot_last_date
+            .insert(member_id.to_string(), today.to_string());
+    }
+
     Ok(())
 }
 
