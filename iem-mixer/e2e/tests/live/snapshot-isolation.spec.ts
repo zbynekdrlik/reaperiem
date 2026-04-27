@@ -67,19 +67,29 @@ async function captureObserverState(
 ): Promise<SendSnapshot[]> {
   const sends: SendSnapshot[] = [];
 
-  // 32 tracks covers all input tracks + inear tracks in the current project.
-  // Over-scanning is safe — missing sends (empty response) are skipped.
-  for (let track = 1; track <= 32; track++) {
+  // Scan all input tracks (which carry sends to inears). 22 input tracks plus
+  // the recently-added ALEX kl (44) and CG (45). Each has up to ~12 sends.
+  //
+  // Resilience: an empty / malformed response on ONE send must not terminate
+  // the scan — REAPER occasionally returns an empty body under load. We
+  // `continue` past errors instead of `break`-ing the inner loop, which
+  // previously caused tests to silently observe zero sends for a member.
+  for (let track = 1; track <= 45; track++) {
     for (let sendIdx = 0; sendIdx < 12; sendIdx++) {
-      const r = await request.get(
-        `${REAPER}/_/GET/TRACK/${track}/SEND/${sendIdx}`,
-      );
-      const text = (await r.text()).trim();
-      if (!text) break; // REAPER returns empty for out-of-range send indices
+      let text: string;
+      try {
+        const r = await request.get(
+          `${REAPER}/_/GET/TRACK/${track}/SEND/${sendIdx}`,
+        );
+        text = (await r.text()).trim();
+      } catch {
+        continue; // request error — skip this send, keep scanning
+      }
+      if (!text) continue; // empty body — skip, don't terminate the scan
 
       const parts = text.split("\t");
       // SEND(0) track(1) send(2) mute_flag(3) volume(4) pan(5) destination(6)
-      if (parts.length < 7) break;
+      if (parts.length < 7) continue;
 
       const dest = parseInt(parts[6] ?? "-1", 10);
       if (dest === observerInear) {

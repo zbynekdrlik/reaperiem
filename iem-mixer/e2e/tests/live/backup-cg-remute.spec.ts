@@ -25,7 +25,7 @@ async function getTrackMute(
   request: import("@playwright/test").APIRequestContext,
   idx: number,
 ): Promise<boolean> {
-  const r = await request.get(`${REAPER}/_/GET/TRACK/${idx}`);
+  const r = await request.get(`${REAPER}/_/TRACK/${idx}`);
   const text = await r.text();
   const parts = text.trim().split("\t");
   // Field layout: TRACK(0) idx(1) name(2) flags(3) vol(4) pan(5) ...

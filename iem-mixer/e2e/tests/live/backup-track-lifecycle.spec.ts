@@ -44,7 +44,7 @@ async function getTrackName(
   request: import("@playwright/test").APIRequestContext,
   idx: number,
 ): Promise<string> {
-  const r = await request.get(`${REAPER}/_/GET/TRACK/${idx}`);
+  const r = await request.get(`${REAPER}/_/TRACK/${idx}`);
   const text = await r.text();
   const parts = text.trim().split("\t");
   return parts[2] ?? "";
