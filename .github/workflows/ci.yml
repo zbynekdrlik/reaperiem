@@ -736,7 +736,13 @@ jobs:
   deploy:
     name: Deploy to iem.lan
     runs-on: [self-hosted, iem-lan]
-    timeout-minutes: 25
+    # 25 min was too tight: full live E2E suite (211 tests, including
+    # 2× 2.5-min snapshot-isolation cases + audio/talkback tests) plus
+    # REAPER project save/revert cleanup hits ~25 min on the self-hosted
+    # runner under realistic load.  Empirically observed 25:23 runs that
+    # got SIGKILLed during cleanup.  35 min gives headroom without making
+    # the gate slow on green runs (which finish in ~22 min).
+    timeout-minutes: 35
     concurrency:
       group: iem-lan-runner
       cancel-in-progress: false
