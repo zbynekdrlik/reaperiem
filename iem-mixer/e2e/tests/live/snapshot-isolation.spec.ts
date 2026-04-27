@@ -36,15 +36,18 @@ const MEMBER_INEAR_TRACK: Record<string, number> = {
 };
 
 /**
- * Three pairs covering distinct send-index vectors:
- *   - petronela/stevo: adjacent members (sends 0/1)
- *   - tina/marek: non-adjacent pair crossing the middle of the matrix
- *   - zuzka/ani: far-apart pair (sends 3/8)
+ * Cross-member isolation pairs. Restricted to members with known PINs
+ * (petronela=7711, stevo=7711) — see MEMORY/feedback_*.md for current
+ * PIN set. The poller only populates `mixer_cache.member_states[X]` after
+ * member X's WebSocket connects (poller.rs:340 — skips if no active_members).
+ * Without member PIN we cannot establish a WebSocket and `create_snapshot`
+ * returns 400 NO_STATE.
+ *
+ * Tested both directions to catch send-index symmetry bugs.
  */
-const PAIRS: Array<[string, string]> = [
-  ["petronela", "stevo"],
-  ["tina", "marek"],
-  ["zuzka", "ani"],
+const PAIRS: Array<[string, string, string]> = [
+  ["petronela", "stevo", "7711"],
+  ["stevo", "petronela", "7711"],
 ];
 
 interface SendSnapshot {
@@ -110,7 +113,7 @@ async function captureObserverState(
 test.describe.configure({ timeout: 180_000 });
 
 test.describe("Snapshot restore isolation (defensive regression gate)", () => {
-  for (const [restoringMember, observerMember] of PAIRS) {
+  for (const [restoringMember, observerMember, restoringPin] of PAIRS) {
     test(
       `member_restore_does_not_touch_other_members__${restoringMember}_restores__${observerMember}_unchanged`,
       async ({ page, request }) => {
@@ -156,32 +159,54 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
 
         try {
           // 2. Warm the mixer cache for the RESTORING member.
-          //    create_snapshot reads from mixer_cache.member_states[member]; if the
-          //    member's WebSocket has not connected yet (poller hasn't populated state),
-          //    the API returns 400 NO_STATE. Visiting their mixer page triggers a
-          //    WebSocket connection and forces the poller to populate state.
+          //    create_snapshot reads from mixer_cache.member_states[member]; the
+          //    poller (poller.rs:340) only populates state for members in
+          //    `active_members`, which only contains members with active WebSocket
+          //    connections.  Without the member PIN we can authenticate but cannot
+          //    sustain a WebSocket against the live system.
           //
-          //    Retry for up to 20s — the WebSocket establish + first poll can be slow.
+          //    Strategy: log in as the member with their PIN (in a separate browser
+          //    context) and let that page mount its WebSocket — the WS subscribe
+          //    handshake adds the member to active_members, the poller picks them
+          //    up on the next 150ms tick, and member_states[member] is populated.
+          //    Retry the snapshot create until cache is hot.
           let snapResp: Awaited<ReturnType<typeof page.request.post>> | null = null;
           let lastBody = "";
-          for (let attempt = 0; attempt < 10; attempt++) {
-            // Open the member's page to trigger WebSocket subscription. New page
-            // context per attempt to avoid socket reuse issues.
-            const ctx = await page.context().newPage();
-            try {
-              await ctx.goto(`${APP}/${restoringMember}`).catch(() => {});
-              await ctx.waitForTimeout(2000);
-            } finally {
-              await ctx.close().catch(() => {});
-            }
 
-            snapResp = await page.request.post(
-              `/api/snapshots/${restoringMember}`,
-              { headers, data: { label: "test_isolation_probe" } },
+          // Open a long-lived authenticated context that holds a WebSocket open.
+          const memberPage = await page.context().newPage();
+          try {
+            await memberPage.goto(`${APP}/login`).catch(() => {});
+            await memberPage.evaluate(
+              ({ member, pin }) => {
+                return fetch("/api/auth", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ member, pin }),
+                })
+                  .then((r) => r.json())
+                  .then((j) => {
+                    if (j.token) localStorage.setItem("authToken", j.token);
+                  });
+              },
+              { member: restoringMember, pin: restoringPin },
             );
-            if (snapResp.status() === 201) break;
-            lastBody = await snapResp.text();
+            await memberPage.goto(`${APP}/${restoringMember}`).catch(() => {});
+            await memberPage.waitForTimeout(3000); // let WebSocket subscribe + first poller tick
+
+            for (let attempt = 0; attempt < 8; attempt++) {
+              snapResp = await page.request.post(
+                `/api/snapshots/${restoringMember}`,
+                { headers, data: { label: "test_isolation_probe" } },
+              );
+              if (snapResp.status() === 201) break;
+              lastBody = await snapResp.text();
+              await memberPage.waitForTimeout(1500);
+            }
+          } finally {
+            await memberPage.close().catch(() => {});
           }
+
           expect(
             snapResp!.status(),
             `snapshot creation for ${restoringMember} failed after retries: ${lastBody}`,
