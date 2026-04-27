@@ -155,21 +155,38 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
         let createdTimestamp: number | null = null;
 
         try {
-          // 2. Engineer creates a snapshot for the RESTORING member.
-          //    create_snapshot reads from mixer_cache — the poller must have
-          //    already populated it (ensured by the app being deployed and running).
-          const snapResp = await page.request.post(
-            `/api/snapshots/${restoringMember}`,
-            {
-              headers,
-              data: { label: "test_isolation_probe" },
-            },
-          );
+          // 2. Warm the mixer cache for the RESTORING member.
+          //    create_snapshot reads from mixer_cache.member_states[member]; if the
+          //    member's WebSocket has not connected yet (poller hasn't populated state),
+          //    the API returns 400 NO_STATE. Visiting their mixer page triggers a
+          //    WebSocket connection and forces the poller to populate state.
+          //
+          //    Retry for up to 20s — the WebSocket establish + first poll can be slow.
+          let snapResp: Awaited<ReturnType<typeof page.request.post>> | null = null;
+          let lastBody = "";
+          for (let attempt = 0; attempt < 10; attempt++) {
+            // Open the member's page to trigger WebSocket subscription. New page
+            // context per attempt to avoid socket reuse issues.
+            const ctx = await page.context().newPage();
+            try {
+              await ctx.goto(`${APP}/${restoringMember}`).catch(() => {});
+              await ctx.waitForTimeout(2000);
+            } finally {
+              await ctx.close().catch(() => {});
+            }
+
+            snapResp = await page.request.post(
+              `/api/snapshots/${restoringMember}`,
+              { headers, data: { label: "test_isolation_probe" } },
+            );
+            if (snapResp.status() === 201) break;
+            lastBody = await snapResp.text();
+          }
           expect(
-            snapResp.status(),
-            `snapshot creation for ${restoringMember} failed: ${await snapResp.text()}`,
+            snapResp!.status(),
+            `snapshot creation for ${restoringMember} failed after retries: ${lastBody}`,
           ).toBe(201);
-          const snapJson = await snapResp.json();
+          const snapJson = await snapResp!.json();
           createdTimestamp = snapJson.timestamp as number;
           expect(
             createdTimestamp,
