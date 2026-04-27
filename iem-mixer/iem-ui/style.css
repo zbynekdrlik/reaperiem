@@ -2734,3 +2734,16 @@ body.talk-live-overlay {
 .limiter-reset-btn:hover {
   background: var(--bg-secondary);
 }
+
+.preview-panel.preview-warning {
+  border-left: 3px solid #f0ad4e;
+  background: rgba(240, 173, 78, 0.08);
+  padding: 0.4em 0.8em;
+  margin-top: 0.5em;
+  border-radius: 2px;
+}
+
+.preview-panel.preview-warning ul {
+  margin: 0.2em 0 0 0;
+  padding-left: 1.4em;
+}

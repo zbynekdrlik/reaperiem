@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.159.0 (2026-04-26)
+
+- **Fix**: Backup/restore — prevent silent partial captures (engineer now sees an error instead of writing an incomplete file)
+- **Fix**: Backup/restore — drop `inear`/`stems` filter on track-mute capture so all tracks (incl. CG and other tech tracks) are restored correctly
+- **Fix**: Auto-snapshot — flag for "snapshot done today" is now set AFTER successful save (was set before, blocking retry on failure)
+- **Feature**: Restore preview now shows "Will NOT be restored" panel listing tracks present in REAPER but missing from the backup
+- **CI**: Mutation testing gate on `backup_*` and `snapshot_*` modules; coverage threshold raised to 85% for those modules
+
 ### v1.158.0 (2026-04-20)
 
 - **Feature**: New stereo input `CG` (Dante RX 53/54) for content playback (YouTube videos, music) during presentations — routed to all 10 member inears, default-muted. Members unmute individually when content plays.

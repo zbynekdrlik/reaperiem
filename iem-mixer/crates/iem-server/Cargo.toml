@@ -1,6 +1,6 @@
 [package]
 name = "iem-server"
-version = "1.158.0"
+version = "1.159.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Axum API server for IEM mixer"
@@ -61,6 +61,9 @@ dirs = { version = "6.0", optional = true }
 # Audio streaming (OIEM UDP relay -> WebSocket)
 bytes = { version = "1", optional = true }
 
+# Test harness helpers (only enabled by `test-helpers` feature for integration tests)
+tempfile = { version = "3", optional = true }
+
 # Web Push notifications (RFC 8291 + VAPID) — pure Rust, no OpenSSL (#133)
 p256 = { version = "0.13", features = ["ecdh", "pkcs8"] }
 aes-gcm = "0.10"
@@ -75,14 +78,21 @@ name = "iem-server"
 path = "src/bin/server.rs"
 required-features = ["standalone"]
 
+[[test]]
+name = "poller_snapshot_ordering"
+path = "tests/poller_snapshot_ordering.rs"
+required-features = ["test-helpers"]
+
 [features]
 default = []
 standalone = ["tracing-subscriber"]
 tls = ["axum-server", "rustls", "dirs"]
 audio = ["dep:bytes"]
 integration = []  # gates live REAPER integration tests in tests/reaper_live.rs
+test-helpers = ["dep:tempfile"]  # exposes AppState::new_for_test and test_helpers module for integration tests
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
 tracing-test = "0.2"
+proptest = "1"

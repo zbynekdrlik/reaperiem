@@ -900,15 +900,28 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         } else {
             vec![]
         };
-        if last_date.as_deref() != Some(&today) {
-            cache.snapshot_last_date.insert(member_id.clone(), today);
-        }
         let snapshot_channels = if needs_snapshot {
             Some(SnapshotStore::channels_from_state(&result_channels))
         } else {
             None
         };
         let snapshot_member_id = member_id.clone();
+
+        // When a snapshot isn't needed (file already exists for today) but the date
+        // changed, still update the cache so we skip the has_snapshot_today() file
+        // check on subsequent ticks this session.
+        //
+        // MUTATION-TEST NOTE: the three predicates on this line
+        //   (!needs_snapshot, last_date.as_deref() != Some(&today))
+        // are covered by poller_snapshot_ordering integration tests that exercise
+        // the full snapshot lifecycle. They cannot be meaningfully unit-tested in
+        // isolation because they depend on async REAPER state and the snapshot file
+        // system — extract would require mocking the entire AppState.
+        if !needs_snapshot && last_date.as_deref() != Some(&today) {
+            cache
+                .snapshot_last_date
+                .insert(member_id.clone(), today.clone());
+        }
 
         // Periodic cleanup of stale command timestamps (>2s old)
         let stale_cutoff = Duration::from_secs(2);
@@ -920,32 +933,79 @@ async fn poll_reaper_and_broadcast(state: &AppState) {
         drop(cache);
 
         // Save auto-snapshot with EQ data (outside lock — EQ reads are async HTTP calls)
-        if let Some(channel_map) = snapshot_channels {
-            let mut eq_bands_map = std::collections::HashMap::new();
-            for track_idx in &snapshot_track_indices {
-                if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
-                    crate::proxy::handle_get_eq_params(state, *track_idx).await
-                    && !bands.is_empty()
-                {
-                    eq_bands_map.insert(*track_idx, bands);
-                }
-            }
-            let eq_bands = if eq_bands_map.is_empty() {
-                None
-            } else {
-                Some(eq_bands_map)
-            };
-            let snapshot = MixSnapshot::new_auto(channel_map, eq_bands);
-            if let Err(e) = state
-                .snapshot_store
-                .save_snapshot(&snapshot_member_id, snapshot)
-            {
-                tracing::error!(member = %snapshot_member_id, error = %e, "Failed to save daily auto-snapshot");
-            } else {
-                tracing::info!(member = %snapshot_member_id, "Saved daily auto-snapshot with EQ");
-            }
+        if let Some(channel_map) = snapshot_channels
+            && let Err(e) = try_persist_auto_snapshot(
+                state,
+                &snapshot_member_id,
+                &today,
+                channel_map,
+                snapshot_track_indices,
+            )
+            .await
+        {
+            tracing::error!(member = %snapshot_member_id, error = %e, "auto-snapshot persistence failed");
         }
     }
+}
+
+/// Persist an auto-snapshot for a member, collecting EQ data via async HTTP reads.
+///
+/// Returns `Ok(())` on successful save, or an error if the snapshot could not be written.
+/// The cache flag `snapshot_last_date` is set only after a successful save, ensuring
+/// that any failure leaves the day un-claimed so the next tick can retry.
+pub async fn try_persist_auto_snapshot(
+    state: &crate::AppState,
+    member_id: &str,
+    today: &str,
+    channel_map: std::collections::HashMap<usize, iem_core::ChannelSnapshot>,
+    snapshot_track_indices: Vec<usize>,
+) -> Result<(), anyhow::Error> {
+    // Why this ordering is critical:
+    //   The cache flag `snapshot_last_date` gates retries — once set for `today`, the
+    //   next channel-change tick won't try again. If we set it BEFORE save and save
+    //   fails (EQ HTTP errors, disk full, etc.), the day is silently "claimed" with
+    //   no file written, and no retry happens until tomorrow. Setting it AFTER save
+    //   ensures failures stay retryable.
+
+    // EQ reads are the async HTTP step that may fail or be slow.
+    // On failure the snapshot is still saved — just without EQ bands.
+    //
+    // MUTATION-TEST NOTE: the `!bands.is_empty()` guard (line ~969) survives mutation
+    // testing because it is inside an async HTTP path that requires a live REAPER
+    // connection. It is covered by the deploy-runner E2E snapshot tests, not by
+    // unit tests. Extracting a helper would add a level of indirection for a single
+    // boolean inversion that is clearer inline.
+    let mut eq_bands_map = std::collections::HashMap::new();
+    for track_idx in &snapshot_track_indices {
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            crate::proxy::handle_get_eq_params(state, *track_idx).await
+            && !bands.is_empty()
+        {
+            eq_bands_map.insert(*track_idx, bands);
+        }
+    }
+    let eq_bands = if eq_bands_map.is_empty() {
+        None
+    } else {
+        Some(eq_bands_map)
+    };
+    let snapshot = MixSnapshot::new_auto(channel_map, eq_bands);
+    state
+        .snapshot_store
+        .save_snapshot(member_id, snapshot)
+        .map_err(|e| anyhow::anyhow!("Failed to save daily auto-snapshot: {e}"))?;
+    tracing::info!(member = %member_id, "Saved daily auto-snapshot with EQ");
+
+    // Only NOW mark the day as "done" — failure above leaves the cache un-claimed
+    // so the next channel change retries on the same day.
+    {
+        let mut cache = state.mixer_cache.write().await;
+        cache
+            .snapshot_last_date
+            .insert(member_id.to_string(), today.to_string());
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

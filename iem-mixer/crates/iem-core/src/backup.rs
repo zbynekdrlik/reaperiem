@@ -10,7 +10,7 @@ use crate::{Customization, EqBand};
 pub const BACKUP_VERSION: u32 = 1;
 
 /// Complete mixer backup snapshot
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct MixerBackup {
     /// Schema version (always BACKUP_VERSION)
     pub version: u32,
@@ -36,7 +36,7 @@ pub struct MixerBackup {
 }
 
 /// State of a single send at backup time
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SendBackup {
     /// Source track name
     pub src_name: String,
@@ -51,7 +51,7 @@ pub struct SendBackup {
 }
 
 /// EQ band state at backup time (serialisable, band-index aware copy of EqBand)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EqBandBackup {
     /// 0-based band index within the track's EQ
     pub band: u8,
@@ -90,7 +90,7 @@ impl From<(u8, &EqBand)> for EqBandBackup {
 }
 
 /// Limiter state for a single output track
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LimiterBackup {
     /// Max output level in dB (-6 to 0)
     pub limit_db: f32,
@@ -127,6 +127,14 @@ pub struct RestorePreview {
     /// Estimated restore time in seconds (EQ is slow: ~0.24s per band)
     #[serde(default)]
     pub estimated_seconds: u32,
+    /// REAPER tracks that exist now but were not in the backup's track_mutes.
+    /// These tracks were added after the backup was captured.
+    #[serde(default)]
+    pub tracks_in_reaper_not_in_backup: Vec<String>,
+    /// Backup track_mutes keys that no longer exist in REAPER.
+    /// These tracks were removed or renamed since the backup was captured.
+    #[serde(default)]
+    pub tracks_in_backup_not_in_reaper: Vec<String>,
 }
 
 /// A single proposed change from a restore
@@ -185,6 +193,33 @@ pub struct RestoreResult {
     pub skipped: Vec<SkippedEntry>,
     /// Whether the REAPER project was saved after the restore
     pub project_saved: bool,
+    /// Track names from the backup that could not be resolved to a current
+    /// REAPER track (missing in any category: sends, track_mutes, track_volumes,
+    /// EQ, or limiter).
+    #[serde(default)]
+    pub skipped_tracks: Vec<String>,
+}
+
+/// Counts and timing metadata about a capture run. Embedded in the
+/// `/api/backups/capture` response (and in v2 file format in Phase 2)
+/// so the engineer can verify the capture is complete before relying on it.
+///
+/// Used by `assert_capture_completeness` (in backup_capture.rs) to refuse
+/// captures that fall below operational minimums — silent partial captures
+/// are the most dangerous failure mode for restore.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CaptureAudit {
+    pub tracks_total: usize,
+    pub tracks_named: Vec<String>,
+    pub sends_count: usize,
+    pub track_mutes_count: usize,
+    pub track_volumes_count: usize,
+    pub eq_count: usize,
+    pub limiter_count: usize,
+    pub customizations_count: usize,
+    pub pins_count: usize,
+    pub reaper_query_duration_ms: u64,
+    pub warnings: Vec<String>,
 }
 
 #[cfg(test)]

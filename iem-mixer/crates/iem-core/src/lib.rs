@@ -11,8 +11,9 @@ pub mod types;
 pub mod ws;
 
 pub use backup::{
-    BACKUP_VERSION, BackupInfo, EqBandBackup, LimiterBackup, MixerBackup, RestoreCategory,
-    RestoreChange, RestorePreview, RestoreProgress, RestoreResult, SendBackup, SkippedEntry,
+    BACKUP_VERSION, BackupInfo, CaptureAudit, EqBandBackup, LimiterBackup, MixerBackup,
+    RestoreCategory, RestoreChange, RestorePreview, RestoreProgress, RestoreResult, SendBackup,
+    SkippedEntry,
 };
 #[cfg(feature = "config")]
 pub use config::{BandMember, Config, DiscoveredMember, InputTrack};
