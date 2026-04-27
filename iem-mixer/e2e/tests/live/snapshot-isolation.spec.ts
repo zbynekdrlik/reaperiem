@@ -189,16 +189,22 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
               { member: restoringMember, pin: restoringPin },
             );
             await memberPage.goto(`${APP}/${restoringMember}`).catch(() => {});
-            await memberPage.waitForTimeout(3000); // let WebSocket subscribe + first poller tick
+            // Initial warm-up: let WebSocket subscribe + several poller ticks land.
+            // Empirically the first send-routing query after a fresh subscribe can
+            // take 5-8s on a quiet REAPER, so we wait 6s before the first attempt.
+            await memberPage.waitForTimeout(6000);
 
-            for (let attempt = 0; attempt < 8; attempt++) {
+            // Generous retry budget. After deploy the poller may need many ticks to
+            // resolve all input-track indices for a freshly-connected member; under
+            // load 24s was empirically too tight for the second test in the suite.
+            for (let attempt = 0; attempt < 20; attempt++) {
               snapResp = await page.request.post(
                 `/api/snapshots/${restoringMember}`,
                 { headers, data: { label: "test_isolation_probe" } },
               );
               if (snapResp.status() === 201) break;
               lastBody = await snapResp.text();
-              await memberPage.waitForTimeout(1500);
+              await memberPage.waitForTimeout(2000);
             }
           } finally {
             await memberPage.close().catch(() => {});
