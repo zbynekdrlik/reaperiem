@@ -12,6 +12,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ENGINEER_PIN } from "../fixtures/test-credentials";
 
 const REAPER = "http://iem.lan:8080";
 const CG_TRACK_IDX = 45;
@@ -83,7 +84,7 @@ test.describe("Backup restore re-mutes CG TRACK after unmute", () => {
       // Get engineer JWT — mirrors backup.spec.ts getEngineerToken pattern.
       await page.goto("/");
       const authResp = await page.request.post("/api/auth", {
-        data: { member: "engineer", pin: "1177" },
+        data: { member: "engineer", pin: ENGINEER_PIN },
       });
       expect(authResp.status()).toBe(200);
       const authData = await authResp.json();

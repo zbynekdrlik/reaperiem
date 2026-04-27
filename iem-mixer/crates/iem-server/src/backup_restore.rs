@@ -47,12 +47,6 @@ pub async fn preview_restore(
     )
     .await?;
 
-    // Reverse map: index → name (for description strings)
-    let index_to_name: HashMap<u32, String> = track_map
-        .iter()
-        .map(|(name, idx)| (*idx, name.clone()))
-        .collect();
-
     let mut changes: Vec<RestoreChange> = Vec::new();
     let mut skipped: Vec<SkippedEntry> = Vec::new();
     let mut unchanged_count: usize = 0;
@@ -375,9 +369,6 @@ pub async fn preview_restore(
             unchanged_count += 1;
         }
     }
-
-    // Suppress unused-variable warning for index_to_name (kept for potential future use)
-    let _ = index_to_name;
 
     // --- Track lifecycle diff: REAPER vs backup.track_mutes ---
     // Tracks present in REAPER but absent from backup.track_mutes

@@ -17,6 +17,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ENGINEER_PIN, ISOLATION_PAIRS } from "../fixtures/test-credentials";
 
 const REAPER = "http://iem.lan:8080";
 const APP = process.env.IEM_APP_URL || "http://10.77.9.231";
@@ -36,19 +37,15 @@ const MEMBER_INEAR_TRACK: Record<string, number> = {
 };
 
 /**
- * Cross-member isolation pairs. Restricted to members with known PINs
- * (petronela=7711, stevo=7711) — see MEMORY/feedback_*.md for current
- * PIN set. The poller only populates `mixer_cache.member_states[X]` after
- * member X's WebSocket connects (poller.rs:340 — skips if no active_members).
- * Without member PIN we cannot establish a WebSocket and `create_snapshot`
- * returns 400 NO_STATE.
+ * Cross-member isolation pairs imported from `fixtures/test-credentials.ts`.
+ * Restricted to members with known stable PINs because the poller only
+ * populates `mixer_cache.member_states[X]` after member X's WebSocket
+ * connects (poller.rs:340 — skips if no `active_members`); without the
+ * member PIN `create_snapshot` returns 400 NO_STATE.
  *
  * Tested both directions to catch send-index symmetry bugs.
  */
-const PAIRS: Array<[string, string, string]> = [
-  ["petronela", "stevo", "7711"],
-  ["stevo", "petronela", "7711"],
-];
+const PAIRS = ISOLATION_PAIRS;
 
 interface SendSnapshot {
   src: number;
@@ -134,7 +131,7 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
         // Engineer login — mirrors backup-cg-remute.spec.ts pattern.
         await page.goto("/");
         const authResp = await page.request.post("/api/auth", {
-          data: { member: "engineer", pin: "1177" },
+          data: { member: "engineer", pin: ENGINEER_PIN },
         });
         expect(authResp.status()).toBe(200);
         const authData = await authResp.json();

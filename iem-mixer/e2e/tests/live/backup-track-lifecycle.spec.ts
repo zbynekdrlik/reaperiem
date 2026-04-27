@@ -11,6 +11,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ENGINEER_PIN } from "../fixtures/test-credentials";
 
 const REAPER = "http://iem.lan:8080";
 const APP_BASE = process.env.APP_URL ?? "http://10.77.9.231";
@@ -57,7 +58,7 @@ async function getEngineerToken(
 ): Promise<string> {
   await page.goto(APP_BASE + "/");
   const resp = await request.post(`${APP_BASE}/api/auth`, {
-    data: { member: "engineer", pin: "1177" },
+    data: { member: "engineer", pin: ENGINEER_PIN },
   });
   expect(resp.status()).toBe(200);
   const data = await resp.json();

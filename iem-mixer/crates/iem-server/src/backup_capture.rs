@@ -19,6 +19,24 @@ pub enum CaptureError {
     InsufficientTrackMutes { got: usize, min: usize },
 }
 
+/// Computes operational minimum capture counts from the live project shape.
+///
+/// Sends: each input track has one send per band member → `inputs × members`.
+/// Track mutes: every visible track contributes one entry → roughly
+/// `inputs + members × 2 (inear + stems)` plus a few aux/tech tracks.
+///
+/// We accept 90% of the nominal as the lower bound so a single missing
+/// optional track (e.g. a temporarily-removed aux) does not trip the gate.
+/// Anything substantially below that signals REAPER was unresponsive and
+/// the backup would be silently corrupt — fail loudly instead.
+pub fn compute_capture_thresholds(input_tracks: usize, band_members: usize) -> (usize, usize) {
+    let nominal_sends = input_tracks * band_members;
+    let nominal_track_mutes = input_tracks + band_members * 2;
+    let min_sends = (nominal_sends * 9) / 10;
+    let min_track_mutes = (nominal_track_mutes * 9) / 10;
+    (min_sends, min_track_mutes)
+}
+
 /// Refuses to accept a capture whose entry counts fall below operational minimums.
 /// A capture below threshold likely means REAPER was unresponsive for some queries
 /// and the resulting backup would be silently corrupt — fail loudly instead.
@@ -69,9 +87,10 @@ pub(crate) fn track_name_qualifies_for_volume_capture(name: &str) -> bool {
 /// - Per-member UI customizations
 /// - Per-member PINs
 pub async fn capture_mixer_state(state: &AppState) -> Result<(MixerBackup, CaptureAudit), String> {
-    let reaper_url = {
+    let (reaper_url, min_sends, min_track_mutes) = {
         let config = state.config.read().await;
-        config.reaper_url.clone()
+        let (s, m) = compute_capture_thresholds(config.inputs.len(), config.members.len());
+        (config.reaper_url.clone(), s, m)
     };
 
     let capture_started = Instant::now();
@@ -389,7 +408,7 @@ pub async fn capture_mixer_state(state: &AppState) -> Result<(MixerBackup, Captu
         warnings: vec![],
     };
 
-    assert_capture_completeness(&audit, 200, 30).map_err(|e| e.to_string())?;
+    assert_capture_completeness(&audit, min_sends, min_track_mutes).map_err(|e| e.to_string())?;
 
     tracing::info!(
         sends = audit.sends_count,
@@ -474,6 +493,34 @@ mod completeness_tests {
         // 29 < 30 — must be rejected
         let audit = audit_with_counts(220, 29);
         assert!(assert_capture_completeness(&audit, 200, 30).is_err());
+    }
+
+    // Threshold-derivation tests — confirm the formula tracks the project shape.
+
+    #[test]
+    fn capture_thresholds_for_current_band_size() {
+        // 22 input tracks × 10 members = 220 sends; threshold = 198.
+        // 22 + 10*2 = 42 track mutes nominal; threshold = 37.
+        let (min_sends, min_track_mutes) = compute_capture_thresholds(22, 10);
+        assert_eq!(min_sends, 198);
+        assert_eq!(min_track_mutes, 37);
+    }
+
+    #[test]
+    fn capture_thresholds_scale_with_band_size() {
+        // Adding a band member shifts both thresholds upward — gates must follow.
+        let (sends_10, mutes_10) = compute_capture_thresholds(22, 10);
+        let (sends_11, mutes_11) = compute_capture_thresholds(22, 11);
+        assert!(sends_11 > sends_10);
+        assert!(mutes_11 > mutes_10);
+    }
+
+    #[test]
+    fn capture_thresholds_are_zero_for_empty_project() {
+        // No inputs and no members ⇒ no minimum (assertion always passes).
+        let (min_sends, min_track_mutes) = compute_capture_thresholds(0, 0);
+        assert_eq!(min_sends, 0);
+        assert_eq!(min_track_mutes, 0);
     }
 
     // Unit tests for the extracted helper predicates (kills line-213 == and line-219 || mutants).

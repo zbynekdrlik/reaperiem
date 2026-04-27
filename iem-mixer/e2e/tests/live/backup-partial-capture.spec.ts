@@ -17,6 +17,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ENGINEER_PIN } from "../fixtures/test-credentials";
 
 const APP = process.env.IEM_APP_URL || "http://10.77.9.231";
 
@@ -47,7 +48,7 @@ test.describe("Capture coverage assertion (defensive hardening)", () => {
       // Engineer login — mirrors backup-cg-remute.spec.ts pattern exactly.
       await page.goto("/");
       const authResp = await page.request.post("/api/auth", {
-        data: { member: "engineer", pin: "1177" },
+        data: { member: "engineer", pin: ENGINEER_PIN },
       });
       expect(authResp.status()).toBe(200);
       const authData = await authResp.json();
