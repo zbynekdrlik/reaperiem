@@ -55,6 +55,10 @@ test.describe("Reconnect banner debounce (#186)", () => {
       }
     });
 
+    // Navigate to root before loginAs — Playwright starts on about:blank,
+    // and `localStorage.setItem` (inside loginAs) is denied on that origin.
+    // Mirrors the pattern in mixer.spec.ts.
+    await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
     await waitForMixerLoaded(page);
@@ -94,6 +98,10 @@ test.describe("Reconnect banner debounce (#186)", () => {
       }
     });
 
+    // Navigate to root before loginAs — Playwright starts on about:blank,
+    // and `localStorage.setItem` (inside loginAs) is denied on that origin.
+    // Mirrors the pattern in mixer.spec.ts.
+    await page.goto("/");
     await loginAs(page, "petronela");
     await page.goto("/petronela");
     await waitForMixerLoaded(page);
