@@ -270,32 +270,49 @@ fn should_schedule_disconnect_timer(is_connected: bool, banner_shown: bool) -> b
 /// stays untouched.
 ///
 /// Implementation: a Leptos `Effect` that watches `connected` and uses a
-/// `gloo_timers::callback::Timeout` stored in a `StoredValue` for cancellation.
-/// Dropping a `Timeout` cancels the underlying JS timer, so replacing the
-/// stored value with `None` (or with a new `Timeout`) cancels any prior
-/// pending transition.
+/// `gloo_timers::callback::Timeout` stored in `Rc<RefCell<Option<Timeout>>>`
+/// for cancellation. Dropping a `Timeout` cancels the underlying JS timer, so
+/// replacing the stored value with `None` (or with a new `Timeout`) cancels
+/// any prior pending transition. `Rc<RefCell<...>>` rather than Leptos
+/// `StoredValue` because `gloo_timers::callback::Timeout` is not `Send +
+/// Sync` and `StoredValue` requires `Send + Sync` even on `wasm32` targets.
+/// This matches the pattern used elsewhere in `iem-ui` for closure-shared
+/// non-reactive state (see `pages/mixer/helpers.rs:34`).
+///
+/// All signal writes inside the `Effect` use `try_set` / `try_get_untracked`
+/// per the project's disposal-safety policy (#153) — the danger-zone scanner
+/// flags any `.set()` / `.get_untracked()` inside `Effect::new`.
 pub fn debounced_disconnect(connected: ReadSignal<bool>, delay_ms: u32) -> Signal<bool> {
     let (show, set_show) = signal(false);
-    let timeout: StoredValue<Option<Timeout>> = StoredValue::new(None);
+    let timeout: std::rc::Rc<std::cell::RefCell<Option<Timeout>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
 
     Effect::new(move |_| {
         let is_connected = connected.get();
 
         // Cancel any pending transition on every change. Dropping the prior
         // Timeout cancels the JS timer.
-        timeout.set_value(None);
+        *timeout.borrow_mut() = None;
 
         if is_connected {
             // Reconnected — hide the banner immediately.
-            set_show.set(false);
-        } else if should_schedule_disconnect_timer(is_connected, show.get_untracked()) {
-            // Disconnected and banner not yet shown — schedule the transition.
-            // (If the banner is already shown, do nothing: continued disconnect
-            // should keep the banner visible without restarting any timer.)
-            let new_timeout = Timeout::new(delay_ms, move || {
-                set_show.set(true);
-            });
-            timeout.set_value(Some(new_timeout));
+            let _ = set_show.try_set(false);
+        } else {
+            // `try_get_untracked` returns None only if the signal has been
+            // disposed; treat disposed-but-disconnected as "banner not
+            // shown" so the timer still gets scheduled (the Effect itself
+            // will be torn down before it can fire on a disposed signal).
+            let banner_shown = show.try_get_untracked().unwrap_or(false);
+            if should_schedule_disconnect_timer(is_connected, banner_shown) {
+                // Disconnected and banner not yet shown — schedule the
+                // transition. (If the banner is already shown, do nothing:
+                // continued disconnect should keep the banner visible
+                // without restarting any timer.)
+                let new_timeout = Timeout::new(delay_ms, move || {
+                    let _ = set_show.try_set(true);
+                });
+                *timeout.borrow_mut() = Some(new_timeout);
+            }
         }
     });
 
