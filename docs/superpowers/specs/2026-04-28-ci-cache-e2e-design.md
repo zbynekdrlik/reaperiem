@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-28
 **Status:** Approved
-**Scope:** Single PR `dev` → `main`, CI-only changes (no Rust, no version bump).
+**Scope:** Single PR `dev` → `main`, CI-only changes to the `e2e` job. The PR's design contains no Rust or runtime-code changes; a version bump 1.159.0 → 1.160.0 is included as required by the airuleset version-bumping rule (after PR #185 merged, dev and main were both at 1.159.0 — every new dev PR must bump strictly higher than main, regardless of whether the diff itself touches runtime code).
 
 ## Problem
 
@@ -16,9 +16,10 @@ Estimated waste: ~2–3 min per push on the `e2e` job. Over a typical week with 
 ## Non-goals
 
 - The self-hosted `deploy` job (`runs-on: [self-hosted, iem-lan]`, line 738) is **out of scope.** Self-hosted runners persist files between runs on local disk; adding `actions/cache@v4` would route through GitHub Actions cache (upload + download) and add overhead without saving real time.
-- No version bump (this PR does not change runtime code).
 - No changes to test logic, dependencies, or `npm install` semantics.
 - No switch from `npm install` to `npm ci` (consistency with post-deploy job is desirable but a separate concern).
+
+The version bump (1.159.0 → 1.160.0) is required hygiene per airuleset, NOT part of this design — it would be included in any PR landing on dev right after a main merge. See the Scope note above.
 
 ## Design
 
