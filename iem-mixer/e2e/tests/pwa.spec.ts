@@ -56,6 +56,13 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
   test("hashed WASM/JS assets are cached after navigation", async ({
     page,
   }) => {
+    // Loop budget below is 40s (40 × 1s) to tolerate GitHub Actions queue
+    // variance (see commit 28c0b42). Default test timeout is 30s, which
+    // cuts the loop off mid-poll and produces flakes when SW cache takes
+    // 25-40s to populate. Extend the test timeout to cover the loop plus
+    // navigation + SW activation buffer.
+    test.setTimeout(60_000);
+
     // Navigate to app — this triggers SW registration
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
