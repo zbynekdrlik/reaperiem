@@ -250,6 +250,17 @@ fn html_escape(s: &str) -> String {
 use gloo_timers::callback::Timeout;
 use leptos::prelude::*;
 
+/// Returns `true` when the banner-show transition should be scheduled — i.e.
+/// we're currently disconnected and the banner is not yet shown. This is the
+/// single source of truth for the scheduling decision, used both by
+/// `debounced_disconnect`'s reactive Effect and by the unit tests that
+/// exercise the branch logic without a Leptos runtime.
+///
+/// Pure function — no reactive context, no side effects.
+fn should_schedule_disconnect_timer(is_connected: bool, banner_shown: bool) -> bool {
+    !is_connected && !banner_shown
+}
+
 /// Returns a derived signal that becomes `true` only after `connected == false`
 /// for `delay_ms` continuously. Flips back to `false` instantly when `connected`
 /// becomes `true` again.
@@ -277,7 +288,7 @@ pub fn debounced_disconnect(connected: ReadSignal<bool>, delay_ms: u32) -> Signa
         if is_connected {
             // Reconnected — hide the banner immediately.
             set_show.set(false);
-        } else if !show.get_untracked() {
+        } else if should_schedule_disconnect_timer(is_connected, show.get_untracked()) {
             // Disconnected and banner not yet shown — schedule the transition.
             // (If the banner is already shown, do nothing: continued disconnect
             // should keep the banner visible without restarting any timer.)
@@ -433,29 +444,23 @@ mod tests {
     // -----------------------------------------------------------------------
     // debounced_disconnect — runtime-dependent behavior is covered by the
     // Playwright test (e2e/tests/reconnect-debounce.spec.ts in T5); here we
-    // test the small pure-logic decisions directly without a Leptos runtime.
+    // test the small pure-logic branch decision directly without a Leptos
+    // runtime. The test calls the SAME `should_schedule_disconnect_timer`
+    // function that the production Effect calls, so the two cannot drift.
     // -----------------------------------------------------------------------
-
-    /// Mirrors the `if is_connected { ... } else if !show.get_untracked() { ... }`
-    /// branch logic of `debounced_disconnect` so it can be unit-tested without
-    /// a Leptos reactive runtime. If the branch logic in `debounced_disconnect`
-    /// changes, this helper must change with it (and vice versa).
-    fn should_schedule_timer(is_connected: bool, banner_shown: bool) -> bool {
-        !is_connected && !banner_shown
-    }
 
     #[test]
     fn debounced_disconnect_helper_branch_decisions() {
-        // When connected (true) → banner must be hidden, no timer needed.
-        assert!(!should_schedule_timer(true, false));
+        // When connected (true) → banner is being hidden, no timer needed.
+        assert!(!should_schedule_disconnect_timer(true, false));
 
         // When disconnected and banner hidden → schedule timer.
-        assert!(should_schedule_timer(false, false));
+        assert!(should_schedule_disconnect_timer(false, false));
 
         // When disconnected and banner already shown → do NOT restart timer.
-        assert!(!should_schedule_timer(false, true));
+        assert!(!should_schedule_disconnect_timer(false, true));
 
         // When connected and banner shown — banner is being hidden, no timer.
-        assert!(!should_schedule_timer(true, true));
+        assert!(!should_schedule_disconnect_timer(true, true));
     }
 }
