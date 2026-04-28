@@ -90,6 +90,10 @@ pub fn MixerPage() -> impl IntoView {
     let (double_tap_fader, set_double_tap_fader) = state.double_tap_fader;
     let set_fader_touched = state.fader_touched.1;
     let loading = state.loading.0;
+    // #186: 3s-debounced disconnect — banner only shows for sustained disconnects.
+    // Underlying `connected` signal stays untouched so other instant-feedback UI
+    // (status dot, channel disabled styling) keeps current behavior.
+    let show_reconnecting = crate::lifecycle::debounced_disconnect(connected, 3000);
     let (soloed, set_soloed) = state.soloed;
     let (pre_solo_mutes, set_pre_solo_mutes) = state.pre_solo_mutes;
     let data_pulse = state.data_pulse.0;
@@ -267,7 +271,7 @@ pub fn MixerPage() -> impl IntoView {
             />
 
             <Show
-                when=move || !connected.get() && !loading.get()
+                when=move || show_reconnecting.get() && !loading.get()
                 fallback=|| ()
             >
                 <div class="disconnected-banner">
