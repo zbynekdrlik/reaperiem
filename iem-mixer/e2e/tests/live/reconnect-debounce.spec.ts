@@ -71,24 +71,29 @@ test.describe("Reconnect banner debounce (#186)", () => {
     await page.goto("/petronela");
     await waitForMixerLoaded(page);
 
-    // Drop network — the WebSocket onclose fires, but the 3s debounce
-    // should keep the banner hidden until the timer elapses.
-    await context.setOffline(true);
+    // Force-close the existing WebSocket. context.setOffline alone does NOT
+    // close existing WebSockets in Chromium — it only blocks new connection
+    // attempts. The WS is exposed on window as `__iem_ws` for exactly this
+    // kind of test introspection (connection.rs sets it during connect).
+    await page.evaluate(() => {
+      const ws = (window as unknown as { __iem_ws?: WebSocket }).__iem_ws;
+      if (ws) ws.close();
+    });
 
-    // 1s in: well within debounce window.
+    // Reconnect closure ticks every 2s. Since we're online, the 2s reconnect
+    // attempt should succeed and snapshot-restore connected=true BEFORE the
+    // 3s debounce fires — Effect cancels the timer and banner stays hidden.
+
+    // 1s in: well within debounce window, no reconnect yet.
     await page.waitForTimeout(1000);
     await expect(page.locator(".disconnected-banner")).not.toBeVisible();
 
-    // 2s in: still inside debounce window.
+    // 2s in: reconnect closure may have fired and reconnected by now.
     await page.waitForTimeout(1000);
     await expect(page.locator(".disconnected-banner")).not.toBeVisible();
 
-    // Restore network before the 3s threshold elapses (total offline ~= 2.2s).
-    await context.setOffline(false);
-
-    // Banner must NEVER appear during this transient blip — wait an
-    // additional 2s (well past the 3s debounce mark from offline-start)
-    // to be certain the timer didn't sneak through.
+    // 4s total elapsed (well past 3s debounce mark) — banner must STILL be
+    // hidden because reconnect cancelled the timer before it fired.
     await page.waitForTimeout(2000);
     await expect(page.locator(".disconnected-banner")).not.toBeVisible();
 
@@ -122,14 +127,23 @@ test.describe("Reconnect banner debounce (#186)", () => {
     await page.goto("/petronela");
     await waitForMixerLoaded(page);
 
+    // setOffline blocks new WS connections (so reconnect attempts fail).
+    // Order matters: setOffline FIRST, then close the existing WS — otherwise
+    // the reconnect closure could open a new WS in the gap before setOffline
+    // takes effect.
     await context.setOffline(true);
+    await page.evaluate(() => {
+      const ws = (window as unknown as { __iem_ws?: WebSocket }).__iem_ws;
+      if (ws) ws.close();
+    });
 
-    // 1s, 2s — banner stays hidden inside debounce window.
+    // 2s in — banner stays hidden inside debounce window. Reconnect attempts
+    // happen at the 2s tick but fail (offline), re-firing connected=false.
+    // The sticky-timer fix means the in-flight 3s timer is NOT restarted.
     await page.waitForTimeout(2000);
     await expect(page.locator(".disconnected-banner")).not.toBeVisible();
 
-    // After 4s total offline the 3s debounce has fired and the banner
-    // is visible.
+    // After 4s total disconnected the 3s debounce has fired — banner visible.
     await page.waitForTimeout(2000);
     await expect(page.locator(".disconnected-banner")).toBeVisible();
 
