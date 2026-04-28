@@ -89,46 +89,27 @@ Add `debounced_disconnect` plus a Rust unit test exercising the four behaviors:
 - Uses Leptos test runtime helpers + `gloo-timers` test mode
 - Covers all four behaviors above
 
-**Playwright E2E** — new file `iem-mixer/e2e/tests/reconnect-debounce.spec.ts`:
+**Playwright E2E** — new file `iem-mixer/e2e/tests/live/reconnect-debounce.spec.ts`.
 
-```typescript
-test('reconnect banner is debounced (does not flash on transient disconnect)', async ({ context, page }) => {
-  const consoleErrors: string[] = [];
-  page.on('console', (msg) => {
-    if (msg.type() === 'error' || msg.type() === 'warning') {
-      consoleErrors.push(`[${msg.type()}] ${msg.text()}`);
-    }
-  });
+**Coverage split (acknowledging Playwright 1.42 limits):**
 
-  await loginAsKnownMember(page);  // mirrors existing live-test login pattern
-  await expect(page.locator('.disconnected-banner')).not.toBeVisible();
+The originally-planned timing tests (banner appears at 3 s of sustained disconnect, hides on reconnect) are HARD to run reliably in Playwright 1.42. `context.setOffline(true)` does not close existing WebSockets in Chromium; it only blocks new connection attempts. `ws.close()` (called via `page.evaluate` against `window.__iem_ws`, which `connection.rs` already exposes) does close the existing socket, but the project's reconnect closure runs every 2 s and races with `setOffline` taking effect — making the timing assertions flaky. Playwright 1.48+ has `routeWebSocket` which would solve this cleanly; an upgrade is tracked separately and is out of scope here.
 
-  // Drop network — WebSocket closes
-  await context.setOffline(true);
+What the Playwright test DOES cover (smoke-level integration):
 
-  // 1s in — banner must NOT be visible (debounce window)
-  await page.waitForTimeout(1000);
-  await expect(page.locator('.disconnected-banner')).not.toBeVisible();
+- Page loads at `/petronela` and reaches connected state without the panic overlay (`#iem-panic-overlay`) — proving the helper compiles into the WASM bundle and doesn't panic at mount.
+- `.disconnected-banner` is not visible while `connected = true`, including after several seconds of normal mixer activity (snapshot, meter updates, etc.) — proving the helper does NOT spuriously schedule the timer when connected.
+- Browser console is clean (no errors, no warnings beyond the known-benign filter list).
 
-  // 2s in — still hidden
-  await page.waitForTimeout(1000);
-  await expect(page.locator('.disconnected-banner')).not.toBeVisible();
+What the Rust unit test covers (full branch logic):
 
-  // 4s total — debounce window elapsed, banner appears
-  await page.waitForTimeout(2000);
-  await expect(page.locator('.disconnected-banner')).toBeVisible();
+- All four `(is_connected, banner_shown, timer_pending)` combinations of `should_schedule_disconnect_timer` — only the disconnected + banner-hidden + no-pending-timer path returns true. Includes the sticky-timer regression guard against re-scheduling on every failed reconnect.
 
-  // Restore network — banner clears immediately
-  await context.setOffline(false);
-  await expect(page.locator('.disconnected-banner')).not.toBeVisible({ timeout: 5000 });
+What manual verification covers (end-to-end timing):
 
-  expect(consoleErrors).toEqual([]);
-});
-```
+- Airplane-mode toggle on a phone (per the Verification section below): toggle airplane mode for < 3 s — banner does not appear; toggle for > 3 s — banner appears at the 3 s mark; restore — banner clears within 1–2 s.
 
-Runs on the GitHub-hosted `e2e` job (in-process iem-server, no live REAPER needed). Live REAPER state is irrelevant — only WebSocket open/close behavior is exercised.
-
-A second test asserts a **transient** disconnect (offline → online within 2s) never shows the banner at all.
+This trade-off is honest about what the live tooling can verify automatically. The branch logic — where the actual debounce decision lives — is fully unit-tested. The integration check ensures the helper is wired into the page. The timing semantics are deferred to manual verification, which is what real users observe anyway.
 
 ## Risk and rollback
 
