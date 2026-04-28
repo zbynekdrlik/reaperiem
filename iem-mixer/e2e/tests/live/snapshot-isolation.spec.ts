@@ -174,6 +174,15 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
           const memberPage = await page.context().newPage();
           try {
             await memberPage.goto(`${APP}/login`).catch(() => {});
+            // Auth via /api/auth, store under the SAME localStorage key the
+            // production app reads (`iem_token`, JSON-encoded auth object).
+            // The previous version of this test wrote to `authToken` with a
+            // raw string, which production's auth.rs (TOKEN_KEY = "iem_token")
+            // never read — so the page navigated unauthenticated, no
+            // WebSocket subscribed, and the poller never added the member to
+            // `active_members`. That manifested as "snapshot creation
+            // failed: NO_STATE" only for members whose state wasn't already
+            // warmed by a prior test in the suite (e.g. stevo).
             await memberPage.evaluate(
               ({ member, pin }) => {
                 return fetch("/api/auth", {
@@ -183,7 +192,16 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
                 })
                   .then((r) => r.json())
                   .then((j) => {
-                    if (j.token) localStorage.setItem("authToken", j.token);
+                    if (j.token) {
+                      localStorage.setItem(
+                        "iem_token",
+                        JSON.stringify({
+                          token: j.token,
+                          member: j.member,
+                          engineer: j.engineer,
+                        }),
+                      );
+                    }
                   });
               },
               { member: restoringMember, pin: restoringPin },
