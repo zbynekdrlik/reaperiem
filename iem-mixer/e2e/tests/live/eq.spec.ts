@@ -671,6 +671,13 @@ test.describe("EQ Feature", () => {
     page,
     request,
   }) => {
+    // The test runs ~6 awaited steps with explicit `waitForTimeout(500)` /
+    // `toBeVisible({timeout: 5000-10000})` between each, plus REAPER ping
+    // and waitForMixer. On loaded CI runners the cumulative duration can
+    // exceed the default 30s test timeout. Same pattern that bit
+    // pwa.spec.ts (commit 8467435 fix). Extending to 60s.
+    test.setTimeout(60_000);
+
     // This test requires REAPER to be running for real channel data
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK");
