@@ -414,8 +414,6 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('iem-mixer/e2e/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
 
       - name: Install Playwright
         working-directory: iem-mixer/e2e

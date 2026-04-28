@@ -58,8 +58,6 @@ Two edits to `.github/workflows/ci.yml`, both within the `e2e` job:
   with:
     path: ~/.cache/ms-playwright
     key: ${{ runner.os }}-playwright-${{ hashFiles('iem-mixer/e2e/package-lock.json') }}
-    restore-keys: |
-      ${{ runner.os }}-playwright-
 ```
 
 The existing `Install Playwright` step is unchanged:
@@ -77,8 +75,9 @@ On cache hit, `npx playwright install --with-deps chromium` is essentially a no-
 Cache key components:
 
 - `runner.os` — guards against the (currently impossible) case where the runner OS changes
-- `hashFiles('iem-mixer/e2e/package-lock.json')` — invalidates whenever the Playwright dependency version changes
-- `restore-keys` allows partial reuse when only an unrelated dep in package-lock.json changes — Playwright still works against an older browser if the version match is close enough, and `npx playwright install` will top up the missing version on cache miss within the prefix
+- `hashFiles('iem-mixer/e2e/package-lock.json')` — invalidates whenever any dep in the lockfile changes; on a Playwright version bump the cache key changes and a fresh entry is built
+
+No `restore-keys` fallback. A prefix-only restore would let stale Chromium binaries linger in `~/.cache/ms-playwright` after a Playwright version bump (the install step still pulls the correct binary, but the old one stays until the cache is rewritten). A clean miss-and-rebuild on any lockfile change is simpler and cheaper.
 
 ## Verification
 
