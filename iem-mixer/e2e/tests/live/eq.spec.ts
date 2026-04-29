@@ -671,6 +671,13 @@ test.describe("EQ Feature", () => {
     page,
     request,
   }) => {
+    // The test runs ~6 awaited steps with explicit `waitForTimeout(500)` /
+    // `toBeVisible({timeout: 5000-10000})` between each, plus REAPER ping
+    // and waitForMixer. On loaded CI runners the cumulative duration can
+    // exceed the default 30s test timeout. Same pattern that bit
+    // pwa.spec.ts (commit 8467435 fix). Extending to 60s.
+    test.setTimeout(60_000);
+
     // This test requires REAPER to be running for real channel data
     const reaperCheck = await request
       .get("http://iem.lan:8080/_/NTRACK");
@@ -688,7 +695,14 @@ test.describe("EQ Feature", () => {
       .locator("button", { hasText: "EQ" })
       .isVisible()
       .catch(() => false);
-    await page.locator(".ch-menu-backdrop").click().catch(() => {});
+    // Short timeout: if the backdrop doesn't exist (no popup open) we
+    // don't want Playwright's default 30s click() auto-wait to burn the
+    // budget — same pattern used in the "kebab menu has EQ option" test
+    // earlier in this file.
+    await page
+      .locator(".ch-menu-backdrop")
+      .click({ timeout: 1000 })
+      .catch(() => {});
     await page.waitForTimeout(300);
 
     // Step 2: Navigate to Mics tab for other members' channels (no EQ)
@@ -709,7 +723,10 @@ test.describe("EQ Feature", () => {
       .locator("button", { hasText: "EQ" })
       .isVisible()
       .catch(() => false);
-    await page.locator(".ch-menu-backdrop").click().catch(() => {});
+    await page
+      .locator(".ch-menu-backdrop")
+      .click({ timeout: 1000 })
+      .catch(() => {});
 
     // Own channel has EQ, other member's doesn't
     expect(eqOnOwn).toBe(true);

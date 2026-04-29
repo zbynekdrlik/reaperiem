@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.161.0 (2026-04-28)
+
+- **Fix**: "Reconnecting" banner and audio listen button no longer flash on transient WebSocket blips (Wi-Fi handoff, brief tab backgrounding, mobile suspend). 3 s client-side debounce — sustained disconnects (>3 s) still show the message. (#186)
+
+### v1.160.0 (2026-04-28)
+
+- **CI**: Cache npm download cache and Playwright browsers on the GitHub-hosted `e2e` job — saves ~2–3 min per push after the first cache warm-up
+
 ### v1.159.0 (2026-04-26)
 
 - **Fix**: Backup/restore — prevent silent partial captures (engineer now sees an error instead of writing an incomplete file)

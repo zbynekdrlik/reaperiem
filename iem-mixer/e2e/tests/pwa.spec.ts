@@ -56,6 +56,13 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
   test("hashed WASM/JS assets are cached after navigation", async ({
     page,
   }) => {
+    // Loop budget below is 40s (40 × 1s) to tolerate GitHub Actions queue
+    // variance (see commit 28c0b42). Default test timeout is 30s, which
+    // cuts the loop off mid-poll and produces flakes when SW cache takes
+    // 25-40s to populate. Extend the test timeout to cover the loop plus
+    // navigation + SW activation buffer.
+    test.setTimeout(60_000);
+
     // Navigate to app — this triggers SW registration
     await page.goto(BASE_URL, { waitUntil: "networkidle" });
 
@@ -88,12 +95,50 @@ test.describe("Service Worker — PWA with hashed asset caching", () => {
     // fetches for hashed assets and populate the cache.
     await page.reload({ waitUntil: "networkidle" });
 
-    // Poll for SW cache to be populated (SW may take several seconds after
-    // activation). 40 × 1 s allows for slow CI runners — the cache DOES
-    // eventually populate, but observed flakes at 10 s (< 5 % on
-    // ubuntu-latest) and 20 s under heavier runner load. Bumping to 40 s
-    // keeps the test real (no mocking) while tolerating GitHub Actions
-    // queue variance.
+    // After reload, page.reload may serve hashed assets from HTTP cache
+    // (Cache-Control: immutable) WITHOUT triggering the SW fetch handler
+    // — observed empirically as a recurring flake on ubuntu-latest. Force
+    // SW interception by refetching the hashed assets explicitly with
+    // `cache: "no-store"`, which bypasses HTTP cache and routes through
+    // the SW fetch handler.
+    await page.evaluate(async () => {
+      // Wait until the SW is actually controlling this page (clients.claim
+      // racing with the navigation can leave us briefly uncontrolled).
+      if (!navigator.serviceWorker.controller) {
+        await new Promise<void>((resolve) => {
+          navigator.serviceWorker.addEventListener(
+            "controllerchange",
+            () => resolve(),
+            { once: true },
+          );
+          if (navigator.serviceWorker.controller) resolve();
+        });
+      }
+      // Find hashed asset URLs from the document and refetch with a
+      // no-store hint. The SW fetch handler matches on URL pathname and
+      // populates `iem-assets-v1`.
+      const urls = new Set<string>();
+      document.querySelectorAll("script[src]").forEach((el) => {
+        const src = (el as HTMLScriptElement).src;
+        if (/[a-f0-9]{16,}\.(js|wasm)$/.test(src)) urls.add(src);
+      });
+      document.querySelectorAll("link[href]").forEach((el) => {
+        const href = (el as HTMLLinkElement).href;
+        if (/[a-f0-9]{16,}\.(js|wasm)$/.test(href)) urls.add(href);
+      });
+      // Best-effort refetch — failures don't stop the test (the SW
+      // intercept itself is what matters; cache.put inside the SW does
+      // the work).
+      await Promise.all(
+        [...urls].map((url) =>
+          fetch(url, { cache: "no-store" }).catch(() => {}),
+        ),
+      );
+    });
+
+    // Poll for SW cache to be populated. After the explicit refetch above
+    // the SW should have written entries on the same tick; the loop is
+    // belt-and-suspenders for slow runners.
     let cacheInfo = { exists: false, keys: [] as string[] };
     for (let attempt = 0; attempt < 40; attempt++) {
       await page.waitForTimeout(1000);

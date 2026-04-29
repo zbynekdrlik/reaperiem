@@ -345,9 +345,22 @@ fn start_listening(
     };
     socket.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
+    // #186: Debounce ListenState::Reconnecting — 3s after WS close. If the
+    // new socket opens before the timer fires, on_open drops the Timeout and
+    // the user never sees the "Reconnecting" text for transient blips.
+    // Mirrors the 3s debounce on the mixer banner (lifecycle.rs::debounced_disconnect).
+    let _reconnecting_timeout: std::rc::Rc<
+        std::cell::RefCell<Option<gloo_timers::callback::Timeout>>,
+    > = std::rc::Rc::new(std::cell::RefCell::new(None));
+    let reconnecting_timeout_open = _reconnecting_timeout.clone();
+    let reconnecting_timeout_close = _reconnecting_timeout.clone();
+
     // On open: send ListenStart with member_id (audio player already initialized above)
     let member_id_open = member_id.clone();
     let on_open = Closure::wrap(Box::new(move |_: web_sys::Event| {
+        // #186: socket reopened — cancel any pending "Reconnecting" timer.
+        *reconnecting_timeout_open.borrow_mut() = None;
+
         // Send ListenStart command with target member
         let cmd = serde_json::to_string(&iem_core::ClientMsg::ListenStart {
             member_id: member_id_open.clone(),
@@ -442,11 +455,20 @@ fn start_listening(
             web_sys::console::log_1(&"[audio] WebSocket closed (user stopped)".into());
             let _ = set_intentional_stop.try_set(false);
             let _ = set_state_close.try_set(ListenState::Idle);
+            // Cancel any pending Reconnecting transition (defensive — should
+            // already have been cancelled by on_open of the prior socket).
+            *reconnecting_timeout_close.borrow_mut() = None;
         } else {
-            // Unexpected disconnect — auto-reconnect
+            // Unexpected disconnect — schedule "Reconnecting" UI after 3s.
+            // If a new socket opens before then, on_open drops this Timeout
+            // and the user never sees the flash. (#186)
             web_sys::console::log_1(&"[audio] WebSocket closed — will reconnect".into());
-            // Don't stop audio player — keep AudioContext alive for seamless resume
-            let _ = set_state_close.try_set(ListenState::Reconnecting);
+            // Don't stop audio player — keep AudioContext alive for seamless resume.
+            let set_state_for_timer = set_state_close;
+            let new_timeout = gloo_timers::callback::Timeout::new(3000, move || {
+                let _ = set_state_for_timer.try_set(ListenState::Reconnecting);
+            });
+            *reconnecting_timeout_close.borrow_mut() = Some(new_timeout);
         }
     }) as Box<dyn FnMut(_)>);
 

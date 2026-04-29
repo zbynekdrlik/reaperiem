@@ -243,6 +243,97 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+// ---------------------------------------------------------------------------
+// Reconnect-banner debounce — issue #186.
+// ---------------------------------------------------------------------------
+
+use gloo_timers::callback::Timeout;
+use leptos::prelude::*;
+
+/// Returns `true` when the banner-show transition should be scheduled — i.e.
+/// we're disconnected, the banner is not yet shown, AND there is no pending
+/// timer already counting down. This is the single source of truth for the
+/// scheduling decision, used both by `debounced_disconnect`'s reactive
+/// Effect and by the unit tests that exercise the branch logic without a
+/// Leptos runtime.
+///
+/// `timer_pending` is critical: while disconnected, every failed reconnect
+/// attempt fires the WS `onclose` handler which calls `set_connected(false)`
+/// again, re-running our Effect even though the signal value didn't change.
+/// Without checking `timer_pending`, we'd cancel and restart the 3 s timer
+/// on every reconnect attempt (every 2 s, 4 s, 8 s … per backoff schedule)
+/// and the banner would never appear during a sustained outage.
+///
+/// Pure function — no reactive context, no side effects.
+fn should_schedule_disconnect_timer(
+    is_connected: bool,
+    banner_shown: bool,
+    timer_pending: bool,
+) -> bool {
+    !is_connected && !banner_shown && !timer_pending
+}
+
+/// Returns a derived signal that becomes `true` only after `connected == false`
+/// for `delay_ms` continuously. Flips back to `false` instantly when `connected`
+/// becomes `true` again.
+///
+/// Used to debounce dramatic "Reconnecting" UI elements without delaying
+/// instant-feedback UI like the status dot. The underlying `connected` signal
+/// stays untouched.
+///
+/// Implementation: a Leptos `Effect` that watches `connected` and uses a
+/// `gloo_timers::callback::Timeout` stored in `Rc<RefCell<Option<Timeout>>>`
+/// for cancellation. Dropping a `Timeout` cancels the underlying JS timer, so
+/// replacing the stored value with `None` (or with a new `Timeout`) cancels
+/// any prior pending transition. `Rc<RefCell<...>>` rather than Leptos
+/// `StoredValue` because `gloo_timers::callback::Timeout` is not `Send +
+/// Sync` and `StoredValue` requires `Send + Sync` even on `wasm32` targets.
+/// This matches the pattern used elsewhere in `iem-ui` for closure-shared
+/// non-reactive state (see `pages/mixer/helpers.rs:34`).
+///
+/// All signal writes inside the `Effect` use `try_set` / `try_get_untracked`
+/// per the project's disposal-safety policy (#153) — the danger-zone scanner
+/// flags any `.set()` / `.get_untracked()` inside `Effect::new`.
+pub fn debounced_disconnect(connected: ReadSignal<bool>, delay_ms: u32) -> Signal<bool> {
+    let (show, set_show) = signal(false);
+    let timeout: std::rc::Rc<std::cell::RefCell<Option<Timeout>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(None));
+
+    Effect::new(move |_| {
+        let is_connected = connected.get();
+
+        if is_connected {
+            // Reconnected — cancel any pending timer and hide the banner.
+            // (Cancellation only happens here: while disconnected, the
+            // existing timer must be allowed to count down regardless of
+            // how many times the Effect re-fires.)
+            *timeout.borrow_mut() = None;
+            let _ = set_show.try_set(false);
+        } else {
+            // `try_get_untracked` returns None only if the signal has been
+            // disposed; treat disposed-but-disconnected as "banner not
+            // shown" so the timer still gets scheduled (the Effect itself
+            // will be torn down before it can fire on a disposed signal).
+            let banner_shown = show.try_get_untracked().unwrap_or(false);
+            let timer_pending = timeout.borrow().is_some();
+            if should_schedule_disconnect_timer(is_connected, banner_shown, timer_pending) {
+                // Disconnected, banner not yet shown, and no timer counting
+                // down yet — schedule the transition. Subsequent re-fires
+                // of `connected = false` (e.g. from failed reconnect
+                // attempts) leave the in-flight timer alone, so the banner
+                // appears `delay_ms` after the FIRST disconnect tick, not
+                // `delay_ms` after the LAST one.
+                let new_timeout = Timeout::new(delay_ms, move || {
+                    let _ = set_show.try_set(true);
+                });
+                *timeout.borrow_mut() = Some(new_timeout);
+            }
+        }
+    });
+
+    show.into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,5 +471,41 @@ mod tests {
         // a phone viewport.
         assert!(PANIC_MESSAGE_MAX_DISPLAY_CHARS <= 500);
         assert!(PANIC_MESSAGE_MAX_DISPLAY_CHARS > 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // debounced_disconnect — runtime-dependent behavior is covered by the
+    // Playwright test (e2e/tests/reconnect-debounce.spec.ts in T5); here we
+    // test the small pure-logic branch decision directly without a Leptos
+    // runtime. The test calls the SAME `should_schedule_disconnect_timer`
+    // function that the production Effect calls, so the two cannot drift.
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn debounced_disconnect_helper_branch_decisions() {
+        // (is_connected, banner_shown, timer_pending) → should_schedule?
+
+        // Connected — never schedule, regardless of other state.
+        assert!(!should_schedule_disconnect_timer(true, false, false));
+        assert!(!should_schedule_disconnect_timer(true, true, false));
+        assert!(!should_schedule_disconnect_timer(true, false, true));
+        assert!(!should_schedule_disconnect_timer(true, true, true));
+
+        // Disconnected, banner hidden, no timer pending → SCHEDULE.
+        // This is the only path that should actually start the timer.
+        assert!(should_schedule_disconnect_timer(false, false, false));
+
+        // Disconnected, banner already shown → never re-schedule.
+        // Continued disconnect should keep the banner visible without
+        // restarting any timer.
+        assert!(!should_schedule_disconnect_timer(false, true, false));
+        assert!(!should_schedule_disconnect_timer(false, true, true));
+
+        // Disconnected, banner hidden, but a timer is ALREADY counting
+        // down → never restart it. This is the regression guard for the
+        // sticky-timer fix: failed reconnect attempts re-fire the
+        // `connected = false` signal but must NOT restart the debounce
+        // window from zero each time.
+        assert!(!should_schedule_disconnect_timer(false, false, true));
     }
 }
