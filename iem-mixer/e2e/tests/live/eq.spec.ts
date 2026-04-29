@@ -695,7 +695,14 @@ test.describe("EQ Feature", () => {
       .locator("button", { hasText: "EQ" })
       .isVisible()
       .catch(() => false);
-    await page.locator(".ch-menu-backdrop").click().catch(() => {});
+    // Short timeout: if the backdrop doesn't exist (no popup open) we
+    // don't want Playwright's default 30s click() auto-wait to burn the
+    // budget — same pattern used in the "kebab menu has EQ option" test
+    // earlier in this file.
+    await page
+      .locator(".ch-menu-backdrop")
+      .click({ timeout: 1000 })
+      .catch(() => {});
     await page.waitForTimeout(300);
 
     // Step 2: Navigate to Mics tab for other members' channels (no EQ)
@@ -716,7 +723,10 @@ test.describe("EQ Feature", () => {
       .locator("button", { hasText: "EQ" })
       .isVisible()
       .catch(() => false);
-    await page.locator(".ch-menu-backdrop").click().catch(() => {});
+    await page
+      .locator(".ch-menu-backdrop")
+      .click({ timeout: 1000 })
+      .catch(() => {});
 
     // Own channel has EQ, other member's doesn't
     expect(eqOnOwn).toBe(true);
