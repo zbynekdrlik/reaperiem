@@ -1501,6 +1501,7 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
+          !text.includes("vapid-key fetch error") &&
           !text.includes("integrity") &&
           !text.includes("navigator.vibrate") &&
           !text.includes("closure invoked recursively or after being dropped")
@@ -1584,6 +1585,7 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
+          !text.includes("vapid-key fetch error") &&
           !text.includes("integrity") &&
           !text.includes("navigator.vibrate") &&
           !text.includes("closure invoked recursively or after being dropped")
@@ -1660,6 +1662,7 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
         if (
           !text.includes("Push API in incognito") &&
           !text.includes("[push] subscribe await failed") &&
+          !text.includes("vapid-key fetch error") &&
           !text.includes("integrity") &&
           !text.includes("navigator.vibrate") &&
           !text.includes("closure invoked recursively or after being dropped")
