@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.163.0 (2026-05-01)
+
+- **CI**: Replaced 6 manual `actions/cache@v4` blocks with `Swatinem/rust-cache@v2`. Fixed broken `build-tauri` cache (was restore-only, never saved artifacts). Standardized auto-pruned target dirs and correctly-keyed cache (rustc + Cargo.lock + features). Cuts ~10–15 min from `build-tauri` after warm-up, ~2–5 min from Ubuntu jobs.
+
 ### v1.162.0 (2026-05-01)
 
 - **CI**: Reorder post-deploy steps so REAPER project backup is captured BEFORE the audio-test tone generator is inserted. Prevents the tone-generator FX from being persisted into the saved `.RPP` and resurrected on every restore-after-E2E (root cause of "tone generator stuck on engineer inear track" between deploys).
