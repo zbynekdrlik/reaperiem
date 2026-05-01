@@ -303,18 +303,10 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            iem-mixer/iem-ui/target/
-          key: ${{ runner.os }}-cargo-wasm-${{ hashFiles('iem-mixer/iem-ui/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: iem-mixer/iem-ui
 
       - name: Install Trunk
         run: |
