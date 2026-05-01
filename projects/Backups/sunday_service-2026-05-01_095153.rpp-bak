@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1777404439 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1777621913 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -453,8 +453,8 @@
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
-        IQAAAAUAAAAEAAAAAAAAAAAAAAAAADRAAAAAAAAA8D8AAAAAAAAAQAEAAAAAAQAAAFyc9m6GgYFAAAAAoPQT1j8AAACgmZnJPwEIAAAAAQAAANNsqVySlYdAAAAAIMmQ
-        /T8AAACAFK7nPwEIAAAAAQAAABitVawdRqRAAAAAoJMX4z8AAACgmZnZPwEBAAAAAQAAACwq7sENYLFAAAAA4NAG9j8AAABgj8LlPwEBAAAAAQAAAAAAAAAAAPA/AAAA
+        IQAAAAUAAAAEAAAAAQAAACxtGl+JDGFAAAAAAAAA8D8AAAAAAAD4PwEAAAAAAQAAAF15LT8h0HJAAAAAYEeq6z8AAAAAAAD4PwEIAAAAAQAAAOHQqVH8RIxAAAAAgCXl
+        8j8AAAAAAAD4PwEIAAAAAQAAADO3rMsLDqZAAAAAgCXl8j8AAAAAAADwPwEBAAAAAQAAANzF7J7JxL9AAAAAwC0f9z8AAAAAAAD4PwEBAAAAAQAAAAAAAAAAAPA/AAAA
         AKwCAACyAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
       >
@@ -1240,7 +1240,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.117489755 0 -1 -1 1
+    VOLPAN 0.1318259984 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1264,16 +1264,16 @@
     AUXRECV 2 3 0.6309570074 0.9333329797 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.28840312 0.7599999905 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.20179623 0.6 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.19054608 0.400000006 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.16595867 0.400000006 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.4786300063 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.1 -1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.002398353 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.4466836 1 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.52480745 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.067608304 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.0870959982 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 0.7079460025 0.0199999996 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.7079460025 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 0.177827999 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 0.30902955 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 23 0 3.981072 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 24 0 3.981072 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 25 0 3.981072 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1309,7 +1309,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {94EBF3D6-E15A-4472-BE90-9F10B46BC816}
+      FXID {071A0864-F74F-4D03-8084-DC8203C057E7}
       WAK 0 0
     >
   >
@@ -1341,17 +1341,17 @@
     AUXRECV 1 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.013487 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.0316229984 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 4 3 0.009013906 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 4 3 0.009013906 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 5 3 0.0153350001 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.0512860008 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.0158489998 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 1 0.5 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.07413103 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.038904507 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.0107129999 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 0.0104710003 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 0.0158489998 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 0.0354809985 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 0.15488164 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 34 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1379,7 +1379,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {274DFA3A-E9A1-4688-8B42-0A14C5AD4908}
+      FXID {813B0F8F-9A3C-47C1-A44E-76D2567C8C00}
       WAK 0 0
     >
   >
@@ -1389,7 +1389,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.3019952 0 -1 -1 1
+    VOLPAN 0.3548134 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1416,15 +1416,15 @@
     AUXRECV 6 3 0.25118864 0.7540000081 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.16029245 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.24547088 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 17 3 0.17378008 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.048977874 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 17 3 0.17378008 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.2691000104 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 19 3 0.1949840039 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 20 3 0.1148149967 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 19 3 0.03981072 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 20 3 0.1148149967 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 35 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 43 3 0.010964781 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 43 3 0.008317639 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 44 3 0.0151356105 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 0 0
     HWOUT 6 0 1 0 0 0 0 -1:U -1
@@ -1449,7 +1449,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A8022CA5-A4DB-43D9-9438-1944E3AE141C}
+      FXID {18A537D6-0A5F-41BA-9658-7C1D1E1264E0}
       WAK 0 0
     >
   >
@@ -1459,7 +1459,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.05011873 0 -1 -1 1
+    VOLPAN 0.23442288 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1477,21 +1477,21 @@
     FX 1
     TRACKID {6D4114BD-AD77-4C21-ADAF-74ACF6D6AAF7}
     PERF 0
-    AUXRECV 0 3 0.0588839985 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.05956621 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.09772372 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.09549926 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.0524809994 -0.066666998 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 0.1513559967 -0.0333329998 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.43651584 -0.0333329998 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.0354809985 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.032359365 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.022387212 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.0645650029 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.001011 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.0012020235 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 9 3 0.0008033651 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.015848933 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 18 3 0.061659496 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 18 3 0.061659496 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 0.057543993 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 0.030902956 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 36 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 0.001413 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1518,7 +1518,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {407E8CFC-F64C-464E-8610-536AB117A7F2}
+      FXID {6D423737-1485-4E4B-8882-6A38644E6F2E}
       WAK 0 0
     >
   >
@@ -1528,7 +1528,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.3311311 0 -1 -1 1
+    VOLPAN 0.22387213 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1546,21 +1546,21 @@
     FX 1
     TRACKID {BBDB2FDC-86DD-4E55-9FE9-EA3A5C55CCED}
     PERF 0
-    AUXRECV 0 3 0.10715194 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.18620871 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 0.1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 0.022387 0.183333 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 0.051286142 1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 0.022387 0.183333 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.11481538 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.0162179992 0.5 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 1 0.5 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 6 3 0.023442 0.5 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.19054608 0.5 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 6 3 0.089125104 0.5 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.002239 0.5 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.00955 0.5 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.01349 1 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 17 3 0.045708828 0.5 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 18 3 0.16982438 0.5 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.031622775 1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 17 3 0.045708828 0.5 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 18 3 0.16982438 0.5 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 0.0537029989 0.5 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 20 3 0.190546006 0.5 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 21 3 0.1862089932 0.5 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 20 3 0.190546006 0.5 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 21 3 0.07943282 0.5 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 37 0 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 43 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 44 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1588,7 +1588,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {F14231D8-1AAF-4033-842A-24BE37E1C87F}
+      FXID {FF72E1A7-637E-48FF-A6D0-322577B2CBB9}
       WAK 0 0
     >
   >
@@ -1598,7 +1598,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.45708817 0 -1 -1 1
+    VOLPAN 1.9952624 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1621,11 +1621,11 @@
     AUXRECV 2 3 0.12589255 -1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.2818383 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.10113768 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.2818383 1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.15848932 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.17985107 -1 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.16029245 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.16029245 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.07943282 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.13182567 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1658,7 +1658,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {F2907FC8-90BE-4471-AD0E-0CC56B25BBA9}
+      FXID {8B3E4DEB-1772-463B-90EC-D17A20EF3555}
       WAK 0 0
     >
   >
@@ -1668,7 +1668,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.2951209 0 -1 -1 1
+    VOLPAN 0.8709636 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1686,16 +1686,16 @@
     FX 1
     TRACKID {C988DC6F-0526-4DD4-85D7-CD2E30967EF6}
     PERF 0
-    AUXRECV 0 3 0.4168694 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.4786301 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 0.5011872 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 0.48977882 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 4 3 0.2290869951 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.53703177 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 6 3 0.63095737 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 7 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 8 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.24547088 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 0.30902955 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.18620871 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 4 3 0.117489755 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.21877618 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 6 3 0.21379623 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 7 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 8 3 0.38018942 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.31622776 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.14791082 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.38018942 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1728,7 +1728,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {35A54218-E76B-4D0C-B3D4-2583D27D49C4}
+      FXID {A754B90D-17B4-4355-BB96-DF4A3A8D3ED7}
       WAK 0 0
     >
   >
@@ -1797,7 +1797,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {7C9F11F3-8DB4-4A75-A677-E947320109E3}
+      FXID {EAE05534-A03E-414F-8EFB-269730908C6B}
       WAK 0 0
     >
   >
@@ -1807,7 +1807,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.724436 0 -1 -1 1
+    VOLPAN 0.21379623 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1825,16 +1825,16 @@
     FX 1
     TRACKID {E2E68799-1B9D-498F-A2B7-EA9C72EB54A6}
     PERF 0
-    AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.8912509 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.041686937 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.07413103 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 0.038018942 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.10471285 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 1.0592537 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 6 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.20417379 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 6 3 0.09120109 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 1 -0.0199999996 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.74131024 -0.0199999996 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.19054608 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.2818379998 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1867,7 +1867,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {63F6485C-956A-4398-B171-ECCAEC8B530F}
+      FXID {7BAB9817-5A1A-495B-A504-4B85850EFBD2}
       WAK 0 0
     >
   >
@@ -1878,7 +1878,7 @@
     AUTOMODE 0
     PANLAWFLAGS 3
     VOLPAN 1.7782794 0 -1 -1 1
-    MUTESOLO 0 0 1
+    MUTESOLO 1 0 1
     IPHASE 0
     PLAYOFFS 0 1
     ISBUS 0 0
@@ -1932,13 +1932,6 @@
       LASTSEL 0
       DOCKED 0
       BYPASS 0 0 0
-      <JS synthesis/tonegenerator ""
-        6 0 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-      >
-      FLOATPOS 0 0 0 0
-      FXID {C016CD3B-A9BC-47D0-8B5C-7E6337981BD0}
-      WAK 0 0
-      BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
         IQAAAAUAAAAEAAAAAQAAAJXfi3BX0XRAAAAAYEkr7j8AAAAAAAAAQAEAAAAAAAAAAAQEaDDZCWlAAAAAAAAA8D8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAIK5H
@@ -1951,10 +1944,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 -10.397146 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A5E17D07-7B4A-4ED5-BBBC-AA3A73A7D278}
+      FXID {9501751C-AA96-45D4-B567-EEDD2CDD88CB}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
@@ -2007,7 +2000,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.31622776 0 -1 -1 1
+    VOLPAN 0.43651584 0 -1 -1 1
     MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
@@ -2030,8 +2023,8 @@
     AUXRECV 11 3 0.3548130095 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 12 3 0.6918309927 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.5754399896 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 14 3 0.089125104 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.1258929968 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 14 3 0.0851140022 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.39810717 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 16 3 0.1122020036 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
@@ -2109,7 +2102,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.2951209 0 -1 -1 1
+    VOLPAN 1 0 -1 -1 1
     MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
@@ -2132,7 +2125,7 @@
     AUXRECV 12 3 0.30902955 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.2818383 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.16982438 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.1348963 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.18620871 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 16 3 0.089125104 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
@@ -2179,11 +2172,11 @@
     PERF 0
     AUXRECV 10 3 0.22908677 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 11 3 0.21379623 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 12 3 0.4168694 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 12 3 0.2951209 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.4168694 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.0151356105 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 16 3 0.07943282 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.1348963 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 16 3 0.061659496 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
@@ -2333,7 +2326,7 @@
     AUXRECV 12 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.16982438 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.5128614 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.64565426 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 16 3 0.4168694 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
