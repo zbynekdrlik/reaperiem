@@ -609,18 +609,10 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Restore cargo cache
-        uses: actions/cache/restore@v4
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            iem-mixer/target/
-          key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: iem-mixer
 
       - name: Install Tauri CLI
         shell: bash
