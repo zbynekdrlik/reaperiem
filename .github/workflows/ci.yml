@@ -1906,6 +1906,30 @@ jobs:
 
           Write-Host "VBAN IEM verified: plugin present and active on engineer track"
 
+      - name: Save REAPER project before E2E (clean state for restore)
+        # MUST run BEFORE "Activate tone generator". The backup captured here is
+        # later restored verbatim by "Restore REAPER project after E2E", so any
+        # state present at backup time is replayed onto disk and reloaded into
+        # REAPER after E2E. If the tone-generator FX is inserted before this
+        # step, the FX persists across deploys and pollutes the next live run
+        # (engineer hears constant 440 Hz, listen feature streams the tone).
+        shell: powershell
+        run: |
+          $rppPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
+          $bakPath = "$rppPath.e2e-bak"
+          try {
+            # Save project to disk (action 40026)
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Start-Sleep -Seconds 2
+            # Create backup of the saved .RPP file BEFORE the tone generator
+            # (and any other E2E-time mutation) is applied
+            Copy-Item -Path $rppPath -Destination $bakPath -Force
+            Write-Host "REAPER project saved and backed up to $bakPath"
+          } catch {
+            Write-Host "::error::Failed to save/backup REAPER project: $_"
+            exit 1
+          }
+
       - name: Activate tone generator for audio testing
         if: steps.reaper-pre.outputs.was_running == 'true'
         shell: powershell
@@ -2312,23 +2336,6 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-
-      - name: Save REAPER project before E2E
-        shell: powershell
-        run: |
-          $rppPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
-          $bakPath = "$rppPath.e2e-bak"
-          try {
-            # Save project to disk (action 40026)
-            Invoke-WebRequest -Uri "http://iem.lan:8080/_/40026" -UseBasicParsing -TimeoutSec 5 | Out-Null
-            Start-Sleep -Seconds 2
-            # Create backup of the saved .RPP file BEFORE E2E tests modify anything
-            Copy-Item -Path $rppPath -Destination $bakPath -Force
-            Write-Host "REAPER project saved and backed up to $bakPath"
-          } catch {
-            Write-Host "::error::Failed to save/backup REAPER project: $_"
-            exit 1
-          }
 
       - name: Validate tone_generator action-ID hash (#145 pre-flight)
         shell: powershell
