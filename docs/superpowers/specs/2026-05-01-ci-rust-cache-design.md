@@ -5,33 +5,47 @@
 
 ## Problem
 
-CI workflow has 13 jobs. None use `Swatinem/rust-cache@v2`. Cargo workspace at `iem-mixer/Cargo.toml` cold-compiles every push. Two jobs have manual cache attempts, one of which is broken:
+CI workflow has 13 jobs. None use `Swatinem/rust-cache@v2`. All 6 cargo-compiling jobs use bespoke manual `actions/cache@v4` blocks. One is broken (restore-only, no save):
 
 | Job | Cargo? | Cache state |
 |-----|--------|-------------|
 | test-integrity | no (grep) | n/a |
-| lint | yes (clippy) | NONE |
-| test | yes | NONE |
-| build-wasm | yes (trunk → cargo) | NONE |
-| e2e | yes (cargo build) | NONE |
-| mutation-test | yes (mutants + llvm-cov) | manual `actions/cache@v4` (works, bespoke key) |
+| lint | yes (clippy) | manual `actions/cache@v4` (lines 237-248), key `cargo-lint` |
+| test | yes | manual `actions/cache@v4` (lines 282-293), key `cargo-test` |
+| build-wasm | yes (trunk → cargo) | manual `actions/cache@v4` (lines 322-333), key `cargo-wasm`, path includes `iem-ui/target/` |
+| e2e | yes (cargo build) | manual `actions/cache@v4` (lines 388-399), key `cargo-e2e` |
+| mutation-test | yes (mutants + llvm-cov) | manual `actions/cache@v4` (lines 485-496), key `cargo-mutants` |
 | check-version-bump | no | n/a |
-| build-tauri | yes (cargo tauri build) | manual `cache/restore@v4` ONLY — **never saves, broken** |
+| build-tauri | yes (cargo tauri build) | manual `cache/restore@v4` ONLY (lines 652-663) — **never saves, broken** |
 | build-vban | no (cmake) | cmake cache (separate, OK) |
 | deploy | no | n/a |
 
-Estimated waste: 8-15 min per push across the 6 cargo jobs. Compounds across PRs and fix-iterations.
+Manual caches work (5/6) but are suboptimal:
+
+- Bespoke job-specific keys → caches don't share base layers across jobs.
+- Key only hashes `Cargo.lock` — does not invalidate on rustc version bump or feature flag change → stale-cache risk.
+- No `target/` pruning — caches accumulate incremental-compilation cruft over time, growing past useful size.
+- `build-tauri` is fully broken — restore step with no save step → Windows cargo cache is permanently empty, cold-compiling every push (largest job, ~30 min timeout).
+
+Net waste: ~2-5 min per push across ubuntu jobs (slow restore from bloated caches) + ~10-15 min on `build-tauri` (Windows cold compile). Compounds across PRs and fix-iterations.
 
 ## Solution
 
-Add `Swatinem/rust-cache@v2` to 6 cargo-compiling jobs:
+Replace all 6 manual cache blocks with `Swatinem/rust-cache@v2`:
 
-1. `lint`
-2. `test`
-3. `build-wasm`
-4. `e2e`
-5. `mutation-test` (**replace** manual `actions/cache@v4` block at lines 485-496)
-6. `build-tauri` (**replace** broken manual `cache/restore@v4` block at lines 652-663)
+1. `lint` — replace lines 237-248
+2. `test` — replace lines 282-293
+3. `build-wasm` — replace lines 322-333
+4. `e2e` — replace lines 388-399
+5. `mutation-test` — replace lines 485-496
+6. `build-tauri` — replace broken `cache/restore@v4` block at lines 652-663
+
+`Swatinem/rust-cache@v2` benefits over manual:
+
+- Auto-prunes `target/` (drops examples, tests, incremental compilation cruft) → smaller caches, faster restore
+- Hashes rustc version, target triple, features, env → correct invalidation
+- Saves on success only → preserves prior cache on failure
+- Single consistent pattern across all 6 jobs
 
 ## Pattern
 
@@ -73,45 +87,11 @@ Total: ~3.3GB. Well under 10GB. Eviction LRU; jobs that run on every push stay w
 
 ## Replaced blocks
 
-### mutation-test (lines 485-496) — DELETE
+Each of the 6 jobs has a manual `actions/cache@v4` (or `cache/restore@v4` for build-tauri) with a path list of `~/.cargo/bin/`, `~/.cargo/registry/{index,cache}/`, `~/.cargo/git/db/`, and `iem-mixer/target/` (or `iem-mixer/iem-ui/target/` for build-wasm). Each uses a job-specific key like `${{ runner.os }}-cargo-<job>-${{ hashFiles('iem-mixer/**/Cargo.lock') }}` with a `${{ runner.os }}-cargo-` restore-keys fallback.
 
-```yaml
-- name: Cache cargo
-  uses: actions/cache@v4
-  with:
-    path:
-      ~/.cargo/bin/
-      ~/.cargo/registry/index/
-      ~/.cargo/registry/cache/
-      ~/.cargo/git/db/
-      iem-mixer/target/
-    key: ${{ runner.os }}-cargo-mutants-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
-    restore-keys: |
-      ${{ runner.os }}-cargo-
-```
+Plan task steps capture the exact line ranges and surrounding context for each replacement.
 
-Replace with the standard rust-cache step.
-
-### build-tauri (lines 652-663) — DELETE
-
-```yaml
-- name: Restore cargo cache
-  uses: actions/cache/restore@v4
-  with:
-    path:
-      ~/.cargo/bin/
-      ~/.cargo/registry/index/
-      ~/.cargo/registry/cache/
-      ~/.cargo/git/db/
-      iem-mixer/target/
-    key: ${{ runner.os }}-cargo-tauri-${{ hashFiles('iem-mixer/**/Cargo.lock') }}
-    restore-keys: |
-      ${{ runner.os }}-cargo-
-```
-
-Note: this uses `cache/restore@v4` only — there is no matching `cache/save@v4` step in the job, so this cache never populates. Bug. rust-cache fixes it (does both restore on entry and save on completion via post-step).
-
-Replace with the standard rust-cache step.
+`build-tauri` is unique: uses `cache/restore@v4` only (no matching `cache/save@v4` step) → cache never populates. rust-cache fixes this automatically (post-step saves on success).
 
 ## Verification
 
@@ -129,7 +109,7 @@ Replace with the standard rust-cache step.
 
 ## File map
 
-- `.github/workflows/ci.yml` — 6 edits (4 inserts, 2 replaces)
+- `.github/workflows/ci.yml` — 6 cache-block replacements
 
 ## Version bump
 
@@ -138,10 +118,10 @@ Per airuleset version-bumping rule: bump 1.162.0 → 1.163.0 as first commit on 
 ## Tasks (sequential)
 
 1. Version bump 1.162.0 → 1.163.0 + README changelog. First commit.
-2. Add rust-cache to `lint`.
-3. Add rust-cache to `test`.
-4. Add rust-cache to `build-wasm`.
-5. Add rust-cache to `e2e`.
+2. Replace manual cache in `lint` with rust-cache.
+3. Replace manual cache in `test` with rust-cache.
+4. Replace manual cache in `build-wasm` with rust-cache.
+5. Replace manual cache in `e2e` with rust-cache.
 6. Replace manual cache in `mutation-test` with rust-cache.
 7. Replace broken manual cache in `build-tauri` with rust-cache.
 8. Push to dev, monitor CI green (10 jobs). Expect first run cold-compile (cache miss); cache populates.
