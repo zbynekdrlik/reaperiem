@@ -57,3 +57,4 @@ Thumbs.db
 test-results/
 **/test-results/**/*.png
 .worktrees/
+*.RPP.bak

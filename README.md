@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.162.0 (2026-05-01)
+
+- **CI**: Reorder post-deploy steps so REAPER project backup is captured BEFORE the audio-test tone generator is inserted. Prevents the tone-generator FX from being persisted into the saved `.RPP` and resurrected on every restore-after-E2E (root cause of "tone generator stuck on engineer inear track" between deploys).
+- **Fix**: `tone_generator.lua` `start` action — when FX is `already_present`, also re-assert `TrackFX_SetEnabled(true)` and `B_MUTE=0` so the script's contract matches its name regardless of pre-state.
+
 ### v1.161.0 (2026-04-28)
 
 - **Fix**: "Reconnecting" banner and audio listen button no longer flash on transient WebSocket blips (Wi-Fi handoff, brief tab backgrounding, mobile suspend). 3 s client-side debounce — sustained disconnects (>3 s) still show the message. (#186)

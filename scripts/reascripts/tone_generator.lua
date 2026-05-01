@@ -33,6 +33,13 @@ if action == "start" then
   for i = 0, fx_count - 1 do
     local _, fx_name = reaper.TrackFX_GetFXName(track, i)
     if fx_name:lower():find("tone generator") then
+      -- Idempotent: re-assert the state the script promises (FX enabled,
+      -- track unmuted, params set). Without this, an "already_present" hit
+      -- could leave the tone disabled or muted depending on prior state.
+      reaper.TrackFX_SetEnabled(track, i, true)
+      reaper.SetMediaTrackInfo_Value(track, "B_MUTE", 0)
+      reaper.TrackFX_SetParam(track, i, 0, 440.0)
+      reaper.TrackFX_SetParam(track, i, 1, 0.25)
       reaper.SetExtState("reaperiem", "tone_gen_result", "OK:already_present:fx_idx=" .. i, false)
       return
     end
