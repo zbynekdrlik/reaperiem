@@ -1913,6 +1913,10 @@ jobs:
         # REAPER after E2E. If the tone-generator FX is inserted before this
         # step, the FX persists across deploys and pollutes the next live run
         # (engineer hears constant 440 Hz, listen feature streams the tone).
+        # Gate matches the surrounding REAPER-touching steps: when REAPER was
+        # not running pre-deploy, skip — the Restore step's "no backup" branch
+        # handles the missing .e2e-bak case cleanly.
+        if: steps.reaper-pre.outputs.was_running == 'true'
         shell: powershell
         run: |
           $rppPath = "C:\Users\newlevel\Documents\reaperiem\projects\sunday_service.RPP"
