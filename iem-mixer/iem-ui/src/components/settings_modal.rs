@@ -306,6 +306,11 @@ pub fn SettingsModal(
                         <button class="settings-action-btn logout-btn" on:click={
                             let navigate = navigate.clone();
                             move |_| {
+                                // Revoke push subscription FIRST so the helper can read the
+                                // auth token before clear_auth() wipes it. The helper itself
+                                // does this synchronously then spawn_local's an async block —
+                                // logout never blocks on it. (#188)
+                                crate::pages::mixer::push::unsubscribe_from_push();
                                 // Clear auth state
                                 crate::auth::clear_auth();
                                 // Navigate to landing page

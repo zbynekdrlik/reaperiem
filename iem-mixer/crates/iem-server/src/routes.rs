@@ -112,6 +112,7 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
         )
         .route("/api/push/subscribe", post(push_subscribe))
+        .route("/api/push/unsubscribe", post(push_unsubscribe))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -215,6 +216,52 @@ async fn push_subscribe(
             Json(serde_json::json!({ "error": format!("save failed: {}", e) })),
         ),
     }
+}
+
+/// Returns true iff the request's `Authorization: Bearer <jwt>` header decodes
+/// to a valid engineer claim under the given secret. Pulled out as a function
+/// so its decision can be unit-tested independently of the handler's
+/// `AppState` plumbing — the boolean check is exactly what cargo-mutants tries
+/// to flip. (#188)
+fn header_has_engineer_token(headers: &axum::http::HeaderMap, jwt_secret: &str) -> bool {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or("");
+    matches!(auth::extract_claims(token, jwt_secret), Some(c) if c.engineer)
+}
+
+/// Remove a stored push subscription by endpoint URL (engineer-only) (#188).
+///
+/// Idempotent: returns 200 even if the endpoint is not in the store. The leaving
+/// client is the source of truth for which endpoint to forget — the server has
+/// no per-member association to look it up otherwise.
+async fn push_unsubscribe(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let config = state.config.read().await;
+    if !header_has_engineer_token(&headers, &config.jwt_secret) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "engineer access required" })),
+        );
+    }
+    drop(config);
+
+    let endpoint = body["endpoint"].as_str().unwrap_or("").to_string();
+    if endpoint.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "missing endpoint" })),
+        );
+    }
+
+    let mut store = state.push_store.write().await;
+    store.remove_endpoint(&endpoint);
+    (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
 }
 
 /// Detect network mode from request headers.
@@ -830,5 +877,206 @@ mod tests {
         ));
         // Full path with hashed filename → long cache
         assert!(has_content_hash("assets/iem-ui-c72f48fccb666eb9.js"));
+    }
+
+    // ---- Auth gate tests for push_unsubscribe (#188) ----
+    //
+    // Verifies the boolean returned by `header_has_engineer_token` matches
+    // the contract: only an engineer JWT under the configured secret may
+    // pass. Kills cargo-mutants flips of the engineer claim check that
+    // would otherwise turn the gate into "always allow" or "always deny".
+
+    fn make_test_token(secret: &str, member: &str, engineer: bool) -> String {
+        use jsonwebtoken::{EncodingKey, Header, encode};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = iem_core::AuthClaims {
+            sub: member.to_string(),
+            engineer,
+            exp: now + 3600,
+            iat: now,
+        };
+        encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    fn headers_with_bearer(token: &str) -> axum::http::HeaderMap {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token).parse().unwrap(),
+        );
+        h
+    }
+
+    #[test]
+    fn header_has_engineer_token_true_for_engineer_jwt() {
+        let secret = "unit-test-secret";
+        let token = make_test_token(secret, "engineer", true);
+        let headers = headers_with_bearer(&token);
+        assert!(header_has_engineer_token(&headers, secret));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_for_member_jwt() {
+        let secret = "unit-test-secret";
+        let token = make_test_token(secret, "petronela", false);
+        let headers = headers_with_bearer(&token);
+        assert!(!header_has_engineer_token(&headers, secret));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_when_no_authorization_header() {
+        let headers = axum::http::HeaderMap::new();
+        assert!(!header_has_engineer_token(&headers, "any-secret"));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_when_secret_mismatches() {
+        // Engineer JWT signed under a DIFFERENT secret must be rejected.
+        let token = make_test_token("issued-under-this", "engineer", true);
+        let headers = headers_with_bearer(&token);
+        assert!(!header_has_engineer_token(
+            &headers,
+            "but-validated-under-this"
+        ));
+    }
+
+    // ---- Router-level integration tests for POST /api/push/unsubscribe (#188) ----
+    //
+    // Exercises the full handler with a real `AppState` + axum Router. Kills
+    // mutations cargo-mutants would otherwise leave on the auth-gate negation
+    // (`!header_has_engineer_token(...)` → drop the `!` flips engineer→403,
+    // member→200). Verifies the 200/403/400 contract end-to-end.
+
+    fn push_unsubscribe_test_state(secret: &str) -> (AppState, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = iem_core::Config::default();
+        config.jwt_secret = secret.to_string();
+        let state = AppState::new(config, dir.path());
+        (state, dir)
+    }
+
+    fn push_unsubscribe_test_router(state: AppState) -> axum::Router {
+        use axum::routing::post;
+        axum::Router::new()
+            .route("/api/push/unsubscribe", post(push_unsubscribe))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_engineer_token_returns_200() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        // Pre-seed the store with the endpoint we'll ask to remove so the
+        // handler does real work.
+        {
+            let mut store = state.push_store.write().await;
+            store
+                .add(crate::push_store::PushSubscription {
+                    endpoint: "https://fcm.example/abc".into(),
+                    p256dh: "k".into(),
+                    auth: "a".into(),
+                })
+                .unwrap();
+        }
+
+        let token = make_test_token(secret, "engineer", true);
+        let router = push_unsubscribe_test_router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Side effect: endpoint actually removed.
+        let store = state.push_store.read().await;
+        assert!(
+            store
+                .all()
+                .iter()
+                .all(|s| s.endpoint != "https://fcm.example/abc"),
+            "engineer call must remove the endpoint"
+        );
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_member_token_returns_403() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let token = make_test_token(secret, "petronela", false);
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_no_auth_returns_403() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_engineer_with_empty_endpoint_returns_400() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let token = make_test_token(secret, "engineer", true);
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":""}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 }
