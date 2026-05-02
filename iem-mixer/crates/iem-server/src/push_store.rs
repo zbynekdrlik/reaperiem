@@ -13,7 +13,6 @@ pub struct PushSubscription {
 pub struct PushStore {
     subscriptions: Vec<PushSubscription>,
     path: PathBuf,
-    marker_path: PathBuf,
 }
 
 impl PushStore {
@@ -57,7 +56,6 @@ impl PushStore {
         Self {
             subscriptions,
             path,
-            marker_path,
         }
     }
 
