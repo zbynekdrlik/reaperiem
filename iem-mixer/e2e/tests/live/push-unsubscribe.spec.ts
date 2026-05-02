@@ -96,13 +96,16 @@ test.describe("Push unsubscribe on engineer logout (#188)", () => {
           localStorage.getItem("iem_token"),
         );
         expect(token).toBeNull();
+        // Filter ONLY known platform-noise patterns (incognito-mode Push API
+        // unavailability, VAPID warnings). DO NOT filter on "[push]" — the
+        // helper only emits warn/log, never error, so any console.error with
+        // a "[push]" prefix would be a real regression we want to surface.
         const unrelatedErrors = consoleErrors.filter(
           (e) =>
             !e.includes("Push API") &&
             !e.includes("incognito") &&
             !e.includes("crbug.com/401439") &&
-            !e.includes("VAPID") &&
-            !e.includes("[push]"),
+            !e.includes("VAPID"),
         );
         expect(unrelatedErrors).toEqual([]);
         return;
