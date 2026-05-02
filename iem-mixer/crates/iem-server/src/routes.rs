@@ -218,6 +218,20 @@ async fn push_subscribe(
     }
 }
 
+/// Returns true iff the request's `Authorization: Bearer <jwt>` header decodes
+/// to a valid engineer claim under the given secret. Pulled out as a function
+/// so its decision can be unit-tested independently of the handler's
+/// `AppState` plumbing — the boolean check is exactly what cargo-mutants tries
+/// to flip. (#188)
+fn header_has_engineer_token(headers: &axum::http::HeaderMap, jwt_secret: &str) -> bool {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
+        .unwrap_or("");
+    matches!(auth::extract_claims(token, jwt_secret), Some(c) if c.engineer)
+}
+
 /// Remove a stored push subscription by endpoint URL (engineer-only) (#188).
 ///
 /// Idempotent: returns 200 even if the endpoint is not in the store. The leaving
@@ -228,26 +242,14 @@ async fn push_unsubscribe(
     headers: axum::http::HeaderMap,
     Json(body): Json<serde_json::Value>,
 ) -> impl IntoResponse {
-    // Verify engineer token (same shape as push_subscribe)
     let config = state.config.read().await;
-    let claims = match auth::extract_claims(
-        headers
-            .get(header::AUTHORIZATION)
-            .and_then(|v| v.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer "))
-            .unwrap_or(""),
-        &config.jwt_secret,
-    ) {
-        Some(c) if c.engineer => c,
-        _ => {
-            return (
-                StatusCode::FORBIDDEN,
-                Json(serde_json::json!({ "error": "engineer access required" })),
-            );
-        }
-    };
+    if !header_has_engineer_token(&headers, &config.jwt_secret) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "engineer access required" })),
+        );
+    }
     drop(config);
-    let _ = claims;
 
     let endpoint = body["endpoint"].as_str().unwrap_or("").to_string();
     if endpoint.is_empty() {
@@ -875,5 +877,75 @@ mod tests {
         ));
         // Full path with hashed filename → long cache
         assert!(has_content_hash("assets/iem-ui-c72f48fccb666eb9.js"));
+    }
+
+    // ---- Auth gate tests for push_unsubscribe (#188) ----
+    //
+    // Verifies the boolean returned by `header_has_engineer_token` matches
+    // the contract: only an engineer JWT under the configured secret may
+    // pass. Kills cargo-mutants flips of the engineer claim check that
+    // would otherwise turn the gate into "always allow" or "always deny".
+
+    fn make_test_token(secret: &str, member: &str, engineer: bool) -> String {
+        use jsonwebtoken::{EncodingKey, Header, encode};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let claims = iem_core::AuthClaims {
+            sub: member.to_string(),
+            engineer,
+            exp: now + 3600,
+            iat: now,
+        };
+        encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    fn headers_with_bearer(token: &str) -> axum::http::HeaderMap {
+        let mut h = axum::http::HeaderMap::new();
+        h.insert(
+            axum::http::header::AUTHORIZATION,
+            format!("Bearer {}", token).parse().unwrap(),
+        );
+        h
+    }
+
+    #[test]
+    fn header_has_engineer_token_true_for_engineer_jwt() {
+        let secret = "unit-test-secret";
+        let token = make_test_token(secret, "engineer", true);
+        let headers = headers_with_bearer(&token);
+        assert!(header_has_engineer_token(&headers, secret));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_for_member_jwt() {
+        let secret = "unit-test-secret";
+        let token = make_test_token(secret, "petronela", false);
+        let headers = headers_with_bearer(&token);
+        assert!(!header_has_engineer_token(&headers, secret));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_when_no_authorization_header() {
+        let headers = axum::http::HeaderMap::new();
+        assert!(!header_has_engineer_token(&headers, "any-secret"));
+    }
+
+    #[test]
+    fn header_has_engineer_token_false_when_secret_mismatches() {
+        // Engineer JWT signed under a DIFFERENT secret must be rejected.
+        let token = make_test_token("issued-under-this", "engineer", true);
+        let headers = headers_with_bearer(&token);
+        assert!(!header_has_engineer_token(
+            &headers,
+            "but-validated-under-this"
+        ));
     }
 }
