@@ -112,6 +112,7 @@ pub fn api_routes(_state: AppState) -> Router<AppState> {
             post(proxy::client_error).layer(axum::extract::DefaultBodyLimit::max(10_240)),
         )
         .route("/api/push/subscribe", post(push_subscribe))
+        .route("/api/push/unsubscribe", post(push_unsubscribe))
         // WebSocket
         .route("/ws/{member_id}", get(proxy::ws_mixer))
         // Snapshot routes
@@ -215,6 +216,50 @@ async fn push_subscribe(
             Json(serde_json::json!({ "error": format!("save failed: {}", e) })),
         ),
     }
+}
+
+/// Remove a stored push subscription by endpoint URL (engineer-only) (#188).
+///
+/// Idempotent: returns 200 even if the endpoint is not in the store. The leaving
+/// client is the source of truth for which endpoint to forget — the server has
+/// no per-member association to look it up otherwise.
+async fn push_unsubscribe(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    headers: axum::http::HeaderMap,
+    Json(body): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    // Verify engineer token (same shape as push_subscribe)
+    let config = state.config.read().await;
+    let claims = match auth::extract_claims(
+        headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|h| h.strip_prefix("Bearer "))
+            .unwrap_or(""),
+        &config.jwt_secret,
+    ) {
+        Some(c) if c.engineer => c,
+        _ => {
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "error": "engineer access required" })),
+            );
+        }
+    };
+    drop(config);
+    let _ = claims;
+
+    let endpoint = body["endpoint"].as_str().unwrap_or("").to_string();
+    if endpoint.is_empty() {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "missing endpoint" })),
+        );
+    }
+
+    let mut store = state.push_store.write().await;
+    store.remove_endpoint(&endpoint);
+    (StatusCode::OK, Json(serde_json::json!({ "ok": true })))
 }
 
 /// Detect network mode from request headers.
