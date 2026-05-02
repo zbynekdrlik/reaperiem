@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.164.0 (2026-05-02)
+
+- **Fix**: Engineer logout now fully revokes push notifications. Previously, logging out via Settings → Logout only cleared local auth — the browser stayed subscribed and the server kept the endpoint in `push_subscriptions.json`, so SOS pushes continued arriving on logged-out phones for as long as the subscription lived. The logout flow now calls `pushManager.unsubscribe()` and `POST /api/push/unsubscribe` so the endpoint is removed both client- and server-side. One-time migration on first server start after deploy clears any orphan subscriptions left over from before the fix. (#188)
+
 ### v1.163.0 (2026-05-01)
 
 - **CI**: Replaced 6 manual `actions/cache@v4` blocks with `Swatinem/rust-cache@v2`. Fixed broken `build-tauri` cache (was restore-only, never saved artifacts). Standardized auto-pruned target dirs and correctly-keyed cache (rustc + Cargo.lock + features). Cuts ~10–15 min from `build-tauri` after warm-up, ~2–5 min from Ubuntu jobs.
