@@ -948,4 +948,135 @@ mod tests {
             "but-validated-under-this"
         ));
     }
+
+    // ---- Router-level integration tests for POST /api/push/unsubscribe (#188) ----
+    //
+    // Exercises the full handler with a real `AppState` + axum Router. Kills
+    // mutations cargo-mutants would otherwise leave on the auth-gate negation
+    // (`!header_has_engineer_token(...)` → drop the `!` flips engineer→403,
+    // member→200). Verifies the 200/403/400 contract end-to-end.
+
+    fn push_unsubscribe_test_state(secret: &str) -> (AppState, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = iem_core::Config::default();
+        config.jwt_secret = secret.to_string();
+        let state = AppState::new(config, dir.path());
+        (state, dir)
+    }
+
+    fn push_unsubscribe_test_router(state: AppState) -> axum::Router {
+        use axum::routing::post;
+        axum::Router::new()
+            .route("/api/push/unsubscribe", post(push_unsubscribe))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_engineer_token_returns_200() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        // Pre-seed the store with the endpoint we'll ask to remove so the
+        // handler does real work.
+        {
+            let mut store = state.push_store.write().await;
+            store
+                .add(crate::push_store::PushSubscription {
+                    endpoint: "https://fcm.example/abc".into(),
+                    p256dh: "k".into(),
+                    auth: "a".into(),
+                })
+                .unwrap();
+        }
+
+        let token = make_test_token(secret, "engineer", true);
+        let router = push_unsubscribe_test_router(state.clone());
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // Side effect: endpoint actually removed.
+        let store = state.push_store.read().await;
+        assert!(
+            store
+                .all()
+                .iter()
+                .all(|s| s.endpoint != "https://fcm.example/abc"),
+            "engineer call must remove the endpoint"
+        );
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_member_token_returns_403() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let token = make_test_token(secret, "petronela", false);
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_no_auth_returns_403() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":"https://fcm.example/abc"}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn push_unsubscribe_engineer_with_empty_endpoint_returns_400() {
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        let secret = "router-test-secret";
+        let (state, _dir) = push_unsubscribe_test_state(secret);
+
+        let token = make_test_token(secret, "engineer", true);
+        let router = push_unsubscribe_test_router(state);
+        let req = Request::builder()
+            .method("POST")
+            .uri("/api/push/unsubscribe")
+            .header("authorization", format!("Bearer {}", token))
+            .header("content-type", "application/json")
+            .body(Body::from(r#"{"endpoint":""}"#))
+            .unwrap();
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
 }
