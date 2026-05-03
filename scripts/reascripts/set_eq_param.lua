@@ -73,7 +73,7 @@ local function set_eq()
         for i = 0, N_STEPS do
             local norm_i = i / N_STEPS
             local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
-                track, eq_idx, gain_param_idx, norm_i)
+                track, eq_idx, gain_param_idx, norm_i, "")
             local db_i = tonumber(fmt:match("(-?[%d%.]+)"))
             if db_i == nil then
                 reaper.SetExtState(section, "eq_set_result",
@@ -101,7 +101,7 @@ local function set_eq()
                 local t = (desired - lo.db) / (hi.db - lo.db)
                 local n = lo.norm + t * (hi.norm - lo.norm)
                 local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
-                    track, eq_idx, gain_param_idx, n)
+                    track, eq_idx, gain_param_idx, n, "")
                 local v_db = tonumber(vfmt:match("(-?[%d%.]+)"))
                 if v_db ~= nil then
                     local err = math.abs(v_db - desired)

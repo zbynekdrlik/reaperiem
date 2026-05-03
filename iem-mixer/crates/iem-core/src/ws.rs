@@ -917,4 +917,35 @@ mod tests {
         let back: ClientMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, back);
     }
+
+    #[test]
+    fn test_default_gain_db_min_is_negative_twelve() {
+        // Mutation killer: prevents -12.0 → 0.0, 1.0, -1.0, or 12.0 (delete -)
+        assert_eq!(super::default_gain_db_min(), -12.0);
+    }
+
+    #[test]
+    fn test_default_gain_db_max_is_positive_twelve() {
+        // Mutation killer: prevents 12.0 → 0.0, 1.0, or -1.0
+        assert_eq!(super::default_gain_db_max(), 12.0);
+    }
+
+    #[test]
+    fn test_eq_band_serde_default_for_missing_db_bounds() {
+        // Mutation + integration: when an old snapshot JSON lacks the gain_db_min/max
+        // fields, serde must inject -12.0 / +12.0 from the default helpers.
+        let json = r#"{
+            "band_type": "band",
+            "freq_hz": 1000.0,
+            "gain_db": 0.0,
+            "bw": 1.0,
+            "freq_norm": 0.5,
+            "gain_norm": 0.25,
+            "bw_norm": 0.5
+        }"#;
+        let band: EqBand = serde_json::from_str(json).unwrap();
+        assert_eq!(band.gain_db_min, -12.0);
+        assert_eq!(band.gain_db_max, 12.0);
+        assert_eq!(band.enabled, true); // also tests existing default_enabled
+    }
 }

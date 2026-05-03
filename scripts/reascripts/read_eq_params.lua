@@ -90,8 +90,8 @@ local function read_eq()
         -- Sample REAPER's actual dB endpoints for this band's gain param.
         -- FormatParamValueNormalized returns the formatted display value WITHOUT
         -- mutating REAPER state — pure read.
-        local _, gd_min_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 0.0)
-        local _, gd_max_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 1.0)
+        local _, gd_min_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 0.0, "")
+        local _, gd_max_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 1.0, "")
         local gd_min_num = gd_min_fmt:match("(-?[%d%.]+)") or "-12"
         local gd_max_num = gd_max_fmt:match("(-?[%d%.]+)") or "12"
 
