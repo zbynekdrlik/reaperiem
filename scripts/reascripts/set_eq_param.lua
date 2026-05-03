@@ -53,6 +53,77 @@ local function set_eq()
         return
     end
 
+    -- New "gain_db" branch: caller sends desired dB, we sample ReaEQ's actual
+    -- norm↔dB mapping at 21 points and linear-interpolate to find the norm
+    -- that yields the desired dB. No mutation during sampling — uses
+    -- FormatParamValueNormalized, which is pure-read. Then SetParam with the
+    -- interpolated norm.
+    if param_name == "gain_db" then
+        local gain_param_idx = band * 3 + 1
+        local num_params_g = reaper.TrackFX_GetNumParams(track, eq_idx)
+        if gain_param_idx >= num_params_g then
+            reaper.SetExtState(section, "eq_set_result",
+                "ERROR:gain_param_out_of_range:" .. gain_param_idx, false)
+            return
+        end
+
+        -- Sample 21 points: norm = 0.00, 0.05, ..., 1.00 → formatted dB.
+        local samples = {}
+        for i = 0, 20 do
+            local norm_i = i / 20
+            local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, gain_param_idx, norm_i)
+            local db_i = tonumber(fmt:match("(-?[%d%.]+)")) or 0.0
+            samples[i + 1] = { norm = norm_i, db = db_i }
+        end
+
+        -- Linear interpolation: walk samples to find the bracketing pair where
+        -- desired_db lies between samples[k].db and samples[k+1].db. ReaEQ's
+        -- norm→dB is monotonic increasing within typical bands; if the table
+        -- is non-monotonic for a particular band type we still snap to the
+        -- closest sample.
+        local desired = value
+        local best_norm = samples[1].norm
+        local best_err = math.huge
+        for i = 1, 20 do
+            local lo = samples[i]
+            local hi = samples[i + 1]
+            -- Only interpolate when desired is bracketed AND mapping is locally
+            -- increasing (lo.db < hi.db). Otherwise score by absolute distance.
+            if lo.db <= desired and desired <= hi.db and lo.db < hi.db then
+                local t = (desired - lo.db) / (hi.db - lo.db)
+                local n = lo.norm + t * (hi.norm - lo.norm)
+                local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
+                    track, eq_idx, gain_param_idx, n)
+                local v_db = tonumber(vfmt:match("(-?[%d%.]+)")) or 0.0
+                local err = math.abs(v_db - desired)
+                if err < best_err then
+                    best_err = err
+                    best_norm = n
+                end
+            else
+                -- Score by distance to either endpoint
+                for _, s in ipairs({ lo, hi }) do
+                    local err = math.abs(s.db - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = s.norm
+                    end
+                end
+            end
+        end
+
+        reaper.TrackFX_SetParam(track, eq_idx, gain_param_idx, best_norm)
+        local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
+            track, eq_idx, gain_param_idx)
+        reaper.SetExtState(section, "eq_set_result",
+            string.format(
+                "OK:track=%d,band=%d,param=gain_db,desired_db=%.3f,norm=%.6f,formatted=%s",
+                track_idx, band, desired, best_norm, fmt_post),
+            false)
+        return
+    end
+
     -- Handle "enabled" param via BANDENABLEDM (NO colon, M=band number).
     -- IMPORTANT: BANDENABLED:N (WITH colon) is a GLOBAL toggle — do NOT use.
     -- BANDENABLEDM (without colon) is the actual per-band enabled checkbox.
