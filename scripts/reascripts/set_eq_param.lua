@@ -69,11 +69,18 @@ local function set_eq()
 
         -- Sample 21 points: norm = 0.00, 0.05, ..., 1.00 → formatted dB.
         local samples = {}
-        for i = 0, 20 do
-            local norm_i = i / 20
+        local N_STEPS = 20 -- 21 sample points, 0.05 norm spacing
+        for i = 0, N_STEPS do
+            local norm_i = i / N_STEPS
             local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, gain_param_idx, norm_i)
-            local db_i = tonumber(fmt:match("(-?[%d%.]+)")) or 0.0
+            local db_i = tonumber(fmt:match("(-?[%d%.]+)"))
+            if db_i == nil then
+                reaper.SetExtState(section, "eq_set_result",
+                    string.format("ERROR:sample_parse_failed:band=%d,norm=%.3f,fmt=%s",
+                        band, norm_i, fmt or ""), false)
+                return
+            end
             samples[i + 1] = { norm = norm_i, db = db_i }
         end
 
@@ -95,11 +102,13 @@ local function set_eq()
                 local n = lo.norm + t * (hi.norm - lo.norm)
                 local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
                     track, eq_idx, gain_param_idx, n)
-                local v_db = tonumber(vfmt:match("(-?[%d%.]+)")) or 0.0
-                local err = math.abs(v_db - desired)
-                if err < best_err then
-                    best_err = err
-                    best_norm = n
+                local v_db = tonumber(vfmt:match("(-?[%d%.]+)"))
+                if v_db ~= nil then
+                    local err = math.abs(v_db - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = n
+                    end
                 end
             else
                 -- Score by distance to either endpoint
