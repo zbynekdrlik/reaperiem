@@ -1719,9 +1719,6 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
   // Norm 0.583 maps to ≈+6 dB in REAPER (verified empirically). UI's approximation
   // gives a different dB position for this norm, which is the bug.
   const TEST_GAIN_NORM = 0.583;
-  const FX_INDEX = 0; // ReaEQ is FX 0 on engineer inear
-  const PARAM_INDEX = TEST_BAND * 3 + 1; // 4
-
   // Capture original norm so we can restore.
   await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
   await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
@@ -1748,12 +1745,15 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
   });
 
   try {
-    // 1. Pre-arrange: set engineer band gain to known test value via direct REAPER
-    //    HTTP. Simulates REAPER having one value while UI loads (the bug pattern).
+    // 1. Pre-arrange: set engineer band gain to known test value via the
+    //    ReaScript SET path. Direct REAPER HTTP API (SET/TRACK/N/FX/M/PARAM/P/VALUE/V)
+    //    returns 200 but does NOT mutate FX state — only the EXTSTATE+ReaScript
+    //    path actually writes FX params.
     await fetch(
-      `${REAPER}/SET/TRACK/${ENGINEER_TRACK}/FX/${FX_INDEX}/PARAM/${PARAM_INDEX}/VALUE/${TEST_GAIN_NORM}`,
+      `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${TEST_GAIN_NORM}`,
     );
-    await new Promise((r) => setTimeout(r, 300));
+    await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    await new Promise((r) => setTimeout(r, 500));
 
     // 2. Read REAPER's formatted dB for this norm (canonical truth).
     await fetch(
@@ -1867,9 +1867,11 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     expect(consoleMessages).toEqual([]);
   } finally {
     // Restore engineer band to its original norm — production-safety per
-    // feedback_live_test_safety.md.
+    // feedback_live_test_safety.md. Uses ReaScript SET path (the only one
+    // that actually mutates FX state).
     await fetch(
-      `${REAPER}/SET/TRACK/${ENGINEER_TRACK}/FX/${FX_INDEX}/PARAM/${PARAM_INDEX}/VALUE/${originalNorm}`,
+      `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${originalNorm}`,
     );
+    await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
   }
 });
