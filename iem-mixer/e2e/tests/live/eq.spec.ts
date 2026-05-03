@@ -260,7 +260,7 @@ test.describe("EQ Feature", () => {
     );
     expect(messages.length).toBeGreaterThan(0);
     expect(messages[0].cmd).toBe("SetEqBand");
-    expect(messages[0].param).toBe("gain");
+    expect(messages[0].param).toBe("gain_db");
   });
 
   test("EQ sliders use safe touch activation (no jump-to-tap)", async ({
@@ -1775,10 +1775,14 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
-    await page.waitForSelector(".mixer-channel", { timeout: 10000 });
+    await waitForMixer(page);
 
-    await openKebabMenu(page); // existing helper in this file
-    await clickEqOption(page); // existing helper
+    // Engineer mic is in the Mics tab (input track).
+    await page.getByRole("button", { name: "Mics" }).click();
+    await page.waitForTimeout(300);
+
+    await openKebabMenu(page, "ENGINEER");
+    await clickEqOption(page);
     await page.waitForSelector(".eq-modal", { timeout: 5000 });
 
     // 4. Wait for bands to load.
@@ -1831,7 +1835,7 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     await page.locator(".eq-close-btn").click();
     await page.waitForSelector(".eq-modal", { state: "detached", timeout: 5000 });
 
-    await openKebabMenu(page);
+    await openKebabMenu(page, "ENGINEER");
     await clickEqOption(page);
     await page.waitForSelector(".eq-modal", { timeout: 5000 });
     await page.waitForFunction(
