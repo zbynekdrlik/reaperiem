@@ -1338,6 +1338,133 @@ test.describe("EQ value sync - ENGINEER track", () => {
     }
     await page.locator(".eq-close-btn").click();
   });
+
+  test("#194 gain slider thumb position matches displayed dB (engineer inear)", async ({
+    page,
+  }) => {
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32; // "ENGINEER inear"
+    const TEST_BAND = 1; // b1 lowshelf — currently default 0.25/0dB
+    const TEST_GAIN_NORM = 0.583;
+
+    // Capture original norm so we can restore.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const readResp = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+    if (!bandMatch) throw new Error(`No band ${TEST_BAND}: ${readResp}`);
+    const originalGn = bandMatch[0].match(/gn=([\d.]+)/);
+    if (!originalGn) throw new Error(`No gn=: ${bandMatch[0]}`);
+    const originalNorm = parseFloat(originalGn[1]);
+
+    try {
+      // Set test value via ReaScript (direct URL doesn't mutate FX state).
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${TEST_GAIN_NORM}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Read REAPER's formatted dB after set (canonical truth).
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+      await new Promise((r) => setTimeout(r, 800));
+      const verifyResp = await fetch(
+        `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+      ).then((r) => r.text());
+      const vBand = verifyResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+      if (!vBand) throw new Error("verify read failed");
+      const reaperDbMatch = vBand[0].match(/gd=(-?[\d.]+)/);
+      if (!reaperDbMatch) throw new Error(`No gd= in verify: ${vBand[0]}`);
+      const reaperDb = parseFloat(reaperDbMatch[1]);
+      expect(reaperDb).not.toBe(0);
+
+      // beforeEach already logged in as engineer + nav'd to /engineer.
+      await waitForMixer(page);
+
+      const opened = await openEqForChannel(page, "ENGINEER");
+      expect(opened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".eq-band-card").first()).toBeVisible({
+        timeout: 5000,
+      });
+      await page.waitForTimeout(1000); // bands populate from server
+
+      // Locate band's gain row.
+      const bandCards = page.locator(".eq-band-card");
+      const bandCard = bandCards.nth(TEST_BAND);
+      await bandCard.waitFor({ state: "visible", timeout: 5000 });
+
+      const gainRow = bandCard.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Gain'))",
+      );
+      const displayedText = await gainRow
+        .locator(".eq-param-value")
+        .textContent();
+      if (!displayedText) throw new Error("Gain text not rendered");
+      const dispMatch = displayedText.match(/(-?[\d.]+)/);
+      if (!dispMatch) throw new Error(`No dB: ${displayedText}`);
+      const displayedDb = parseFloat(dispMatch[1]);
+
+      expect(Math.abs(displayedDb - reaperDb)).toBeLessThan(0.2);
+
+      // Slider thumb position vs dB-derived expected.
+      const thumbStyle = await gainRow
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => {
+          const cs = window.getComputedStyle(el as HTMLElement);
+          return cs.left || (el as HTMLElement).style.left;
+        });
+      const thumbPctMatch = thumbStyle.match(/([\d.]+)%/);
+      if (!thumbPctMatch) throw new Error(`Thumb pct: ${thumbStyle}`);
+      const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
+
+      // UI fixed range ±12 dB.
+      const expectedThumbPct = (Math.max(-12, Math.min(12, displayedDb)) + 12) / 24;
+      expect(Math.abs(thumbPct - expectedThumbPct)).toBeLessThan(0.05);
+
+      // Close + reopen, re-assert.
+      await page.locator(".eq-close-btn").click();
+      await page.waitForSelector(".eq-modal", {
+        state: "detached",
+        timeout: 5000,
+      });
+
+      const reopened = await openEqForChannel(page, "ENGINEER");
+      expect(reopened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+
+      const bandCard2 = page.locator(".eq-band-card").nth(TEST_BAND);
+      const gainRow2 = bandCard2.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Gain'))",
+      );
+      const text2 = await gainRow2.locator(".eq-param-value").textContent();
+      if (!text2) throw new Error("Reopen: gain text empty");
+      const db2 = parseFloat(text2.match(/(-?[\d.]+)/)![1]);
+      expect(Math.abs(db2 - reaperDb)).toBeLessThan(0.2);
+
+      const thumbStyle2 = await gainRow2
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => {
+          const cs = window.getComputedStyle(el as HTMLElement);
+          return cs.left || (el as HTMLElement).style.left;
+        });
+      const thumbPct2 = parseFloat(thumbStyle2.match(/([\d.]+)%/)![1]) / 100;
+      const expectedThumbPct2 = (Math.max(-12, Math.min(12, db2)) + 12) / 24;
+      expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.05);
+    } finally {
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${originalNorm}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    }
+  });
 });
 
 // Regression test for #167 — EQ curve shape
@@ -1706,172 +1833,3 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
   });
 });
 
-// #194 — slider thumb position must agree with displayed dB on initial render and
-// after close+reopen. Uses ENGINEER mic track only (production-safe per
-// feedback_live_test_safety.md). Captures band gain BEFORE, sets a known test
-// value, asserts, restores in finally.
-test("#194 EQ gain slider thumb position matches displayed dB (engineer track)", async ({
-  page,
-}) => {
-  const REAPER = "http://iem.lan:8080/_";
-  const ENGINEER_TRACK = 32; // 1-based REAPER track index for "ENGINEER inear"
-  const TEST_BAND = 1; // b1 = lowshelf — currently at default 0.25/0dB on track 32
-  // Norm 0.583 maps to ≈+6 dB in REAPER (verified empirically). UI's approximation
-  // gives a different dB position for this norm, which is the bug.
-  const TEST_GAIN_NORM = 0.583;
-  // Capture original norm so we can restore.
-  await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
-  await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
-  await new Promise((r) => setTimeout(r, 800));
-  const readResp = await fetch(
-    `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
-  ).then((r) => r.text());
-  const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
-  if (!bandMatch) throw new Error(`No band ${TEST_BAND} in EQ read: ${readResp}`);
-  const originalGnMatch = bandMatch[0].match(/gn=([\d.]+)/);
-  if (!originalGnMatch) throw new Error(`No gn= in band: ${bandMatch[0]}`);
-  const originalNorm = parseFloat(originalGnMatch[1]);
-
-  const consoleMessages: string[] = [];
-  page.on("console", (msg) => {
-    if (msg.type() === "error" || msg.type() === "warning") {
-      // Filter known platform noise (Push API in incognito, etc.)
-      if (msg.text().includes("subscribe await failed")) return;
-      if (msg.text().includes("Push API in incognito")) return;
-      if (msg.text().includes("vapid-key fetch error")) return;
-      if (msg.text().includes("crbug.com/401439")) return;
-      consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
-    }
-  });
-
-  try {
-    // 1. Pre-arrange: set engineer band gain to known test value via the
-    //    ReaScript SET path. Direct REAPER HTTP API (SET/TRACK/N/FX/M/PARAM/P/VALUE/V)
-    //    returns 200 but does NOT mutate FX state — only the EXTSTATE+ReaScript
-    //    path actually writes FX params.
-    await fetch(
-      `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${TEST_GAIN_NORM}`,
-    );
-    await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
-    await new Promise((r) => setTimeout(r, 500));
-
-    // 2. Read REAPER's formatted dB for this norm (canonical truth).
-    await fetch(
-      `${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`,
-    );
-    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
-    await new Promise((r) => setTimeout(r, 800));
-    const verifyResp = await fetch(
-      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
-    ).then((r) => r.text());
-    const vBandMatch = verifyResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
-    if (!vBandMatch) throw new Error("verify read failed");
-    const reaperDbMatch = vBandMatch[0].match(/gd=(-?[\d.]+)/);
-    if (!reaperDbMatch) throw new Error(`No gd= in verify: ${vBandMatch[0]}`);
-    const reaperDb = parseFloat(reaperDbMatch[1]);
-    expect(reaperDb).not.toBe(0); // Must be a clearly non-default value.
-
-    // 3. Open the app, login as engineer, navigate, open EQ for engineer inear.
-    //    Engineer inear is visible on the Main tab — no tab switch required.
-    await page.goto("/");
-    await loginAs(page, "engineer", "1177");
-    await page.goto("/engineer");
-    await waitForMixer(page);
-
-    const opened = await openEqForChannel(page, "ENGINEER");
-    expect(opened).toBe(true);
-    await page.waitForSelector(".eq-modal", { timeout: 5000 });
-
-    // 4. Wait for bands to load.
-    await page.waitForFunction(
-      () => !document.querySelector(".eq-loading"),
-      undefined,
-      { timeout: 5000 },
-    );
-
-    // 5. Locate band b1 (lowshelf) — DOM index TEST_BAND in display order.
-    const bandCards = page.locator(".eq-band-card");
-    const bandCard = bandCards.nth(TEST_BAND);
-    await bandCard.waitFor({ state: "visible", timeout: 5000 });
-
-    // 6. Read displayed dB text for the Gain row.
-    const gainValueEl = bandCard.locator(
-      ".eq-param-row:has(.eq-param-label:has-text('Gain')) .eq-param-value",
-    );
-    const displayedText = await gainValueEl.textContent();
-    if (!displayedText) throw new Error("Gain text not rendered");
-    const displayedDbMatch = displayedText.match(/(-?[\d.]+)/);
-    if (!displayedDbMatch) throw new Error(`No dB in text: ${displayedText}`);
-    const displayedDb = parseFloat(displayedDbMatch[1]);
-
-    expect(Math.abs(displayedDb - reaperDb)).toBeLessThan(0.2);
-
-    // 7. Read slider thumb position. Style is `left:N%`.
-    const thumbStyle = await bandCard
-      .locator(
-        ".eq-param-row:has(.eq-param-label:has-text('Gain')) .eq-slider-thumb",
-      )
-      .evaluate((el) => {
-        const cs = window.getComputedStyle(el as HTMLElement);
-        return cs.left || (el as HTMLElement).style.left;
-      });
-
-    const thumbPctMatch = thumbStyle.match(/([\d.]+)%/);
-    if (!thumbPctMatch) throw new Error(`Cannot parse thumb position: ${thumbStyle}`);
-    const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
-
-    // After fix: thumb_pct = (displayedDb − db_min) / (db_max − db_min).
-    // Conservative ReaEQ range ±24 dB.
-    const DB_MIN = -24.0;
-    const DB_MAX = 24.0;
-    const expectedThumbPct = (displayedDb - DB_MIN) / (DB_MAX - DB_MIN);
-
-    expect(Math.abs(thumbPct - expectedThumbPct)).toBeLessThan(0.05);
-
-    // 8. Close, reopen, re-assert (the regression case the user reported).
-    await page.locator(".eq-close-btn").click();
-    await page.waitForSelector(".eq-modal", { state: "detached", timeout: 5000 });
-
-    const reopened = await openEqForChannel(page, "ENGINEER");
-    expect(reopened).toBe(true);
-    await page.waitForSelector(".eq-modal", { timeout: 5000 });
-    await page.waitForFunction(
-      () => !document.querySelector(".eq-loading"),
-      undefined,
-      { timeout: 5000 },
-    );
-
-    const bandCard2 = page.locator(".eq-band-card").nth(TEST_BAND);
-    const displayedText2 = await bandCard2
-      .locator(
-        ".eq-param-row:has(.eq-param-label:has-text('Gain')) .eq-param-value",
-      )
-      .textContent();
-    if (!displayedText2) throw new Error("Reopen: gain text not rendered");
-    const displayedDb2 = parseFloat(displayedText2.match(/(-?[\d.]+)/)![1]);
-    expect(Math.abs(displayedDb2 - reaperDb)).toBeLessThan(0.2);
-
-    const thumbStyle2 = await bandCard2
-      .locator(
-        ".eq-param-row:has(.eq-param-label:has-text('Gain')) .eq-slider-thumb",
-      )
-      .evaluate((el) => {
-        const cs = window.getComputedStyle(el as HTMLElement);
-        return cs.left || (el as HTMLElement).style.left;
-      });
-    const thumbPct2 = parseFloat(thumbStyle2.match(/([\d.]+)%/)![1]) / 100;
-    const expectedThumbPct2 = (displayedDb2 - DB_MIN) / (DB_MAX - DB_MIN);
-    expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.05);
-
-    // Per browser-console-zero-errors.md
-    expect(consoleMessages).toEqual([]);
-  } finally {
-    // Restore engineer band to its original norm — production-safety per
-    // feedback_live_test_safety.md. Uses ReaScript SET path (the only one
-    // that actually mutates FX state).
-    await fetch(
-      `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${originalNorm}`,
-    );
-    await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
-  }
-});
