@@ -1399,13 +1399,12 @@ test.describe("EQ value sync - ENGINEER track", () => {
       expect(Math.abs(displayedDb)).toBeGreaterThan(0.5);
 
       // Slider thumb position vs dB-derived expected.
+      // Read INLINE style.left (set as percent by Leptos), not computed style
+      // which resolves percent → pixels.
       const thumbStyle = await gainRow
         .locator(".eq-slider-thumb")
-        .evaluate((el) => {
-          const cs = window.getComputedStyle(el as HTMLElement);
-          return cs.left || (el as HTMLElement).style.left;
-        });
-      const thumbPctMatch = thumbStyle.match(/([\d.]+)%/);
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPctMatch = thumbStyle.match(/left:\s*([\d.]+)%/);
       if (!thumbPctMatch) throw new Error(`Thumb pct: ${thumbStyle}`);
       const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
 
@@ -1436,11 +1435,10 @@ test.describe("EQ value sync - ENGINEER track", () => {
 
       const thumbStyle2 = await gainRow2
         .locator(".eq-slider-thumb")
-        .evaluate((el) => {
-          const cs = window.getComputedStyle(el as HTMLElement);
-          return cs.left || (el as HTMLElement).style.left;
-        });
-      const thumbPct2 = parseFloat(thumbStyle2.match(/([\d.]+)%/)![1]) / 100;
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPct2Match = thumbStyle2.match(/left:\s*([\d.]+)%/);
+      if (!thumbPct2Match) throw new Error(`Reopen thumb pct: ${thumbStyle2}`);
+      const thumbPct2 = parseFloat(thumbPct2Match[1]) / 100;
       const expectedThumbPct2 = (Math.max(-12, Math.min(12, db2)) + 12) / 24;
       expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.05);
     } finally {
