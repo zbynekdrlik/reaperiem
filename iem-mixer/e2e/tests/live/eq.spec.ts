@@ -1735,6 +1735,18 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
   if (!originalGnMatch) throw new Error(`No gn= in band: ${bandMatch[0]}`);
   const originalNorm = parseFloat(originalGnMatch[1]);
 
+  const consoleMessages: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      // Filter known platform noise (Push API in incognito, etc.)
+      if (msg.text().includes("subscribe await failed")) return;
+      if (msg.text().includes("Push API in incognito")) return;
+      if (msg.text().includes("vapid-key fetch error")) return;
+      if (msg.text().includes("crbug.com/401439")) return;
+      consoleMessages.push(`[${msg.type()}] ${msg.text()}`);
+    }
+  });
+
   try {
     // 1. Pre-arrange: set engineer band gain to known test value via direct REAPER
     //    HTTP. Simulates REAPER having one value while UI loads (the bug pattern).
@@ -1849,6 +1861,9 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     const thumbPct2 = parseFloat(thumbStyle2.match(/([\d.]+)%/)![1]) / 100;
     const expectedThumbPct2 = (displayedDb2 - DB_MIN) / (DB_MAX - DB_MIN);
     expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.05);
+
+    // Per browser-console-zero-errors.md
+    expect(consoleMessages).toEqual([]);
   } finally {
     // Restore engineer band to its original norm — production-safety per
     // feedback_live_test_safety.md.
