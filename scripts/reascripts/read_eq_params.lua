@@ -87,9 +87,17 @@ local function read_eq()
         local en_ok, en_val = reaper.TrackFX_GetNamedConfigParm(track, eq_idx, "BANDENABLED" .. b)
         local band_enabled = (not en_ok or en_val == "1") and "1" or "0"
 
+        -- Sample REAPER's actual dB endpoints for this band's gain param.
+        -- FormatParamValueNormalized returns the formatted display value WITHOUT
+        -- mutating REAPER state — pure read.
+        local _, gd_min_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 0.0)
+        local _, gd_max_fmt = reaper.TrackFX_FormatParamValueNormalized(track, eq_idx, gain_idx, 1.0)
+        local gd_min_num = gd_min_fmt:match("(-?[%d%.]+)") or "-12"
+        local gd_max_num = gd_max_fmt:match("(-?[%d%.]+)") or "12"
+
         table.insert(bands, string.format(
-            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s,en=%s",
-            b, btype, freq_norm, gain_norm, bw_norm, freq_num, gain_num, bw_num, band_enabled
+            "b%d:%s,fn=%.6f,gn=%.6f,bn=%.6f,fh=%s,gd=%s,bo=%s,en=%s,gd_min=%s,gd_max=%s",
+            b, btype, freq_norm, gain_norm, bw_norm, freq_num, gain_num, bw_num, band_enabled, gd_min_num, gd_max_num
         ))
     end
 

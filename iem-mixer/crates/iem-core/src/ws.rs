@@ -24,6 +24,12 @@ pub struct EqBand {
     pub gain_norm: f32,
     /// Normalized bandwidth value for ReaEQ (0-1)
     pub bw_norm: f32,
+    /// Minimum dB this band's gain can produce (norm=0.0 endpoint, REAPER-sampled)
+    #[serde(default = "default_gain_db_min")]
+    pub gain_db_min: f32,
+    /// Maximum dB this band's gain can produce (norm=1.0 endpoint, REAPER-sampled)
+    #[serde(default = "default_gain_db_max")]
+    pub gain_db_max: f32,
     /// Whether this band is enabled in ReaEQ (BANDENABLED config param)
     #[serde(default = "default_enabled")]
     pub enabled: bool,
@@ -31,6 +37,14 @@ pub struct EqBand {
 
 fn default_enabled() -> bool {
     true
+}
+
+fn default_gain_db_min() -> f32 {
+    -12.0
+}
+
+fn default_gain_db_max() -> f32 {
+    12.0
 }
 
 /// Alert info for ActiveAlerts catch-up message
@@ -651,6 +665,8 @@ mod tests {
                 freq_norm: 0.283,
                 gain_norm: 0.184,
                 bw_norm: 0.295,
+                gain_db_min: -12.0,
+                gain_db_max: 12.0,
                 enabled: true,
             }],
         };
@@ -687,6 +703,8 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3,
                 bw_norm: 0.4,
+                gain_db_min: -12.0,
+                gain_db_max: 12.0,
                 enabled: true,
             }],
         );

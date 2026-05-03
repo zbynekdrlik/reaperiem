@@ -2570,6 +2570,9 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     // Parse enabled state (en=0/1), default to true for backward compat
     let enabled = get_field("en=").is_none_or(|v| v >= 0.5);
 
+    let gain_db_min = get_field("gd_min=").unwrap_or(-12.0);
+    let gain_db_max = get_field("gd_max=").unwrap_or(12.0);
+
     Some(iem_core::EqBand {
         band_type,
         freq_hz,
@@ -2578,6 +2581,8 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
         freq_norm,
         gain_norm,
         bw_norm,
+        gain_db_min,
+        gain_db_max,
         enabled,
     })
 }
