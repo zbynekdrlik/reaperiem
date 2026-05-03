@@ -30,7 +30,7 @@ local function set_eq()
     -- Parse "track=N|band=B|param=P|value=V"
     local track_idx = tonumber(input:match("track=(%d+)"))
     local band = tonumber(input:match("band=(%d+)"))
-    local param_name = input:match("param=(%w+)")
+    local param_name = input:match("param=([%w_]+)")
     local value = tonumber(input:match("value=([%d%.%-]+)"))
 
     if not track_idx or not band or not param_name or not value then
