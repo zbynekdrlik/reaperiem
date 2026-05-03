@@ -83,33 +83,6 @@ fn norm_to_freq_hz(norm: f32) -> f32 {
     (log_lo + t * (log_hi - log_lo)).exp()
 }
 
-/// Approximate normalized gain (0-1) to dB matching REAPER's non-linear curve.
-/// Piecewise: log curve below 0.25 (0dB), power curve above.
-/// Verified: 0.125→-6, 0.25→0, 0.5→+6, 0.75→+9.5, 1.0→+12.
-fn norm_to_gain_db(norm: f32) -> f32 {
-    if norm <= 0.001 {
-        -60.0
-    } else if norm <= 0.25 {
-        24.0 * (norm / 0.25).log2()
-    } else {
-        12.0 * ((norm - 0.25) / 0.75).powf(0.631)
-    }
-}
-
-/// Convert dB (-12 to +12) back to REAPER normalized gain (inverse of norm_to_gain_db).
-fn gain_db_to_norm(db: f32) -> f32 {
-    let db = db.clamp(-12.0, 12.0);
-    if db <= 0.0 {
-        // Inverse of: db = 24 * log2(norm / 0.25)
-        // norm = 0.25 * 2^(db/24)
-        0.25 * 2.0_f32.powf(db / 24.0)
-    } else {
-        // Inverse of: db = 12 * ((norm - 0.25) / 0.75)^0.631
-        // (norm - 0.25) / 0.75 = (db / 12)^(1/0.631)
-        0.25 + 0.75 * (db / 12.0).powf(1.0 / 0.631)
-    }
-}
-
 /// Convert normalized bandwidth (0-1) to octaves
 fn norm_to_bw(norm: f32) -> f32 {
     0.01 + norm * 3.99
@@ -668,7 +641,6 @@ pub fn EQModal(
 
                                 // Get the stable local signals for this band
                                 let freq_sig = local.freq_norm;
-                                let gain_sig = local.gain_norm;
                                 let bw_sig = local.bw_norm;
                                 let freq_hz_sig = local.freq_hz;
                                 let gain_db_sig = local.gain_db;
@@ -715,10 +687,9 @@ pub fn EQModal(
                                                 title="Reset band"
                                                 on:click=move |_| {
                                                     let idx = band_idx_sv.get_value();
-                                                    // Reset gain to 0dB
-                                                    let _ = gain_sig.try_set(0.25);
+                                                    // Reset gain to 0dB via new gain_db protocol
                                                     let _ = gain_db_sig.try_set(0.0);
-                                                    on_param_change.run((idx, "gain".to_string(), 0.25));
+                                                    on_param_change.run((idx, "gain_db".to_string(), 0.0));
                                                     // Reset freq to per-band default
                                                     // Norm values verified empirically against REAPER
                                                     let default_freq_norm: f32 = match band_type_reset.as_str() {
@@ -805,8 +776,6 @@ pub fn EQModal(
                                                     }
                                                     // Local optimistic update for smooth drag.
                                                     let _ = gain_db_sig.try_set(db);
-                                                    let approx_norm = gain_db_to_norm(db);
-                                                    let _ = gain_sig.try_set(approx_norm);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -1265,62 +1234,6 @@ mod tests {
             "HighShelf default: expected ~8000Hz, got {}",
             norm_to_freq_hz(0.8176)
         );
-    }
-
-    #[test]
-    fn test_norm_to_gain_db_center() {
-        assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
-    }
-
-    /// Verify gain_db_to_norm is the inverse of norm_to_gain_db.
-    #[test]
-    fn test_gain_db_to_norm_roundtrip() {
-        // Test key dB values roundtrip: dB → norm → dB
-        for db in [-12.0, -6.0, -3.0, 0.0, 3.0, 6.0, 9.0, 12.0] {
-            let norm = gain_db_to_norm(db);
-            let db_back = norm_to_gain_db(norm);
-            assert!(
-                (db_back - db).abs() < 0.1,
-                "dB={db}: norm={norm}, back={db_back}"
-            );
-        }
-        // 0dB must map to norm=0.25
-        assert!(
-            (gain_db_to_norm(0.0) - 0.25).abs() < 0.001,
-            "0dB must be norm 0.25"
-        );
-        // Slider center (0.5) → 0dB → norm 0.25
-        let slider_center_db = (0.5 - 0.5) * 24.0; // = 0dB
-        assert!((slider_center_db).abs() < 0.001);
-        assert!((gain_db_to_norm(slider_center_db) - 0.25).abs() < 0.001);
-    }
-
-    #[test]
-    fn test_norm_to_gain_db_range() {
-        // Verified against live REAPER ReaEQ measurements
-        assert!(
-            norm_to_gain_db(0.001) <= -40.0,
-            "Near-zero norm should be very negative dB"
-        );
-        assert!((norm_to_gain_db(0.125) - (-6.0)).abs() < 0.3);
-        assert!((norm_to_gain_db(0.25) - 0.0).abs() < 0.01);
-        assert!((norm_to_gain_db(0.5) - 6.0).abs() < 0.3);
-        assert!((norm_to_gain_db(0.75) - 9.5).abs() < 0.5);
-        assert!((norm_to_gain_db(1.0) - 12.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn test_norm_to_gain_db_monotonic() {
-        let mut prev = norm_to_gain_db(0.01);
-        for i in 2..=100 {
-            let norm = i as f32 / 100.0;
-            let db = norm_to_gain_db(norm);
-            assert!(
-                db >= prev,
-                "norm_to_gain_db must be monotonic: at {norm}, {db} < {prev}"
-            );
-            prev = db;
-        }
     }
 
     #[test]
