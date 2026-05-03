@@ -1714,12 +1714,12 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
   page,
 }) => {
   const REAPER = "http://iem.lan:8080/_";
-  const ENGINEER_TRACK = 22; // 1-based REAPER track index for "ENGINEER mic"
-  const TEST_BAND = 1; // b1 = lowshelf — has param[1] = gain
+  const ENGINEER_TRACK = 32; // 1-based REAPER track index for "ENGINEER inear"
+  const TEST_BAND = 1; // b1 = lowshelf — currently at default 0.25/0dB on track 32
   // Norm 0.583 maps to ≈+6 dB in REAPER (verified empirically). UI's approximation
   // gives a different dB position for this norm, which is the bug.
   const TEST_GAIN_NORM = 0.583;
-  const FX_INDEX = 1; // ReaEQ is FX 1 on engineer mic
+  const FX_INDEX = 0; // ReaEQ is FX 0 on engineer inear
   const PARAM_INDEX = TEST_BAND * 3 + 1; // 4
 
   // Capture original norm so we can restore.
@@ -1771,18 +1771,15 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     const reaperDb = parseFloat(reaperDbMatch[1]);
     expect(reaperDb).not.toBe(0); // Must be a clearly non-default value.
 
-    // 3. Open the app, login as engineer, navigate, open EQ for engineer mic.
+    // 3. Open the app, login as engineer, navigate, open EQ for engineer inear.
+    //    Engineer inear is visible on the Main tab — no tab switch required.
     await page.goto("/");
     await loginAs(page, "engineer", "1177");
     await page.goto("/engineer");
     await waitForMixer(page);
 
-    // Engineer mic is in the Mics tab (input track).
-    await page.getByRole("button", { name: "Mics" }).click();
-    await page.waitForTimeout(300);
-
-    await openKebabMenu(page, "ENGINEER");
-    await clickEqOption(page);
+    const opened = await openEqForChannel(page, "ENGINEER");
+    expect(opened).toBe(true);
     await page.waitForSelector(".eq-modal", { timeout: 5000 });
 
     // 4. Wait for bands to load.
@@ -1835,8 +1832,8 @@ test("#194 EQ gain slider thumb position matches displayed dB (engineer track)",
     await page.locator(".eq-close-btn").click();
     await page.waitForSelector(".eq-modal", { state: "detached", timeout: 5000 });
 
-    await openKebabMenu(page, "ENGINEER");
-    await clickEqOption(page);
+    const reopened = await openEqForChannel(page, "ENGINEER");
+    expect(reopened).toBe(true);
     await page.waitForSelector(".eq-modal", { timeout: 5000 });
     await page.waitForFunction(
       () => !document.querySelector(".eq-loading"),
