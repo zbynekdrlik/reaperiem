@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1777734814 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1777828328 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -453,8 +453,8 @@
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
-        IQAAAAUAAAAEAAAAAQAAACxtGl+JDGFAAAAAAAAA8D8AAAAAAAD4PwEAAAAAAQAAAF15LT8h0HJAAAAAYEeq6z8AAAAAAAD4PwEIAAAAAQAAAOHQqVH8RIxAAAAAgCXl
-        8j8AAAAAAAD4PwEIAAAAAQAAADO3rMsLDqZAAAAAgCXl8j8AAAAAAADwPwEBAAAAAQAAANzF7J7JxL9AAAAAwC0f9z8AAAAAAAD4PwEBAAAAAQAAAAAAAAAAAPA/AAAA
+        IQAAAAUAAAAEAAAAAQAAACxtGl+JDGFAAAAAAAAA8D8AAAAAAAD4PwEAAAAAAQAAAF15LT8h0HJAAAAAgHxe6T8AAAAAAAD4PwEIAAAAAQAAAHKab3mCSoVAAAAAoKyK
+        7D8AAAAAAAD4PwEIAAAAAQAAADO3rMsLDqZAAAAAgCXl8j8AAAAAAADwPwEBAAAAAQAAANzF7J7JxL9AAAAAwC0f9z8AAAAAAAD4PwEBAAAAAQAAAAAAAAAAAPA/AAAA
         AKwCAACyAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
       >
@@ -1262,13 +1262,13 @@
     AUXRECV 0 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 0.5128614 -1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.6309570074 0.9333329797 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 0.28840312 0.7599999905 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.46773517 0.7599999905 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.20179623 0.6 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.16595867 0.400000006 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 6 3 0.4786300063 1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.23988329 0.400000006 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 6 3 0.691831 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.1 -1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.002398353 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.52480745 1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.52480745 1 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.067608304 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.0870959982 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 0.7079460025 0.0199999996 1 0 0 0 0 -1:U 0 -1 ''
@@ -1309,7 +1309,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {41058EB0-BC35-48D6-A2E7-65742645A1B6}
+      FXID {0F4621FA-23C2-4D70-9422-DBFCC420CAB6}
       WAK 0 0
     >
   >
@@ -1379,7 +1379,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {1D1E9D2C-91CF-4581-AC44-234CB29B7B00}
+      FXID {548ED032-3A8E-4B4F-93C9-732181B15F0A}
       WAK 0 0
     >
   >
@@ -1407,8 +1407,8 @@
     FX 1
     TRACKID {C4C21337-5F37-4E90-B19E-57C3972E1FCB}
     PERF 0
-    AUXRECV 0 3 0.2137960047 0.2639999986 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.3311310112 -0.3420000076 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.27542287 0.2639999986 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.38018942 -0.3420000076 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 1 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.1819700003 0.3666670024 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.019054607 0 0 0 0 0 0 -1:U 0 -1 ''
@@ -1449,7 +1449,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {892F0CD8-3AB3-47C2-88B6-A747F13F69A1}
+      FXID {46E31B51-FF83-4A60-90DC-561C040DBFF5}
       WAK 0 0
     >
   >
@@ -1478,17 +1478,17 @@
     TRACKID {6D4114BD-AD77-4C21-ADAF-74ACF6D6AAF7}
     PERF 0
     AUXRECV 0 3 0.09772372 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.09549926 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.14125374 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.0524809994 -0.066666998 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.43651584 -0.0333329998 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 4 3 0.0354809985 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 4 3 0.060255956 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 5 3 0.022387212 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.0645650029 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.001011 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.0012020235 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 9 3 0.0008033651 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.015848933 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 18 3 0.061659496 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 18 3 0.061659496 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 20 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 21 3 0.030902956 0 0 0 0 0 0 -1:U 0 -1 ''
@@ -1518,7 +1518,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {BDEE6597-D0F4-4159-B430-F42D3D43D0E1}
+      FXID {A92C54F2-858A-49B0-ABB6-1A193C817BCA}
       WAK 0 0
     >
   >
@@ -1546,12 +1546,12 @@
     FX 1
     TRACKID {BBDB2FDC-86DD-4E55-9FE9-EA3A5C55CCED}
     PERF 0
-    AUXRECV 0 3 0.18620871 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.1 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.21877618 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.15135613 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.022387 0.183333 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.11481538 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.0162179992 0.5 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.19054608 0.5 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.24547088 -0.23333335 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.089125104 0.5 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 0.002239 0.5 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 0.00955 0.5 1 0 0 0 0 -1:U 0 -1 ''
@@ -1588,7 +1588,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {C4101258-6EBE-4227-8AA3-DF2E5F0DE63C}
+      FXID {D8540F2E-54C3-4A07-95D2-765B5FC293CB}
       WAK 0 0
     >
   >
@@ -1616,8 +1616,8 @@
     FX 1
     TRACKID {7D97119D-82A1-42A1-B362-F3CCD9C9CB30}
     PERF 0
-    AUXRECV 0 3 0.39810717 -1 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 1 3 0.1 -1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.5011872 -1 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 1 3 0.14125374 -1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.12589255 -1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.2818383 1 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 0.10113768 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1658,7 +1658,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {7CF5B0BE-9E82-4575-924E-B1BEDA2CC81F}
+      FXID {59447E18-0A07-479E-A234-002741C8F71E}
       WAK 0 0
     >
   >
@@ -1668,7 +1668,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.8709636 0 -1 -1 1
+    VOLPAN 1.2882495 0 -1 -1 1
     MUTESOLO 0 0 1
     IPHASE 0
     PLAYOFFS 0 1
@@ -1728,7 +1728,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {851581C5-410C-41DB-A710-355503A0F91F}
+      FXID {CBBBE5E8-7D43-48F2-A9E0-009D9EFB5A14}
       WAK 0 0
     >
   >
@@ -1797,7 +1797,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {0608D147-D6B6-4FE2-A095-CBD3B5727934}
+      FXID {7CAD518C-9512-4719-BD51-4FDBB264B74D}
       WAK 0 0
     >
   >
@@ -1867,7 +1867,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {44E40717-AA36-4F50-9E80-9E192E4842F0}
+      FXID {B7B17AA2-8B6E-4A4A-BF09-8DFC036D37AD}
       WAK 0 0
     >
   >
@@ -1893,7 +1893,7 @@
     TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
-    FX 1
+    FX 0
     TRACKID {BB7BB7CA-A675-4639-A353-359B00245678}
     PERF 0
     AUXRECV 0 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1947,7 +1947,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {EE4892BB-6818-441D-BD20-118E166679C0}
+      FXID {02F37C52-FA1A-4CFC-9D72-D13D910BBB0E}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
@@ -2172,10 +2172,10 @@
     PERF 0
     AUXRECV 10 3 0.22908677 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 11 3 0.21379623 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 12 3 0.2951209 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 12 3 0.5011872 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.4168694 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.0151356105 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.1348963 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.16982438 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 16 3 0.061659496 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
@@ -2276,8 +2276,8 @@
     AUXRECV 12 3 0.7585776 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 13 3 0.7585776 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 14 3 0.1 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 15 3 0.3019952 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 16 3 0.30902955 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 15 3 0.3548134 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 16 3 0.31622776 0 0 0 0 0 0 -1:U 0 -1 ''
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
