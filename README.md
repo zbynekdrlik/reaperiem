@@ -6,6 +6,10 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.165.0 (2026-05-03)
+
+- **Fix**: EQ panel slider thumb now matches displayed dB value. Previously the slider position was computed from REAPER's normalized 0-1 value via a UI approximation curve, while the text label read REAPER's actual formatted dB — the two disagreed (e.g. text said "+4 dB" while thumb sat at the "+1 dB" tick). Now both derive from REAPER's formatted dB; thumb and text always agree on initial render and across re-mounts. Send path also uses REAPER's actual norm↔dB mapping for accurate writes. (#194)
+
 ### v1.164.0 (2026-05-02)
 
 - **Fix**: Engineer logout now fully revokes push notifications. Previously, logging out via Settings → Logout only cleared local auth — the browser stayed subscribed and the server kept the endpoint in `push_subscriptions.json`, so SOS pushes continued arriving on logged-out phones for as long as the subscription lived. The logout flow now calls `pushManager.unsubscribe()` and `POST /api/push/unsubscribe` so the endpoint is removed both client- and server-side. One-time migration on first server start after deploy clears any orphan subscriptions left over from before the fix. (#188)
