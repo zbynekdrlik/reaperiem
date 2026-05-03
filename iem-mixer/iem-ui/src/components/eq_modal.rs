@@ -646,10 +646,6 @@ pub fn EQModal(
                                 let gain_db_sig = local.gain_db;
                                 let bw_oct_sig = local.bw_oct;
                                 let enabled_sig = local.enabled;
-                                let gain_db_min = local.gain_db_min;
-                                let gain_db_max = local.gain_db_max;
-
-
                                 // Throttle WebSocket sends to 50ms intervals per band.
                                 let last_send_freq = RwSignal::new(0.0_f64);
                                 let last_send_gain = RwSignal::new(0.0_f64);
@@ -751,30 +747,30 @@ pub fn EQModal(
                                         </div>
 
                                         // Gain slider: derives position from REAPER's actual gain_db
-                                        // using REAPER's own dB range (gain_db_min..gain_db_max).
+                                        // clamped to a fixed ±12 dB UI range for sensible UX.
+                                        // (REAPER's actual range is -150..+12 dB which would squash
+                                        // all musical gains into the far-right 10% of slider travel.)
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Gain"</label>
                                             <EqSlider
                                                 value=Signal::derive(move || {
                                                     // Single source of truth — REAPER's formatted dB.
-                                                    // Slider position is a linear mapping over REAPER's
-                                                    // own dB range (db_min..db_max).
-                                                    let db = gain_db_sig.get();
-                                                    let span = (gain_db_max - gain_db_min).max(0.001);
-                                                    ((db - gain_db_min) / span).clamp(0.0, 1.0)
+                                                    // Slider VISUAL range fixed at ±12 dB for UX
+                                                    // (REAPER's actual range is -150..+12 dB which would
+                                                    // squash all musical gains into the far-right 10%
+                                                    // of slider travel). Out-of-range values clamp.
+                                                    let db = gain_db_sig.get().clamp(-12.0, 12.0);
+                                                    (db + 12.0) / 24.0
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // v is slider position 0-1; project back to dB
-                                                    // using REAPER's actual range. Server interpolates
-                                                    // dB → norm via REAPER's own mapping.
-                                                    let span = gain_db_max - gain_db_min;
-                                                    let db = gain_db_min + v * span;
+                                                    // Project slider position 0-1 to dB using
+                                                    // the same UI-fixed ±12 range as the value derive.
+                                                    let db = (v - 0.5) * 24.0;
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         let _ = last_send_gain.try_set(now);
                                                         on_param_change.run((band_idx_sv.get_value(), "gain_db".to_string(), db));
                                                     }
-                                                    // Local optimistic update for smooth drag.
                                                     let _ = gain_db_sig.try_set(db);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })

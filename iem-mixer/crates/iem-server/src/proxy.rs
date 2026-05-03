@@ -5404,4 +5404,15 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             result.ok()
         );
     }
+
+    #[test]
+    fn test_parse_eq_band_default_gd_min_max_when_missing() {
+        // Mutation killer for line ~2573 (unwrap_or(-12.0)) and ~2574 (unwrap_or(12.0)):
+        // when an old ReaScript response lacks gd_min=/gd_max= fields, the parsed
+        // band must default to -12.0 / +12.0, NOT 12.0 / -12.0.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,gd=0.0,bo=1.0,en=1";
+        let band = parse_eq_band(band_str).expect("parse must succeed");
+        assert_eq!(band.gain_db_min, -12.0);
+        assert_eq!(band.gain_db_max, 12.0);
+    }
 }
