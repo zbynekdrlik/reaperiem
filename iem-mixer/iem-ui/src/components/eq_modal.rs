@@ -674,6 +674,8 @@ pub fn EQModal(
                                 let gain_db_sig = local.gain_db;
                                 let bw_oct_sig = local.bw_oct;
                                 let enabled_sig = local.enabled;
+                                let gain_db_min = local.gain_db_min;
+                                let gain_db_max = local.gain_db_max;
 
 
                                 // Throttle WebSocket sends to 50ms intervals per band.
@@ -777,27 +779,34 @@ pub fn EQModal(
                                             </span>
                                         </div>
 
-                                        // Gain slider: -12dB to +12dB, 0dB at center (slider 0.5)
-                                        // Slider 0.0=-12dB, 0.5=0dB, 1.0=+12dB
+                                        // Gain slider: derives position from REAPER's actual gain_db
+                                        // using REAPER's own dB range (gain_db_min..gain_db_max).
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Gain"</label>
                                             <EqSlider
                                                 value=Signal::derive(move || {
-                                                    // Convert REAPER norm → dB → slider position
-                                                    let db = norm_to_gain_db(gain_sig.get()).clamp(-12.0, 12.0);
-                                                    (db + 12.0) / 24.0
+                                                    // Single source of truth — REAPER's formatted dB.
+                                                    // Slider position is a linear mapping over REAPER's
+                                                    // own dB range (db_min..db_max).
+                                                    let db = gain_db_sig.get();
+                                                    let span = (gain_db_max - gain_db_min).max(0.001);
+                                                    ((db - gain_db_min) / span).clamp(0.0, 1.0)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Convert slider position → dB → REAPER norm
-                                                    let db = (v - 0.5) * 24.0; // slider 0-1 → -12 to +12 dB
-                                                    let norm = gain_db_to_norm(db);
+                                                    // v is slider position 0-1; project back to dB
+                                                    // using REAPER's actual range. Server interpolates
+                                                    // dB → norm via REAPER's own mapping.
+                                                    let span = gain_db_max - gain_db_min;
+                                                    let db = gain_db_min + v * span;
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         let _ = last_send_gain.try_set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "gain".to_string(), norm));
+                                                        on_param_change.run((band_idx_sv.get_value(), "gain_db".to_string(), db));
                                                     }
-                                                    let _ = gain_sig.try_set(norm);
+                                                    // Local optimistic update for smooth drag.
                                                     let _ = gain_db_sig.try_set(db);
+                                                    let approx_norm = gain_db_to_norm(db);
+                                                    let _ = gain_sig.try_set(approx_norm);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
