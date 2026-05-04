@@ -581,7 +581,6 @@ fn connect_websocket(
                                     gain_db: b.gain_db,
                                     bw: b.bw,
                                     freq_norm: b.freq_norm,
-                                    gain_norm: b.gain_norm,
                                     bw_norm: b.bw_norm,
                                     enabled: b.enabled,
                                 })

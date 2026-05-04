@@ -35,7 +35,6 @@ pub struct EqBandState {
     pub gain_db: f32,
     pub bw: f32,
     pub freq_norm: f32,
-    pub gain_norm: f32,
     pub bw_norm: f32,
     /// Whether this band is enabled (disabled bands should not affect the curve)
     pub enabled: bool,
@@ -335,7 +334,6 @@ struct BandLocalState {
     reaper_band_idx: u8,
     band_type: String,
     freq_norm: RwSignal<f32>,
-    gain_norm: RwSignal<f32>,
     bw_norm: RwSignal<f32>,
     /// REAPER-formatted display values (accurate, loaded from server)
     freq_hz: RwSignal<f32>,
@@ -434,7 +432,6 @@ pub fn EQModal(
                     reaper_band_idx: *reaper_idx as u8,
                     band_type: b.band_type.clone(),
                     freq_norm: RwSignal::new(b.freq_norm),
-                    gain_norm: RwSignal::new(b.gain_norm),
                     bw_norm: RwSignal::new(b.bw_norm),
                     freq_hz: RwSignal::new(b.freq_hz),
                     gain_db: RwSignal::new(b.gain_db),
@@ -456,7 +453,6 @@ pub fn EQModal(
                 let ri = local.reaper_band_idx as usize;
                 if let Some(parent_band) = parent.get(ri) {
                     let _ = local.freq_norm.try_set(parent_band.freq_norm);
-                    let _ = local.gain_norm.try_set(parent_band.gain_norm);
                     let _ = local.bw_norm.try_set(parent_band.bw_norm);
                     let _ = local.freq_hz.try_set(parent_band.freq_hz);
                     let _ = local.gain_db.try_set(parent_band.gain_db);
@@ -549,7 +545,6 @@ pub fn EQModal(
                                     let locals = stored_locals.get_value();
                                     let states: Vec<EqBandState> = locals.iter().map(|l| {
                                         let fn_ = l.freq_norm.get_untracked();
-                                        let gn_ = l.gain_norm.get_untracked();
                                         let bn_ = l.bw_norm.get_untracked();
                                         EqBandState {
                                             band_type: l.band_type.clone(),
@@ -557,7 +552,6 @@ pub fn EQModal(
                                             gain_db: l.gain_db.get_untracked(),
                                             bw: l.bw_oct.get_untracked(),
                                             freq_norm: fn_,
-                                            gain_norm: gn_,
                                             bw_norm: bn_,
                                             enabled: l.enabled.get_untracked(),
                                         }
@@ -1247,7 +1241,6 @@ mod tests {
             gain_db: 6.0,
             bw: 1.0,
             freq_norm: 0.5,
-            gain_norm: 0.3,
             bw_norm: 0.25,
             enabled: true,
         };
@@ -1268,7 +1261,6 @@ mod tests {
             gain_db: 12.0,
             bw: 1.0,
             freq_norm: 0.5,
-            gain_norm: 0.3,
             bw_norm: 0.25,
             enabled: true,
         };
@@ -1289,7 +1281,6 @@ mod tests {
             gain_db: 0.0,
             bw: 2.0,
             freq_norm: 0.14,
-            gain_norm: 0.25,
             bw_norm: 0.5,
             enabled: true,
         };
@@ -1317,7 +1308,6 @@ mod tests {
             gain_db: 6.0,
             bw: 0.8,
             freq_norm: 0.2,
-            gain_norm: 0.3,
             bw_norm: 0.2,
             enabled: true,
         };
@@ -1345,7 +1335,6 @@ mod tests {
             gain_db: 0.0,
             bw: 2.0,
             freq_norm: 0.14,
-            gain_norm: 0.25,
             bw_norm: 0.5,
             enabled: false,
         };
@@ -1368,7 +1357,6 @@ mod tests {
             gain_db: 0.0,
             bw: 2.0,
             freq_norm: 0.14,
-            gain_norm: 0.25,
             bw_norm: 0.5,
             enabled: true,
         };
@@ -1389,7 +1377,6 @@ mod tests {
             gain_db,
             bw,
             freq_norm: 0.0,
-            gain_norm: 0.0,
             bw_norm: 0.0,
             enabled: true,
         }
