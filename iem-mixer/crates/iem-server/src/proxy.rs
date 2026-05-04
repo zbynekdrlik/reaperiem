@@ -2553,22 +2553,17 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let gain_norm = get_field("gn=")?;
     let bw_norm = get_field("bn=")?;
 
-    // Use REAPER-formatted values if available, otherwise approximate
-    // Fallback: approximate ReaEQ freq (20-24000Hz, non-linear curve)
-    let freq_hz = get_field("fh=").unwrap_or(20.0 * 1200.0_f32.powf(freq_norm));
-    let gain_db = get_field("gd=").unwrap_or_else(|| {
-        if gain_norm <= 0.001 {
-            -60.0
-        } else if gain_norm <= 0.25 {
-            24.0 * (gain_norm / 0.25).log2()
-        } else {
-            12.0 * ((gain_norm - 0.25) / 0.75).powf(0.631)
-        }
-    });
-    let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
+    // `fh=`, `gd=`, and `bo=` are always emitted by read_eq_params.lua;
+    // if any are missing, the input is malformed — fail closed.
+    let freq_hz = get_field("fh=")?;
+    let gain_db = get_field("gd=")?;
+    let bw = get_field("bo=")?;
 
     // Parse enabled state (en=0/1), default to true for backward compat
     let enabled = get_field("en=").is_none_or(|v| v >= 0.5);
+
+    let gain_db_min = get_field("gd_min=").unwrap_or(-12.0);
+    let gain_db_max = get_field("gd_max=").unwrap_or(12.0);
 
     Some(iem_core::EqBand {
         band_type,
@@ -2578,6 +2573,8 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
         freq_norm,
         gain_norm,
         bw_norm,
+        gain_db_min,
+        gain_db_max,
         enabled,
     })
 }
@@ -4851,20 +4848,13 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
     }
 
     #[test]
-    fn test_parse_eq_band_lowshelf_fallback() {
-        // Old format without formatted values — falls back to approximation
+    fn test_parse_eq_band_lowshelf_missing_gd_returns_none() {
+        // gd= is mandatory; old format without it must fail closed, not approximate.
         let s = "b0:lowshelf,fn=0.283000,gn=0.184000,bn=0.295000";
-        let band = parse_eq_band(s).unwrap();
-        assert_eq!(band.band_type, "lowshelf");
         assert!(
-            band.freq_hz > 0.0,
-            "freq_hz should be computed from fallback"
+            parse_eq_band(s).is_none(),
+            "missing gd= must return None (malformed input)"
         );
-        assert!(
-            band.gain_db < 0.0,
-            "gain below 0.25 should give negative dB"
-        );
-        assert!(band.bw > 0.0, "bw should be positive");
     }
 
     #[test]
@@ -4878,16 +4868,13 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
     }
 
     #[test]
-    fn test_parse_eq_band_regular_fallback() {
+    fn test_parse_eq_band_regular_missing_gd_returns_none() {
+        // gd= is mandatory; old format without it must fail closed.
         let s = "b1:band,fn=0.500000,gn=0.250000,bn=0.500000";
-        let band = parse_eq_band(s).unwrap();
-        assert_eq!(band.band_type, "band");
-        // fn=0.5 -> 20 * 1000^0.5 = 20 * ~31.62 = ~632 Hz
-        assert!(band.freq_hz > 600.0 && band.freq_hz < 700.0);
-        // gn=0.25 -> (0.25 - 0.25) * 48 = 0.0 dB
-        assert!((band.gain_db - 0.0).abs() < 0.01);
-        // No en= field -> defaults to enabled
-        assert!(band.enabled);
+        assert!(
+            parse_eq_band(s).is_none(),
+            "missing gd= must return None (malformed input)"
+        );
     }
 
     #[test]
@@ -4902,16 +4889,12 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
     }
 
     #[test]
-    fn test_parse_eq_band_gain_fallback_clamped() {
-        // Gain norm beyond 0.5 should be clamped to 0.5 in fallback formula
+    fn test_parse_eq_band_missing_gd_returns_none_for_highpass() {
+        // gd= is mandatory; any input without it must fail closed.
         let s = "b4:highpass,fn=0.500000,gn=1.000000,bn=0.500000";
-        let band = parse_eq_band(s).unwrap();
-        // Without clamp: (1.0 - 0.25) * 48 = 36.0 dB (WRONG)
-        // With clamp: (0.5 - 0.25) * 48 = 12.0 dB (correct max for ReaEQ)
         assert!(
-            (band.gain_db - 12.0).abs() < 0.01,
-            "gain_db fallback for norm=1.0 should be clamped to +12dB, got {}",
-            band.gain_db
+            parse_eq_band(s).is_none(),
+            "missing gd= must return None (malformed input)"
         );
     }
 
@@ -5398,5 +5381,38 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             "track_index 999 (not in valid set) must be rejected — got Ok: {:?}",
             result.ok()
         );
+    }
+
+    #[test]
+    fn test_parse_eq_band_default_gd_min_max_when_missing() {
+        // Mutation killer for line ~2573 (unwrap_or(-12.0)) and ~2574 (unwrap_or(12.0)):
+        // when an old ReaScript response lacks gd_min=/gd_max= fields, the parsed
+        // band must default to -12.0 / +12.0, NOT 12.0 / -12.0.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,gd=0.0,bo=1.0,en=1";
+        let band = parse_eq_band(band_str).expect("parse must succeed");
+        assert_eq!(band.gain_db_min, -12.0);
+        assert_eq!(band.gain_db_max, 12.0);
+    }
+
+    #[test]
+    fn test_parse_eq_band_returns_none_when_gd_missing() {
+        // gd= is mandatory in current ReaScript output; if absent the input is malformed
+        // and parse must fail closed (not silently approximate).
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,bo=1.0,en=1";
+        assert!(parse_eq_band(band_str).is_none());
+    }
+
+    #[test]
+    fn test_parse_eq_band_returns_none_when_fh_missing() {
+        // fh= is mandatory in current ReaScript output; if absent the input is malformed.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,gd=0.0,bo=1.0,en=1";
+        assert!(parse_eq_band(band_str).is_none());
+    }
+
+    #[test]
+    fn test_parse_eq_band_returns_none_when_bo_missing() {
+        // bo= is mandatory in current ReaScript output; if absent the input is malformed.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,gd=0.0,en=1";
+        assert!(parse_eq_band(band_str).is_none());
     }
 }

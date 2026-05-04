@@ -260,7 +260,7 @@ test.describe("EQ Feature", () => {
     );
     expect(messages.length).toBeGreaterThan(0);
     expect(messages[0].cmd).toBe("SetEqBand");
-    expect(messages[0].param).toBe("gain");
+    expect(messages[0].param).toBe("gain_db");
   });
 
   test("EQ sliders use safe touch activation (no jump-to-tap)", async ({
@@ -1338,6 +1338,116 @@ test.describe("EQ value sync - ENGINEER track", () => {
     }
     await page.locator(".eq-close-btn").click();
   });
+
+  test("#194 gain slider thumb position matches displayed dB (engineer inear)", async ({
+    page,
+  }) => {
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32; // "ENGINEER inear"
+    const TEST_BAND = 1; // b1 lowshelf — currently default 0.25/0dB
+    const TEST_GAIN_NORM = 0.583;
+
+    // Capture original norm so we can restore.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const readResp = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+    if (!bandMatch) throw new Error(`No band ${TEST_BAND}: ${readResp}`);
+    const originalGn = bandMatch[0].match(/gn=([\d.]+)/);
+    if (!originalGn) throw new Error(`No gn=: ${bandMatch[0]}`);
+    const originalNorm = parseFloat(originalGn[1]);
+
+    try {
+      // Set test value via ReaScript (direct URL doesn't mutate FX state).
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${TEST_GAIN_NORM}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // beforeEach already logged in as engineer + nav'd to /engineer.
+      await waitForMixer(page);
+
+      const opened = await openEqForChannel(page, "ENGINEER");
+      expect(opened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".eq-band-card").first()).toBeVisible({
+        timeout: 5000,
+      });
+      await page.waitForTimeout(1000); // bands populate from server
+
+      // Locate band's gain row.
+      const bandCards = page.locator(".eq-band-card");
+      const bandCard = bandCards.nth(TEST_BAND);
+      await bandCard.waitFor({ state: "visible", timeout: 5000 });
+
+      const gainRow = bandCard.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Gain'))",
+      );
+      const displayedText = await gainRow
+        .locator(".eq-param-value")
+        .textContent();
+      if (!displayedText) throw new Error("Gain text not rendered");
+      const dispMatch = displayedText.match(/(-?[\d.]+)/);
+      if (!dispMatch) throw new Error(`No dB: ${displayedText}`);
+      const displayedDb = parseFloat(dispMatch[1]);
+
+      // At least one non-default gain — ensures we're not trivially testing a 0 dB band.
+      expect(Math.abs(displayedDb)).toBeGreaterThan(0.5);
+
+      // Slider thumb position vs dB-derived expected.
+      // Read INLINE style.left (set as percent by Leptos), not computed style
+      // which resolves percent → pixels.
+      const thumbStyle = await gainRow
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPctMatch = thumbStyle.match(/left:\s*([\d.]+)%/);
+      if (!thumbPctMatch) throw new Error(`Thumb pct: ${thumbStyle}`);
+      const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
+
+      // UI fixed range ±12 dB.
+      const expectedThumbPct = (Math.max(-12, Math.min(12, displayedDb)) + 12) / 24;
+      expect(Math.abs(thumbPct - expectedThumbPct)).toBeLessThan(0.05);
+
+      // Close + reopen, re-assert.
+      await page.locator(".eq-close-btn").click();
+      await page.waitForSelector(".eq-modal", {
+        state: "detached",
+        timeout: 5000,
+      });
+
+      const reopened = await openEqForChannel(page, "ENGINEER");
+      expect(reopened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+
+      const bandCard2 = page.locator(".eq-band-card").nth(TEST_BAND);
+      const gainRow2 = bandCard2.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Gain'))",
+      );
+      const text2 = await gainRow2.locator(".eq-param-value").textContent();
+      if (!text2) throw new Error("Reopen: gain text empty");
+      const db2 = parseFloat(text2.match(/(-?[\d.]+)/)![1]);
+      expect(Math.abs(db2)).toBeGreaterThan(0.5);
+
+      const thumbStyle2 = await gainRow2
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPct2Match = thumbStyle2.match(/left:\s*([\d.]+)%/);
+      if (!thumbPct2Match) throw new Error(`Reopen thumb pct: ${thumbStyle2}`);
+      const thumbPct2 = parseFloat(thumbPct2Match[1]) / 100;
+      const expectedThumbPct2 = (Math.max(-12, Math.min(12, db2)) + 12) / 24;
+      expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.05);
+    } finally {
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${originalNorm}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    }
+  });
 });
 
 // Regression test for #167 — EQ curve shape
@@ -1705,3 +1815,4 @@ test.describe("#179 EQ iPhone 17 Pro usability", () => {
     expect(consoleMessages).toEqual([]);
   });
 });
+

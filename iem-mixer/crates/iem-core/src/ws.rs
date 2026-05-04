@@ -24,6 +24,12 @@ pub struct EqBand {
     pub gain_norm: f32,
     /// Normalized bandwidth value for ReaEQ (0-1)
     pub bw_norm: f32,
+    /// Minimum dB this band's gain can produce (norm=0.0 endpoint, REAPER-sampled)
+    #[serde(default = "default_gain_db_min")]
+    pub gain_db_min: f32,
+    /// Maximum dB this band's gain can produce (norm=1.0 endpoint, REAPER-sampled)
+    #[serde(default = "default_gain_db_max")]
+    pub gain_db_max: f32,
     /// Whether this band is enabled in ReaEQ (BANDENABLED config param)
     #[serde(default = "default_enabled")]
     pub enabled: bool,
@@ -31,6 +37,14 @@ pub struct EqBand {
 
 fn default_enabled() -> bool {
     true
+}
+
+fn default_gain_db_min() -> f32 {
+    -12.0
+}
+
+fn default_gain_db_max() -> f32 {
+    12.0
 }
 
 /// Alert info for ActiveAlerts catch-up message
@@ -651,6 +665,8 @@ mod tests {
                 freq_norm: 0.283,
                 gain_norm: 0.184,
                 bw_norm: 0.295,
+                gain_db_min: -12.0,
+                gain_db_max: 12.0,
                 enabled: true,
             }],
         };
@@ -687,6 +703,8 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3,
                 bw_norm: 0.4,
+                gain_db_min: -12.0,
+                gain_db_max: 12.0,
                 enabled: true,
             }],
         );
@@ -898,5 +916,36 @@ mod tests {
         assert!(json.contains("\"track_index\":23"));
         let back: ClientMsg = serde_json::from_str(&json).unwrap();
         assert_eq!(msg, back);
+    }
+
+    #[test]
+    fn test_default_gain_db_min_is_negative_twelve() {
+        // Mutation killer: prevents -12.0 → 0.0, 1.0, -1.0, or 12.0 (delete -)
+        assert_eq!(super::default_gain_db_min(), -12.0);
+    }
+
+    #[test]
+    fn test_default_gain_db_max_is_positive_twelve() {
+        // Mutation killer: prevents 12.0 → 0.0, 1.0, or -1.0
+        assert_eq!(super::default_gain_db_max(), 12.0);
+    }
+
+    #[test]
+    fn test_eq_band_serde_default_for_missing_db_bounds() {
+        // Mutation + integration: when an old snapshot JSON lacks the gain_db_min/max
+        // fields, serde must inject -12.0 / +12.0 from the default helpers.
+        let json = r#"{
+            "band_type": "band",
+            "freq_hz": 1000.0,
+            "gain_db": 0.0,
+            "bw": 1.0,
+            "freq_norm": 0.5,
+            "gain_norm": 0.25,
+            "bw_norm": 0.5
+        }"#;
+        let band: EqBand = serde_json::from_str(json).unwrap();
+        assert_eq!(band.gain_db_min, -12.0);
+        assert_eq!(band.gain_db_max, 12.0);
+        assert_eq!(band.enabled, true); // also tests existing default_enabled
     }
 }

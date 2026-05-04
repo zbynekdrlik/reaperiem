@@ -197,6 +197,8 @@ mod tests {
                 freq_norm: 0.5,
                 gain_norm: 0.3125,
                 bw_norm: 0.5,
+                gain_db_min: -12.0,
+                gain_db_max: 12.0,
                 enabled: true,
             }],
         );

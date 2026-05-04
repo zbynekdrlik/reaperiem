@@ -333,6 +333,10 @@ async fn restore_preset(
     if let Some(ref eq_bands_map) = preset.eq_bands {
         for (track_index, bands) in eq_bands_map {
             for (band_idx, band) in bands.iter().enumerate() {
+                // NOTE: preset replay uses the legacy `param=gain` (norm) protocol.
+                // The interactive UI slider uses `param=gain_db` (#194), but the
+                // ReaScript supports BOTH. Don't remove the legacy `gain` branch
+                // from set_eq_param.lua without updating preset/snapshot apply paths.
                 for (param_name, value) in [
                     ("freq", band.freq_norm),
                     ("gain", band.gain_norm),
