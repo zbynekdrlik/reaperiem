@@ -583,8 +583,6 @@ fn connect_websocket(
                                     freq_norm: b.freq_norm,
                                     gain_norm: b.gain_norm,
                                     bw_norm: b.bw_norm,
-                                    gain_db_min: b.gain_db_min,
-                                    gain_db_max: b.gain_db_max,
                                     enabled: b.enabled,
                                 })
                                 .collect(),

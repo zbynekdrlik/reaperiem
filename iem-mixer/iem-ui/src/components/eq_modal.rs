@@ -37,8 +37,6 @@ pub struct EqBandState {
     pub freq_norm: f32,
     pub gain_norm: f32,
     pub bw_norm: f32,
-    pub gain_db_min: f32,
-    pub gain_db_max: f32,
     /// Whether this band is enabled (disabled bands should not affect the curve)
     pub enabled: bool,
 }
@@ -343,9 +341,6 @@ struct BandLocalState {
     freq_hz: RwSignal<f32>,
     gain_db: RwSignal<f32>,
     bw_oct: RwSignal<f32>,
-    /// REAPER-sampled dB endpoints for this band's gain (norm=0 → norm=1)
-    gain_db_min: f32,
-    gain_db_max: f32,
     /// Whether this band is enabled
     enabled: RwSignal<bool>,
 }
@@ -444,8 +439,6 @@ pub fn EQModal(
                     freq_hz: RwSignal::new(b.freq_hz),
                     gain_db: RwSignal::new(b.gain_db),
                     bw_oct: RwSignal::new(b.bw),
-                    gain_db_min: b.gain_db_min,
-                    gain_db_max: b.gain_db_max,
                     enabled: RwSignal::new(b.enabled),
                 })
                 .collect();
@@ -566,8 +559,6 @@ pub fn EQModal(
                                             freq_norm: fn_,
                                             gain_norm: gn_,
                                             bw_norm: bn_,
-                                            gain_db_min: l.gain_db_min,
-                                            gain_db_max: l.gain_db_max,
                                             enabled: l.enabled.get_untracked(),
                                         }
                                     }).collect();
@@ -786,7 +777,9 @@ pub fn EQModal(
                                             <span class="eq-param-value">
                                                 {move || {
                                                     curve_trigger.get();
-                                                    let db = gain_db_sig.get_untracked();
+                                                    // Clamp display to ±12 dB to match slider visual range —
+                                                    // single source of truth for both thumb position and text.
+                                                    let db = gain_db_sig.get_untracked().clamp(-12.0, 12.0);
                                                     if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
                                                 }}
                                             </span>
@@ -1256,8 +1249,6 @@ mod tests {
             freq_norm: 0.5,
             gain_norm: 0.3,
             bw_norm: 0.25,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         };
         let gain_at_center = compute_band_gain(1000.0, &band);
@@ -1279,8 +1270,6 @@ mod tests {
             freq_norm: 0.5,
             gain_norm: 0.3,
             bw_norm: 0.25,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         };
         // At 10x the center frequency, gain should be near 0 dB
@@ -1302,8 +1291,6 @@ mod tests {
             freq_norm: 0.14,
             gain_norm: 0.25,
             bw_norm: 0.5,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         };
         // Well above cutoff: should be ~0 dB
@@ -1332,8 +1319,6 @@ mod tests {
             freq_norm: 0.2,
             gain_norm: 0.3,
             bw_norm: 0.2,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         };
         // Well below shelf: should be near shelf gain
@@ -1362,8 +1347,6 @@ mod tests {
             freq_norm: 0.14,
             gain_norm: 0.25,
             bw_norm: 0.5,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: false,
         };
         let bands = vec![disabled_hpf];
@@ -1387,8 +1370,6 @@ mod tests {
             freq_norm: 0.14,
             gain_norm: 0.25,
             bw_norm: 0.5,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         };
         let bands = vec![enabled_hpf];
@@ -1410,8 +1391,6 @@ mod tests {
             freq_norm: 0.0,
             gain_norm: 0.0,
             bw_norm: 0.0,
-            gain_db_min: -12.0,
-            gain_db_max: 12.0,
             enabled: true,
         }
     }

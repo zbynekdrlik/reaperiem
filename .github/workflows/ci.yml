@@ -1,6 +1,5 @@
 name: CI
 
-# Re-trigger after audio engine recovery (#194)
 on:
   push:
     branches: [main, dev]
