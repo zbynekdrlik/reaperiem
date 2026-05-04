@@ -2553,12 +2553,11 @@ fn parse_eq_band(s: &str) -> Option<iem_core::EqBand> {
     let gain_norm = get_field("gn=")?;
     let bw_norm = get_field("bn=")?;
 
-    // Use REAPER-formatted values if available, otherwise approximate
-    // Fallback: approximate ReaEQ freq (20-24000Hz, non-linear curve)
-    let freq_hz = get_field("fh=").unwrap_or(20.0 * 1200.0_f32.powf(freq_norm));
-    // `gd=` is always emitted by read_eq_params.lua; if missing, the input is malformed.
+    // `fh=`, `gd=`, and `bo=` are always emitted by read_eq_params.lua;
+    // if any are missing, the input is malformed — fail closed.
+    let freq_hz = get_field("fh=")?;
     let gain_db = get_field("gd=")?;
-    let bw = get_field("bo=").unwrap_or(0.01 + bw_norm * 3.99);
+    let bw = get_field("bo=")?;
 
     // Parse enabled state (en=0/1), default to true for backward compat
     let enabled = get_field("en=").is_none_or(|v| v >= 0.5);
@@ -5400,6 +5399,20 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         // gd= is mandatory in current ReaScript output; if absent the input is malformed
         // and parse must fail closed (not silently approximate).
         let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,bo=1.0,en=1";
+        assert!(parse_eq_band(band_str).is_none());
+    }
+
+    #[test]
+    fn test_parse_eq_band_returns_none_when_fh_missing() {
+        // fh= is mandatory in current ReaScript output; if absent the input is malformed.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,gd=0.0,bo=1.0,en=1";
+        assert!(parse_eq_band(band_str).is_none());
+    }
+
+    #[test]
+    fn test_parse_eq_band_returns_none_when_bo_missing() {
+        // bo= is mandatory in current ReaScript output; if absent the input is malformed.
+        let band_str = "b0:band,fn=0.5,gn=0.25,bn=0.5,fh=1000,gd=0.0,en=1";
         assert!(parse_eq_band(band_str).is_none());
     }
 }
