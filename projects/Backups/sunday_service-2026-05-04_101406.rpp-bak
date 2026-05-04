@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1777824074 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1777882446 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -696,9 +696,9 @@
     MIDIOUT -1
     MAINSEND 1 0
     <FXCHAIN
-      WNDRECT 24 52 655 408
+      WNDRECT 24 52 736 461
       SHOW 0
-      LASTSEL 0
+      LASTSEL 1
       DOCKED 0
       BYPASS 0 0 0
       <JS utility/volume_pan "TRIM IN"
@@ -712,7 +712,7 @@
         cWVlcu5e7f4CAAAAAQAAAAAAAAACAAAAAAAAAAIAAAABAAAAAAAAAAIAAAAAAAAAzQAAAAEAAAAAABAA
         IQAAAAUAAAAEAAAAAAAAAA9hXXhVDVRAAAAAAAAA8D8AAAAAAAAAQAEAAAAAAAAAAAQEaDDZCWlAAAAAAAAA8D8AAAAAAAAAQAEIAAAAAAAAAAEaHb6ED4lAAAAAAAAA
         8D8AAAAAAADwPwEIAAAAAAAAAHfH++l3aKdAAAAAAAAA8D8AAAAAAADwPwEBAAAAAAAAAKWt3qUPUL9AAAAAAAAA8D8AAAAAAAAAQAEBAAAAAQAAAAAAAAAAAPA/AAAA
-        AAAAAAAAAAAAAgAAAA==
+        AP0BAABcAQAAAgAAAA==
         AFByb2dyYW0gMQAQAAAA
       >
       FLOATPOS 0 0 0 0
@@ -1174,7 +1174,7 @@
     >
   >
   <TRACK {D1E5C976-852E-44C5-AD28-D3D3FFD0EC69}
-    NAME __lifecycle_warn_1777824004420
+    NAME "ENGINEER mic"
     PEAKCOL 30713204
     BEAT -1
     AUTOMODE 0
@@ -1309,7 +1309,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {48B03E6D-072E-4270-9BA0-3E38A28349B1}
+      FXID {665DD48B-434D-4F9A-AB29-A04166B8B551}
       WAK 0 0
     >
   >
@@ -1379,7 +1379,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A2D5A77A-D00B-49C9-BFA0-9A43881ED47C}
+      FXID {ED21BA90-34E2-45BB-87B0-72E0A5D8B2AE}
       WAK 0 0
     >
   >
@@ -1449,7 +1449,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {973DFA2A-C8C3-43F0-88A5-BF39566262CD}
+      FXID {D59ACC2B-C0C5-45B9-BA58-1B4CF92D0C14}
       WAK 0 0
     >
   >
@@ -1518,7 +1518,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {7557FAFA-4A55-4524-85FB-C44847785CB8}
+      FXID {9F2AA8B4-AED8-440A-9FD8-768CA2B54013}
       WAK 0 0
     >
   >
@@ -1588,7 +1588,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {05D03733-DEEB-45C3-8A2B-17A582408076}
+      FXID {27549333-8A49-454E-8522-C91C98F4D6F9}
       WAK 0 0
     >
   >
@@ -1658,7 +1658,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {157E035C-9B7F-4C69-86F5-6022F961EBBB}
+      FXID {39FA139F-D68C-4E7F-812D-FAB8B8BE9799}
       WAK 0 0
     >
   >
@@ -1728,7 +1728,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {AAB0CEA7-9E4A-40CC-BF19-7CA552A6F80A}
+      FXID {EA6A17C2-FF1C-47B9-A1A4-4DC793BC46F9}
       WAK 0 0
     >
   >
@@ -1797,7 +1797,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {A20DA534-F477-4D60-BAE5-1DB166080CE6}
+      FXID {30157518-BA19-40B6-B676-A4D49C2713B3}
       WAK 0 0
     >
   >
@@ -1867,7 +1867,7 @@
         -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {FCB2A693-E5CF-4111-B757-A161B4509F6B}
+      FXID {5154D774-80D1-42C2-B207-50C884B57C11}
       WAK 0 0
     >
   >
@@ -1936,7 +1936,7 @@
         6 0 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {DCF19CD2-7D15-45C6-A51F-9CE4927CAE49}
+      FXID {965CC9B7-C9DC-4939-A4C5-97C18DD6D635}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST: ReaEQ (Cockos)" reaeq.dll 0 EQ 1919247729<56535472656571726561657100000000> ""
@@ -1951,10 +1951,10 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 -10.39717 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 -10.397132 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
-      FXID {6D720D60-4F5F-4036-947C-5C3C21A19C1F}
+      FXID {15F9209E-DC8E-41EA-8E22-4F32CC4EC675}
       WAK 0 0
       BYPASS 0 0 0
       <VST "VST3: VBAN IEM (NewLevel)" "VBAN IEM.vst3" 0 "" 2144468121{ABCDEF019182FAEB5269656D5669656D} ""
