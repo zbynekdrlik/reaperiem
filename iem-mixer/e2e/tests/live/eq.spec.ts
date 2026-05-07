@@ -1448,6 +1448,135 @@ test.describe("EQ value sync - ENGINEER track", () => {
       await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
     }
   });
+
+  test("#196 freq slider thumb position matches displayed Hz across close+reopen (engineer inear)", async ({
+    page,
+  }) => {
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32; // "ENGINEER inear"
+    const TEST_BAND = 1; // b1 lowshelf
+    const TEST_FREQ_NORM = 0.30; // ≈ 322 Hz — close to Mirec's reported 321/320 boundary
+
+    // Capture original norm so we can restore.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const readResp = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+    if (!bandMatch) throw new Error(`No band ${TEST_BAND}: ${readResp}`);
+    const originalFn = bandMatch[0].match(/fn=([\d.]+)/);
+    if (!originalFn) throw new Error(`No fn=: ${bandMatch[0]}`);
+    const originalNorm = parseFloat(originalFn[1]);
+
+    try {
+      // Set test value via legacy `param=freq` (norm) ReaScript path —
+      // pre-arrangement decoupled from the new freq_hz protocol under test.
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=freq%7Cvalue=${TEST_FREQ_NORM}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // beforeEach already logged in as engineer + nav'd to /engineer.
+      await waitForMixer(page);
+
+      const opened = await openEqForChannel(page, "ENGINEER");
+      expect(opened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".eq-band-card").first()).toBeVisible({
+        timeout: 5000,
+      });
+      await page.waitForTimeout(1000); // bands populate from server
+
+      // Locate band's freq row.
+      const bandCards = page.locator(".eq-band-card");
+      const bandCard = bandCards.nth(TEST_BAND);
+      await bandCard.waitFor({ state: "visible", timeout: 5000 });
+
+      const freqRow = bandCard.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Freq'))",
+      );
+      const displayedText = await freqRow
+        .locator(".eq-param-value")
+        .textContent();
+      if (!displayedText) throw new Error("Freq text not rendered");
+
+      // Parse Hz from forms like "322", "1.2k", "20.0k".
+      const parseHz = (t: string): number => {
+        const km = t.match(/([\d.]+)k/);
+        if (km) return parseFloat(km[1]) * 1000;
+        const n = t.match(/([\d.]+)/);
+        if (!n) throw new Error(`No Hz: ${t}`);
+        return parseFloat(n[1]);
+      };
+      const displayedHz = parseHz(displayedText);
+
+      // Sanity: pre-arrangement landed somewhere musical (not 20 Hz floor or 24k ceiling).
+      expect(displayedHz).toBeGreaterThan(50);
+      expect(displayedHz).toBeLessThan(2000);
+
+      // Slider thumb position vs Hz-derived expected (UI log scale 20-24000 Hz).
+      const thumbStyle = await freqRow
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPctMatch = thumbStyle.match(/left:\s*([\d.]+)%/);
+      if (!thumbPctMatch) throw new Error(`Thumb pct: ${thumbStyle}`);
+      const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
+
+      const logMin = Math.log(20);
+      const logMax = Math.log(24000);
+      const expectedThumbPct =
+        (Math.log(Math.max(20, Math.min(24000, displayedHz))) - logMin) /
+        (logMax - logMin);
+      // Tolerance 0.02 covers Hz display rounding (e.g. "322" vs actual 322.4).
+      expect(Math.abs(thumbPct - expectedThumbPct)).toBeLessThan(0.02);
+
+      // Close + reopen, re-assert stability — the core #196 bug check.
+      await page.locator(".eq-close-btn").click();
+      await page.waitForSelector(".eq-modal", {
+        state: "detached",
+        timeout: 5000,
+      });
+
+      const reopened = await openEqForChannel(page, "ENGINEER");
+      expect(reopened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+
+      const bandCard2 = page.locator(".eq-band-card").nth(TEST_BAND);
+      const freqRow2 = bandCard2.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Freq'))",
+      );
+      const text2 = await freqRow2.locator(".eq-param-value").textContent();
+      if (!text2) throw new Error("Reopen: freq text empty");
+      const hz2 = parseHz(text2);
+
+      const thumbStyle2 = await freqRow2
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPct2Match = thumbStyle2.match(/left:\s*([\d.]+)%/);
+      if (!thumbPct2Match) throw new Error(`Reopen thumb pct: ${thumbStyle2}`);
+      const thumbPct2 = parseFloat(thumbPct2Match[1]) / 100;
+
+      // Stability across close+reopen: same displayed text (the Mirec bug — text
+      // shifted from 321 to 320 on reopen) and same thumb position.
+      expect(text2.trim()).toBe(displayedText.trim());
+      expect(Math.abs(thumbPct2 - thumbPct)).toBeLessThan(0.005);
+
+      // Also confirm reopen thumb-vs-text agreement.
+      const expectedThumbPct2 =
+        (Math.log(Math.max(20, Math.min(24000, hz2))) - logMin) /
+        (logMax - logMin);
+      expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.02);
+    } finally {
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=freq%7Cvalue=${originalNorm}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    }
+  });
 });
 
 // Regression test for #167 — EQ curve shape
