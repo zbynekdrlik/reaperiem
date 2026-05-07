@@ -794,19 +794,24 @@ pub fn EQModal(
                                             </span>
                                         </div>
 
-                                        // Bandwidth/Q slider
+                                        // Bandwidth/Q slider: derives position from REAPER's actual bw_oct
+                                        // mapped onto a fixed UI linear scale (0.01 – 4.00 oct). Single
+                                        // source of truth = REAPER (#196).
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"BW"</label>
                                             <EqSlider
-                                                value=bw_sig.into()
+                                                value=Signal::derive(move || {
+                                                    let oct = bw_oct_sig.get().clamp(0.01, 4.00);
+                                                    (oct - 0.01) / 3.99
+                                                })
                                                 on_change=Callback::new(move |v: f32| {
+                                                    let oct = 0.01 + v * 3.99;
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         let _ = last_send_bw.try_set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "bw".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "bw_oct".to_string(), oct));
                                                     }
-                                                    let _ = bw_sig.try_set(v);
-                                                    let _ = bw_oct_sig.try_set(norm_to_bw(v));
+                                                    let _ = bw_oct_sig.try_set(oct);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -819,7 +824,11 @@ pub fn EQModal(
                                                 default_value=0.5
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format!("{:.2} oct", bw_oct_sig.get_untracked()) }}
+                                                {move || {
+                                                    curve_trigger.get();
+                                                    let oct = bw_oct_sig.get_untracked().clamp(0.01, 4.00);
+                                                    format!("{:.2} oct", oct)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
