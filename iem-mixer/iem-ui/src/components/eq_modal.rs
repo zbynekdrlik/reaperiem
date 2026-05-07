@@ -677,30 +677,26 @@ pub fn EQModal(
                                                     // Reset gain to 0dB via new gain_db protocol
                                                     let _ = gain_db_sig.try_set(0.0);
                                                     on_param_change.run((idx, "gain_db".to_string(), 0.0));
-                                                    // Reset freq to per-band default
-                                                    // Norm values verified empirically against REAPER
-                                                    let default_freq_norm: f32 = match band_type_reset.as_str() {
-                                                        "highpass" => 0.1160,   // 80Hz
-                                                        "lowshelf" => 0.2316,   // 200Hz
-                                                        "highshelf" => 0.8176,  // 8kHz
-                                                        "lowpass" => 0.8848,    // 12kHz
+                                                    // Reset freq to per-band default Hz (#196)
+                                                    let default_freq_hz: f32 = match band_type_reset.as_str() {
+                                                        "highpass" => 80.0,
+                                                        "lowshelf" => 200.0,
+                                                        "highshelf" => 8000.0,
+                                                        "lowpass" => 12000.0,
                                                         _ => {
                                                             // Parametric bands: use REAPER index
-                                                            if idx == 3 { 0.6548 } else { 0.4408 }
-                                                            // band 2 → 800Hz, band 3 → 3kHz
+                                                            if idx == 3 { 3000.0 } else { 800.0 }
                                                         }
                                                     };
-                                                    let default_bw_norm = match band_type_reset.as_str() {
-                                                        "highpass" | "lowshelf" | "highshelf" | "lowpass" => 0.50,
-                                                        _ => 0.25,
+                                                    // Reset bw to per-band default oct (#196)
+                                                    let default_bw_oct: f32 = match band_type_reset.as_str() {
+                                                        "highpass" | "lowshelf" | "highshelf" | "lowpass" => 2.00,
+                                                        _ => 1.00,
                                                     };
-                                                    let _ = freq_sig.try_set(default_freq_norm);
-                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(default_freq_norm));
-                                                    on_param_change.run((idx, "freq".to_string(), default_freq_norm));
-                                                    // Override BW with type-specific default
-                                                    let _ = bw_sig.try_set(default_bw_norm);
-                                                    let _ = bw_oct_sig.try_set(norm_to_bw(default_bw_norm));
-                                                    on_param_change.run((idx, "bw".to_string(), default_bw_norm));
+                                                    let _ = freq_hz_sig.try_set(default_freq_hz);
+                                                    on_param_change.run((idx, "freq_hz".to_string(), default_freq_hz));
+                                                    let _ = bw_oct_sig.try_set(default_bw_oct);
+                                                    on_param_change.run((idx, "bw_oct".to_string(), default_bw_oct));
                                                     // Enable/disable state NOT changed — reset only affects parameters
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 }
@@ -709,19 +705,28 @@ pub fn EQModal(
                                             </button>
                                         </div>
 
-                                        // Frequency slider
+                                        // Frequency slider: derives position from REAPER's actual freq_hz
+                                        // mapped onto a fixed UI log scale (20 Hz – 24 kHz). Single source
+                                        // of truth = REAPER (#196).
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Freq"</label>
                                             <EqSlider
-                                                value=freq_sig.into()
+                                                value=Signal::derive(move || {
+                                                    let hz = freq_hz_sig.get().clamp(20.0, 24000.0);
+                                                    let log_min = 20.0_f32.ln();
+                                                    let log_max = 24000.0_f32.ln();
+                                                    (hz.ln() - log_min) / (log_max - log_min)
+                                                })
                                                 on_change=Callback::new(move |v: f32| {
+                                                    let log_min = 20.0_f32.ln();
+                                                    let log_max = 24000.0_f32.ln();
+                                                    let hz = (log_min + v * (log_max - log_min)).exp();
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         let _ = last_send_freq.try_set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "freq".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "freq_hz".to_string(), hz));
                                                     }
-                                                    let _ = freq_sig.try_set(v);
-                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(v));
+                                                    let _ = freq_hz_sig.try_set(hz);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -733,7 +738,11 @@ pub fn EQModal(
                                                 css_class="eq-slider-freq"
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format_freq(freq_hz_sig.get_untracked()) }}
+                                                {move || {
+                                                    curve_trigger.get();
+                                                    let hz = freq_hz_sig.get_untracked().clamp(20.0, 24000.0);
+                                                    format_freq(hz)
+                                                }}
                                             </span>
                                         </div>
 
