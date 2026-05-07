@@ -220,6 +220,77 @@ local function set_eq()
         return
     end
 
+    -- New "bw_oct" branch: caller sends desired bandwidth in octaves; we
+    -- sample 21 norm→oct points and LINEAR-interpolate. ReaEQ formats bw
+    -- as e.g. "1.18 oct". Same pattern as gain_db / freq_hz (#196).
+    if param_name == "bw_oct" then
+        local bw_param_idx = band * 3 + 2
+        local num_params_b = reaper.TrackFX_GetNumParams(track, eq_idx)
+        if bw_param_idx >= num_params_b then
+            reaper.SetExtState(section, "eq_set_result",
+                "ERROR:bw_param_out_of_range:" .. bw_param_idx, false)
+            return
+        end
+
+        -- Sample 21 points: norm = 0.00, 0.05, ..., 1.00 → formatted oct.
+        local samples = {}
+        local N_STEPS = 20
+        for i = 0, N_STEPS do
+            local norm_i = i / N_STEPS
+            local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, bw_param_idx, norm_i, "")
+            local oct_i = tonumber(fmt:match("(-?[%d%.]+)"))
+            if oct_i == nil then
+                reaper.SetExtState(section, "eq_set_result",
+                    string.format("ERROR:sample_parse_failed:band=%d,norm=%.3f,fmt=%s",
+                        band, norm_i, fmt or ""), false)
+                return
+            end
+            samples[i + 1] = { norm = norm_i, oct = oct_i }
+        end
+
+        -- Linear interpolation in oct space.
+        local desired = value
+        local best_norm = samples[1].norm
+        local best_err = math.huge
+        for i = 1, 20 do
+            local lo = samples[i]
+            local hi = samples[i + 1]
+            if lo.oct <= desired and desired <= hi.oct and lo.oct < hi.oct then
+                local t = (desired - lo.oct) / (hi.oct - lo.oct)
+                local n = lo.norm + t * (hi.norm - lo.norm)
+                local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
+                    track, eq_idx, bw_param_idx, n, "")
+                local v_oct = tonumber(vfmt:match("(-?[%d%.]+)"))
+                if v_oct ~= nil then
+                    local err = math.abs(v_oct - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = n
+                    end
+                end
+            else
+                for _, s in ipairs({ lo, hi }) do
+                    local err = math.abs(s.oct - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = s.norm
+                    end
+                end
+            end
+        end
+
+        reaper.TrackFX_SetParam(track, eq_idx, bw_param_idx, best_norm)
+        local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
+            track, eq_idx, bw_param_idx)
+        reaper.SetExtState(section, "eq_set_result",
+            string.format(
+                "OK:track=%d,band=%d,param=bw_oct,desired_oct=%.3f,norm=%.6f,formatted=%s",
+                track_idx, band, desired, best_norm, fmt_post),
+            false)
+        return
+    end
+
     -- Handle "enabled" param via BANDENABLEDM (NO colon, M=band number).
     -- IMPORTANT: BANDENABLED:N (WITH colon) is a GLOBAL toggle — do NOT use.
     -- BANDENABLEDM (without colon) is the actual per-band enabled checkbox.
