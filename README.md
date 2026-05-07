@@ -6,6 +6,11 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.166.0 (2026-05-07)
+
+- **Fix**: EQ frequency value drift on close+reopen (Mirec) — set 321 Hz, return showed 320 Hz. Same dual-formula divergence pattern as the v1.165.0 gain fix; UI sent normalized values from its own approximation table while REAPER stored its actual mapping. UI now sends Hz/oct directly; ReaScript samples REAPER's norm↔value mapping (21 points, log-space for freq, linear for bw) and writes the matching norm. REAPER is now the single source of truth for both freq and bw.
+- **Internal**: Delete UI helpers `norm_to_freq_hz` and `norm_to_bw`. Existing preset replay keeps the legacy norm protocol for bit-exact restoration of saved presets — no migration risk for existing user EQ state.
+
 ### v1.165.0 (2026-05-03)
 
 - **Fix**: EQ panel slider thumb now matches displayed dB value. Previously the slider position was computed from REAPER's normalized 0-1 value via a UI approximation curve while the text label read REAPER's actual formatted dB — the two disagreed (e.g. text said "+4 dB" while thumb sat at the "+1 dB" tick). Both now derive from REAPER's formatted dB; thumb and text always agree on initial render and across re-mounts. (#194)
