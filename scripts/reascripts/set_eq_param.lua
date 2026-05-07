@@ -133,6 +133,93 @@ local function set_eq()
         return
     end
 
+    -- New "freq_hz" branch: caller sends desired Hz, we sample ReaEQ's actual
+    -- norm↔Hz mapping at 21 points and log-space-interpolate to find the norm
+    -- that yields the desired Hz. ReaEQ formats freq as "250 Hz" or "1.2 kHz" —
+    -- handle both. Same pattern as gain_db (#194).
+    if param_name == "freq_hz" then
+        local freq_param_idx = band * 3
+        local num_params_f = reaper.TrackFX_GetNumParams(track, eq_idx)
+        if freq_param_idx >= num_params_f then
+            reaper.SetExtState(section, "eq_set_result",
+                "ERROR:freq_param_out_of_range:" .. freq_param_idx, false)
+            return
+        end
+
+        -- Parse Hz from a formatted string like "250 Hz" or "1.2 kHz".
+        -- Returns nil if neither form parses cleanly.
+        local function parse_hz(fmt)
+            local n = tonumber(fmt:match("(-?[%d%.]+)"))
+            if n == nil then return nil end
+            if fmt:lower():match("khz") then
+                return n * 1000.0
+            end
+            return n
+        end
+
+        -- Sample 21 points: norm = 0.00, 0.05, ..., 1.00 → formatted Hz.
+        local samples = {}
+        local N_STEPS = 20
+        for i = 0, N_STEPS do
+            local norm_i = i / N_STEPS
+            local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, freq_param_idx, norm_i, "")
+            local hz_i = parse_hz(fmt)
+            if hz_i == nil then
+                reaper.SetExtState(section, "eq_set_result",
+                    string.format("ERROR:sample_parse_failed:band=%d,norm=%.3f,fmt=%s",
+                        band, norm_i, fmt or ""), false)
+                return
+            end
+            samples[i + 1] = { norm = norm_i, hz = hz_i }
+        end
+
+        -- Linear interpolation in LOG-Hz space (freq is logarithmic):
+        -- find bracketing pair where lo.hz <= desired_hz <= hi.hz, lo.hz < hi.hz.
+        -- ReaEQ's norm→Hz is monotonic increasing; if non-monotonic for some
+        -- band type we still snap to the closest sample by absolute distance.
+        local desired = value
+        local best_norm = samples[1].norm
+        local best_err = math.huge
+        for i = 1, 20 do
+            local lo = samples[i]
+            local hi = samples[i + 1]
+            if lo.hz <= desired and desired <= hi.hz and lo.hz < hi.hz then
+                local t = (math.log(desired) - math.log(lo.hz))
+                        / (math.log(hi.hz) - math.log(lo.hz))
+                local n = lo.norm + t * (hi.norm - lo.norm)
+                local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
+                    track, eq_idx, freq_param_idx, n, "")
+                local v_hz = parse_hz(vfmt)
+                if v_hz ~= nil then
+                    local err = math.abs(v_hz - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = n
+                    end
+                end
+            else
+                for _, s in ipairs({ lo, hi }) do
+                    local err = math.abs(s.hz - desired)
+                    if err < best_err then
+                        best_err = err
+                        best_norm = s.norm
+                    end
+                end
+            end
+        end
+
+        reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, best_norm)
+        local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
+            track, eq_idx, freq_param_idx)
+        reaper.SetExtState(section, "eq_set_result",
+            string.format(
+                "OK:track=%d,band=%d,param=freq_hz,desired_hz=%.3f,norm=%.6f,formatted=%s",
+                track_idx, band, desired, best_norm, fmt_post),
+            false)
+        return
+    end
+
     -- Handle "enabled" param via BANDENABLEDM (NO colon, M=band number).
     -- IMPORTANT: BANDENABLED:N (WITH colon) is a GLOBAL toggle — do NOT use.
     -- BANDENABLEDM (without colon) is the actual per-band enabled checkbox.
