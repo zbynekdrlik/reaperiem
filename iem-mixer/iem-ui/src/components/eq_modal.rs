@@ -12,6 +12,28 @@
 //!
 //! v1.108.0: Band ordering (HPF first), ±12dB gain range fix, HPF toggle via
 //! frequency, professional biquad curve rendering (Audio EQ Cookbook).
+//!
+//! ### EQ value precision (set→reopen drift fix, #194 + #196)
+//!
+//! Three layers protect the round-trip set→display→store→reopen against drift:
+//!
+//! 1. **ReaScript Newton refinement** (`scripts/reascripts/set_eq_param.lua`) —
+//!    after the initial 21-sample interpolation, the script reads REAPER's
+//!    actual stored value, estimates slope via finite difference, nudges the
+//!    norm by error/slope, repeats ≤5 iterations. Converges to within 0.05 dB
+//!    / 0.5 Hz / 0.005 oct of the requested value.
+//! 2. **UI snap to display granularity** (`snap_db` / `snap_hz` / `snap_oct`
+//!    in this file) — slider on_change rounds the projected value to the same
+//!    granularity the UI label uses (`{:.1} dB`, `format_freq`, `{:.2} oct`).
+//!    Sent value matches displayed value exactly.
+//! 3. **drag_end force-flush** — slider on_change is throttled to 50 ms,
+//!    which can drop the last position before drag-end. on_drag_end now
+//!    unconditionally sends the local sig value, guaranteeing the final
+//!    position reaches REAPER. The local sig already holds the snapped value
+//!    from on_change.
+//!
+//! Together these make sent = displayed = stored = reopened. Removing any
+//! layer reintroduces a drift surface.
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -26,6 +48,22 @@ const DOUBLE_TAP_MS: f64 = 300.0;
 
 /// Sample rate for biquad filter calculations (Dante network rate)
 const SAMPLE_RATE: f32 = 96000.0;
+
+/// UI-fixed visual range for the freq slider (Hz). REAPER's actual ReaEQ range is
+/// 20 Hz – ~24 kHz; we mirror that here for the slider's log-scale projection.
+const UI_FREQ_MIN_HZ: f32 = 20.0;
+const UI_FREQ_MAX_HZ: f32 = 24000.0;
+
+/// UI-fixed visual range for the bw slider (octaves). REAPER's typical ReaEQ bw is
+/// 0.01 – 4.00 oct (varies per band type, but UI displays this nominal range).
+const UI_BW_MIN_OCT: f32 = 0.01;
+const UI_BW_MAX_OCT: f32 = 4.00;
+
+/// UI-fixed visual range for the gain slider (dB). REAPER's actual gd range is
+/// -150 dB to +12 dB, but musical gains live in ±12 — UI clamps display to this
+/// range so the slider isn't squashed into the far-right 10%.
+const UI_GAIN_MIN_DB: f32 = -12.0;
+const UI_GAIN_MAX_DB: f32 = 12.0;
 
 /// EQ band data (mirrors iem_core::EqBand for frontend use)
 #[derive(Debug, Clone, PartialEq)]
@@ -51,39 +89,6 @@ fn band_color(band_type: &str) -> &'static str {
         "notch" => "#ff9f43",
         _ => "#4ecdc4", // "band" = default accent
     }
-}
-
-/// Convert normalized frequency (0-1) to Hz matching REAPER's ReaEQ curve.
-/// Uses lookup table with log-space interpolation from empirical REAPER data.
-/// Range: 20 Hz to 24,000 Hz (NOT 20,000 — REAPER's actual range).
-fn norm_to_freq_hz(norm: f32) -> f32 {
-    const TABLE: [(f32, f32); 11] = [
-        (0.0, 20.0),
-        (0.1, 69.2),
-        (0.2, 158.9),
-        (0.3, 322.1),
-        (0.4, 619.3),
-        (0.5, 1160.5),
-        (0.6, 2146.2),
-        (0.7, 3941.0),
-        (0.8, 7209.5),
-        (0.9, 13161.4),
-        (1.0, 24000.0),
-    ];
-    let norm = norm.clamp(0.0, 1.0);
-    let idx = (norm * 10.0) as usize;
-    if idx >= 10 {
-        return TABLE[10].1;
-    }
-    let t = norm * 10.0 - idx as f32;
-    let log_lo = TABLE[idx].1.ln();
-    let log_hi = TABLE[idx + 1].1.ln();
-    (log_lo + t * (log_hi - log_lo)).exp()
-}
-
-/// Convert normalized bandwidth (0-1) to octaves
-fn norm_to_bw(norm: f32) -> f32 {
-    0.01 + norm * 3.99
 }
 
 /// Convert frequency in Hz to SVG x position (20Hz-20kHz log scale)
@@ -325,6 +330,29 @@ fn format_freq(hz: f32) -> String {
     } else {
         format!("{:.0}", hz)
     }
+}
+
+/// Snap a dB value to UI display granularity (0.1 dB).
+/// Ensures slider on_change sends exactly the value shown in the label,
+/// preventing reopen-drift caused by float-precision mismatch between
+/// displayed text (`{:.1} dB`) and the underlying float sent to ReaScript.
+fn snap_db(db: f32) -> f32 {
+    (db * 10.0).round() / 10.0
+}
+
+/// Snap a Hz value to UI display granularity. Matches `format_freq`:
+/// integer Hz below 1 kHz, 100 Hz above.
+fn snap_hz(hz: f32) -> f32 {
+    if hz >= 1000.0 {
+        (hz / 100.0).round() * 100.0
+    } else {
+        hz.round()
+    }
+}
+
+/// Snap an oct value to UI display granularity (0.01 oct).
+fn snap_oct(oct: f32) -> f32 {
+    (oct * 100.0).round() / 100.0
 }
 
 /// Per-band local state signals that survive parent re-renders.
@@ -631,8 +659,6 @@ pub fn EQModal(
                                 let color = band_color(&band_type).to_string();
 
                                 // Get the stable local signals for this band
-                                let freq_sig = local.freq_norm;
-                                let bw_sig = local.bw_norm;
                                 let freq_hz_sig = local.freq_hz;
                                 let gain_db_sig = local.gain_db;
                                 let bw_oct_sig = local.bw_oct;
@@ -677,30 +703,26 @@ pub fn EQModal(
                                                     // Reset gain to 0dB via new gain_db protocol
                                                     let _ = gain_db_sig.try_set(0.0);
                                                     on_param_change.run((idx, "gain_db".to_string(), 0.0));
-                                                    // Reset freq to per-band default
-                                                    // Norm values verified empirically against REAPER
-                                                    let default_freq_norm: f32 = match band_type_reset.as_str() {
-                                                        "highpass" => 0.1160,   // 80Hz
-                                                        "lowshelf" => 0.2316,   // 200Hz
-                                                        "highshelf" => 0.8176,  // 8kHz
-                                                        "lowpass" => 0.8848,    // 12kHz
+                                                    // Reset freq to per-band default Hz (#196)
+                                                    let default_freq_hz: f32 = match band_type_reset.as_str() {
+                                                        "highpass" => 80.0,
+                                                        "lowshelf" => 200.0,
+                                                        "highshelf" => 8000.0,
+                                                        "lowpass" => 12000.0,
                                                         _ => {
                                                             // Parametric bands: use REAPER index
-                                                            if idx == 3 { 0.6548 } else { 0.4408 }
-                                                            // band 2 → 800Hz, band 3 → 3kHz
+                                                            if idx == 3 { 3000.0 } else { 800.0 }
                                                         }
                                                     };
-                                                    let default_bw_norm = match band_type_reset.as_str() {
-                                                        "highpass" | "lowshelf" | "highshelf" | "lowpass" => 0.50,
-                                                        _ => 0.25,
+                                                    // Reset bw to per-band default oct (#196)
+                                                    let default_bw_oct: f32 = match band_type_reset.as_str() {
+                                                        "highpass" | "lowshelf" | "highshelf" | "lowpass" => 2.00,
+                                                        _ => 1.00,
                                                     };
-                                                    let _ = freq_sig.try_set(default_freq_norm);
-                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(default_freq_norm));
-                                                    on_param_change.run((idx, "freq".to_string(), default_freq_norm));
-                                                    // Override BW with type-specific default
-                                                    let _ = bw_sig.try_set(default_bw_norm);
-                                                    let _ = bw_oct_sig.try_set(norm_to_bw(default_bw_norm));
-                                                    on_param_change.run((idx, "bw".to_string(), default_bw_norm));
+                                                    let _ = freq_hz_sig.try_set(default_freq_hz);
+                                                    on_param_change.run((idx, "freq_hz".to_string(), default_freq_hz));
+                                                    let _ = bw_oct_sig.try_set(default_bw_oct);
+                                                    on_param_change.run((idx, "bw_oct".to_string(), default_bw_oct));
                                                     // Enable/disable state NOT changed — reset only affects parameters
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 }
@@ -709,19 +731,30 @@ pub fn EQModal(
                                             </button>
                                         </div>
 
-                                        // Frequency slider
+                                        // Frequency slider: derives position from REAPER's actual freq_hz
+                                        // mapped onto a fixed UI log scale (20 Hz – 24 kHz). Single source
+                                        // of truth = REAPER (#196).
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"Freq"</label>
                                             <EqSlider
-                                                value=freq_sig.into()
+                                                value=Signal::derive(move || {
+                                                    let hz = freq_hz_sig.get().clamp(UI_FREQ_MIN_HZ, UI_FREQ_MAX_HZ);
+                                                    let log_min = UI_FREQ_MIN_HZ.ln();
+                                                    let log_max = UI_FREQ_MAX_HZ.ln();
+                                                    (hz.ln() - log_min) / (log_max - log_min)
+                                                })
                                                 on_change=Callback::new(move |v: f32| {
+                                                    let log_min = UI_FREQ_MIN_HZ.ln();
+                                                    let log_max = UI_FREQ_MAX_HZ.ln();
+                                                    // Snap to UI display granularity — same lock-step
+                                                    // sent/displayed/stored argument as gain_db (#196).
+                                                    let hz = snap_hz((log_min + v * (log_max - log_min)).exp());
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         let _ = last_send_freq.try_set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "freq".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "freq_hz".to_string(), hz));
                                                     }
-                                                    let _ = freq_sig.try_set(v);
-                                                    let _ = freq_hz_sig.try_set(norm_to_freq_hz(v));
+                                                    let _ = freq_hz_sig.try_set(hz);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -729,11 +762,24 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value: 50 ms throttle in on_change
+                                                    // can drop the last position. Without this, REAPER
+                                                    // stores a value from up to 50 ms before drag-end
+                                                    // and reopen reads that → drift (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
+                                                    let final_hz = freq_hz_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "freq_hz".to_string(), final_hz));
                                                 })
                                                 css_class="eq-slider-freq"
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format_freq(freq_hz_sig.get_untracked()) }}
+                                                {move || {
+                                                    curve_trigger.get();
+                                                    let hz = freq_hz_sig.get_untracked().clamp(UI_FREQ_MIN_HZ, UI_FREQ_MAX_HZ);
+                                                    format_freq(hz)
+                                                }}
                                             </span>
                                         </div>
 
@@ -750,13 +796,16 @@ pub fn EQModal(
                                                     // (REAPER's actual range is -150..+12 dB which would
                                                     // squash all musical gains into the far-right 10%
                                                     // of slider travel). Out-of-range values clamp.
-                                                    let db = gain_db_sig.get().clamp(-12.0, 12.0);
-                                                    (db + 12.0) / 24.0
+                                                    let db = gain_db_sig.get().clamp(UI_GAIN_MIN_DB, UI_GAIN_MAX_DB);
+                                                    (db - UI_GAIN_MIN_DB) / (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Project slider position 0-1 to dB using
-                                                    // the same UI-fixed ±12 range as the value derive.
-                                                    let db = (v - 0.5) * 24.0;
+                                                    // Project slider position 0-1 to dB, then snap to UI
+                                                    // display granularity (0.1 dB). Without snapping, the
+                                                    // displayed `{:.1}` rounds e.g. 2.04 → "+2.0 dB" while
+                                                    // ReaScript receives 2.04, REAPER stores ~2.04, and on
+                                                    // reopen the display may round differently → drift.
+                                                    let db = snap_db(UI_GAIN_MIN_DB + v * (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB));
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         let _ = last_send_gain.try_set(now);
@@ -770,6 +819,12 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value past the 50 ms throttle (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
+                                                    let final_db = gain_db_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "gain_db".to_string(), final_db));
                                                 })
                                                 css_class="eq-slider-gain"
                                                 default_value=0.5
@@ -779,25 +834,31 @@ pub fn EQModal(
                                                     curve_trigger.get();
                                                     // Clamp display to ±12 dB to match slider visual range —
                                                     // single source of truth for both thumb position and text.
-                                                    let db = gain_db_sig.get_untracked().clamp(-12.0, 12.0);
+                                                    let db = gain_db_sig.get_untracked().clamp(UI_GAIN_MIN_DB, UI_GAIN_MAX_DB);
                                                     if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
                                                 }}
                                             </span>
                                         </div>
 
-                                        // Bandwidth/Q slider
+                                        // Bandwidth/Q slider: derives position from REAPER's actual bw_oct
+                                        // mapped onto a fixed UI linear scale (0.01 – 4.00 oct). Single
+                                        // source of truth = REAPER (#196).
                                         <div class="eq-param-row">
                                             <label class="eq-param-label">"BW"</label>
                                             <EqSlider
-                                                value=bw_sig.into()
+                                                value=Signal::derive(move || {
+                                                    let oct = bw_oct_sig.get().clamp(UI_BW_MIN_OCT, UI_BW_MAX_OCT);
+                                                    (oct - UI_BW_MIN_OCT) / (UI_BW_MAX_OCT - UI_BW_MIN_OCT)
+                                                })
                                                 on_change=Callback::new(move |v: f32| {
+                                                    // Snap to UI display granularity (0.01 oct).
+                                                    let oct = snap_oct(UI_BW_MIN_OCT + v * (UI_BW_MAX_OCT - UI_BW_MIN_OCT));
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         let _ = last_send_bw.try_set(now);
-                                                        on_param_change.run((band_idx_sv.get_value(), "bw".to_string(), v));
+                                                        on_param_change.run((band_idx_sv.get_value(), "bw_oct".to_string(), oct));
                                                     }
-                                                    let _ = bw_sig.try_set(v);
-                                                    let _ = bw_oct_sig.try_set(norm_to_bw(v));
+                                                    let _ = bw_oct_sig.try_set(oct);
                                                     let _ = curve_trigger.try_update(|n| *n += 1);
                                                 })
                                                 on_drag_start=Callback::new(move |_: ()| {
@@ -805,12 +866,22 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value past the 50 ms throttle (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
+                                                    let final_oct = bw_oct_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "bw_oct".to_string(), final_oct));
                                                 })
                                                 css_class=""
                                                 default_value=0.5
                                             />
                                             <span class="eq-param-value">
-                                                {move || { curve_trigger.get(); format!("{:.2} oct", bw_oct_sig.get_untracked()) }}
+                                                {move || {
+                                                    curve_trigger.get();
+                                                    let oct = bw_oct_sig.get_untracked().clamp(UI_BW_MIN_OCT, UI_BW_MAX_OCT);
+                                                    format!("{:.2} oct", oct)
+                                                }}
                                             </span>
                                         </div>
                                     </div>
@@ -1168,63 +1239,6 @@ mod tests {
         assert_eq!(display_order("lowpass"), 5);
     }
 
-    /// Verify norm_to_freq_hz matches REAPER's actual ReaEQ frequency mapping.
-    /// Data points measured empirically via REAPER's GetFormattedParamValue.
-    #[test]
-    fn test_norm_to_freq_hz_matches_reaper() {
-        let data = [
-            (0.00, 20.0),
-            (0.10, 69.2),
-            (0.20, 158.9),
-            (0.30, 322.1),
-            (0.40, 619.3),
-            (0.50, 1160.5),
-            (0.60, 2146.2),
-            (0.70, 3941.0),
-            (0.80, 7209.5),
-            (0.90, 13161.4),
-            (1.00, 24000.0),
-        ];
-        for (norm, expected_hz) in data {
-            let actual = norm_to_freq_hz(norm);
-            let tolerance = expected_hz * 0.02; // 2% tolerance
-            assert!(
-                (actual - expected_hz).abs() < tolerance,
-                "norm={norm}: expected {expected_hz}Hz, got {actual}Hz"
-            );
-        }
-    }
-
-    /// Verify reset default norm values produce correct Hz.
-    #[test]
-    fn test_reset_default_frequencies() {
-        assert!(
-            (norm_to_freq_hz(0.1160) - 80.0).abs() < 3.0,
-            "HPF default: expected ~80Hz, got {}",
-            norm_to_freq_hz(0.1160)
-        );
-        assert!(
-            (norm_to_freq_hz(0.2316) - 200.0).abs() < 5.0,
-            "LowShelf default: expected ~200Hz, got {}",
-            norm_to_freq_hz(0.2316)
-        );
-        assert!(
-            (norm_to_freq_hz(0.4408) - 800.0).abs() < 20.0,
-            "Band default: expected ~800Hz, got {}",
-            norm_to_freq_hz(0.4408)
-        );
-        assert!(
-            (norm_to_freq_hz(0.6548) - 3000.0).abs() < 60.0,
-            "Band2 default: expected ~3000Hz, got {}",
-            norm_to_freq_hz(0.6548)
-        );
-        assert!(
-            (norm_to_freq_hz(0.8176) - 8000.0).abs() < 160.0,
-            "HighShelf default: expected ~8000Hz, got {}",
-            norm_to_freq_hz(0.8176)
-        );
-    }
-
     #[test]
     fn test_gain_to_y_center() {
         let height = 300.0;
@@ -1540,5 +1554,44 @@ mod tests {
             curve_max <= 4.6,
             "fixture curve max = {curve_max} dB, expected ≤ 4.6 (no shelf ringing)"
         );
+    }
+
+    #[test]
+    fn test_snap_db_rounds_to_tenth() {
+        assert!((snap_db(2.04) - 2.0).abs() < f32::EPSILON);
+        // 2.05 isn't exactly representable in f32 (≈2.0499998...), so the snap
+        // result lands ≈2.1 within ~1e-7 but not within f32::EPSILON. Use 1e-3
+        // tolerance for any half-up boundary case.
+        assert!((snap_db(2.05) - 2.1).abs() < 0.001);
+        assert!((snap_db(-3.46) - -3.5).abs() < 0.001);
+        assert!((snap_db(0.0) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snap_hz_below_1k_rounds_to_integer() {
+        assert!((snap_hz(322.4) - 322.0).abs() < f32::EPSILON);
+        assert!((snap_hz(322.6) - 323.0).abs() < f32::EPSILON);
+        assert!((snap_hz(20.0) - 20.0).abs() < f32::EPSILON);
+        assert!((snap_hz(999.4) - 999.0).abs() < f32::EPSILON);
+        // Boundary at 1 kHz: half-up still uses integer-Hz branch when input < 1000.
+        assert!((snap_hz(999.6) - 1000.0).abs() < 0.001);
+        // Exactly 1000 falls into the >=1000 branch, rounds to 1000 in 100-Hz space.
+        assert!((snap_hz(1000.0) - 1000.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_snap_hz_above_1k_rounds_to_hundred() {
+        assert!((snap_hz(1234.0) - 1200.0).abs() < f32::EPSILON);
+        assert!((snap_hz(1250.0) - 1300.0).abs() < f32::EPSILON); // half-up
+        assert!((snap_hz(10049.0) - 10000.0).abs() < f32::EPSILON);
+        assert!((snap_hz(10050.0) - 10100.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snap_oct_rounds_to_hundredth() {
+        assert!((snap_oct(1.184) - 1.18).abs() < 0.001);
+        assert!((snap_oct(1.185) - 1.19).abs() < 0.001);
+        assert!((snap_oct(2.005) - 2.01).abs() < 0.001);
+        assert!((snap_oct(0.01) - 0.01).abs() < f32::EPSILON);
     }
 }

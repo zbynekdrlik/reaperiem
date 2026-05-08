@@ -6,6 +6,13 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.166.0 (2026-05-07)
+
+- **Fix**: EQ frequency value drift on close+reopen (Mirec) — set 321 Hz, return showed 320 Hz. Same dual-formula divergence pattern as the v1.165.0 gain fix; UI sent normalized values from its own approximation table while REAPER stored its actual mapping. UI now sends Hz/oct directly; ReaScript samples REAPER's norm↔value mapping (21 points, log-space for freq, linear for bw) and writes the matching norm. REAPER is now the single source of truth for both freq and bw.
+- **Internal**: Delete UI helpers `norm_to_freq_hz` and `norm_to_bw`. Existing preset replay keeps the legacy norm protocol for bit-exact restoration of saved presets — no migration risk for existing user EQ state.
+- **Fix**: EQ slider now snaps to display granularity (0.1 dB / integer Hz / 0.01 oct) on change. Previously the slider sent full-precision floats while the UI label rounded to 1 decimal; user could see "+2.0 dB" but ReaScript received 2.04 → REAPER stored 2.04 → reopen rounded differently and showed "+2.1 dB". Now displayed value, sent value, and stored value match exactly. Mirec's reported drift fully resolved at the slider→REAPER boundary.
+- **Fix**: EQ slider now force-flushes the final value on drag-end. Without this, the 50 ms throttle on slider on-change could drop the last position before release, leaving REAPER with a value from up to 50 ms before drag-end while the UI showed the (visually correct) final position. Combined with the snap and Newton fixes (#194 v1.165.0 + #196), set→reopen is now deterministic.
+
 ### v1.165.0 (2026-05-03)
 
 - **Fix**: EQ panel slider thumb now matches displayed dB value. Previously the slider position was computed from REAPER's normalized 0-1 value via a UI approximation curve while the text label read REAPER's actual formatted dB — the two disagreed (e.g. text said "+4 dB" while thumb sat at the "+1 dB" tick). Both now derive from REAPER's formatted dB; thumb and text always agree on initial render and across re-mounts. (#194)

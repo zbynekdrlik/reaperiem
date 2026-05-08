@@ -1448,6 +1448,230 @@ test.describe("EQ value sync - ENGINEER track", () => {
       await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
     }
   });
+
+  test("#196 freq slider thumb position matches displayed Hz across close+reopen (engineer inear)", async ({
+    page,
+  }) => {
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32; // "ENGINEER inear"
+    const TEST_FREQ_NORM = 0.30; // ≈ 322 Hz — close to Mirec's reported 321/320 boundary
+
+    // Discover lowshelf band's REAPER native index (for pre-arrangement) — UI sorts by
+    // display_order, so we cannot use the same index for UI nth(); we select the UI card
+    // by its band-type label instead.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const initial = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const lowshelfMatch = initial.match(/b(\d+):lowshelf,[^|]+/);
+    if (!lowshelfMatch) {
+      throw new Error(`No lowshelf band on engineer track: ${initial}`);
+    }
+    const TEST_BAND = parseInt(lowshelfMatch[1]);
+    const originalGn = lowshelfMatch[0].match(/fn=([\d.]+)/);
+    if (!originalGn) throw new Error(`No fn=: ${lowshelfMatch[0]}`);
+    const originalNorm = parseFloat(originalGn[1]);
+
+    try {
+      // Set test value via legacy `param=freq` (norm) ReaScript path —
+      // pre-arrangement decoupled from the new freq_hz protocol under test.
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=freq%7Cvalue=${TEST_FREQ_NORM}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 500));
+
+      // beforeEach already logged in as engineer + nav'd to /engineer.
+      await waitForMixer(page);
+
+      const opened = await openEqForChannel(page, "ENGINEER");
+      expect(opened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".eq-band-card").first()).toBeVisible({
+        timeout: 5000,
+      });
+      await page.waitForTimeout(1000); // bands populate from server
+
+      // Locate band card by type label — robust to display_order sorting.
+      const bandCard = page.locator(".eq-band-card").filter({
+        has: page.locator(`.eq-band-type:has-text("lowshelf")`),
+      }).first();
+      await bandCard.waitFor({ state: "visible", timeout: 5000 });
+
+      const freqRow = bandCard.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Freq'))",
+      );
+      const displayedText = await freqRow
+        .locator(".eq-param-value")
+        .textContent();
+      if (!displayedText) throw new Error("Freq text not rendered");
+
+      // Parse Hz from forms like "322", "1.2k", "20.0k".
+      const parseHz = (t: string): number => {
+        const km = t.match(/([\d.]+)k/);
+        if (km) return parseFloat(km[1]) * 1000;
+        const n = t.match(/([\d.]+)/);
+        if (!n) throw new Error(`No Hz: ${t}`);
+        return parseFloat(n[1]);
+      };
+      const displayedHz = parseHz(displayedText);
+
+      // Sanity: pre-arrangement landed somewhere musical (not 20 Hz floor or 24k ceiling).
+      expect(displayedHz).toBeGreaterThan(50);
+      expect(displayedHz).toBeLessThan(2000);
+
+      // Slider thumb position vs Hz-derived expected (UI log scale 20-24000 Hz).
+      const thumbStyle = await freqRow
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPctMatch = thumbStyle.match(/left:\s*([\d.]+)%/);
+      if (!thumbPctMatch) throw new Error(`Thumb pct: ${thumbStyle}`);
+      const thumbPct = parseFloat(thumbPctMatch[1]) / 100;
+
+      const logMin = Math.log(20);
+      const logMax = Math.log(24000);
+      const expectedThumbPct =
+        (Math.log(Math.max(20, Math.min(24000, displayedHz))) - logMin) /
+        (logMax - logMin);
+      // Tolerance 0.02 covers Hz display rounding (e.g. "322" vs actual 322.4).
+      expect(Math.abs(thumbPct - expectedThumbPct)).toBeLessThan(0.02);
+
+      // Close + reopen, re-assert stability — the core #196 bug check.
+      await page.locator(".eq-close-btn").click();
+      await page.waitForSelector(".eq-modal", {
+        state: "detached",
+        timeout: 5000,
+      });
+
+      const reopened = await openEqForChannel(page, "ENGINEER");
+      expect(reopened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+
+      const bandCard2 = page.locator(".eq-band-card").filter({
+        has: page.locator(`.eq-band-type:has-text("lowshelf")`),
+      }).first();
+      const freqRow2 = bandCard2.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Freq'))",
+      );
+      const text2 = await freqRow2.locator(".eq-param-value").textContent();
+      if (!text2) throw new Error("Reopen: freq text empty");
+      const hz2 = parseHz(text2);
+
+      const thumbStyle2 = await freqRow2
+        .locator(".eq-slider-thumb")
+        .evaluate((el) => (el as HTMLElement).getAttribute("style") || "");
+      const thumbPct2Match = thumbStyle2.match(/left:\s*([\d.]+)%/);
+      if (!thumbPct2Match) throw new Error(`Reopen thumb pct: ${thumbStyle2}`);
+      const thumbPct2 = parseFloat(thumbPct2Match[1]) / 100;
+
+      // Stability across close+reopen: same displayed text (the Mirec bug — text
+      // shifted from 321 to 320 on reopen) and same thumb position.
+      expect(text2.trim()).toBe(displayedText.trim());
+      expect(Math.abs(thumbPct2 - thumbPct)).toBeLessThan(0.005);
+
+      // Also confirm reopen thumb-vs-text agreement.
+      const expectedThumbPct2 =
+        (Math.log(Math.max(20, Math.min(24000, hz2))) - logMin) /
+        (logMax - logMin);
+      expect(Math.abs(thumbPct2 - expectedThumbPct2)).toBeLessThan(0.02);
+    } finally {
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=freq%7Cvalue=${originalNorm}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    }
+  });
+
+  test("#196 gain_db / freq_hz / bw_oct precision — REAPER stores exactly the value sent (engineer lowshelf)", async ({
+    page: _page,
+  }) => {
+    // Backend-only assertion: the new value-domain protocols (gain_db / freq_hz / bw_oct)
+    // round-trip through REAPER's mapping with sub-display-resolution accuracy. The UI
+    // reads REAPER's truth on every load, so if REAPER's gd matches the desired dB
+    // exactly, the UI cannot drift on close+reopen.
+    //
+    // Why backend-only: the modal-render path is covered by the existing #194 + #196 freq
+    // tests. This test isolates the precision of the ReaScript refinement loop, which is
+    // what user reported (set 2.0 → reopen 2.1).
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32;
+
+    // Snapshot lowshelf band's original norms for restore.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const initial = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const lowshelfMatch = initial.match(/b(\d+):lowshelf,[^|]+/);
+    if (!lowshelfMatch) {
+      throw new Error(`No lowshelf band on engineer: ${initial}`);
+    }
+    const TEST_BAND = parseInt(lowshelfMatch[1]);
+    const orig = lowshelfMatch[0];
+    const origGn = parseFloat(orig.match(/gn=([\d.]+)/)![1]);
+    const origFn = parseFloat(orig.match(/fn=([\d.]+)/)![1]);
+    const origBn = parseFloat(orig.match(/bn=([\d.]+)/)![1]);
+
+    // Helper: send a value-domain SET via the new protocol and return parsed eq_params row.
+    const setAndRead = async (param: string, value: number) => {
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=${param}%7Cvalue=${value}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 250));
+      const result = await fetch(
+        `${REAPER}/GET/EXTSTATE/reaperiem/eq_set_result`,
+      ).then((r) => r.text());
+      const lineEq = result.split("\t").pop()?.trim() ?? "";
+      if (!lineEq.startsWith("OK:")) {
+        throw new Error(`set_eq_param failed for ${param}=${value}: ${lineEq}`);
+      }
+      // Re-read eq_params to get the persisted band state.
+      await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+      await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+      await new Promise((r) => setTimeout(r, 300));
+      const params = await fetch(
+        `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+      ).then((r) => r.text());
+      const row = params.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+      if (!row) throw new Error(`No band ${TEST_BAND} in: ${params}`);
+      return row[0];
+    };
+
+    try {
+      // gain_db: user reports 2.0 → 2.1 drift. Refinement should converge ≤0.05 dB.
+      let row = await setAndRead("gain_db", 2.0);
+      const gd = parseFloat(row.match(/gd=([-\d.]+)/)![1]);
+      expect(Math.abs(gd - 2.0)).toBeLessThanOrEqual(0.05);
+
+      // freq_hz: 322 Hz precision. Refinement should converge ≤0.5 Hz.
+      row = await setAndRead("freq_hz", 322);
+      const fh = parseFloat(row.match(/fh=([\d.]+)/)![1]);
+      expect(Math.abs(fh - 322.0)).toBeLessThanOrEqual(0.5);
+
+      // bw_oct: 1.5 oct precision. Refinement should converge ≤0.005 oct.
+      row = await setAndRead("bw_oct", 1.5);
+      const bo = parseFloat(row.match(/bo=([\d.]+)/)![1]);
+      expect(Math.abs(bo - 1.5)).toBeLessThanOrEqual(0.005);
+    } finally {
+      // Restore via legacy norm protocol on the same REAPER band index.
+      for (const [param, value] of [
+        ["freq", origFn],
+        ["gain", origGn],
+        ["bw", origBn],
+      ] as const) {
+        await fetch(
+          `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=${param}%7Cvalue=${value}`,
+        );
+        await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+  });
 });
 
 // Regression test for #167 — EQ curve shape

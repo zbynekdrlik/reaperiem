@@ -342,10 +342,13 @@ async fn restore_snapshot(
     if let Some(ref eq_bands_map) = snapshot.eq_bands {
         for (track_index, bands) in eq_bands_map {
             for (band_idx, band) in bands.iter().enumerate() {
-                // NOTE: preset replay uses the legacy `param=gain` (norm) protocol.
-                // The interactive UI slider uses `param=gain_db` (#194), but the
-                // ReaScript supports BOTH. Don't remove the legacy `gain` branch
-                // from set_eq_param.lua without updating preset/snapshot apply paths.
+                // NOTE: preset replay uses the LEGACY norm protocol for all params:
+                // `param=freq` (norm), `param=gain` (norm), `param=bw` (norm).
+                // The interactive UI slider uses the value-domain protocols:
+                // `param=gain_db` (#194), `param=freq_hz` (#196), `param=bw_oct` (#196).
+                // The ReaScript supports BOTH families. Don't remove any legacy
+                // norm branch from set_eq_param.lua without updating preset/snapshot
+                // apply paths — preset bit-exactness depends on the norm protocol.
                 for (param_name, value) in [
                     ("freq", band.freq_norm),
                     ("gain", band.gain_norm),
