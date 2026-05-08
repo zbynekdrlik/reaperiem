@@ -145,14 +145,9 @@ local function set_eq()
             if val_now == nil then break end
             if math.abs(val_now - desired) <= TOL then break end
 
-            local probe
-            if best_norm + EPS <= 1.0 then
-                probe = best_norm + EPS
-            elseif best_norm - EPS >= 0.0 then
-                probe = best_norm - EPS
-            else
-                break
-            end
+            -- Probe direction: prefer + EPS; fall back to - EPS only when at upper edge.
+            -- (EPS=0.001 ⇒ both clauses can't simultaneously fail; no `else` needed.)
+            local probe = (best_norm + EPS <= 1.0) and (best_norm + EPS) or (best_norm - EPS)
             local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, gain_param_idx, probe, "")
             local val_probe = parse_db(fmt_probe)
@@ -259,8 +254,8 @@ local function set_eq()
         -- difference slope estimate. Converges to REAPER's float32 internal
         -- precision in ≤5 iterations. Same loop applies to gain_db / freq_hz /
         -- bw_oct — only the parse function and TOL differ. (#196 follow-up:
-        -- 21-sample interp left ~0.05-unit residual error, visible at 0.1 dB
-        -- display rounding.)
+        -- 21-sample interp left ~0.05-unit residual error,
+        -- amplified by REAPER's display-formatted Hz precision.)
         local TOL = 0.5
         local MAX_ITER = 5
         local EPS = 0.001
@@ -271,14 +266,9 @@ local function set_eq()
             if val_now == nil then break end
             if math.abs(val_now - desired) <= TOL then break end
 
-            local probe
-            if best_norm + EPS <= 1.0 then
-                probe = best_norm + EPS
-            elseif best_norm - EPS >= 0.0 then
-                probe = best_norm - EPS
-            else
-                break
-            end
+            -- Probe direction: prefer + EPS; fall back to - EPS only when at upper edge.
+            -- (EPS=0.001 ⇒ both clauses can't simultaneously fail; no `else` needed.)
+            local probe = (best_norm + EPS <= 1.0) and (best_norm + EPS) or (best_norm - EPS)
             local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, freq_param_idx, probe, "")
             local val_probe = parse_hz(fmt_probe)
@@ -373,8 +363,8 @@ local function set_eq()
         -- difference slope estimate. Converges to REAPER's float32 internal
         -- precision in ≤5 iterations. Same loop applies to gain_db / freq_hz /
         -- bw_oct — only the parse function and TOL differ. (#196 follow-up:
-        -- 21-sample interp left ~0.05-unit residual error, visible at 0.1 dB
-        -- display rounding.)
+        -- 21-sample interp left ~0.005-unit residual error,
+        -- amplified by REAPER's display-formatted oct precision.)
         local TOL = 0.005
         local MAX_ITER = 5
         local EPS = 0.001
@@ -385,14 +375,9 @@ local function set_eq()
             if val_now == nil then break end
             if math.abs(val_now - desired) <= TOL then break end
 
-            local probe
-            if best_norm + EPS <= 1.0 then
-                probe = best_norm + EPS
-            elseif best_norm - EPS >= 0.0 then
-                probe = best_norm - EPS
-            else
-                break
-            end
+            -- Probe direction: prefer + EPS; fall back to - EPS only when at upper edge.
+            -- (EPS=0.001 ⇒ both clauses can't simultaneously fail; no `else` needed.)
+            local probe = (best_norm + EPS <= 1.0) and (best_norm + EPS) or (best_norm - EPS)
             local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, bw_param_idx, probe, "")
             local val_probe = parse_oct(fmt_probe)

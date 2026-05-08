@@ -1454,21 +1454,25 @@ test.describe("EQ value sync - ENGINEER track", () => {
   }) => {
     const REAPER = "http://iem.lan:8080/_";
     const ENGINEER_TRACK = 32; // "ENGINEER inear"
-    const TEST_BAND = 1; // b1 lowshelf
     const TEST_FREQ_NORM = 0.30; // ≈ 322 Hz — close to Mirec's reported 321/320 boundary
 
-    // Capture original norm so we can restore.
+    // Discover lowshelf band's REAPER native index (for pre-arrangement) — UI sorts by
+    // display_order, so we cannot use the same index for UI nth(); we select the UI card
+    // by its band-type label instead.
     await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
     await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
     await new Promise((r) => setTimeout(r, 800));
-    const readResp = await fetch(
+    const initial = await fetch(
       `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
     ).then((r) => r.text());
-    const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
-    if (!bandMatch) throw new Error(`No band ${TEST_BAND}: ${readResp}`);
-    const originalFn = bandMatch[0].match(/fn=([\d.]+)/);
-    if (!originalFn) throw new Error(`No fn=: ${bandMatch[0]}`);
-    const originalNorm = parseFloat(originalFn[1]);
+    const lowshelfMatch = initial.match(/b(\d+):lowshelf,[^|]+/);
+    if (!lowshelfMatch) {
+      throw new Error(`No lowshelf band on engineer track: ${initial}`);
+    }
+    const TEST_BAND = parseInt(lowshelfMatch[1]);
+    const originalGn = lowshelfMatch[0].match(/fn=([\d.]+)/);
+    if (!originalGn) throw new Error(`No fn=: ${lowshelfMatch[0]}`);
+    const originalNorm = parseFloat(originalGn[1]);
 
     try {
       // Set test value via legacy `param=freq` (norm) ReaScript path —
@@ -1490,9 +1494,10 @@ test.describe("EQ value sync - ENGINEER track", () => {
       });
       await page.waitForTimeout(1000); // bands populate from server
 
-      // Locate band's freq row.
-      const bandCards = page.locator(".eq-band-card");
-      const bandCard = bandCards.nth(TEST_BAND);
+      // Locate band card by type label — robust to display_order sorting.
+      const bandCard = page.locator(".eq-band-card").filter({
+        has: page.locator(`.eq-band-type:has-text("lowshelf")`),
+      }).first();
       await bandCard.waitFor({ state: "visible", timeout: 5000 });
 
       const freqRow = bandCard.locator(
@@ -1545,7 +1550,9 @@ test.describe("EQ value sync - ENGINEER track", () => {
       await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
       await page.waitForTimeout(1000);
 
-      const bandCard2 = page.locator(".eq-band-card").nth(TEST_BAND);
+      const bandCard2 = page.locator(".eq-band-card").filter({
+        has: page.locator(`.eq-band-type:has-text("lowshelf")`),
+      }).first();
       const freqRow2 = bandCard2.locator(
         ".eq-param-row:has(.eq-param-label:has-text('Freq'))",
       );
@@ -1649,7 +1656,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
       // bw_oct: 1.5 oct precision. Refinement should converge ≤0.005 oct.
       row = await setAndRead("bw_oct", 1.5);
       const bo = parseFloat(row.match(/bo=([\d.]+)/)![1]);
-      expect(Math.abs(bo - 1.5)).toBeLessThanOrEqual(0.01);
+      expect(Math.abs(bo - 1.5)).toBeLessThanOrEqual(0.005);
     } finally {
       // Restore via legacy norm protocol on the same REAPER band index.
       for (const [param, value] of [

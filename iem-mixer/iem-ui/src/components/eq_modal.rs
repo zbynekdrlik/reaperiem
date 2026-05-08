@@ -27,6 +27,22 @@ const DOUBLE_TAP_MS: f64 = 300.0;
 /// Sample rate for biquad filter calculations (Dante network rate)
 const SAMPLE_RATE: f32 = 96000.0;
 
+/// UI-fixed visual range for the freq slider (Hz). REAPER's actual ReaEQ range is
+/// 20 Hz – ~24 kHz; we mirror that here for the slider's log-scale projection.
+const UI_FREQ_MIN_HZ: f32 = 20.0;
+const UI_FREQ_MAX_HZ: f32 = 24000.0;
+
+/// UI-fixed visual range for the bw slider (octaves). REAPER's typical ReaEQ bw is
+/// 0.01 – 4.00 oct (varies per band type, but UI displays this nominal range).
+const UI_BW_MIN_OCT: f32 = 0.01;
+const UI_BW_MAX_OCT: f32 = 4.00;
+
+/// UI-fixed visual range for the gain slider (dB). REAPER's actual gd range is
+/// -150 dB to +12 dB, but musical gains live in ±12 — UI clamps display to this
+/// range so the slider isn't squashed into the far-right 10%.
+const UI_GAIN_MIN_DB: f32 = -12.0;
+const UI_GAIN_MAX_DB: f32 = 12.0;
+
 /// EQ band data (mirrors iem_core::EqBand for frontend use)
 #[derive(Debug, Clone, PartialEq)]
 pub struct EqBandState {
@@ -677,14 +693,14 @@ pub fn EQModal(
                                             <label class="eq-param-label">"Freq"</label>
                                             <EqSlider
                                                 value=Signal::derive(move || {
-                                                    let hz = freq_hz_sig.get().clamp(20.0, 24000.0);
-                                                    let log_min = 20.0_f32.ln();
-                                                    let log_max = 24000.0_f32.ln();
+                                                    let hz = freq_hz_sig.get().clamp(UI_FREQ_MIN_HZ, UI_FREQ_MAX_HZ);
+                                                    let log_min = UI_FREQ_MIN_HZ.ln();
+                                                    let log_max = UI_FREQ_MAX_HZ.ln();
                                                     (hz.ln() - log_min) / (log_max - log_min)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    let log_min = 20.0_f32.ln();
-                                                    let log_max = 24000.0_f32.ln();
+                                                    let log_min = UI_FREQ_MIN_HZ.ln();
+                                                    let log_max = UI_FREQ_MAX_HZ.ln();
                                                     let hz = (log_min + v * (log_max - log_min)).exp();
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
@@ -705,7 +721,7 @@ pub fn EQModal(
                                             <span class="eq-param-value">
                                                 {move || {
                                                     curve_trigger.get();
-                                                    let hz = freq_hz_sig.get_untracked().clamp(20.0, 24000.0);
+                                                    let hz = freq_hz_sig.get_untracked().clamp(UI_FREQ_MIN_HZ, UI_FREQ_MAX_HZ);
                                                     format_freq(hz)
                                                 }}
                                             </span>
@@ -724,13 +740,13 @@ pub fn EQModal(
                                                     // (REAPER's actual range is -150..+12 dB which would
                                                     // squash all musical gains into the far-right 10%
                                                     // of slider travel). Out-of-range values clamp.
-                                                    let db = gain_db_sig.get().clamp(-12.0, 12.0);
-                                                    (db + 12.0) / 24.0
+                                                    let db = gain_db_sig.get().clamp(UI_GAIN_MIN_DB, UI_GAIN_MAX_DB);
+                                                    (db - UI_GAIN_MIN_DB) / (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
                                                     // Project slider position 0-1 to dB using
                                                     // the same UI-fixed ±12 range as the value derive.
-                                                    let db = (v - 0.5) * 24.0;
+                                                    let db = UI_GAIN_MIN_DB + v * (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         let _ = last_send_gain.try_set(now);
@@ -753,7 +769,7 @@ pub fn EQModal(
                                                     curve_trigger.get();
                                                     // Clamp display to ±12 dB to match slider visual range —
                                                     // single source of truth for both thumb position and text.
-                                                    let db = gain_db_sig.get_untracked().clamp(-12.0, 12.0);
+                                                    let db = gain_db_sig.get_untracked().clamp(UI_GAIN_MIN_DB, UI_GAIN_MAX_DB);
                                                     if db >= 0.0 { format!("+{:.1} dB", db) } else { format!("{:.1} dB", db) }
                                                 }}
                                             </span>
@@ -766,11 +782,11 @@ pub fn EQModal(
                                             <label class="eq-param-label">"BW"</label>
                                             <EqSlider
                                                 value=Signal::derive(move || {
-                                                    let oct = bw_oct_sig.get().clamp(0.01, 4.00);
-                                                    (oct - 0.01) / 3.99
+                                                    let oct = bw_oct_sig.get().clamp(UI_BW_MIN_OCT, UI_BW_MAX_OCT);
+                                                    (oct - UI_BW_MIN_OCT) / (UI_BW_MAX_OCT - UI_BW_MIN_OCT)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    let oct = 0.01 + v * 3.99;
+                                                    let oct = UI_BW_MIN_OCT + v * (UI_BW_MAX_OCT - UI_BW_MIN_OCT);
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         let _ = last_send_bw.try_set(now);
@@ -791,7 +807,7 @@ pub fn EQModal(
                                             <span class="eq-param-value">
                                                 {move || {
                                                     curve_trigger.get();
-                                                    let oct = bw_oct_sig.get_untracked().clamp(0.01, 4.00);
+                                                    let oct = bw_oct_sig.get_untracked().clamp(UI_BW_MIN_OCT, UI_BW_MAX_OCT);
                                                     format!("{:.2} oct", oct)
                                                 }}
                                             </span>
