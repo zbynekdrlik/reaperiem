@@ -12,6 +12,28 @@
 //!
 //! v1.108.0: Band ordering (HPF first), ±12dB gain range fix, HPF toggle via
 //! frequency, professional biquad curve rendering (Audio EQ Cookbook).
+//!
+//! ### EQ value precision (set→reopen drift fix, #194 + #196)
+//!
+//! Three layers protect the round-trip set→display→store→reopen against drift:
+//!
+//! 1. **ReaScript Newton refinement** (`scripts/reascripts/set_eq_param.lua`) —
+//!    after the initial 21-sample interpolation, the script reads REAPER's
+//!    actual stored value, estimates slope via finite difference, nudges the
+//!    norm by error/slope, repeats ≤5 iterations. Converges to within 0.05 dB
+//!    / 0.5 Hz / 0.005 oct of the requested value.
+//! 2. **UI snap to display granularity** (`snap_db` / `snap_hz` / `snap_oct`
+//!    in this file) — slider on_change rounds the projected value to the same
+//!    granularity the UI label uses (`{:.1} dB`, `format_freq`, `{:.2} oct`).
+//!    Sent value matches displayed value exactly.
+//! 3. **drag_end force-flush** — slider on_change is throttled to 50 ms,
+//!    which can drop the last position before drag-end. on_drag_end now
+//!    unconditionally sends the local sig value, guaranteeing the final
+//!    position reaches REAPER. The local sig already holds the snapped value
+//!    from on_change.
+//!
+//! Together these make sent = displayed = stored = reopened. Removing any
+//! layer reintroduces a drift surface.
 
 use leptos::prelude::*;
 use std::cell::{Cell, RefCell};
@@ -744,6 +766,9 @@ pub fn EQModal(
                                                     // can drop the last position. Without this, REAPER
                                                     // stores a value from up to 50 ms before drag-end
                                                     // and reopen reads that → drift (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
                                                     let final_hz = freq_hz_sig.get_untracked();
                                                     on_param_change.run((band_idx_sv.get_value(), "freq_hz".to_string(), final_hz));
                                                 })
@@ -795,6 +820,9 @@ pub fn EQModal(
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
                                                     // Force-flush final value past the 50 ms throttle (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
                                                     let final_db = gain_db_sig.get_untracked();
                                                     on_param_change.run((band_idx_sv.get_value(), "gain_db".to_string(), final_db));
                                                 })
@@ -839,6 +867,9 @@ pub fn EQModal(
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
                                                     // Force-flush final value past the 50 ms throttle (#196).
+                                                    // Always send (no last_send_* check) — extra send is
+                                                    // cheaper than missing the final position. ReaScript
+                                                    // Newton refinement is idempotent on duplicate writes.
                                                     let final_oct = bw_oct_sig.get_untracked();
                                                     on_param_change.run((band_idx_sv.get_value(), "bw_oct".to_string(), final_oct));
                                                 })
@@ -1528,6 +1559,9 @@ mod tests {
     #[test]
     fn test_snap_db_rounds_to_tenth() {
         assert!((snap_db(2.04) - 2.0).abs() < f32::EPSILON);
+        // 2.05 isn't exactly representable in f32 (≈2.0499998...), so the snap
+        // result lands ≈2.1 within ~1e-7 but not within f32::EPSILON. Use 1e-3
+        // tolerance for any half-up boundary case.
         assert!((snap_db(2.05) - 2.1).abs() < 0.001);
         assert!((snap_db(-3.46) - -3.5).abs() < 0.001);
         assert!((snap_db(0.0) - 0.0).abs() < f32::EPSILON);
@@ -1539,6 +1573,10 @@ mod tests {
         assert!((snap_hz(322.6) - 323.0).abs() < f32::EPSILON);
         assert!((snap_hz(20.0) - 20.0).abs() < f32::EPSILON);
         assert!((snap_hz(999.4) - 999.0).abs() < f32::EPSILON);
+        // Boundary at 1 kHz: half-up still uses integer-Hz branch when input < 1000.
+        assert!((snap_hz(999.6) - 1000.0).abs() < 0.001);
+        // Exactly 1000 falls into the >=1000 branch, rounds to 1000 in 100-Hz space.
+        assert!((snap_hz(1000.0) - 1000.0).abs() < 0.001);
     }
 
     #[test]
