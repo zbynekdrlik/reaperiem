@@ -740,6 +740,12 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value: 50 ms throttle in on_change
+                                                    // can drop the last position. Without this, REAPER
+                                                    // stores a value from up to 50 ms before drag-end
+                                                    // and reopen reads that → drift (#196).
+                                                    let final_hz = freq_hz_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "freq_hz".to_string(), final_hz));
                                                 })
                                                 css_class="eq-slider-freq"
                                             />
@@ -788,6 +794,9 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value past the 50 ms throttle (#196).
+                                                    let final_db = gain_db_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "gain_db".to_string(), final_db));
                                                 })
                                                 css_class="eq-slider-gain"
                                                 default_value=0.5
@@ -829,6 +838,9 @@ pub fn EQModal(
                                                 })
                                                 on_drag_end=Callback::new(move |_: ()| {
                                                     let _ = any_dragging.try_set(false);
+                                                    // Force-flush final value past the 50 ms throttle (#196).
+                                                    let final_oct = bw_oct_sig.get_untracked();
+                                                    on_param_change.run((band_idx_sv.get_value(), "bw_oct".to_string(), final_oct));
                                                 })
                                                 css_class=""
                                                 default_value=0.5
