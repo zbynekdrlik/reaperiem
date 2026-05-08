@@ -59,6 +59,10 @@ local function set_eq()
     -- FormatParamValueNormalized, which is pure-read. Then SetParam with the
     -- interpolated norm.
     if param_name == "gain_db" then
+        local function parse_db(fmt)
+            return tonumber(fmt:match("(-?[%d%.]+)"))
+        end
+
         local gain_param_idx = band * 3 + 1
         local num_params_g = reaper.TrackFX_GetNumParams(track, eq_idx)
         if gain_param_idx >= num_params_g then
@@ -74,7 +78,7 @@ local function set_eq()
             local norm_i = i / N_STEPS
             local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, gain_param_idx, norm_i, "")
-            local db_i = tonumber(fmt:match("(-?[%d%.]+)"))
+            local db_i = parse_db(fmt)
             if db_i == nil then
                 reaper.SetExtState(section, "eq_set_result",
                     string.format("ERROR:sample_parse_failed:band=%d,norm=%.3f,fmt=%s",
@@ -102,7 +106,7 @@ local function set_eq()
                 local n = lo.norm + t * (hi.norm - lo.norm)
                 local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
                     track, eq_idx, gain_param_idx, n, "")
-                local v_db = tonumber(vfmt:match("(-?[%d%.]+)"))
+                local v_db = parse_db(vfmt)
                 if v_db ~= nil then
                     local err = math.abs(v_db - desired)
                     if err < best_err then
@@ -123,6 +127,45 @@ local function set_eq()
         end
 
         reaper.TrackFX_SetParam(track, eq_idx, gain_param_idx, best_norm)
+
+        -- Newton-style refinement loop: read REAPER's actual value after the
+        -- interp-based SetParam, nudge norm toward desired using a finite-
+        -- difference slope estimate. Converges to REAPER's float32 internal
+        -- precision in ≤5 iterations. Same loop applies to gain_db / freq_hz /
+        -- bw_oct — only the parse function and TOL differ. (#196 follow-up:
+        -- 21-sample interp left ~0.05-unit residual error, visible at 0.1 dB
+        -- display rounding.)
+        local TOL = 0.05
+        local MAX_ITER = 5
+        local EPS = 0.001
+        for iter = 1, MAX_ITER do
+            local _, fmt_now = reaper.TrackFX_GetFormattedParamValue(
+                track, eq_idx, gain_param_idx)
+            local val_now = parse_db(fmt_now)
+            if val_now == nil then break end
+            if math.abs(val_now - desired) <= TOL then break end
+
+            local probe
+            if best_norm + EPS <= 1.0 then
+                probe = best_norm + EPS
+            elseif best_norm - EPS >= 0.0 then
+                probe = best_norm - EPS
+            else
+                break
+            end
+            local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, gain_param_idx, probe, "")
+            local val_probe = parse_db(fmt_probe)
+            if val_probe == nil then break end
+
+            local slope = (val_probe - val_now) / (probe - best_norm)
+            if slope == 0 or slope ~= slope then break end -- 0 or NaN
+
+            local adjust = (desired - val_now) / slope
+            best_norm = math.max(0.0, math.min(1.0, best_norm + adjust))
+            reaper.TrackFX_SetParam(track, eq_idx, gain_param_idx, best_norm)
+        end
+
         local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
             track, eq_idx, gain_param_idx)
         reaper.SetExtState(section, "eq_set_result",
@@ -210,6 +253,45 @@ local function set_eq()
         end
 
         reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, best_norm)
+
+        -- Newton-style refinement loop: read REAPER's actual value after the
+        -- interp-based SetParam, nudge norm toward desired using a finite-
+        -- difference slope estimate. Converges to REAPER's float32 internal
+        -- precision in ≤5 iterations. Same loop applies to gain_db / freq_hz /
+        -- bw_oct — only the parse function and TOL differ. (#196 follow-up:
+        -- 21-sample interp left ~0.05-unit residual error, visible at 0.1 dB
+        -- display rounding.)
+        local TOL = 0.5
+        local MAX_ITER = 5
+        local EPS = 0.001
+        for iter = 1, MAX_ITER do
+            local _, fmt_now = reaper.TrackFX_GetFormattedParamValue(
+                track, eq_idx, freq_param_idx)
+            local val_now = parse_hz(fmt_now)
+            if val_now == nil then break end
+            if math.abs(val_now - desired) <= TOL then break end
+
+            local probe
+            if best_norm + EPS <= 1.0 then
+                probe = best_norm + EPS
+            elseif best_norm - EPS >= 0.0 then
+                probe = best_norm - EPS
+            else
+                break
+            end
+            local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, freq_param_idx, probe, "")
+            local val_probe = parse_hz(fmt_probe)
+            if val_probe == nil then break end
+
+            local slope = (val_probe - val_now) / (probe - best_norm)
+            if slope == 0 or slope ~= slope then break end -- 0 or NaN
+
+            local adjust = (desired - val_now) / slope
+            best_norm = math.max(0.0, math.min(1.0, best_norm + adjust))
+            reaper.TrackFX_SetParam(track, eq_idx, freq_param_idx, best_norm)
+        end
+
         local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
             track, eq_idx, freq_param_idx)
         reaper.SetExtState(section, "eq_set_result",
@@ -224,6 +306,10 @@ local function set_eq()
     -- sample 21 norm→oct points and LINEAR-interpolate. ReaEQ formats bw
     -- as e.g. "1.18 oct". Same pattern as gain_db / freq_hz (#196).
     if param_name == "bw_oct" then
+        local function parse_oct(fmt)
+            return tonumber(fmt:match("(-?[%d%.]+)"))
+        end
+
         local bw_param_idx = band * 3 + 2
         local num_params_b = reaper.TrackFX_GetNumParams(track, eq_idx)
         if bw_param_idx >= num_params_b then
@@ -239,7 +325,7 @@ local function set_eq()
             local norm_i = i / N_STEPS
             local _, fmt = reaper.TrackFX_FormatParamValueNormalized(
                 track, eq_idx, bw_param_idx, norm_i, "")
-            local oct_i = tonumber(fmt:match("(-?[%d%.]+)"))
+            local oct_i = parse_oct(fmt)
             if oct_i == nil then
                 reaper.SetExtState(section, "eq_set_result",
                     string.format("ERROR:sample_parse_failed:band=%d,norm=%.3f,fmt=%s",
@@ -261,7 +347,7 @@ local function set_eq()
                 local n = lo.norm + t * (hi.norm - lo.norm)
                 local _, vfmt = reaper.TrackFX_FormatParamValueNormalized(
                     track, eq_idx, bw_param_idx, n, "")
-                local v_oct = tonumber(vfmt:match("(-?[%d%.]+)"))
+                local v_oct = parse_oct(vfmt)
                 if v_oct ~= nil then
                     local err = math.abs(v_oct - desired)
                     if err < best_err then
@@ -281,6 +367,45 @@ local function set_eq()
         end
 
         reaper.TrackFX_SetParam(track, eq_idx, bw_param_idx, best_norm)
+
+        -- Newton-style refinement loop: read REAPER's actual value after the
+        -- interp-based SetParam, nudge norm toward desired using a finite-
+        -- difference slope estimate. Converges to REAPER's float32 internal
+        -- precision in ≤5 iterations. Same loop applies to gain_db / freq_hz /
+        -- bw_oct — only the parse function and TOL differ. (#196 follow-up:
+        -- 21-sample interp left ~0.05-unit residual error, visible at 0.1 dB
+        -- display rounding.)
+        local TOL = 0.005
+        local MAX_ITER = 5
+        local EPS = 0.001
+        for iter = 1, MAX_ITER do
+            local _, fmt_now = reaper.TrackFX_GetFormattedParamValue(
+                track, eq_idx, bw_param_idx)
+            local val_now = parse_oct(fmt_now)
+            if val_now == nil then break end
+            if math.abs(val_now - desired) <= TOL then break end
+
+            local probe
+            if best_norm + EPS <= 1.0 then
+                probe = best_norm + EPS
+            elseif best_norm - EPS >= 0.0 then
+                probe = best_norm - EPS
+            else
+                break
+            end
+            local _, fmt_probe = reaper.TrackFX_FormatParamValueNormalized(
+                track, eq_idx, bw_param_idx, probe, "")
+            local val_probe = parse_oct(fmt_probe)
+            if val_probe == nil then break end
+
+            local slope = (val_probe - val_now) / (probe - best_norm)
+            if slope == 0 or slope ~= slope then break end -- 0 or NaN
+
+            local adjust = (desired - val_now) / slope
+            best_norm = math.max(0.0, math.min(1.0, best_norm + adjust))
+            reaper.TrackFX_SetParam(track, eq_idx, bw_param_idx, best_norm)
+        end
+
         local _, fmt_post = reaper.TrackFX_GetFormattedParamValue(
             track, eq_idx, bw_param_idx)
         reaper.SetExtState(section, "eq_set_result",

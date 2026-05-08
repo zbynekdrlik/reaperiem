@@ -1577,6 +1577,83 @@ test.describe("EQ value sync - ENGINEER track", () => {
       await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
     }
   });
+
+  test("#196 gain_db precision — set 2.0 dB persists exactly across close+reopen (engineer inear lowshelf)", async ({
+    page,
+  }) => {
+    const REAPER = "http://iem.lan:8080/_";
+    const ENGINEER_TRACK = 32;
+    const TEST_BAND = 0; // b0 lowshelf — Mirec's reported bug location
+    const TEST_DESIRED_DB = 2.0;
+    const EXPECTED_TEXT = "+2.0 dB";
+
+    // Capture original norm via legacy gn= field for restore.
+    await fetch(`${REAPER}/SET/EXTSTATE/reaperiem/eq_read_track/${ENGINEER_TRACK}`);
+    await fetch(`${REAPER}/_RS_REAPERIEM_READ_EQ`);
+    await new Promise((r) => setTimeout(r, 800));
+    const readResp = await fetch(
+      `${REAPER}/GET/EXTSTATE/reaperiem/eq_params`,
+    ).then((r) => r.text());
+    const bandMatch = readResp.match(new RegExp(`b${TEST_BAND}:[^|]+`));
+    if (!bandMatch) throw new Error(`No band ${TEST_BAND}: ${readResp}`);
+    const originalGn = bandMatch[0].match(/gn=([\d.]+)/);
+    if (!originalGn) throw new Error(`No gn=: ${bandMatch[0]}`);
+    const originalNorm = parseFloat(originalGn[1]);
+
+    try {
+      // Pre-arrange via the NEW gain_db protocol — what the UI now uses.
+      // Goal: prove that writing 2.0 dB and reading back yields "+2.0 dB" exactly.
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain_db%7Cvalue=${TEST_DESIRED_DB}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+      await new Promise((r) => setTimeout(r, 500));
+
+      await waitForMixer(page);
+
+      const opened = await openEqForChannel(page, "ENGINEER");
+      expect(opened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".eq-band-card").first()).toBeVisible({
+        timeout: 5000,
+      });
+      await page.waitForTimeout(1000);
+
+      const bandCard = page.locator(".eq-band-card").nth(TEST_BAND);
+      await bandCard.waitFor({ state: "visible", timeout: 5000 });
+      const gainRow = bandCard.locator(
+        ".eq-param-row:has(.eq-param-label:has-text('Gain'))",
+      );
+      const text1 = (await gainRow.locator(".eq-param-value").textContent())?.trim();
+      expect(text1).toBe(EXPECTED_TEXT);
+
+      // Close + reopen, assert text unchanged.
+      await page.locator(".eq-close-btn").click();
+      await page.waitForSelector(".eq-modal", {
+        state: "detached",
+        timeout: 5000,
+      });
+
+      const reopened = await openEqForChannel(page, "ENGINEER");
+      expect(reopened).toBe(true);
+      await expect(page.locator(".eq-overlay")).toBeVisible({ timeout: 5000 });
+      await page.waitForTimeout(1000);
+
+      const text2 = (await page
+        .locator(".eq-band-card")
+        .nth(TEST_BAND)
+        .locator(".eq-param-row:has(.eq-param-label:has-text('Gain'))")
+        .locator(".eq-param-value")
+        .textContent())?.trim();
+      expect(text2).toBe(EXPECTED_TEXT);
+    } finally {
+      // Restore via legacy norm protocol.
+      await fetch(
+        `${REAPER}/SET/EXTSTATE/reaperiem/eq_set/track=${ENGINEER_TRACK}%7Cband=${TEST_BAND}%7Cparam=gain%7Cvalue=${originalNorm}`,
+      );
+      await fetch(`${REAPER}/_RS_REAPERIEM_SET_EQ`);
+    }
+  });
 });
 
 // Regression test for #167 — EQ curve shape
