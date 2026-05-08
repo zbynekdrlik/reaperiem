@@ -310,6 +310,29 @@ fn format_freq(hz: f32) -> String {
     }
 }
 
+/// Snap a dB value to UI display granularity (0.1 dB).
+/// Ensures slider on_change sends exactly the value shown in the label,
+/// preventing reopen-drift caused by float-precision mismatch between
+/// displayed text (`{:.1} dB`) and the underlying float sent to ReaScript.
+fn snap_db(db: f32) -> f32 {
+    (db * 10.0).round() / 10.0
+}
+
+/// Snap a Hz value to UI display granularity. Matches `format_freq`:
+/// integer Hz below 1 kHz, 100 Hz above.
+fn snap_hz(hz: f32) -> f32 {
+    if hz >= 1000.0 {
+        (hz / 100.0).round() * 100.0
+    } else {
+        hz.round()
+    }
+}
+
+/// Snap an oct value to UI display granularity (0.01 oct).
+fn snap_oct(oct: f32) -> f32 {
+    (oct * 100.0).round() / 100.0
+}
+
 /// Per-band local state signals that survive parent re-renders.
 /// These are created once per band when the modal opens and persist until close.
 #[derive(Clone)]
@@ -701,7 +724,9 @@ pub fn EQModal(
                                                 on_change=Callback::new(move |v: f32| {
                                                     let log_min = UI_FREQ_MIN_HZ.ln();
                                                     let log_max = UI_FREQ_MAX_HZ.ln();
-                                                    let hz = (log_min + v * (log_max - log_min)).exp();
+                                                    // Snap to UI display granularity — same lock-step
+                                                    // sent/displayed/stored argument as gain_db (#196).
+                                                    let hz = snap_hz((log_min + v * (log_max - log_min)).exp());
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_freq.get_untracked() > 50.0 {
                                                         let _ = last_send_freq.try_set(now);
@@ -744,9 +769,12 @@ pub fn EQModal(
                                                     (db - UI_GAIN_MIN_DB) / (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    // Project slider position 0-1 to dB using
-                                                    // the same UI-fixed ±12 range as the value derive.
-                                                    let db = UI_GAIN_MIN_DB + v * (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB);
+                                                    // Project slider position 0-1 to dB, then snap to UI
+                                                    // display granularity (0.1 dB). Without snapping, the
+                                                    // displayed `{:.1}` rounds e.g. 2.04 → "+2.0 dB" while
+                                                    // ReaScript receives 2.04, REAPER stores ~2.04, and on
+                                                    // reopen the display may round differently → drift.
+                                                    let db = snap_db(UI_GAIN_MIN_DB + v * (UI_GAIN_MAX_DB - UI_GAIN_MIN_DB));
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_gain.get_untracked() > 50.0 {
                                                         let _ = last_send_gain.try_set(now);
@@ -786,7 +814,8 @@ pub fn EQModal(
                                                     (oct - UI_BW_MIN_OCT) / (UI_BW_MAX_OCT - UI_BW_MIN_OCT)
                                                 })
                                                 on_change=Callback::new(move |v: f32| {
-                                                    let oct = UI_BW_MIN_OCT + v * (UI_BW_MAX_OCT - UI_BW_MIN_OCT);
+                                                    // Snap to UI display granularity (0.01 oct).
+                                                    let oct = snap_oct(UI_BW_MIN_OCT + v * (UI_BW_MAX_OCT - UI_BW_MIN_OCT));
                                                     let now = js_sys::Date::now();
                                                     if now - last_send_bw.get_untracked() > 50.0 {
                                                         let _ = last_send_bw.try_set(now);
@@ -1482,5 +1511,37 @@ mod tests {
             curve_max <= 4.6,
             "fixture curve max = {curve_max} dB, expected ≤ 4.6 (no shelf ringing)"
         );
+    }
+
+    #[test]
+    fn test_snap_db_rounds_to_tenth() {
+        assert!((snap_db(2.04) - 2.0).abs() < f32::EPSILON);
+        assert!((snap_db(2.05) - 2.1).abs() < 0.001);
+        assert!((snap_db(-3.46) - -3.5).abs() < 0.001);
+        assert!((snap_db(0.0) - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snap_hz_below_1k_rounds_to_integer() {
+        assert!((snap_hz(322.4) - 322.0).abs() < f32::EPSILON);
+        assert!((snap_hz(322.6) - 323.0).abs() < f32::EPSILON);
+        assert!((snap_hz(20.0) - 20.0).abs() < f32::EPSILON);
+        assert!((snap_hz(999.4) - 999.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snap_hz_above_1k_rounds_to_hundred() {
+        assert!((snap_hz(1234.0) - 1200.0).abs() < f32::EPSILON);
+        assert!((snap_hz(1250.0) - 1300.0).abs() < f32::EPSILON); // half-up
+        assert!((snap_hz(10049.0) - 10000.0).abs() < f32::EPSILON);
+        assert!((snap_hz(10050.0) - 10100.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_snap_oct_rounds_to_hundredth() {
+        assert!((snap_oct(1.184) - 1.18).abs() < 0.001);
+        assert!((snap_oct(1.185) - 1.19).abs() < 0.001);
+        assert!((snap_oct(2.005) - 2.01).abs() < 0.001);
+        assert!((snap_oct(0.01) - 0.01).abs() < f32::EPSILON);
     }
 }
