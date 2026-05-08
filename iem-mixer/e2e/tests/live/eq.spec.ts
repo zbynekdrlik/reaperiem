@@ -1583,7 +1583,7 @@ test.describe("EQ value sync - ENGINEER track", () => {
   }) => {
     const REAPER = "http://iem.lan:8080/_";
     const ENGINEER_TRACK = 32;
-    const TEST_BAND = 0; // b0 lowshelf — Mirec's reported bug location
+    const TEST_BAND = 1; // engineer track b1 = lowshelf (REAPER native; matches #194 test)
     const TEST_DESIRED_DB = 2.0;
     const EXPECTED_TEXT = "+2.0 dB";
 
