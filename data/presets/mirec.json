@@ -1,0 +1,130 @@
+{
+  "07.05.2026": {
+    "name": "07.05.2026",
+    "channels": {
+      "22": {
+        "vol": -16.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "21": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "1": {
+        "vol": -6.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "9": {
+        "vol": -15.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": 0.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "6": {
+        "vol": -16.0,
+        "mute": false,
+        "pan": 1.0
+      },
+      "12": {
+        "vol": -6.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "15": {
+        "vol": -20.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "19": {
+        "vol": -17.6,
+        "mute": false,
+        "pan": 0.75
+      },
+      "17": {
+        "vol": -10.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "5": {
+        "vol": -20.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "10": {
+        "vol": -16.0,
+        "mute": false,
+        "pan": 1.0
+      },
+      "4": {
+        "vol": -11.0,
+        "mute": false,
+        "pan": 1.0
+      },
+      "16": {
+        "vol": -9.0,
+        "mute": false,
+        "pan": 0.75
+      },
+      "11": {
+        "vol": -4.4,
+        "mute": false,
+        "pan": 0.75
+      },
+      "20": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "44": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "3": {
+        "vol": -18.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": -2.4,
+        "mute": false,
+        "pan": 0.75
+      },
+      "45": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.75
+      },
+      "13": {
+        "vol": -2.4,
+        "mute": false,
+        "pan": 0.75
+      },
+      "2": {
+        "vol": -17.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -22.0,
+        "mute": false,
+        "pan": 0.75
+      }
+    },
+    "created_at": 1778340251,
+    "updated_at": 1778340448,
+    "stems_level_db": -10.4
+  }
+}
