@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1778469292 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1778555574 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -1951,7 +1951,7 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 -10.397178 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 -10.397176 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
       FXID {5A13372B-C07C-456B-BF5C-5B1D21AE6BE9}
