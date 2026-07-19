@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "7.65/win64" 1784355107 0
+<REAPER_PROJECT 0.1 "7.65/win64" 1784449219 0
   RIPPLE 0 0
   GROUPOVERRIDE 1 0 0 0
   AUTOXFADE 128
@@ -427,7 +427,7 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 1
+    SEL 0
     REC 1 8 1 2 0 0 0 0
     VU 64
     TRACKHEIGHT 64 0 0 0 0 0 0
@@ -636,7 +636,7 @@
     REC 1 1044 2 2 0 0 0 0
     VU 64
     SPACER 1
-    TRACKHEIGHT 60 0 0 0 0 0 0
+    TRACKHEIGHT 64 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -1477,7 +1477,7 @@
     FX 1
     TRACKID {6D4114BD-AD77-4C21-ADAF-74ACF6D6AAF7}
     PERF 0
-    AUXRECV 0 3 0.12589255 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 0 3 0.12882496 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 0.11220185 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 2 3 0.1 -0.066666998 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 3 3 0.53703177 -0.0333329998 0 0 0 0 0 -1:U 0 -1 ''
@@ -1827,14 +1827,14 @@
     PERF 0
     AUXRECV 0 3 0.21379623 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 1 3 0.07413103 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 2 3 0.038018942 0 0 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 3 3 0.5011872 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 2 3 0.038018942 0 1 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 3 3 0.4265795 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 4 3 1.0592537 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 5 3 0.20417379 0 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 5 3 0.20417379 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 6 3 0.09120109 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 7 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 8 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
-    AUXRECV 9 3 0.74131024 -0.0199999996 0 0 0 0 0 -1:U 0 -1 ''
+    AUXRECV 9 3 0.66069347 -0.0199999996 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 17 3 0.19054608 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 18 3 0.2818379998 0 0 0 0 0 0 -1:U 0 -1 ''
     AUXRECV 19 3 1 0 1 0 0 0 0 -1:U 0 -1 ''
@@ -1886,11 +1886,11 @@
     SHOWINMIX 1 0.6667 0.5 1 0.5 0 0 0 0
     FIXEDLANES 9 0 0 0 0
     LANEREC -1 -1 -1 0
-    SEL 0
+    SEL 1
     REC 0 -1 0 2 0 0 0 0
     VU 64
     SPACER 1
-    TRACKHEIGHT 25 0 0 0 0 0 0
+    TRACKHEIGHT 60 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -1931,7 +1931,7 @@
       SHOW 0
       LASTSEL 0
       DOCKED 0
-      BYPASS 0 0 0
+      BYPASS 1 0 0
       <JS synthesis/tonegenerator ""
         6 0 440 0 0 0 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
@@ -1951,7 +1951,7 @@
       WAK 0 0
       BYPASS 0 0 0
       <JS loser/MGA_JSLimiterST LIMITER
-        -6 50 75 -6 -10.397238 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        -6 50 75 -6 0 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
       >
       FLOATPOS 0 0 0 0
       FXID {5A13372B-C07C-456B-BF5C-5B1D21AE6BE9}
@@ -2020,7 +2020,7 @@
     REC 0 0 1 0 0 0 0 0
     VU 64
     SPACER 1
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2071,7 +2071,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2121,7 +2121,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2159,7 +2159,7 @@
     BEAT -1
     AUTOMODE 0
     PANLAWFLAGS 3
-    VOLPAN 0.22387213 0 -1 -1 1
+    VOLPAN 0.18197007 0 -1 -1 1
     MUTESOLO 0 0 0
     IPHASE 0
     PLAYOFFS 0 1
@@ -2171,7 +2171,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2221,7 +2221,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2272,7 +2272,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2322,7 +2322,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2373,7 +2373,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2423,7 +2423,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2473,7 +2473,7 @@
     SEL 0
     REC 0 0 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 25 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2524,7 +2524,7 @@
     SEL 0
     REC 1 1036 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 64 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
@@ -2574,7 +2574,7 @@
     SEL 0
     REC 1 1076 1 0 0 0 0 0
     VU 64
-    TRACKHEIGHT 0 0 0 0 0 0 0
+    TRACKHEIGHT 64 0 0 0 0 0 0
     INQ 0 0 0 0.5 100 0 0 100
     NCHAN 2
     FX 1
