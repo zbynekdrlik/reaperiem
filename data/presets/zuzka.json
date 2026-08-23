@@ -2,74 +2,14 @@
   "Sima pred": {
     "name": "Sima pred",
     "channels": {
-      "18": {
-        "vol": -56.899357,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": -24.399994,
-        "mute": false,
+      "44": {
+        "vol": -56.997154,
+        "mute": true,
         "pan": 0.5
       },
       "5": {
         "vol": -29.000084,
         "mute": true,
-        "pan": 0.5
-      },
-      "22": {
-        "vol": -24.799997,
-        "mute": false,
-        "pan": 0.5
-      },
-      "8": {
-        "vol": -59.904976,
-        "mute": true,
-        "pan": 0.5
-      },
-      "45": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": -55.401245,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": -58.40191,
-        "mute": true,
-        "pan": 0.5
-      },
-      "2": {
-        "vol": -24.50003,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": -42.100395,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": -27.999937,
-        "mute": false,
-        "pan": 0.5
-      },
-      "12": {
-        "vol": -23.999962,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": -21.000008,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": -23.800056,
-        "mute": false,
         "pan": 0.5
       },
       "10": {
@@ -82,20 +22,15 @@
         "mute": false,
         "pan": 0.4833335
       },
-      "16": {
-        "vol": -43.40235,
-        "mute": false,
-        "pan": 0.5
-      },
       "1": {
         "vol": -24.600056,
         "mute": false,
         "pan": 0.5
       },
-      "3": {
-        "vol": -25.599958,
+      "12": {
+        "vol": -23.999962,
         "mute": false,
-        "pan": 0.4666665
+        "pan": 0.5
       },
       "6": {
         "vol": -32.401566,
@@ -107,24 +42,217 @@
         "mute": true,
         "pan": 0.5
       },
+      "2": {
+        "vol": -24.50003,
+        "mute": false,
+        "pan": 0.5
+      },
       "19": {
         "vol": -24.20007,
         "mute": false,
         "pan": 0.5
       },
-      "44": {
-        "vol": -56.997154,
+      "7": {
+        "vol": -23.800056,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": -27.999937,
+        "mute": false,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -56.899357,
+        "mute": false,
+        "pan": 0.5
+      },
+      "45": {
+        "vol": 0.0,
         "mute": true,
         "pan": 0.5
+      },
+      "8": {
+        "vol": -59.904976,
+        "mute": true,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": -55.401245,
+        "mute": false,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": -24.399994,
+        "mute": false,
+        "pan": 0.5
+      },
+      "22": {
+        "vol": -24.799997,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": -43.40235,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": -25.599958,
+        "mute": false,
+        "pan": 0.4666665
       },
       "21": {
         "vol": 0.0,
         "mute": true,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": -58.40191,
+        "mute": true,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": -42.100395,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": -21.000008,
+        "mute": false,
         "pan": 0.5
       }
     },
     "created_at": 1776950174,
     "updated_at": 1776950174,
     "stems_level_db": 0.0
+  },
+  "Zuzka": {
+    "name": "Zuzka",
+    "channels": {
+      "22": {
+        "vol": -12.2,
+        "mute": false,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": -17.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "16": {
+        "vol": -18.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": -24.8,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": -36.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": -5.2,
+        "mute": true,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": -28.8,
+        "mute": false,
+        "pan": 0.4666665
+      },
+      "45": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": -11.6,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": -13.4,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": -5.2,
+        "mute": false,
+        "pan": 0.4833335
+      },
+      "6": {
+        "vol": -26.4,
+        "mute": false,
+        "pan": 0.5
+      },
+      "14": {
+        "vol": -4.2,
+        "mute": false,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": -23.6,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -36.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": -22.4,
+        "mute": false,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": -60.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": -24.2,
+        "mute": false,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": -8.4,
+        "mute": false,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": -58.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": -20.2,
+        "mute": false,
+        "pan": 0.5
+      },
+      "44": {
+        "vol": -57.0,
+        "mute": true,
+        "pan": 0.5
+      }
+    },
+    "created_at": 1787239785,
+    "updated_at": 1787242283,
+    "stems_level_db": -14.8
   }
 }
