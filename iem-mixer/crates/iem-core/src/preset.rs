@@ -16,7 +16,8 @@ pub struct ChannelPreset {
     pub vol: f32,
     /// Muted state
     pub mute: bool,
-    /// Pan position (-1.0 left to 1.0 right)
+    /// Pan position in UI range (0.0 left, 0.5 center, 1.0 right) — stored as
+    /// the UI sends it; restore converts it back to REAPER's -1.0..1.0. (#203)
     pub pan: f32,
 }
 

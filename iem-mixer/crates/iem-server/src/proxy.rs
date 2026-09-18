@@ -1109,8 +1109,8 @@ pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
 /// path wrote the stored value RAW, mapping center (0.0 UI→REAPER) to 0.5 =
 /// half-right and shifting every channel's panorama right.
 pub(crate) fn restore_send_pan(stored_pan: f32) -> f32 {
-    // BUG #203 (RED): stored UI pan written raw — REAPER interprets 0.5 as half-right.
-    stored_pan
+    // #203 fix: stored pan is UI-range 0..1; convert to REAPER -1..1 before writing.
+    ui_pan_to_reaper(stored_pan)
 }
 
 /// Validate a pan value for SetPan commands.
