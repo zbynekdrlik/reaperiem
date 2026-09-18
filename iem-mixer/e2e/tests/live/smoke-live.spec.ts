@@ -117,6 +117,6 @@ test.describe("Snapshot History - Issue #46", () => {
     // Snapshot modal should be visible
     const modal = page.locator(".snapshot-modal");
     await expect(modal).toBeVisible({ timeout: 3000 });
-    await expect(modal.locator("h2")).toContainText("Mix History");
+    await expect(modal.locator("h2")).toContainText("História mixu");
   });
 });

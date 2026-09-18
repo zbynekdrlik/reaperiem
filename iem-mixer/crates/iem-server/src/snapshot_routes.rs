@@ -132,22 +132,9 @@ async fn create_snapshot(
         ));
     }
 
-    // Read EQ params for each track
+    // Read EQ params for each track (shared with preset save via capture_eq_bands).
     let track_indices: Vec<usize> = channels.iter().map(|ch| ch.track_index).collect();
-    let mut eq_bands_map = std::collections::HashMap::new();
-    for track_idx in &track_indices {
-        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
-            crate::proxy::handle_get_eq_params(&state, *track_idx).await
-            && !bands.is_empty()
-        {
-            eq_bands_map.insert(*track_idx, bands);
-        }
-    }
-    let eq_bands = if eq_bands_map.is_empty() {
-        None
-    } else {
-        Some(eq_bands_map)
-    };
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices).await;
 
     // Create snapshot
     let channel_map = SnapshotStore::channels_from_state(&channels);
@@ -276,6 +263,8 @@ async fn restore_snapshot(
         .find(|m| m.id() == member)
         .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    // #204: mix channels route to a DIFFERENT send than the member's own.
+    let mix_members = crate::proxy::compute_mix_members(&discovered, &member);
     drop(discovered);
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
@@ -286,10 +275,20 @@ async fn restore_snapshot(
     for (track_index, ch) in &snapshot.channels {
         let url_base = reaper_url.clone();
         let client = state.http_client.clone();
-        let send_index = member_index;
         let track_idx = *track_index;
+        // #204: resolve the correct send for this track — mix channels use their
+        // discovered mix_send_index; a missing one is a SAFETY error, not a fallback.
+        let send_index = crate::proxy::resolve_send_index(track_idx, member_index, &mix_members)
+            .map_err(|e| {
+                tracing::error!(track_idx, error = %e, "Snapshot restore send_index resolution failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new("SEND_INDEX", e)),
+                )
+            })?;
         let vol = ch.vol;
-        let pan = ch.pan;
+        // #203: stored pan is UI-range 0..1 — convert to REAPER -1..1 before writing.
+        let pan = crate::proxy::restore_send_pan(ch.pan);
         let mute = ch.mute;
 
         handles.push(tokio::spawn(async move {

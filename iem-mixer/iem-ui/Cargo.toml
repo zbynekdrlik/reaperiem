@@ -1,6 +1,6 @@
 [package]
 name = "iem-ui"
-version = "1.166.0"
+version = "1.167.0"
 edition = "2024"
 authors = ["REAPER IEM Team"]
 description = "Leptos WASM frontend for IEM mixer"
@@ -36,6 +36,8 @@ web-sys = { version = "0.3", features = [
     "MessageEvent",
     "CloseEvent",
     "ErrorEvent",
+    # Keyboard handling (Esc-to-cancel in ConfirmDialog, #206)
+    "KeyboardEvent",
     # Touch event handling for safe fader touch
     "TouchEvent",
     "TouchList",

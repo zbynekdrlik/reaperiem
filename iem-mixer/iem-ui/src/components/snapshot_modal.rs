@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
 
 use crate::auth::get_token;
+use crate::components::confirm_dialog::ConfirmDialog;
 
 /// Snapshot info from the API
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -135,12 +136,55 @@ async fn restore_snapshot(member_id: &str, timestamp: i64) -> Result<(), String>
         .header("Authorization", &format!("Bearer {}", token))
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|_| "Chyba siete — snapshot sa nedal obnoviť.".to_string())?;
 
     if resp.ok() {
         Ok(())
     } else {
-        Err(format!("Server error: {}", resp.status()))
+        Err(format!("Chyba servera ({}).", resp.status()))
+    }
+}
+
+/// Pin a snapshot (protects it from the 50-snapshot prune). (#206)
+async fn pin_snapshot(member_id: &str, timestamp: i64, label: String) -> Result<(), String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/snapshots/{}/{}/pin", member_id, timestamp);
+
+    #[derive(Serialize)]
+    struct PinReq {
+        label: String,
+    }
+
+    let resp = gloo_net::http::Request::post(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .json(&PinReq { label })
+        .map_err(|e| format!("Request error: {}", e))?
+        .send()
+        .await
+        .map_err(|_| "Chyba siete — snapshot sa nedal pripnúť.".to_string())?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Chyba servera ({}).", resp.status()))
+    }
+}
+
+/// Unpin a snapshot. (#206)
+async fn unpin_snapshot(member_id: &str, timestamp: i64) -> Result<(), String> {
+    let token = get_token().ok_or("Not authenticated")?;
+    let url = format!("/api/snapshots/{}/{}/unpin", member_id, timestamp);
+
+    let resp = gloo_net::http::Request::post(&url)
+        .header("Authorization", &format!("Bearer {}", token))
+        .send()
+        .await
+        .map_err(|_| "Chyba siete — snapshot sa nedal odopnúť.".to_string())?;
+
+    if resp.ok() {
+        Ok(())
+    } else {
+        Err(format!("Chyba servera ({}).", resp.status()))
     }
 }
 
@@ -157,7 +201,32 @@ pub fn SnapshotModal(
     let (snapshots, set_snapshots) = signal(Vec::<SnapshotInfo>::new());
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(Option::<String>::None);
+    // #206: confirmation dialog state for delete.
+    let (confirm_visible, set_confirm_visible) = signal(false);
+    let (confirm_title, set_confirm_title) = signal(String::new());
+    let (confirm_body, set_confirm_body) = signal(String::new());
+    let (pending_delete, set_pending_delete) = signal(Option::<i64>::None);
     let member_id_stored = StoredValue::new(member_id);
+
+    // The actual delete, called from the confirm dialog. (#206)
+    let do_delete = Callback::new(move |timestamp: i64| {
+        let member_id = member_id_stored.get_value();
+        let _ = set_loading.try_set(true);
+        let _ = set_error.try_set(None);
+        wasm_bindgen_futures::spawn_local(async move {
+            match delete_snapshot(&member_id, timestamp).await {
+                Ok(()) => {
+                    if let Ok(list) = fetch_snapshots(&member_id).await {
+                        let _ = set_snapshots.try_set(list);
+                    }
+                }
+                Err(e) => {
+                    let _ = set_error.try_set(Some(e));
+                }
+            }
+            let _ = set_loading.try_set(false);
+        });
+    });
 
     // Refresh snapshots when modal opens
     Effect::new(move |_| {
@@ -211,7 +280,12 @@ pub fn SnapshotModal(
         }
     };
 
+    // Named closure — the `>=` comparison must not sit inline in a view! `when=`
+    // attribute, where the macro mis-tokenizes `>` as a tag boundary.
+    let at_snapshot_limit = move || snapshots.get().len() >= iem_core::MAX_SNAPSHOTS;
+
     view! {
+        <>
         <div
             class=move || if visible.get() { "modal-overlay visible" } else { "modal-overlay" }
             on:click=handle_overlay_click
@@ -220,7 +294,7 @@ pub fn SnapshotModal(
                 <button class="modal-close" on:click=move |_| on_close.run(())>
                     "\u{00D7}"
                 </button>
-                <h2>"Mix History"</h2>
+                <h2>"História mixu"</h2>
 
                 <Show when=move || loading.get() fallback=|| ()>
                     <div class="snapshot-loading">
@@ -234,12 +308,22 @@ pub fn SnapshotModal(
                     </div>
                 </Show>
 
+                <Show when=at_snapshot_limit fallback=|| ()>
+                    <div class="snapshot-limit-notice">
+                        {move || format!(
+                            "História je plná ({} z {}). Staré nepripnuté snapshoty sa prepisujú — dôležité si pripni.",
+                            snapshots.get().len(),
+                            iem_core::MAX_SNAPSHOTS,
+                        )}
+                    </div>
+                </Show>
+
                 <div class="snapshot-list">
                     {move || {
                         let current = snapshots.get();
                         if current.is_empty() && !loading.get() {
                             view! {
-                                <div class="no-presets">"No snapshots yet. Changes are auto-saved daily."</div>
+                                <div class="no-presets">"Zatiaľ žiadne snapshoty. Zmeny sa ukladajú automaticky denne."</div>
                             }.into_any()
                         } else {
                             view! {
@@ -248,6 +332,8 @@ pub fn SnapshotModal(
                                         let timestamp = snap.timestamp;
                                         let is_pinned = snap.pinned;
                                         let label = snap.label.clone();
+                                        let label_for_pin = snap.label.clone();
+                                        let ts_label = format_timestamp_with_day(timestamp);
                                         let channel_count = snap.channel_count;
 
                                         view! {
@@ -281,28 +367,53 @@ pub fn SnapshotModal(
                                                             }
                                                         }
                                                     >
-                                                        "Restore"
+                                                        "Obnoviť"
                                                     </button>
                                                     <button
-                                                        class="delete-btn"
+                                                        class=move || if is_pinned { "snapshot-pin-btn pinned" } else { "snapshot-pin-btn" }
                                                         on:click={
                                                             let member_id = member_id_stored.get_value();
                                                             move |_| {
                                                                 let member_id = member_id.clone();
+                                                                let lbl = label_for_pin.clone();
                                                                 let _ = set_loading.try_set(true);
+                                                                let _ = set_error.try_set(None);
                                                                 wasm_bindgen_futures::spawn_local(async move {
-                                                                    // try_update: modal can close mid-await. #153
-                                                                    if let Err(e) = delete_snapshot(&member_id, timestamp).await {
-                                                                        let _ = set_error.try_set(Some(e));
-                                                                    } else if let Ok(list) = fetch_snapshots(&member_id).await {
-                                                                        let _ = set_snapshots.try_set(list);
+                                                                    let res = if is_pinned {
+                                                                        unpin_snapshot(&member_id, timestamp).await
+                                                                    } else {
+                                                                        pin_snapshot(&member_id, timestamp, lbl).await
+                                                                    };
+                                                                    match res {
+                                                                        Ok(()) => {
+                                                                            if let Ok(list) = fetch_snapshots(&member_id).await {
+                                                                                let _ = set_snapshots.try_set(list);
+                                                                            }
+                                                                        }
+                                                                        Err(e) => {
+                                                                            let _ = set_error.try_set(Some(e));
+                                                                        }
                                                                     }
                                                                     let _ = set_loading.try_set(false);
                                                                 });
                                                             }
                                                         }
                                                     >
-                                                        "Del"
+                                                        {if is_pinned { "Odopnúť" } else { "Pripnúť" }}
+                                                    </button>
+                                                    <button
+                                                        class="delete-btn"
+                                                        on:click=move |_| {
+                                                            let _ = set_confirm_title.try_set("Zmazať snapshot?".to_string());
+                                                            let _ = set_confirm_body.try_set(format!(
+                                                                "Snapshot z {} sa natrvalo zmaže.",
+                                                                ts_label
+                                                            ));
+                                                            let _ = set_pending_delete.try_set(Some(timestamp));
+                                                            let _ = set_confirm_visible.try_set(true);
+                                                        }
+                                                    >
+                                                        "Zmazať"
                                                     </button>
                                                 </div>
                                             </div>
@@ -315,9 +426,27 @@ pub fn SnapshotModal(
                 </div>
 
                 <button class="snapshot-save-btn" on:click=handle_save_now disabled=move || loading.get()>
-                    "Save Snapshot Now"
+                    "Uložiť teraz"
                 </button>
             </div>
         </div>
+
+        <ConfirmDialog
+            visible=confirm_visible
+            title=confirm_title
+            body=confirm_body
+            on_confirm=Callback::new(move |_: ()| {
+                let _ = set_confirm_visible.try_set(false);
+                if let Some(ts) = pending_delete.get_untracked() {
+                    do_delete.run(ts);
+                }
+                let _ = set_pending_delete.try_set(None);
+            })
+            on_cancel=Callback::new(move |_: ()| {
+                let _ = set_confirm_visible.try_set(false);
+                let _ = set_pending_delete.try_set(None);
+            })
+        />
+        </>
     }
 }

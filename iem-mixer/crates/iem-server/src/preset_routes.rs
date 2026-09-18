@@ -107,15 +107,16 @@ async fn save_preset(
         ));
     }
 
+    // #205: capture EQ server-side for ALL channels (same helper the snapshot
+    // path uses); fall back to any EQ the client sent only if REAPER had none.
+    let track_indices: Vec<usize> = req.channels.keys().copied().collect();
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices)
+        .await
+        .or(req.eq_bands);
+
     let entry = state
         .preset_store
-        .save_with_stems(
-            &member,
-            &name,
-            req.channels,
-            req.stems_level_db,
-            req.eq_bands,
-        )
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db, eq_bands)
         .map_err(|e| {
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
@@ -169,12 +170,17 @@ async fn update_preset(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     drop(config);
-    // Verify preset exists and preserve EQ bands if not provided in request
-    let existing = state.preset_store.get(&member, &name);
-    if existing.is_none() {
+    // Verify preset exists.
+    if state.preset_store.get(&member, &name).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Preset"))));
     }
-    let eq_bands = req.eq_bands.or_else(|| existing.and_then(|e| e.eq_bands));
+
+    // #205: capture EQ server-side for ALL channels (overwrite = save the CURRENT
+    // mix, including its live EQ); fall back to client EQ only if REAPER had none.
+    let track_indices: Vec<usize> = req.channels.keys().copied().collect();
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices)
+        .await
+        .or(req.eq_bands);
 
     let entry = state
         .preset_store
@@ -236,6 +242,8 @@ async fn restore_preset(
         .find(|m| m.id() == member)
         .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    // #204: mix channels route to a DIFFERENT send than the member's own.
+    let mix_members = crate::proxy::compute_mix_members(&discovered, &member);
     drop(discovered);
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
@@ -246,10 +254,20 @@ async fn restore_preset(
     for (track_index, ch) in &preset.channels {
         let url_base = reaper_url.clone();
         let client = state.http_client.clone();
-        let send_index = member_index;
         let track_idx = *track_index;
+        // #204: resolve the correct send for this track — mix channels use their
+        // discovered mix_send_index; a missing one is a SAFETY error, not a fallback.
+        let send_index = crate::proxy::resolve_send_index(track_idx, member_index, &mix_members)
+            .map_err(|e| {
+                tracing::error!(track_idx, error = %e, "Preset restore send_index resolution failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new("SEND_INDEX", e)),
+                )
+            })?;
         let vol_db = ch.vol;
-        let pan = ch.pan;
+        // #203: stored pan is UI-range 0..1 — convert to REAPER -1..1 before writing.
+        let pan = crate::proxy::restore_send_pan(ch.pan);
         let mute = ch.mute;
 
         handles.push(tokio::spawn(async move {

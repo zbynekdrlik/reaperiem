@@ -16,7 +16,9 @@ pub struct ChannelSnapshot {
     pub vol: f32,
     /// Muted state
     pub mute: bool,
-    /// Pan position (-1.0 left to 1.0 right)
+    /// Pan position in UI range (0.0 left, 0.5 center, 1.0 right) — copied
+    /// verbatim from `Channel.pan`, which the poller already converted from
+    /// REAPER's -1.0..1.0. Restore converts it back before writing. (#203)
     pub pan: f32,
 }
 

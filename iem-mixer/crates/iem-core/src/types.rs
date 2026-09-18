@@ -20,7 +20,10 @@ pub struct Channel {
     pub name: String,
     /// Level in dB
     pub level_db: f32,
-    /// Pan position (-1.0 to 1.0)
+    /// Pan position in UI range: 0.0 = left, 0.5 = center, 1.0 = right.
+    /// The poller converts REAPER's native -1.0..1.0 to this range on read
+    /// (`reaper_pan_to_ui`); the restore path converts it back
+    /// (`restore_send_pan`/`ui_pan_to_reaper`) before writing to REAPER. (#203)
     pub pan: f32,
     /// Muted state
     pub muted: bool,

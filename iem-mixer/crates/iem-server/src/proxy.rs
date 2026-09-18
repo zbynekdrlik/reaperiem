@@ -1100,6 +1100,84 @@ pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
     ((ui_pan * 2.0) - 1.0).clamp(-1.0, 1.0)
 }
 
+/// Pan value the snapshot/preset RESTORE path must write to a REAPER send.
+///
+/// Snapshots and presets store pan in the UI range 0..1 (0.5 = center), because
+/// the poller converts REAPER's -1..1 to 0..1 the moment it reads it
+/// (`reaper_pan_to_ui`). REAPER's `SET .../SEND/{}/PAN/` write expects -1..1, so
+/// the stored value MUST be converted back before writing. Bug #203: the restore
+/// path wrote the stored value RAW, mapping center (0.0 UI→REAPER) to 0.5 =
+/// half-right and shifting every channel's panorama right.
+pub(crate) fn restore_send_pan(stored_pan: f32) -> f32 {
+    // #203 fix: stored pan is UI-range 0..1; convert to REAPER -1..1 before writing.
+    ui_pan_to_reaper(stored_pan)
+}
+
+/// Build the `(track_index, mix_send_index)` list of a member's mix channels.
+///
+/// Mirrors the discovery in `apply_command_to_cache` (the WS write path):
+/// - engineer: every other member's inear track + its send TO engineer;
+/// - elevated member (petronela): every other member's inear track + the send
+///   on it that routes TO this elevated member (`mix_send_indices[member]`);
+/// - regular member: no mix channels.
+///
+/// The result feeds `resolve_send_index`, the single place that decides which
+/// REAPER send a restore/write targets — so the "never hardcode send_index=0
+/// for mix channels" rule is enforced once, for the WS path AND both REST
+/// restore handlers.
+pub(crate) fn compute_mix_members(
+    discovered: &[iem_core::DiscoveredMember],
+    member_id: &str,
+) -> Vec<(usize, Option<usize>)> {
+    let is_elevated = member_id == "petronela";
+    if member_id == "engineer" {
+        discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .map(|m| (m.track_index, m.mix_send_index))
+            .collect()
+    } else if is_elevated {
+        let elevated = discovered.iter().find(|m| m.id() == member_id);
+        discovered
+            .iter()
+            .filter(|m| m.id() != member_id && m.id() != "engineer")
+            .map(|m| {
+                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
+                (m.track_index, si)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// REAPER send index a write/restore must target for `track_idx`.
+///
+/// A mix channel (its `track_idx` appears in `mix_members`) uses its discovered
+/// `mix_send_index` — NEVER a hardcoded 0 and NEVER the member's own send index
+/// (bug #204: both REST restore handlers used the member's `send_index` for
+/// every track, writing mix channels to the wrong send). A missing
+/// `mix_send_index` is a SAFETY error, never a silent fallback. A regular input
+/// track uses the member's own `member_send_index`.
+pub(crate) fn resolve_send_index(
+    track_idx: usize,
+    member_send_index: usize,
+    mix_members: &[(usize, Option<usize>)],
+) -> Result<usize, String> {
+    if let Some((_, mix_si)) = mix_members.iter().find(|(track, _)| *track == track_idx) {
+        // #204 fix: a mix channel uses its discovered mix_send_index. A missing
+        // one is a SAFETY error — never fall back to the member's own send.
+        mix_si.ok_or_else(|| {
+            format!(
+                "SAFETY: No mix_send_index for track {} — cannot route to engineer",
+                track_idx
+            )
+        })
+    } else {
+        Ok(member_send_index)
+    }
+}
+
 /// Validate a pan value for SetPan commands.
 /// Returns Err with a user-facing message if pan is NaN, infinite, or out of [-1.0, 1.0].
 pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
@@ -1838,30 +1916,9 @@ async fn apply_command_to_cache(
         .find(|m| m.id() == member_id)
         .map(|m| m.send_index)
         .ok_or_else(|| "Unknown member".to_string())?;
-    // Collect mix channel track indices and their send_index for validation.
-    // For engineer: use mix_send_index (sends TO engineer).
-    // For elevated: use mix_send_indices[member_id] (sends TO this member).
-    let is_elevated = member_id == "petronela";
-    let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
-        discovered
-            .iter()
-            .filter(|m| m.id() != "engineer")
-            .map(|m| (m.track_index, m.mix_send_index))
-            .collect()
-    } else if is_elevated {
-        // mix_send_indices stored on the elevated member, keyed by source member ID
-        let elevated = discovered.iter().find(|m| m.id() == member_id);
-        discovered
-            .iter()
-            .filter(|m| m.id() != member_id && m.id() != "engineer")
-            .map(|m| {
-                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
-                (m.track_index, si)
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // Collect mix channel track indices and their send_index for validation
+    // (shared with both REST restore handlers via compute_mix_members).
+    let mix_members = compute_mix_members(&discovered, member_id);
     let mix_track_indices: Vec<usize> = mix_members.iter().map(|(ti, _)| *ti).collect();
     drop(discovered);
 
@@ -1886,21 +1943,10 @@ async fn apply_command_to_cache(
     let is_valid_track =
         |ti: usize| -> bool { is_valid_track_index(ti, &valid_input_indices, &mix_track_indices) };
 
-    // Helper: determine REAPER send_index for a given track_index.
-    // Mix channels use their discovered mix_send_index (NOT hardcoded 0!).
-    // Regular input channels use the member's send_index.
-    let send_index_for = |ti: usize| -> Result<usize, String> {
-        if let Some((_, mix_si)) = mix_members.iter().find(|(track, _)| *track == ti) {
-            mix_si.ok_or_else(|| {
-                format!(
-                    "SAFETY: No mix_send_index for track {} — cannot route to engineer",
-                    ti
-                )
-            })
-        } else {
-            Ok(member_index)
-        }
-    };
+    // Helper: determine REAPER send_index for a given track_index via the shared
+    // resolver (mix channels use their discovered mix_send_index, never 0). #204
+    let send_index_for =
+        |ti: usize| -> Result<usize, String> { resolve_send_index(ti, member_index, &mix_members) };
 
     // Validate incoming WS command values
     match cmd {
@@ -2430,6 +2476,41 @@ fn send_to_reaper(
 // =============================================================================
 // EQ handlers (EXTSTATE + ReaScript async flow)
 // =============================================================================
+
+/// Capture live ReaEQ bands for every track that has a ReaEQ, reading each via
+/// the WS EQ path (`handle_get_eq_params`). Returns `None` when no track has
+/// EQ. Shared by snapshot create AND preset save/update so EQ is captured
+/// identically — server-side, for ALL tracks, independent of any UI modal
+/// state (#205: presets previously captured EQ for at most one open-modal
+/// track, silently losing the rest).
+pub async fn capture_eq_bands(
+    state: &AppState,
+    track_indices: &[usize],
+) -> Option<std::collections::HashMap<usize, Vec<iem_core::EqBand>>> {
+    let mut per_track = Vec::new();
+    for track_idx in track_indices {
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            handle_get_eq_params(state, *track_idx).await
+        {
+            per_track.push((*track_idx, bands));
+        }
+    }
+    build_eq_bands_map(per_track)
+}
+
+/// Keep only the tracks whose captured band list is non-empty; return `None`
+/// when nothing remains. Pure (no REAPER I/O) so the #205 "drop empty EQ /
+/// None-when-empty" rule is unit-testable — `capture_eq_bands` does the HTTP
+/// reads and hands the results here.
+pub(crate) fn build_eq_bands_map(
+    per_track: Vec<(usize, Vec<iem_core::EqBand>)>,
+) -> Option<std::collections::HashMap<usize, Vec<iem_core::EqBand>>> {
+    let map: std::collections::HashMap<usize, Vec<iem_core::EqBand>> = per_track
+        .into_iter()
+        .filter(|(_, bands)| !bands.is_empty())
+        .collect();
+    if map.is_empty() { None } else { Some(map) }
+}
 
 /// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
 pub async fn handle_get_eq_params(
@@ -3946,6 +4027,51 @@ mod tests {
         }
     }
 
+    // ================================================================
+    // #203: snapshot/preset RESTORE must convert stored UI pan (0..1)
+    // back to REAPER pan (-1..1). Before the fix, restore wrote the
+    // stored value RAW, so center (0.0 REAPER) came back as 0.5 =
+    // half-right and every channel's panorama shifted right.
+    // ================================================================
+
+    #[test]
+    fn test_restore_send_pan_converts_ui_to_reaper() {
+        // The value fed to `SET/.../SEND/{}/PAN/{:.6}` must be REAPER-range.
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(0.5)),
+            "0.000000",
+            "stored UI center (0.5) must restore to REAPER center (0.0), not 0.5 (half-right) — #203"
+        );
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(0.0)),
+            "-1.000000",
+            "stored UI hard-left (0.0) must restore to REAPER -1.0 — #203"
+        );
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(1.0)),
+            "1.000000",
+            "stored UI hard-right (1.0) must restore to REAPER 1.0 — #203"
+        );
+    }
+
+    #[test]
+    fn test_restore_send_pan_roundtrip_from_reaper() {
+        // Full capture->store->restore round-trip: a REAPER pan read by the
+        // poller (reaper_pan_to_ui) then stored, must restore to the same
+        // REAPER value. Identity round-trip is the guarantee #203 restores.
+        for reaper_pan in [-1.0_f32, -0.5, 0.0, 0.5, 1.0] {
+            let stored_ui = reaper_pan_to_ui(reaper_pan); // what the poller/snapshot stores
+            let restored = restore_send_pan(stored_ui); // what restore writes back
+            assert!(
+                (restored - reaper_pan).abs() < 0.001,
+                "round-trip failed: REAPER {} -> stored UI {} -> restored {} (#203)",
+                reaper_pan,
+                stored_ui,
+                restored
+            );
+        }
+    }
+
     #[test]
     fn test_pan_conversion_clamps() {
         // Test that out-of-range values are clamped
@@ -4695,6 +4821,161 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             send_index_for(5),
             Some(member_index),
             "Input track should use member's send_index"
+        );
+    }
+
+    // ================================================================
+    // #204: the SHARED resolver used by the WS write path AND both REST
+    // restore handlers. Before the fix, snapshot_routes/preset_routes
+    // applied the member's own send_index to every track, writing mix
+    // channels to the wrong send.
+    // ================================================================
+
+    #[test]
+    fn test_resolve_send_index_mix_channel_uses_discovered_index() {
+        // (track_index, mix_send_index) — as compute_mix_members builds it.
+        let mix_members = vec![(23_usize, Some(1_usize)), (24, Some(1)), (25, Some(1))];
+        let member_index = 0_usize; // e.g. petronela's own send index
+
+        // Mix channel (track 23) MUST resolve to its discovered mix_send_index (1),
+        // NOT the member's own send index (0) — this is the #204 regression.
+        assert_eq!(
+            resolve_send_index(23, member_index, &mix_members),
+            Ok(1),
+            "mix channel must use discovered mix_send_index, not member send_index (#204)"
+        );
+        // Regular input track (5) is not a mix member → member's own send index.
+        assert_eq!(
+            resolve_send_index(5, member_index, &mix_members),
+            Ok(member_index),
+            "regular input track uses the member's send index"
+        );
+        // Missing mix_send_index → SAFETY error, never a silent fallback.
+        assert!(
+            resolve_send_index(23, member_index, &[(23_usize, None)]).is_err(),
+            "missing mix_send_index must be a SAFETY error, not a fallback (#204)"
+        );
+    }
+
+    #[test]
+    fn test_compute_mix_members_engineer_and_regular() {
+        let discovered = make_discovered_members();
+        // Engineer sees every other member's inear track + its send to engineer.
+        let eng = compute_mix_members(&discovered, "engineer");
+        assert_eq!(
+            eng.len(),
+            3,
+            "engineer has 3 mix channels (petronela/stevo/marek)"
+        );
+        assert!(
+            eng.iter().all(|(_, si)| si.is_some()),
+            "each mix channel carries a discovered mix_send_index"
+        );
+        // A regular member has no mix channels.
+        assert!(
+            compute_mix_members(&discovered, "stevo").is_empty(),
+            "regular member has no mix channels"
+        );
+    }
+
+    #[test]
+    fn test_compute_mix_members_elevated_uses_mix_send_indices() {
+        use std::collections::HashMap;
+        // Elevated member (petronela) with per-source send indices to HER inear.
+        let mut petronela_idx = HashMap::new();
+        petronela_idx.insert("stevo".to_string(), 3_usize);
+        petronela_idx.insert("marek".to_string(), 4_usize);
+        let discovered = vec![
+            iem_core::DiscoveredMember {
+                name: "PETRONELA".to_string(),
+                track_index: 23,
+                dante_output_l: 1,
+                dante_output_r: 2,
+                send_index: 0,
+                mix_send_index: Some(1),
+                mix_send_indices: petronela_idx,
+            },
+            iem_core::DiscoveredMember {
+                name: "STEVO".to_string(),
+                track_index: 24,
+                dante_output_l: 3,
+                dante_output_r: 4,
+                send_index: 1,
+                mix_send_index: Some(1),
+                mix_send_indices: HashMap::new(),
+            },
+            iem_core::DiscoveredMember {
+                name: "MAREK".to_string(),
+                track_index: 25,
+                dante_output_l: 5,
+                dante_output_r: 6,
+                send_index: 2,
+                mix_send_index: Some(1),
+                mix_send_indices: HashMap::new(),
+            },
+            iem_core::DiscoveredMember {
+                name: "ENGINEER".to_string(),
+                track_index: 32,
+                dante_output_l: 19,
+                dante_output_r: 20,
+                send_index: 9,
+                mix_send_index: None,
+                mix_send_indices: HashMap::new(),
+            },
+        ];
+        let mix = compute_mix_members(&discovered, "petronela");
+        // Excludes the elevated member's OWN track and the engineer track (#204).
+        assert!(
+            !mix.iter().any(|(t, _)| *t == 23),
+            "elevated member's own inear track must be excluded"
+        );
+        assert!(
+            !mix.iter().any(|(t, _)| *t == 32),
+            "engineer track must be excluded"
+        );
+        // Each other member's send index comes from THIS elevated member's map.
+        assert_eq!(
+            mix.iter().find(|(t, _)| *t == 24).and_then(|(_, s)| *s),
+            Some(3),
+            "stevo's inear routes to petronela via send 3"
+        );
+        assert_eq!(
+            mix.iter().find(|(t, _)| *t == 25).and_then(|(_, s)| *s),
+            Some(4),
+            "marek's inear routes to petronela via send 4"
+        );
+        assert_eq!(
+            mix.len(),
+            2,
+            "exactly the two non-self, non-engineer members"
+        );
+    }
+
+    #[test]
+    fn test_build_eq_bands_map_drops_empty_and_none_when_all_empty() {
+        let band = || iem_core::EqBand {
+            band_type: "band".to_string(),
+            freq_hz: 1000.0,
+            gain_db: 0.0,
+            bw: 1.0,
+            freq_norm: 0.5,
+            gain_norm: 0.25,
+            bw_norm: 0.5,
+            gain_db_min: -12.0,
+            gain_db_max: 12.0,
+            enabled: true,
+        };
+        // Track 5 has EQ, track 7 has none → only 5 survives (#205).
+        let out = build_eq_bands_map(vec![(5_usize, vec![band()]), (7_usize, vec![])])
+            .expect("a non-empty track must yield Some");
+        assert_eq!(out.len(), 1, "empty band lists must be dropped");
+        assert!(out.contains_key(&5), "the track with EQ is kept");
+        assert!(!out.contains_key(&7), "the empty track is dropped");
+        // Nothing / all-empty → None (never Some(empty map)).
+        assert!(build_eq_bands_map(vec![]).is_none());
+        assert!(
+            build_eq_bands_map(vec![(7_usize, vec![])]).is_none(),
+            "all-empty input must be None, not an empty map"
         );
     }
 

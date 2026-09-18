@@ -10,7 +10,7 @@ use std::time::Instant;
 use tokio::sync::{RwLock, broadcast};
 
 /// OIEM packet magic bytes: "OIEM" as bytes
-const OIEM_MAGIC: [u8; 4] = [b'O', b'I', b'E', b'M'];
+const OIEM_MAGIC: [u8; 4] = *b"OIEM";
 
 /// OIEM header size: 4 (magic) + 2 (sequence) + 2 (payload_size) = 8 bytes
 const OIEM_HEADER_SIZE: usize = 8;
