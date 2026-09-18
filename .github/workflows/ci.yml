@@ -2333,6 +2333,49 @@ jobs:
             exit 1
           }
 
+      - name: Re-verify tone generator live before post-deploy E2E (#207)
+        if: steps.reaper-pre.outputs.was_running == 'true'
+        shell: powershell
+        run: |
+          # The tone was activated earlier (before the audio-pipeline steps).
+          # Re-verify it still drives the ENGINEER inear track and re-activate if
+          # it has died, so the meter tests (~20 min into the suite) have a live
+          # signal. tone_generator.lua is idempotent start/stop — a second
+          # "start" only re-asserts (enables FX, unmutes, 440Hz), never toggles
+          # off — so this read-then-act step is safe. Silence floor = -1500;
+          # the active tone reads ~-224, so <= -1100 means the tone is gone.
+          function Get-EngineerInearPeak {
+            $resp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/NTRACK;TRACK" -UseBasicParsing).Content
+            $peak = -1500
+            foreach ($line in ($resp -split "`n")) {
+              $p = $line -split "`t"
+              if ($p[0] -ne "TRACK") { continue }
+              $name = $p[2].ToLower()
+              if ($name -like "*engineer*" -and $name -like "*inear*") {
+                $v = [int]$p[6]
+                if ($v -gt $peak) { $peak = $v }
+              }
+            }
+            return $peak
+          }
+          $peak = Get-EngineerInearPeak
+          Write-Host "Engineer inear peak before E2E: $peak"
+          if ($peak -le -1100) {
+            Write-Host "Tone silent (peak $peak) - re-activating tone generator"
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/SET/EXTSTATE/reaperiem/tone_gen_action/start" -UseBasicParsing | Out-Null
+            $toneIdResp = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/action_tone_generator" -UseBasicParsing).Content
+            $toneActionId = ($toneIdResp -split "`t")[-1]
+            if (-not $toneActionId) { Write-Host "::error::Tone generator action ID not found in EXTSTATE"; exit 1 }
+            Invoke-WebRequest -Uri "http://iem.lan:8080/_/$toneActionId" -UseBasicParsing | Out-Null
+            Start-Sleep -Seconds 2
+            $toneResult = (Invoke-WebRequest -Uri "http://iem.lan:8080/_/GET/EXTSTATE/reaperiem/tone_gen_result" -UseBasicParsing).Content
+            Write-Host "Re-activation result: $toneResult"
+            if ($toneResult -notmatch "OK") { Write-Host "::error::Tone re-activation failed: $toneResult"; exit 1 }
+            $peak = Get-EngineerInearPeak
+            Write-Host "Engineer inear peak after re-activation: $peak"
+            if ($peak -le -1100) { Write-Host "::error::Tone still silent after re-activation (peak $peak)"; exit 1 }
+          }
+
       - name: Run post-deploy E2E tests
         shell: powershell
         working-directory: iem-mixer/e2e
