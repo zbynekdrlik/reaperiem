@@ -50,6 +50,8 @@ const PAIRS = ISOLATION_PAIRS;
 interface SendSnapshot {
   src: number;
   sendIdx: number;
+  /** Destination inear track this send targets. */
+  dest: number;
   /** Raw REAPER mute flag (0 = unmuted, 8 = muted). */
   mute: number;
   vol: string;
@@ -57,13 +59,18 @@ interface SendSnapshot {
 }
 
 /**
- * Walk all REAPER tracks (1..32) and collect the sends that point at
- * `observerInear`.  Returns a deterministically ordered array so that
- * deep-equality comparison works.
+ * Walk all REAPER tracks (1..45) ONCE and collect every send that points at
+ * ANY of the given inear targets. One full 45×12 scan is expensive (~3 min for
+ * an elevated member), so both the observer and the restoring member's own
+ * sends are captured in a SINGLE pass and filtered by `dest` afterwards —
+ * capturing them with two separate scans doubled the REAPER load and pushed the
+ * petronela case past the 180s test timeout (#203 regression, fixed by this
+ * single-pass form — never by widening the timeout).
+ * Returns a deterministically ordered array so deep-equality comparison works.
  */
-async function captureObserverState(
+async function captureSends(
   request: import("@playwright/test").APIRequestContext,
-  observerInear: number,
+  inears: number[],
 ): Promise<SendSnapshot[]> {
   const sends: SendSnapshot[] = [];
 
@@ -92,10 +99,11 @@ async function captureObserverState(
       if (parts.length < 7) continue;
 
       const dest = parseInt(parts[6] ?? "-1", 10);
-      if (dest === observerInear) {
+      if (inears.includes(dest)) {
         sends.push({
           src: track,
           sendIdx,
+          dest,
           mute: parseInt(parts[3] ?? "0", 10),
           vol: parts[4] ?? "0",
           pan: parts[5] ?? "0",
@@ -145,28 +153,33 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
           `unknown observer member: ${observerMember}`,
         ).toBeDefined();
 
-        // 1. Capture observer's full inear-receiving send picture BEFORE restore.
-        const before = await captureObserverState(request, observerInear);
-        expect(
-          before.length,
-          `observer ${observerMember} must have at least one send routed to their inear track`,
-        ).toBeGreaterThan(0);
-
-        // 1b. #203 regression: also capture the RESTORING member's OWN inear
-        //     sends. A create->restore round-trip with no intervening change
-        //     must leave the member's own send pans byte-identical. The old
-        //     test only checked another member, so #203 (restore wrote UI-range
-        //     pan 0..1 raw into REAPER's -1..1 send, shifting every channel
-        //     right) went undetected. Center (REAPER 0.0) previously came back
-        //     as 0.5 = half-right.
+        // #203 regression: also watch the RESTORING member's OWN inear sends. A
+        // create->restore round-trip with no intervening change must leave the
+        // member's own send pans byte-identical. The old test only checked
+        // another member, so #203 (restore wrote UI-range pan 0..1 raw into
+        // REAPER's -1..1 send, shifting every channel right) went undetected.
         const restoringInear = MEMBER_INEAR_TRACK[restoringMember];
         expect(
           restoringInear,
           `unknown restoring member: ${restoringMember}`,
         ).toBeDefined();
-        const beforeSelf = await captureObserverState(request, restoringInear);
+
+        // 1. Capture BOTH the observer's and the restoring member's inear-
+        //    receiving sends in ONE scan (a second scan would double a ~3 min
+        //    pass and time the elevated case out), then split by dest.
+        const beforeAll = await captureSends(request, [
+          observerInear,
+          restoringInear,
+        ]);
+        const before = beforeAll.filter((s) => s.dest === observerInear);
+        expect(
+          before.length,
+          `observer ${observerMember} must have at least one send routed to their inear track`,
+        ).toBeGreaterThan(0);
         const beforeSelfPan = new Map<string, number>(
-          beforeSelf.map((s) => [`${s.src}:${s.sendIdx}`, parseFloat(s.pan)]),
+          beforeAll
+            .filter((s) => s.dest === restoringInear)
+            .map((s) => [`${s.src}:${s.sendIdx}`, parseFloat(s.pan)]),
         );
 
         let createdTimestamp: number | null = null;
@@ -269,13 +282,18 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
           // Give REAPER time to apply all sends (mirrors backup test wait pattern).
           await page.waitForTimeout(2500);
 
-          // 4. Capture observer's send picture AFTER restore.
-          const after = await captureObserverState(request, observerInear);
+          // 4. Capture observer + restoring member's sends AFTER restore in ONE
+          //    scan, then split by dest.
+          const afterAll = await captureSends(request, [
+            observerInear,
+            restoringInear,
+          ]);
+          const after = afterAll.filter((s) => s.dest === observerInear);
 
           // 4b. #203 regression: the restoring member's OWN send pans must be
           //     unchanged by a no-op create->restore round-trip. Before the fix
           //     the raw UI->REAPER pan write shifted every send toward right.
-          const afterSelf = await captureObserverState(request, restoringInear);
+          const afterSelf = afterAll.filter((s) => s.dest === restoringInear);
           for (const s of afterSelf) {
             const key = `${s.src}:${s.sendIdx}`;
             const beforePan = beforeSelfPan.get(key);

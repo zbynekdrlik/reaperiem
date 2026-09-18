@@ -2487,20 +2487,29 @@ pub async fn capture_eq_bands(
     state: &AppState,
     track_indices: &[usize],
 ) -> Option<std::collections::HashMap<usize, Vec<iem_core::EqBand>>> {
-    let mut eq_bands_map = std::collections::HashMap::new();
+    let mut per_track = Vec::new();
     for track_idx in track_indices {
         if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
             handle_get_eq_params(state, *track_idx).await
-            && !bands.is_empty()
         {
-            eq_bands_map.insert(*track_idx, bands);
+            per_track.push((*track_idx, bands));
         }
     }
-    if eq_bands_map.is_empty() {
-        None
-    } else {
-        Some(eq_bands_map)
-    }
+    build_eq_bands_map(per_track)
+}
+
+/// Keep only the tracks whose captured band list is non-empty; return `None`
+/// when nothing remains. Pure (no REAPER I/O) so the #205 "drop empty EQ /
+/// None-when-empty" rule is unit-testable — `capture_eq_bands` does the HTTP
+/// reads and hands the results here.
+pub(crate) fn build_eq_bands_map(
+    per_track: Vec<(usize, Vec<iem_core::EqBand>)>,
+) -> Option<std::collections::HashMap<usize, Vec<iem_core::EqBand>>> {
+    let map: std::collections::HashMap<usize, Vec<iem_core::EqBand>> = per_track
+        .into_iter()
+        .filter(|(_, bands)| !bands.is_empty())
+        .collect();
+    if map.is_empty() { None } else { Some(map) }
 }
 
 /// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
@@ -4866,6 +4875,107 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
         assert!(
             compute_mix_members(&discovered, "stevo").is_empty(),
             "regular member has no mix channels"
+        );
+    }
+
+    #[test]
+    fn test_compute_mix_members_elevated_uses_mix_send_indices() {
+        use std::collections::HashMap;
+        // Elevated member (petronela) with per-source send indices to HER inear.
+        let mut petronela_idx = HashMap::new();
+        petronela_idx.insert("stevo".to_string(), 3_usize);
+        petronela_idx.insert("marek".to_string(), 4_usize);
+        let discovered = vec![
+            iem_core::DiscoveredMember {
+                name: "PETRONELA".to_string(),
+                track_index: 23,
+                dante_output_l: 1,
+                dante_output_r: 2,
+                send_index: 0,
+                mix_send_index: Some(1),
+                mix_send_indices: petronela_idx,
+            },
+            iem_core::DiscoveredMember {
+                name: "STEVO".to_string(),
+                track_index: 24,
+                dante_output_l: 3,
+                dante_output_r: 4,
+                send_index: 1,
+                mix_send_index: Some(1),
+                mix_send_indices: HashMap::new(),
+            },
+            iem_core::DiscoveredMember {
+                name: "MAREK".to_string(),
+                track_index: 25,
+                dante_output_l: 5,
+                dante_output_r: 6,
+                send_index: 2,
+                mix_send_index: Some(1),
+                mix_send_indices: HashMap::new(),
+            },
+            iem_core::DiscoveredMember {
+                name: "ENGINEER".to_string(),
+                track_index: 32,
+                dante_output_l: 19,
+                dante_output_r: 20,
+                send_index: 9,
+                mix_send_index: None,
+                mix_send_indices: HashMap::new(),
+            },
+        ];
+        let mix = compute_mix_members(&discovered, "petronela");
+        // Excludes the elevated member's OWN track and the engineer track (#204).
+        assert!(
+            !mix.iter().any(|(t, _)| *t == 23),
+            "elevated member's own inear track must be excluded"
+        );
+        assert!(
+            !mix.iter().any(|(t, _)| *t == 32),
+            "engineer track must be excluded"
+        );
+        // Each other member's send index comes from THIS elevated member's map.
+        assert_eq!(
+            mix.iter().find(|(t, _)| *t == 24).and_then(|(_, s)| *s),
+            Some(3),
+            "stevo's inear routes to petronela via send 3"
+        );
+        assert_eq!(
+            mix.iter().find(|(t, _)| *t == 25).and_then(|(_, s)| *s),
+            Some(4),
+            "marek's inear routes to petronela via send 4"
+        );
+        assert_eq!(
+            mix.len(),
+            2,
+            "exactly the two non-self, non-engineer members"
+        );
+    }
+
+    #[test]
+    fn test_build_eq_bands_map_drops_empty_and_none_when_all_empty() {
+        let band = || iem_core::EqBand {
+            band_type: "band".to_string(),
+            freq_hz: 1000.0,
+            gain_db: 0.0,
+            bw: 1.0,
+            freq_norm: 0.5,
+            gain_norm: 0.25,
+            bw_norm: 0.5,
+            gain_db_min: -12.0,
+            gain_db_max: 12.0,
+            enabled: true,
+        };
+        // Track 5 has EQ, track 7 has none → only 5 survives (#205).
+        let out = build_eq_bands_map(vec![(5_usize, vec![band()]), (7_usize, vec![])])
+            .expect("a non-empty track must yield Some");
+        assert_eq!(out.len(), 1, "empty band lists must be dropped");
+        assert!(out.contains_key(&5), "the track with EQ is kept");
+        assert!(!out.contains_key(&7), "the empty track is dropped");
+        // Nothing / all-empty → None (never Some(empty map)).
+        assert!(build_eq_bands_map(vec![]).is_none());
+        assert!(
+            build_eq_bands_map(vec![(7_usize, vec![])]).is_none(),
+            "all-empty input must be None, not an empty map"
         );
     }
 
