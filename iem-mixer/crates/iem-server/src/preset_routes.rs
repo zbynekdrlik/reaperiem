@@ -236,6 +236,8 @@ async fn restore_preset(
         .find(|m| m.id() == member)
         .map(|m| m.send_index)
         .ok_or_else(|| (StatusCode::NOT_FOUND, Json(ApiError::not_found("Member"))))?;
+    // #204: mix channels route to a DIFFERENT send than the member's own.
+    let mix_members = crate::proxy::compute_mix_members(&discovered, &member);
     drop(discovered);
     let config = state.config.read().await;
     let reaper_url = config.reaper_url.clone();
@@ -246,8 +248,17 @@ async fn restore_preset(
     for (track_index, ch) in &preset.channels {
         let url_base = reaper_url.clone();
         let client = state.http_client.clone();
-        let send_index = member_index;
         let track_idx = *track_index;
+        // #204: resolve the correct send for this track — mix channels use their
+        // discovered mix_send_index; a missing one is a SAFETY error, not a fallback.
+        let send_index = crate::proxy::resolve_send_index(track_idx, member_index, &mix_members)
+            .map_err(|e| {
+                tracing::error!(track_idx, error = %e, "Preset restore send_index resolution failed");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ApiError::new("SEND_INDEX", e)),
+                )
+            })?;
         let vol_db = ch.vol;
         // #203: stored pan is UI-range 0..1 — convert to REAPER -1..1 before writing.
         let pan = crate::proxy::restore_send_pan(ch.pan);

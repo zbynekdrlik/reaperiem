@@ -1113,6 +1113,64 @@ pub(crate) fn restore_send_pan(stored_pan: f32) -> f32 {
     ui_pan_to_reaper(stored_pan)
 }
 
+/// Build the `(track_index, mix_send_index)` list of a member's mix channels.
+///
+/// Mirrors the discovery in `apply_command_to_cache` (the WS write path):
+/// - engineer: every other member's inear track + its send TO engineer;
+/// - elevated member (petronela): every other member's inear track + the send
+///   on it that routes TO this elevated member (`mix_send_indices[member]`);
+/// - regular member: no mix channels.
+///
+/// The result feeds `resolve_send_index`, the single place that decides which
+/// REAPER send a restore/write targets — so the "never hardcode send_index=0
+/// for mix channels" rule is enforced once, for the WS path AND both REST
+/// restore handlers.
+pub(crate) fn compute_mix_members(
+    discovered: &[iem_core::DiscoveredMember],
+    member_id: &str,
+) -> Vec<(usize, Option<usize>)> {
+    let is_elevated = member_id == "petronela";
+    if member_id == "engineer" {
+        discovered
+            .iter()
+            .filter(|m| m.id() != "engineer")
+            .map(|m| (m.track_index, m.mix_send_index))
+            .collect()
+    } else if is_elevated {
+        let elevated = discovered.iter().find(|m| m.id() == member_id);
+        discovered
+            .iter()
+            .filter(|m| m.id() != member_id && m.id() != "engineer")
+            .map(|m| {
+                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
+                (m.track_index, si)
+            })
+            .collect()
+    } else {
+        Vec::new()
+    }
+}
+
+/// REAPER send index a write/restore must target for `track_idx`.
+///
+/// A mix channel (its `track_idx` appears in `mix_members`) uses its discovered
+/// `mix_send_index` — NEVER a hardcoded 0 and NEVER the member's own send index
+/// (bug #204: both REST restore handlers used the member's `send_index` for
+/// every track, writing mix channels to the wrong send). A missing
+/// `mix_send_index` is a SAFETY error, never a silent fallback. A regular input
+/// track uses the member's own `member_send_index`.
+pub(crate) fn resolve_send_index(
+    track_idx: usize,
+    member_send_index: usize,
+    mix_members: &[(usize, Option<usize>)],
+) -> Result<usize, String> {
+    // BUG #204 (RED): applies the member's own send index to EVERY track,
+    // ignoring mix_members — so mix channels write to the wrong send.
+    let _ = mix_members;
+    let _ = track_idx;
+    Ok(member_send_index)
+}
+
 /// Validate a pan value for SetPan commands.
 /// Returns Err with a user-facing message if pan is NaN, infinite, or out of [-1.0, 1.0].
 pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
@@ -4753,6 +4811,60 @@ TRACK\t3\tMAREK mic\t192\t1.000000\t0.000000\t-1500\t-1500\t1.000000\t3\t9\t0\t0
             send_index_for(5),
             Some(member_index),
             "Input track should use member's send_index"
+        );
+    }
+
+    // ================================================================
+    // #204: the SHARED resolver used by the WS write path AND both REST
+    // restore handlers. Before the fix, snapshot_routes/preset_routes
+    // applied the member's own send_index to every track, writing mix
+    // channels to the wrong send.
+    // ================================================================
+
+    #[test]
+    fn test_resolve_send_index_mix_channel_uses_discovered_index() {
+        // (track_index, mix_send_index) — as compute_mix_members builds it.
+        let mix_members = vec![(23_usize, Some(1_usize)), (24, Some(1)), (25, Some(1))];
+        let member_index = 0_usize; // e.g. petronela's own send index
+
+        // Mix channel (track 23) MUST resolve to its discovered mix_send_index (1),
+        // NOT the member's own send index (0) — this is the #204 regression.
+        assert_eq!(
+            resolve_send_index(23, member_index, &mix_members),
+            Ok(1),
+            "mix channel must use discovered mix_send_index, not member send_index (#204)"
+        );
+        // Regular input track (5) is not a mix member → member's own send index.
+        assert_eq!(
+            resolve_send_index(5, member_index, &mix_members),
+            Ok(member_index),
+            "regular input track uses the member's send index"
+        );
+        // Missing mix_send_index → SAFETY error, never a silent fallback.
+        assert!(
+            resolve_send_index(23, member_index, &[(23_usize, None)]).is_err(),
+            "missing mix_send_index must be a SAFETY error, not a fallback (#204)"
+        );
+    }
+
+    #[test]
+    fn test_compute_mix_members_engineer_and_regular() {
+        let discovered = make_discovered_members();
+        // Engineer sees every other member's inear track + its send to engineer.
+        let eng = compute_mix_members(&discovered, "engineer");
+        assert_eq!(
+            eng.len(),
+            3,
+            "engineer has 3 mix channels (petronela/stevo/marek)"
+        );
+        assert!(
+            eng.iter().all(|(_, si)| si.is_some()),
+            "each mix channel carries a discovered mix_send_index"
+        );
+        // A regular member has no mix channels.
+        assert!(
+            compute_mix_members(&discovered, "stevo").is_empty(),
+            "regular member has no mix channels"
         );
     }
 
