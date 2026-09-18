@@ -10,6 +10,10 @@
 - Dante network audio / netaudio CLI → load `.claude/skills/dante`
 - IEM project overview / MCP tools / git workflow → load `.claude/skills/reaperiem`
 - Band-member changelog → load `.claude/skills/band-changelog`
+- Pan 0..1 vs −1..1 + send_index on restore → `.claude/rules/pan-and-send-domains.md` (auto-loads on its `paths:`)
+- Live audio E2E / tone generator indicator → `.claude/rules/live-e2e-tone.md` (auto-loads on its `paths:`)
+- Leptos `view!` macro gotchas → `.claude/rules/leptos-view-macro.md` (auto-loads on iem-ui `.rs`)
+- CI Rust toolchain (trunk `--locked`, clippy) → `.claude/rules/ci-rust-toolchain.md` (auto-loads on ci.yml / crates)
 
 ## Always-Apply Project Rules
 
@@ -36,7 +40,6 @@
 - NEVER `taskkill /F /IM reaper.exe` without saving first — has crashed remote Windows machine
 - ALWAYS SAVE before restart: `curl "http://iem.lan:8080/_/40026"`
 - NEVER modify Dante subscriptions or stagebox/FOH devices (see `.claude/skills/dante`)
-- NEVER hardcode send_index=0 for mix channels on member inear tracks (see `.claude/skills/reaper`)
 
 ### Key commands
 
