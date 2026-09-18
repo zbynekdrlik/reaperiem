@@ -152,6 +152,23 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
           `observer ${observerMember} must have at least one send routed to their inear track`,
         ).toBeGreaterThan(0);
 
+        // 1b. #203 regression: also capture the RESTORING member's OWN inear
+        //     sends. A create->restore round-trip with no intervening change
+        //     must leave the member's own send pans byte-identical. The old
+        //     test only checked another member, so #203 (restore wrote UI-range
+        //     pan 0..1 raw into REAPER's -1..1 send, shifting every channel
+        //     right) went undetected. Center (REAPER 0.0) previously came back
+        //     as 0.5 = half-right.
+        const restoringInear = MEMBER_INEAR_TRACK[restoringMember];
+        expect(
+          restoringInear,
+          `unknown restoring member: ${restoringMember}`,
+        ).toBeDefined();
+        const beforeSelf = await captureObserverState(request, restoringInear);
+        const beforeSelfPan = new Map<string, number>(
+          beforeSelf.map((s) => [`${s.src}:${s.sendIdx}`, parseFloat(s.pan)]),
+        );
+
         let createdTimestamp: number | null = null;
 
         try {
@@ -254,6 +271,21 @@ test.describe("Snapshot restore isolation (defensive regression gate)", () => {
 
           // 4. Capture observer's send picture AFTER restore.
           const after = await captureObserverState(request, observerInear);
+
+          // 4b. #203 regression: the restoring member's OWN send pans must be
+          //     unchanged by a no-op create->restore round-trip. Before the fix
+          //     the raw UI->REAPER pan write shifted every send toward right.
+          const afterSelf = await captureObserverState(request, restoringInear);
+          for (const s of afterSelf) {
+            const key = `${s.src}:${s.sendIdx}`;
+            const beforePan = beforeSelfPan.get(key);
+            if (beforePan === undefined) continue; // send appeared/disappeared — not a pan check
+            const afterPan = parseFloat(s.pan);
+            expect(
+              Math.abs(afterPan - beforePan),
+              `#203: ${restoringMember}'s own send ${key} pan changed on restore (before=${beforePan}, after=${afterPan}) — UI-range pan written raw into REAPER`,
+            ).toBeLessThan(0.02);
+          }
 
           // 5. DECISION GATE: observer must be byte-identical before and after.
           //    A diff here means member_restore is contaminating other members.

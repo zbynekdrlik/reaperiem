@@ -249,7 +249,8 @@ async fn restore_preset(
         let send_index = member_index;
         let track_idx = *track_index;
         let vol_db = ch.vol;
-        let pan = ch.pan;
+        // #203: stored pan is UI-range 0..1 — convert to REAPER -1..1 before writing.
+        let pan = crate::proxy::restore_send_pan(ch.pan);
         let mute = ch.mute;
 
         handles.push(tokio::spawn(async move {

@@ -199,6 +199,42 @@ mod tests {
         ))
     }
 
+    /// #203: capture stores the UI-range pan verbatim; the restore path must
+    /// convert it back to REAPER range. This exercises the real capture
+    /// function `channels_from_state` end-to-end with `restore_send_pan`.
+    #[test]
+    fn test_capture_restore_pan_roundtrip() {
+        for reaper_pan in [-1.0_f32, -0.5, 0.0, 0.5, 1.0] {
+            // The poller stores UI-range pan (reaper_pan_to_ui).
+            let ui_pan = crate::proxy::reaper_pan_to_ui(reaper_pan);
+            let channels = vec![iem_core::Channel {
+                track_index: 5,
+                name: "TEST".to_string(),
+                level_db: -6.0,
+                pan: ui_pan,
+                muted: false,
+                category: "mics".to_string(),
+                stereo_pair: None,
+                stereo_side: None,
+            }];
+            let snap = SnapshotStore::channels_from_state(&channels);
+            let stored = snap.get(&5).expect("track 5 captured");
+            // Capture keeps pan in UI range (0..1) unchanged.
+            assert!(
+                (stored.pan - ui_pan).abs() < 0.0001,
+                "capture must keep UI-range pan verbatim"
+            );
+            // Restore converts it back to the original REAPER value.
+            let restored = crate::proxy::restore_send_pan(stored.pan);
+            assert!(
+                (restored - reaper_pan).abs() < 0.001,
+                "capture->store->restore must round-trip REAPER {} (got {}) — #203",
+                reaper_pan,
+                restored
+            );
+        }
+    }
+
     #[test]
     fn test_empty_store_returns_empty() {
         let dir = temp_dir("empty");

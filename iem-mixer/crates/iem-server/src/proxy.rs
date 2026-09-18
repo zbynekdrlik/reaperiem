@@ -1100,6 +1100,19 @@ pub(crate) fn ui_pan_to_reaper(ui_pan: f32) -> f32 {
     ((ui_pan * 2.0) - 1.0).clamp(-1.0, 1.0)
 }
 
+/// Pan value the snapshot/preset RESTORE path must write to a REAPER send.
+///
+/// Snapshots and presets store pan in the UI range 0..1 (0.5 = center), because
+/// the poller converts REAPER's -1..1 to 0..1 the moment it reads it
+/// (`reaper_pan_to_ui`). REAPER's `SET .../SEND/{}/PAN/` write expects -1..1, so
+/// the stored value MUST be converted back before writing. Bug #203: the restore
+/// path wrote the stored value RAW, mapping center (0.0 UI→REAPER) to 0.5 =
+/// half-right and shifting every channel's panorama right.
+pub(crate) fn restore_send_pan(stored_pan: f32) -> f32 {
+    // BUG #203 (RED): stored UI pan written raw — REAPER interprets 0.5 as half-right.
+    stored_pan
+}
+
 /// Validate a pan value for SetPan commands.
 /// Returns Err with a user-facing message if pan is NaN, infinite, or out of [-1.0, 1.0].
 pub(crate) fn validate_pan_value(pan: f32) -> Result<(), String> {
@@ -3942,6 +3955,51 @@ mod tests {
                 ui_pan,
                 reaper,
                 back
+            );
+        }
+    }
+
+    // ================================================================
+    // #203: snapshot/preset RESTORE must convert stored UI pan (0..1)
+    // back to REAPER pan (-1..1). Before the fix, restore wrote the
+    // stored value RAW, so center (0.0 REAPER) came back as 0.5 =
+    // half-right and every channel's panorama shifted right.
+    // ================================================================
+
+    #[test]
+    fn test_restore_send_pan_converts_ui_to_reaper() {
+        // The value fed to `SET/.../SEND/{}/PAN/{:.6}` must be REAPER-range.
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(0.5)),
+            "0.000000",
+            "stored UI center (0.5) must restore to REAPER center (0.0), not 0.5 (half-right) — #203"
+        );
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(0.0)),
+            "-1.000000",
+            "stored UI hard-left (0.0) must restore to REAPER -1.0 — #203"
+        );
+        assert_eq!(
+            format!("{:.6}", restore_send_pan(1.0)),
+            "1.000000",
+            "stored UI hard-right (1.0) must restore to REAPER 1.0 — #203"
+        );
+    }
+
+    #[test]
+    fn test_restore_send_pan_roundtrip_from_reaper() {
+        // Full capture->store->restore round-trip: a REAPER pan read by the
+        // poller (reaper_pan_to_ui) then stored, must restore to the same
+        // REAPER value. Identity round-trip is the guarantee #203 restores.
+        for reaper_pan in [-1.0_f32, -0.5, 0.0, 0.5, 1.0] {
+            let stored_ui = reaper_pan_to_ui(reaper_pan); // what the poller/snapshot stores
+            let restored = restore_send_pan(stored_ui); // what restore writes back
+            assert!(
+                (restored - reaper_pan).abs() < 0.001,
+                "round-trip failed: REAPER {} -> stored UI {} -> restored {} (#203)",
+                reaper_pan,
+                stored_ui,
+                restored
             );
         }
     }
