@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsCast;
 
 use crate::auth::get_token;
+use crate::components::confirm_dialog::ConfirmDialog;
 
 /// Preset data used by the mixer to apply channel states
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -240,6 +241,15 @@ fn encode_name(name: &str) -> String {
         .unwrap_or_else(|| name.to_string())
 }
 
+/// A destructive action awaiting user confirmation (#206).
+#[derive(Clone)]
+enum PendingAction {
+    /// Overwrite an existing preset with the current mix.
+    Overwrite(String),
+    /// Delete a preset.
+    Delete(String),
+}
+
 /// Preset modal component
 #[component]
 pub fn PresetModal(
@@ -247,6 +257,8 @@ pub fn PresetModal(
     visible: ReadSignal<bool>,
     /// Member ID for preset storage
     member_id: String,
+    /// Whether the WebSocket to REAPER is connected (load is blocked otherwise, #205)
+    connected: ReadSignal<bool>,
     /// Called to close modal
     on_close: Callback<()>,
     /// Called when a preset is loaded
@@ -258,7 +270,60 @@ pub fn PresetModal(
     let (new_name, set_new_name) = signal(String::new());
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(Option::<String>::None);
+    // #206: confirmation dialog state (overwrite / delete).
+    let (confirm_visible, set_confirm_visible) = signal(false);
+    let (confirm_title, set_confirm_title) = signal(String::new());
+    let (confirm_body, set_confirm_body) = signal(String::new());
+    let (pending, set_pending) = signal(Option::<PendingAction>::None);
     let member_id_stored = StoredValue::new(member_id);
+
+    // The actual overwrite/delete operations, callable from the confirm dialog.
+    let do_overwrite = Callback::new(move |name: String| {
+        let state = get_current_state.run(());
+        let member_id = member_id_stored.get_value();
+        let _ = set_loading.try_set(true);
+        let _ = set_error.try_set(None);
+        wasm_bindgen_futures::spawn_local(async move {
+            match update_preset_api(
+                &member_id,
+                &name,
+                state.channels,
+                state.stems_level_db,
+                state.eq_bands,
+            )
+            .await
+            {
+                Ok(()) => {
+                    if let Ok(list) = fetch_presets(&member_id).await {
+                        let _ = set_presets.try_set(list);
+                    }
+                    let _ = set_new_name.try_set(String::new());
+                }
+                Err(e) => {
+                    let _ = set_error.try_set(Some(e));
+                }
+            }
+            let _ = set_loading.try_set(false);
+        });
+    });
+    let do_delete = Callback::new(move |name: String| {
+        let member_id = member_id_stored.get_value();
+        let _ = set_loading.try_set(true);
+        let _ = set_error.try_set(None);
+        wasm_bindgen_futures::spawn_local(async move {
+            match delete_preset_api(&member_id, &name).await {
+                Ok(()) => {
+                    if let Ok(list) = fetch_presets(&member_id).await {
+                        let _ = set_presets.try_set(list);
+                    }
+                }
+                Err(e) => {
+                    let _ = set_error.try_set(Some(e));
+                }
+            }
+            let _ = set_loading.try_set(false);
+        });
+    });
 
     // Refresh presets when modal opens
     Effect::new(move |_| {
@@ -290,6 +355,19 @@ pub fn PresetModal(
         let name = new_name.get().trim().to_string();
         if name.is_empty() {
             let _ = set_error.try_set(Some("Zadajte názov presetu.".to_string()));
+            return;
+        }
+
+        // #206: saving under an existing name would silently overwrite it —
+        // confirm first.
+        if presets.get_untracked().iter().any(|p| p.name == name) {
+            let _ = set_confirm_title.try_set("Prepísať preset?".to_string());
+            let _ = set_confirm_body.try_set(format!(
+                "Preset {} už existuje. Prepísať ho aktuálnym mixom?",
+                name
+            ));
+            let _ = set_pending.try_set(Some(PendingAction::Overwrite(name)));
+            let _ = set_confirm_visible.try_set(true);
             return;
         }
 
@@ -338,6 +416,7 @@ pub fn PresetModal(
     };
 
     view! {
+        <>
         <div
             class=move || if visible.get() { "modal-overlay visible" } else { "modal-overlay" }
             on:click=handle_overlay_click
@@ -346,7 +425,7 @@ pub fn PresetModal(
                 <button class="modal-close" on:click=move |_| on_close.run(())>
                     "\u{00D7}"
                 </button>
-                <h2>"Presets"</h2>
+                <h2>"Presety"</h2>
 
                 <Show when=move || loading.get() fallback=|| ()>
                     <div class="snapshot-loading">
@@ -365,108 +444,92 @@ pub fn PresetModal(
                         let current_presets = presets.get();
                         if current_presets.is_empty() && !loading.get() {
                             view! {
-                                <div class="no-presets">"No saved presets yet"</div>
+                                <div class="no-presets">"Zatiaľ žiadne uložené presety"</div>
                             }.into_any()
                         } else {
                             view! {
                                 <>
                                     {current_presets.into_iter().map(|info| {
                                         let name_load = info.name.clone();
-                                        let name_update = info.name.clone();
+                                        let name_overwrite = info.name.clone();
                                         let name_delete = info.name.clone();
                                         let updated_at = info.updated_at;
 
                                         view! {
                                             <div class="preset-item">
-                                                <div
-                                                    class="preset-info"
-                                                    on:click=move |_| {
-                                                        let member_id = member_id_stored.get_value();
-                                                        let name = name_load.clone();
-                                                        wasm_bindgen_futures::spawn_local(async move {
-                                                            match fetch_preset(&member_id, &name).await {
-                                                                Ok(entry) => {
-                                                                    let data = PresetData {
-                                                                        channels: entry.channels.into_iter().map(|(k, v)| {
-                                                                            (k, ChannelState { vol: v.vol, mute: v.mute, pan: v.pan })
-                                                                        }).collect(),
-                                                                        created_at: Some(entry.created_at),
-                                                                        updated_at: Some(entry.updated_at),
-                                                                        stems_level_db: entry.stems_level_db,
-                                                                        eq_bands: entry.eq_bands,
-                                                                    };
-                                                                    on_load.run(data);
-                                                                    on_close.run(());
-                                                                }
-                                                                Err(e) => {
-                                                                    web_sys::console::error_1(&format!("Failed to load preset: {}", e).into());
-                                                                }
-                                                            }
-                                                        });
-                                                    }
-                                                >
+                                                <div class="preset-info">
                                                     <span class="name">{info.name.clone()}</span>
                                                     <span class="preset-timestamp">{format_timestamp(updated_at)}</span>
                                                 </div>
                                                 <div class="preset-actions">
                                                     <button
-                                                        class="update-preset"
+                                                        class="load-preset"
                                                         on:click=move |_| {
-                                                            let state = get_current_state.run(());
+                                                            // #205: block load when disconnected, with a Slovak message.
+                                                            if !connected.get() {
+                                                                let _ = set_error.try_set(Some(
+                                                                    "Nie ste pripojení k REAPERu — preset sa nedá načítať.".to_string(),
+                                                                ));
+                                                                return;
+                                                            }
+                                                            let _ = set_error.try_set(None);
                                                             let member_id = member_id_stored.get_value();
-                                                            let name = name_update.clone();
-                                                            let _ = set_loading.try_set(true);
-
+                                                            let name = name_load.clone();
                                                             wasm_bindgen_futures::spawn_local(async move {
-                                                                // try_update: modal can close mid-await. #153
-                                                                match update_preset_api(
-                                                                    &member_id,
-                                                                    &name,
-                                                                    state.channels,
-                                                                    state.stems_level_db,
-                                                                    state.eq_bands,
-                                                                )
-                                                                .await
-                                                                {
-                                                                    Ok(()) => {
-                                                                        if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            let _ = set_presets.try_set(list);
-                                                                        }
+                                                                match fetch_preset(&member_id, &name).await {
+                                                                    Ok(entry) => {
+                                                                        let data = PresetData {
+                                                                            channels: entry.channels.into_iter().map(|(k, v)| {
+                                                                                (k, ChannelState { vol: v.vol, mute: v.mute, pan: v.pan })
+                                                                            }).collect(),
+                                                                            created_at: Some(entry.created_at),
+                                                                            updated_at: Some(entry.updated_at),
+                                                                            stems_level_db: entry.stems_level_db,
+                                                                            eq_bands: entry.eq_bands,
+                                                                        };
+                                                                        on_load.run(data);
+                                                                        on_close.run(());
                                                                     }
                                                                     Err(e) => {
-                                                                        let _ = set_error.try_set(Some(e));
+                                                                        let _ = set_error.try_set(Some(
+                                                                            format!("Preset sa nepodarilo načítať: {}", e),
+                                                                        ));
                                                                     }
                                                                 }
-                                                                let _ = set_loading.try_set(false);
                                                             });
                                                         }
                                                     >
-                                                        "Upd"
+                                                        "Načítať"
+                                                    </button>
+                                                    <button
+                                                        class="update-preset"
+                                                        on:click=move |_| {
+                                                            let name = name_overwrite.clone();
+                                                            let _ = set_confirm_title.try_set("Prepísať preset?".to_string());
+                                                            let _ = set_confirm_body.try_set(format!(
+                                                                "Preset {} sa prepíše aktuálnym mixom.",
+                                                                name
+                                                            ));
+                                                            let _ = set_pending.try_set(Some(PendingAction::Overwrite(name)));
+                                                            let _ = set_confirm_visible.try_set(true);
+                                                        }
+                                                    >
+                                                        "Prepísať"
                                                     </button>
                                                     <button
                                                         class="delete-preset"
                                                         on:click=move |_| {
-                                                            let member_id = member_id_stored.get_value();
                                                             let name = name_delete.clone();
-                                                            let _ = set_loading.try_set(true);
-
-                                                            wasm_bindgen_futures::spawn_local(async move {
-                                                                // try_update: modal can close mid-await. #153
-                                                                match delete_preset_api(&member_id, &name).await {
-                                                                    Ok(()) => {
-                                                                        if let Ok(list) = fetch_presets(&member_id).await {
-                                                                            let _ = set_presets.try_set(list);
-                                                                        }
-                                                                    }
-                                                                    Err(e) => {
-                                                                        let _ = set_error.try_set(Some(e));
-                                                                    }
-                                                                }
-                                                                let _ = set_loading.try_set(false);
-                                                            });
+                                                            let _ = set_confirm_title.try_set("Zmazať preset?".to_string());
+                                                            let _ = set_confirm_body.try_set(format!(
+                                                                "Preset {} sa natrvalo zmaže.",
+                                                                name
+                                                            ));
+                                                            let _ = set_pending.try_set(Some(PendingAction::Delete(name)));
+                                                            let _ = set_confirm_visible.try_set(true);
                                                         }
                                                     >
-                                                        "Del"
+                                                        "Zmazať"
                                                     </button>
                                                 </div>
                                             </div>
@@ -482,16 +545,37 @@ pub fn PresetModal(
                     <input
                         type="text"
                         class="preset-input"
-                        placeholder="Preset name..."
+                        placeholder="Názov presetu…"
                         maxlength="30"
                         prop:value=move || new_name.get()
                         on:input=handle_input
                     />
                     <button class="preset-save-btn" on:click=handle_save disabled=move || loading.get()>
-                        "Save"
+                        "Uložiť ako nový"
                     </button>
                 </div>
             </div>
         </div>
+
+        <ConfirmDialog
+            visible=confirm_visible
+            title=confirm_title
+            body=confirm_body
+            on_confirm=Callback::new(move |_: ()| {
+                let _ = set_confirm_visible.try_set(false);
+                if let Some(action) = pending.get_untracked() {
+                    match action {
+                        PendingAction::Overwrite(n) => do_overwrite.run(n),
+                        PendingAction::Delete(n) => do_delete.run(n),
+                    }
+                }
+                let _ = set_pending.try_set(None);
+            })
+            on_cancel=Callback::new(move |_: ()| {
+                let _ = set_confirm_visible.try_set(false);
+                let _ = set_pending.try_set(None);
+            })
+        />
+        </>
     }
 }

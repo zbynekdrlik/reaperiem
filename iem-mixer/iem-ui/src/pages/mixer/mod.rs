@@ -401,6 +401,7 @@ pub fn MixerPage() -> impl IntoView {
             <PresetModal
                 visible=preset_modal_visible.into()
                 member_id=member_id()
+                connected=connected
                 on_close=on_close_modal
                 on_load=on_load_preset
                 get_current_state=get_current_state

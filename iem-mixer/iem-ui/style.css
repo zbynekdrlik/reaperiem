@@ -1345,6 +1345,110 @@ body {
   padding: 16px;
 }
 
+/* #206 — primary "Načítať" (load) button on preset rows */
+.preset-item .load-preset {
+  color: var(--bg-primary);
+  background: var(--accent);
+  font-size: 0.75em;
+  font-weight: 700;
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* #206 — reusable confirmation dialog (stacks above the modal, z-index 100) */
+.confirm-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.confirm-overlay.visible {
+  display: flex;
+}
+
+.confirm-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 22px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.confirm-title {
+  margin: 0 0 10px;
+  font-size: 1em;
+  color: var(--accent);
+}
+
+.confirm-body {
+  margin: 0 0 18px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.confirm-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.85em;
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+}
+
+.confirm-btn-cancel {
+  background: var(--bg-channel);
+  color: var(--text-primary);
+}
+
+.confirm-btn-confirm {
+  background: var(--mute-red);
+  color: #fff;
+  border-color: var(--mute-red);
+}
+
+/* #206 — snapshot pin toggle + history-full notice */
+.snapshot-item .snapshot-pin-btn {
+  color: var(--text-secondary);
+  font-size: 0.75em;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.snapshot-item .snapshot-pin-btn.pinned {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(78, 205, 196, 0.1);
+}
+
+.snapshot-limit-notice {
+  color: var(--text-secondary);
+  background: rgba(255, 180, 0, 0.12);
+  border: 1px solid rgba(255, 180, 0, 0.4);
+  border-radius: 8px;
+  font-size: 0.78em;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  line-height: 1.35;
+}
+
 .no-channels {
   color: var(--text-muted);
   font-size: 0.9em;
