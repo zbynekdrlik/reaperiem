@@ -311,7 +311,7 @@ jobs:
       - name: Install Trunk
         run: |
           if ! command -v trunk &> /dev/null; then
-            cargo install trunk
+            cargo install trunk --locked
           fi
 
       - name: Build WASM (release)
