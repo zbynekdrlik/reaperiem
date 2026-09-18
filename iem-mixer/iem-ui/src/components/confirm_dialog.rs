@@ -36,7 +36,9 @@ pub fn ConfirmDialog(
     // leaked for the session (the modal lives the whole session).
     if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
         let closure = Closure::wrap(Box::new(move |ev: web_sys::KeyboardEvent| {
-            if visible.get_untracked() && ev.key() == "Escape" {
+            // try_get_untracked: if this dialog's signal was ever disposed the
+            // leaked listener must NOT panic (that would trip zero-console E2E).
+            if visible.try_get_untracked() == Some(true) && ev.key() == "Escape" {
                 on_cancel.run(());
             }
         }) as Box<dyn FnMut(web_sys::KeyboardEvent)>);

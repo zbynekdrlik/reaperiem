@@ -163,6 +163,7 @@ pub(super) fn make_get_current_state(
                                 freq_norm: b.freq_norm,
                                 gain_norm: b.gain_norm,
                                 bw_norm: b.bw_norm,
+                                enabled: b.enabled,
                             })
                             .collect(),
                     );
@@ -252,6 +253,7 @@ pub(super) fn make_on_load_preset(
                         ("freq", band.freq_norm),
                         ("gain", band.gain_norm),
                         ("bw", band.bw_norm),
+                        ("enabled", if band.enabled { 1.0 } else { 0.0 }),
                     ] {
                         ws_send(
                             ws,

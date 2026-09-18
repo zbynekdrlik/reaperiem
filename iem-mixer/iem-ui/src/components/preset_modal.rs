@@ -59,6 +59,10 @@ struct PresetEntry {
     eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// EQ band data for preset save (mirrors iem_core::EqBand)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EqBandPreset {
@@ -69,6 +73,10 @@ pub struct EqBandPreset {
     pub freq_norm: f32,
     pub gain_norm: f32,
     pub bw_norm: f32,
+    /// Whether the band is enabled (#205 — round-trips the disabled state so a
+    /// disabled band re-disables on load, matching the server restore path).
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }
 
 /// Request to save a preset
