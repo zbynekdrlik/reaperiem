@@ -1164,11 +1164,18 @@ pub(crate) fn resolve_send_index(
     member_send_index: usize,
     mix_members: &[(usize, Option<usize>)],
 ) -> Result<usize, String> {
-    // BUG #204 (RED): applies the member's own send index to EVERY track,
-    // ignoring mix_members — so mix channels write to the wrong send.
-    let _ = mix_members;
-    let _ = track_idx;
-    Ok(member_send_index)
+    if let Some((_, mix_si)) = mix_members.iter().find(|(track, _)| *track == track_idx) {
+        // #204 fix: a mix channel uses its discovered mix_send_index. A missing
+        // one is a SAFETY error — never fall back to the member's own send.
+        mix_si.ok_or_else(|| {
+            format!(
+                "SAFETY: No mix_send_index for track {} — cannot route to engineer",
+                track_idx
+            )
+        })
+    } else {
+        Ok(member_send_index)
+    }
 }
 
 /// Validate a pan value for SetPan commands.
@@ -1909,30 +1916,9 @@ async fn apply_command_to_cache(
         .find(|m| m.id() == member_id)
         .map(|m| m.send_index)
         .ok_or_else(|| "Unknown member".to_string())?;
-    // Collect mix channel track indices and their send_index for validation.
-    // For engineer: use mix_send_index (sends TO engineer).
-    // For elevated: use mix_send_indices[member_id] (sends TO this member).
-    let is_elevated = member_id == "petronela";
-    let mix_members: Vec<(usize, Option<usize>)> = if member_id == "engineer" {
-        discovered
-            .iter()
-            .filter(|m| m.id() != "engineer")
-            .map(|m| (m.track_index, m.mix_send_index))
-            .collect()
-    } else if is_elevated {
-        // mix_send_indices stored on the elevated member, keyed by source member ID
-        let elevated = discovered.iter().find(|m| m.id() == member_id);
-        discovered
-            .iter()
-            .filter(|m| m.id() != member_id && m.id() != "engineer")
-            .map(|m| {
-                let si = elevated.and_then(|e| e.mix_send_indices.get(&m.id()).copied());
-                (m.track_index, si)
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
+    // Collect mix channel track indices and their send_index for validation
+    // (shared with both REST restore handlers via compute_mix_members).
+    let mix_members = compute_mix_members(&discovered, member_id);
     let mix_track_indices: Vec<usize> = mix_members.iter().map(|(ti, _)| *ti).collect();
     drop(discovered);
 
@@ -1957,21 +1943,10 @@ async fn apply_command_to_cache(
     let is_valid_track =
         |ti: usize| -> bool { is_valid_track_index(ti, &valid_input_indices, &mix_track_indices) };
 
-    // Helper: determine REAPER send_index for a given track_index.
-    // Mix channels use their discovered mix_send_index (NOT hardcoded 0!).
-    // Regular input channels use the member's send_index.
-    let send_index_for = |ti: usize| -> Result<usize, String> {
-        if let Some((_, mix_si)) = mix_members.iter().find(|(track, _)| *track == ti) {
-            mix_si.ok_or_else(|| {
-                format!(
-                    "SAFETY: No mix_send_index for track {} — cannot route to engineer",
-                    ti
-                )
-            })
-        } else {
-            Ok(member_index)
-        }
-    };
+    // Helper: determine REAPER send_index for a given track_index via the shared
+    // resolver (mix channels use their discovered mix_send_index, never 0). #204
+    let send_index_for =
+        |ti: usize| -> Result<usize, String> { resolve_send_index(ti, member_index, &mix_members) };
 
     // Validate incoming WS command values
     match cmd {
