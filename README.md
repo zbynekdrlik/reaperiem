@@ -6,6 +6,12 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.168.0 (2026-09-18)
+
+- **Interné**: meter E2E testy („meter animation timer stays alive", „muted channel still shows meter") sú deterministické — nezávisia od zvuku v miestnosti ani od tónového generátora; predtým padali v tichu a blokovali nasadenie. (#207)
+- **Oprava**: odstránené zastarané `apple-mobile-web-app-capable` varovanie v konzole prehliadača (pridaný štandardný `mobile-web-app-capable` meta tag).
+- **Interné**: playbook pravidlá pre pan/send_index domény, live-E2E tónový generátor, Leptos `view!` makro a CI Rust toolchain (`.claude/rules/`).
+
 ### v1.167.0 (2026-09-18)
 
 - **Oprava**: Načítanie snapshotu z Histórie už neposúva všetky zvuky doprava. Panoráma sa pri obnove ukladá do REAPERu v správnom rozsahu (stred zostane stredom). (#203)
