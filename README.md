@@ -6,6 +6,14 @@ MCP server for controlling REAPER as a personal monitor (IEM) mixer for church b
 
 ## Changelog
 
+### v1.167.0 (2026-09-18)
+
+- **Oprava**: Načítanie snapshotu z Histórie už neposúva všetky zvuky doprava. Panoráma sa pri obnove ukladá do REAPERu v správnom rozsahu (stred zostane stredom). (#203)
+- **Oprava**: Obnova snapshotu aj presetu už zapisuje mix kanály na správny výstup (send), nie na cudzí — nič, čoho som sa nedotkol, sa už nepohne. (#204)
+- **Oprava**: Preset si teraz pri uložení zapamätá EQ aj hlasitosť stems a pri načítaní ich naozaj obnoví. Chyby (limit 20 presetov, odpojené, prázdny názov) sa zobrazia zrozumiteľne. (#205)
+- **Vylepšenie**: Presety majú jasné slovenské tlačidlá — Načítať / Prepísať / Zmazať a dole Uložiť ako nový; História má Obnoviť / Zmazať / Uložiť teraz a pripínanie. Pred prepísaním alebo zmazaním sa vždy opýtam na potvrdenie. (#206)
+- **Interné**: Konsolidácia projektových poznámok do skill súborov.
+
 ### v1.166.0 (2026-05-07)
 
 - **Fix**: EQ frequency value drift on close+reopen (Mirec) — set 321 Hz, return showed 320 Hz. Same dual-formula divergence pattern as the v1.165.0 gain fix; UI sent normalized values from its own approximation table while REAPER stored its actual mapping. UI now sends Hz/oct directly; ReaScript samples REAPER's norm↔value mapping (21 points, log-space for freq, linear for bw) and writes the matching norm. REAPER is now the single source of truth for both freq and bw.
