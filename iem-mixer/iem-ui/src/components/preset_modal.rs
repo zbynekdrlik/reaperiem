@@ -53,6 +53,9 @@ struct PresetEntry {
     updated_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     stems_level_db: Option<f32>,
+    /// EQ band data per track (#205 — previously dropped on load).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    eq_bands: Option<std::collections::HashMap<usize, Vec<EqBandPreset>>>,
 }
 
 /// EQ band data for preset save (mirrors iem_core::EqBand)
@@ -149,12 +152,12 @@ async fn save_preset_api(
         .map_err(|e| format!("Request error: {}", e))?
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|_| "Chyba siete — preset sa neuložil.".to_string())?;
 
     if resp.ok() {
         Ok(())
     } else {
-        Err(format!("Server error: {}", resp.status()))
+        Err(preset_error_message(resp).await)
     }
 }
 
@@ -182,12 +185,12 @@ async fn update_preset_api(
         .map_err(|e| format!("Request error: {}", e))?
         .send()
         .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        .map_err(|_| "Chyba siete — preset sa neuložil.".to_string())?;
 
     if resp.ok() {
         Ok(())
     } else {
-        Err(format!("Server error: {}", resp.status()))
+        Err(preset_error_message(resp).await)
     }
 }
 
@@ -206,6 +209,27 @@ async fn delete_preset_api(member_id: &str, name: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("Server error: {}", resp.status()))
+    }
+}
+
+/// Turn a failed preset request into a human Slovak message (#205 — the UI used
+/// to render the bare HTTP status, e.g. "Server error: 409" for the 20-preset
+/// limit). Reads the server's structured `ApiError` body for context.
+async fn preset_error_message(resp: gloo_net::http::Response) -> String {
+    #[derive(Deserialize)]
+    struct ApiErr {
+        #[serde(default)]
+        message: String,
+    }
+    let status = resp.status();
+    let server_msg = resp.json::<ApiErr>().await.ok().map(|e| e.message);
+    match status {
+        409 => "Dosiahli ste maximum 20 presetov. Najprv niektorý zmažte.".to_string(),
+        400 => server_msg
+            .filter(|m| !m.is_empty())
+            .unwrap_or_else(|| "Neplatná požiadavka.".to_string()),
+        401 | 403 => "Prihlásenie vypršalo. Obnovte stránku a skúste znova.".to_string(),
+        _ => format!("Chyba servera ({}). Skúste to znova.", status),
     }
 }
 
@@ -261,8 +285,11 @@ pub fn PresetModal(
     });
 
     let handle_save = move |_| {
+        // #205: clear any stale error on every attempt.
+        let _ = set_error.try_set(None);
         let name = new_name.get().trim().to_string();
         if name.is_empty() {
+            let _ = set_error.try_set(Some("Zadajte názov presetu.".to_string()));
             return;
         }
 
@@ -366,7 +393,7 @@ pub fn PresetModal(
                                                                         created_at: Some(entry.created_at),
                                                                         updated_at: Some(entry.updated_at),
                                                                         stems_level_db: entry.stems_level_db,
-                                                                        eq_bands: None,
+                                                                        eq_bands: entry.eq_bands,
                                                                     };
                                                                     on_load.run(data);
                                                                     on_close.run(());

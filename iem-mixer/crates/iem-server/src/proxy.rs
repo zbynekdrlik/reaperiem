@@ -2477,6 +2477,32 @@ fn send_to_reaper(
 // EQ handlers (EXTSTATE + ReaScript async flow)
 // =============================================================================
 
+/// Capture live ReaEQ bands for every track that has a ReaEQ, reading each via
+/// the WS EQ path (`handle_get_eq_params`). Returns `None` when no track has
+/// EQ. Shared by snapshot create AND preset save/update so EQ is captured
+/// identically — server-side, for ALL tracks, independent of any UI modal
+/// state (#205: presets previously captured EQ for at most one open-modal
+/// track, silently losing the rest).
+pub async fn capture_eq_bands(
+    state: &AppState,
+    track_indices: &[usize],
+) -> Option<std::collections::HashMap<usize, Vec<iem_core::EqBand>>> {
+    let mut eq_bands_map = std::collections::HashMap::new();
+    for track_idx in track_indices {
+        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
+            handle_get_eq_params(state, *track_idx).await
+            && !bands.is_empty()
+        {
+            eq_bands_map.insert(*track_idx, bands);
+        }
+    }
+    if eq_bands_map.is_empty() {
+        None
+    } else {
+        Some(eq_bands_map)
+    }
+}
+
 /// Handle GetEqParams: read EQ state from REAPER via EXTSTATE + ReaScript
 pub async fn handle_get_eq_params(
     state: &AppState,

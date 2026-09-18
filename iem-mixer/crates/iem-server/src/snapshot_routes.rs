@@ -132,22 +132,9 @@ async fn create_snapshot(
         ));
     }
 
-    // Read EQ params for each track
+    // Read EQ params for each track (shared with preset save via capture_eq_bands).
     let track_indices: Vec<usize> = channels.iter().map(|ch| ch.track_index).collect();
-    let mut eq_bands_map = std::collections::HashMap::new();
-    for track_idx in &track_indices {
-        if let Some(iem_core::ServerMsg::EqParams { bands, .. }) =
-            crate::proxy::handle_get_eq_params(&state, *track_idx).await
-            && !bands.is_empty()
-        {
-            eq_bands_map.insert(*track_idx, bands);
-        }
-    }
-    let eq_bands = if eq_bands_map.is_empty() {
-        None
-    } else {
-        Some(eq_bands_map)
-    };
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices).await;
 
     // Create snapshot
     let channel_map = SnapshotStore::channels_from_state(&channels);

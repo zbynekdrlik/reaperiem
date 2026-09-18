@@ -107,15 +107,16 @@ async fn save_preset(
         ));
     }
 
+    // #205: capture EQ server-side for ALL channels (same helper the snapshot
+    // path uses); fall back to any EQ the client sent only if REAPER had none.
+    let track_indices: Vec<usize> = req.channels.keys().copied().collect();
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices)
+        .await
+        .or(req.eq_bands);
+
     let entry = state
         .preset_store
-        .save_with_stems(
-            &member,
-            &name,
-            req.channels,
-            req.stems_level_db,
-            req.eq_bands,
-        )
+        .save_with_stems(&member, &name, req.channels, req.stems_level_db, eq_bands)
         .map_err(|e| {
             let (code, err) = match &e {
                 crate::preset_store::PresetError::LimitReached => (
@@ -169,12 +170,17 @@ async fn update_preset(
     let config = state.config.read().await;
     crate::auth::verify_member_access(&headers, &member, &config.jwt_secret)?;
     drop(config);
-    // Verify preset exists and preserve EQ bands if not provided in request
-    let existing = state.preset_store.get(&member, &name);
-    if existing.is_none() {
+    // Verify preset exists.
+    if state.preset_store.get(&member, &name).is_none() {
         return Err((StatusCode::NOT_FOUND, Json(ApiError::not_found("Preset"))));
     }
-    let eq_bands = req.eq_bands.or_else(|| existing.and_then(|e| e.eq_bands));
+
+    // #205: capture EQ server-side for ALL channels (overwrite = save the CURRENT
+    // mix, including its live EQ); fall back to client EQ only if REAPER had none.
+    let track_indices: Vec<usize> = req.channels.keys().copied().collect();
+    let eq_bands = crate::proxy::capture_eq_bands(&state, &track_indices)
+        .await
+        .or(req.eq_bands);
 
     let entry = state
         .preset_store

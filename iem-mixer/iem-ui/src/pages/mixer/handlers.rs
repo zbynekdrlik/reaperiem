@@ -231,6 +231,41 @@ pub(super) fn make_on_load_preset(
                 },
             );
         }
+
+        // #205: apply the stems bus level if the preset carries one (previously
+        // captured but never applied on load).
+        if let Some(stems_db) = preset.stems_level_db {
+            ws_send(
+                ws,
+                &iem_core::ClientMsg::SetStemsLevel { level_db: stems_db },
+            );
+        }
+
+        // #205: apply EQ bands via the LEGACY norm protocol (param=freq|gain|bw),
+        // matching the server-side preset replay path — NOT the value-domain
+        // protocol used by the interactive slider. Previously eq_bands was
+        // dropped on load entirely.
+        if let Some(ref eq_bands) = preset.eq_bands {
+            for (track_index, bands) in eq_bands {
+                for (band_idx, band) in bands.iter().enumerate() {
+                    for (param, value) in [
+                        ("freq", band.freq_norm),
+                        ("gain", band.gain_norm),
+                        ("bw", band.bw_norm),
+                    ] {
+                        ws_send(
+                            ws,
+                            &iem_core::ClientMsg::SetEqBand {
+                                track_index: *track_index,
+                                band: band_idx as u8,
+                                param: param.to_string(),
+                                value,
+                            },
+                        );
+                    }
+                }
+            }
+        }
     })
 }
 
