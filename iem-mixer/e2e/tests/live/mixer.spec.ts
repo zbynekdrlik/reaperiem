@@ -1583,11 +1583,27 @@ test.describe("v1.18.0+ — Fader Resolution, Double-Tap, Stereo Meter", () => {
     expect(injected).toBeTruthy();
 
     // Poll until a channel meter fill shows signal (skip first 2 = IEM VOL master).
-    // waitForFunction resolves on truthy return; return null to keep polling,
-    // .catch gives a clear assertion failure instead of timeout.
+    // #207: RE-INJECT the meter signal on every poll. The metered channel is a
+    // member input track whose real level is ambient room sound (the tone sits
+    // on the ENGINEER inear, track 32, which is NOT a visible channel — verified
+    // against /api/mixer/engineer), so the live poller otherwise overwrites the
+    // one-shot injection with silence before the assertion. Feeding it each poll
+    // makes the test self-contained: if the animation timer is alive it processes
+    // the 0.85 level (instant attack → ~90%); if the timer is DEAD (the
+    // regression under test) no processing happens and width stays 0 → fails.
     const fillWidth = await page
       .waitForFunction(
         () => {
+          const ws = (window as any).__iem_ws as WebSocket | undefined;
+          if (ws && ws.onmessage) {
+            const meters: Record<string, [number, number]> = {};
+            for (let i = 1; i <= 22; i++) meters[String(i)] = [0.85, 0.82];
+            ws.onmessage(
+              new MessageEvent("message", {
+                data: JSON.stringify({ event: "Meters", data: { meters } }),
+              }),
+            );
+          }
           const fills = document.querySelectorAll(".meter-fill");
           if (fills.length < 3) return null;
           const el = fills[2]; // First channel Meter component fill
@@ -1788,11 +1804,43 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
     // Wait for animation tick
     await page.waitForTimeout(300);
 
-    // The meter for channel at index 2 (first dynamic = track_idx from channels)
-    // should show non-zero width even though the channel is muted
+    // #207: RE-INJECT the muted-channel State + a strong meter on every poll so
+    // the live poller cannot overwrite the synthetic signal with silence before
+    // the assertion (the metered channel is a member input track driven by
+    // ambient room sound; the tone is on the ENGINEER inear track 32, which is
+    // NOT a visible channel — verified against /api/mixer/engineer). This makes
+    // the assertion deterministic: a muted channel MUST still show its raw input
+    // meter. Without the fix (muted → 0) width stays 0 → fails regardless.
     const fillWidth = await page
       .waitForFunction(
         () => {
+          const ws = (window as any).__iem_ws as WebSocket | undefined;
+          if (ws && ws.onmessage) {
+            const stateMsg = JSON.stringify({
+              event: "State",
+              data: {
+                channels: [
+                  {
+                    track_index: 1,
+                    name: "TEST mic",
+                    category: "mic",
+                    level_db: -6.0,
+                    pan: 0.5,
+                    muted: true,
+                  },
+                ],
+              },
+            });
+            ws.onmessage(new MessageEvent("message", { data: stateMsg }));
+            const meters: Record<string, [number, number]> = {};
+            meters["1"] = [0.8, 0.75];
+            for (let i = 2; i <= 22; i++) meters[String(i)] = [0.5, 0.5];
+            ws.onmessage(
+              new MessageEvent("message", {
+                data: JSON.stringify({ event: "Meters", data: { meters } }),
+              }),
+            );
+          }
           const fills = document.querySelectorAll(".meter-fill");
           if (fills.length < 3) return null;
           const el = fills[2]; // First dynamic channel meter fill
@@ -1806,19 +1854,11 @@ test.describe("v1.23.0 — Meter Independence (raw input levels)", () => {
       .then((h) => h.jsonValue())
       .catch(() => 0);
 
-    // With the fix: muted channels still show meters (raw input level)
-    // Without the fix: muted returns 0.0 → fillWidth stays 0
-    // On live system: real REAPER meter data overwrites synthetic injection.
-    // The test verifies the synthetic injection path works — if fillWidth > 0,
-    // the muted channel IS showing meter data (the fix works).
-    // fillWidth may be 0 if REAPER overwrites before render — test the injection succeeded.
+    // A muted channel must still show its raw input meter (#207: deterministic
+    // now via per-poll re-injection). Without the fix, muted returned 0.0 →
+    // width would stay 0.
     expect(injected).toBe(true);
-    // If we got a non-zero fill, verify it's meaningful
-    if (fillWidth > 0) {
-      expect(fillWidth).toBeGreaterThan(5);
-    }
-    // Note: fillWidth === 0 is acceptable on live systems where real REAPER
-    // meter data (potentially silence) overwrites the synthetic injection
+    expect(fillWidth).toBeGreaterThan(5);
   });
 });
 
