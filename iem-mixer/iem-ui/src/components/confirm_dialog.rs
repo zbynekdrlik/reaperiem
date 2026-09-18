@@ -21,10 +21,10 @@ pub fn ConfirmDialog(
     #[prop(into)]
     body: Signal<String>,
     /// Confirm button label.
-    #[prop(into, default = "Potvrdiť".to_string())]
+    #[prop(default = "Potvrdiť".to_string())]
     confirm_label: String,
     /// Cancel button label.
-    #[prop(into, default = "Zrušiť".to_string())]
+    #[prop(default = "Zrušiť".to_string())]
     cancel_label: String,
     /// Called when the user confirms.
     on_confirm: Callback<()>,
