@@ -2,89 +2,19 @@
   "24-7": {
     "name": "24-7",
     "channels": {
-      "26": {
-        "vol": 12.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "4": {
-        "vol": -4.2000003,
-        "mute": true,
-        "pan": 1.0
-      },
       "21": {
         "vol": -2.9999974,
         "mute": true,
         "pan": 0.5
       },
-      "22": {
-        "vol": -10.199986,
+      "15": {
+        "vol": -5.3999968,
         "mute": false,
         "pan": 0.5
       },
-      "12": {
-        "vol": -9.00001,
-        "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": -3.1999996,
-        "mute": false,
-        "pan": 0.5
-      },
-      "44": {
-        "vol": -31.599894,
+      "27": {
+        "vol": 11.0,
         "mute": true,
-        "pan": 0.5
-      },
-      "5": {
-        "vol": -13.901749,
-        "mute": true,
-        "pan": 0.8
-      },
-      "24": {
-        "vol": 12.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "16": {
-        "vol": -11.799986,
-        "mute": false,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": -2.9999974,
-        "mute": true,
-        "pan": 0.51
-      },
-      "2": {
-        "vol": -3.600006,
-        "mute": true,
-        "pan": 0.0
-      },
-      "19": {
-        "vol": -20.400024,
-        "mute": false,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": -52.403015,
-        "mute": true,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": -18.999989,
-        "mute": false,
-        "pan": 0.5
-      },
-      "14": {
-        "vol": -4.799999,
-        "mute": false,
-        "pan": 0.5
-      },
-      "11": {
-        "vol": -9.00001,
-        "mute": false,
         "pan": 0.5
       },
       "31": {
@@ -97,39 +27,19 @@
         "mute": true,
         "pan": 0.6833335
       },
-      "8": {
-        "vol": -20.0,
-        "mute": true,
-        "pan": 0.0
-      },
-      "30": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": 0.0,
+      "12": {
+        "vol": -9.00001,
         "mute": false,
         "pan": 0.5
       },
-      "18": {
-        "vol": -23.400038,
+      "13": {
+        "vol": -3.1999996,
         "mute": false,
         "pan": 0.5
       },
-      "45": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": -14.0000105,
-        "mute": true,
-        "pan": 1.0
-      },
-      "25": {
-        "vol": 12.0,
-        "mute": true,
+      "22": {
+        "vol": -10.199986,
+        "mute": false,
         "pan": 0.5
       },
       "3": {
@@ -137,111 +47,13 @@
         "mute": false,
         "pan": 0.21666649
       },
-      "15": {
-        "vol": -5.3999968,
-        "mute": false,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": -3.1999996,
-        "mute": true,
-        "pan": 1.0
-      },
-      "29": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "28": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "27": {
-        "vol": 11.0,
-        "mute": true,
-        "pan": 0.5
-      }
-    },
-    "created_at": 1784915055,
-    "updated_at": 1784915055,
-    "stems_level_db": -10.0
-  },
-  "Lily": {
-    "name": "Lily",
-    "channels": {
       "11": {
-        "vol": -9.0,
+        "vol": -9.00001,
         "mute": false,
-        "pan": 0.5
-      },
-      "13": {
-        "vol": -3.2,
-        "mute": false,
-        "pan": 0.5
-      },
-      "17": {
-        "vol": -19.0,
-        "mute": false,
-        "pan": 0.5
-      },
-      "26": {
-        "vol": 12.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "18": {
-        "vol": -23.4,
-        "mute": false,
-        "pan": 0.5
-      },
-      "10": {
-        "vol": -14.0,
-        "mute": true,
-        "pan": 1.0
-      },
-      "45": {
-        "vol": 0.0,
-        "mute": true,
         "pan": 0.5
       },
       "19": {
-        "vol": -13.6,
-        "mute": false,
-        "pan": 0.5
-      },
-      "28": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "20": {
-        "vol": -3.0,
-        "mute": true,
-        "pan": 0.51
-      },
-      "21": {
-        "vol": -3.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "1": {
-        "vol": -1.6,
-        "mute": false,
-        "pan": 0.5
-      },
-      "30": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "9": {
-        "vol": -52.4,
-        "mute": true,
-        "pan": 0.5
-      },
-      "7": {
-        "vol": -6.0,
+        "vol": -20.400024,
         "mute": false,
         "pan": 0.5
       },
@@ -251,42 +63,17 @@
         "pan": 0.5
       },
       "14": {
-        "vol": -4.8,
+        "vol": -4.799999,
         "mute": false,
         "pan": 0.5
       },
-      "4": {
-        "vol": -10.4,
-        "mute": true,
-        "pan": 1.0
-      },
-      "3": {
-        "vol": -11.0,
-        "mute": false,
-        "pan": 0.099999994
-      },
-      "31": {
-        "vol": 0.0,
-        "mute": true,
-        "pan": 0.5
-      },
-      "6": {
-        "vol": -21.8,
-        "mute": true,
-        "pan": 0.5
-      },
-      "15": {
-        "vol": -5.0,
+      "16": {
+        "vol": -11.799986,
         "mute": false,
         "pan": 0.5
       },
-      "2": {
-        "vol": -8.0,
-        "mute": true,
-        "pan": 0.0
-      },
-      "44": {
-        "vol": -14.4,
+      "24": {
+        "vol": 12.0,
         "mute": true,
         "pan": 0.5
       },
@@ -295,14 +82,112 @@
         "mute": true,
         "pan": 0.5
       },
-      "5": {
-        "vol": -14.0,
+      "44": {
+        "vol": -31.599894,
         "mute": true,
         "pan": 0.5
       },
-      "12": {
-        "vol": -9.0,
+      "10": {
+        "vol": -14.0000105,
+        "mute": true,
+        "pan": 1.0
+      },
+      "28": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -23.400038,
         "mute": false,
+        "pan": 0.5
+      },
+      "30": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": -3.1999996,
+        "mute": true,
+        "pan": 1.0
+      },
+      "5": {
+        "vol": -13.901749,
+        "mute": true,
+        "pan": 0.8
+      },
+      "26": {
+        "vol": 12.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "9": {
+        "vol": -52.403015,
+        "mute": true,
+        "pan": 0.5
+      },
+      "8": {
+        "vol": -20.0,
+        "mute": true,
+        "pan": 0.0
+      },
+      "45": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "2": {
+        "vol": -3.600006,
+        "mute": true,
+        "pan": 0.0
+      },
+      "4": {
+        "vol": -4.2000003,
+        "mute": true,
+        "pan": 1.0
+      },
+      "1": {
+        "vol": 0.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "17": {
+        "vol": -18.999989,
+        "mute": false,
+        "pan": 0.5
+      },
+      "20": {
+        "vol": -2.9999974,
+        "mute": true,
+        "pan": 0.51
+      }
+    },
+    "created_at": 1784915055,
+    "updated_at": 1784915055,
+    "stems_level_db": -10.0
+  },
+  "Lily": {
+    "name": "Lily",
+    "channels": {
+      "30": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "7": {
+        "vol": -6.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "25": {
+        "vol": 12.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "21": {
+        "vol": -3.0,
+        "mute": true,
         "pan": 0.5
       },
       "16": {
@@ -310,12 +195,57 @@
         "mute": false,
         "pan": 0.5
       },
+      "6": {
+        "vol": -21.8,
+        "mute": true,
+        "pan": 0.5
+      },
       "22": {
         "vol": -10.2,
         "mute": false,
         "pan": 0.5
       },
-      "24": {
+      "9": {
+        "vol": -52.4,
+        "mute": true,
+        "pan": 0.5
+      },
+      "31": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "13": {
+        "vol": -3.2,
+        "mute": false,
+        "pan": 0.5
+      },
+      "45": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "11": {
+        "vol": -9.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "12": {
+        "vol": -9.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "5": {
+        "vol": -14.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "1": {
+        "vol": -1.6,
+        "mute": false,
+        "pan": 0.5
+      },
+      "26": {
         "vol": 12.0,
         "mute": true,
         "pan": 0.5
@@ -329,6 +259,76 @@
         "vol": -20.0,
         "mute": true,
         "pan": 0.0
+      },
+      "17": {
+        "vol": -19.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "4": {
+        "vol": -10.4,
+        "mute": true,
+        "pan": 1.0
+      },
+      "2": {
+        "vol": -8.0,
+        "mute": true,
+        "pan": 0.0
+      },
+      "28": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "29": {
+        "vol": 0.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "18": {
+        "vol": -23.4,
+        "mute": false,
+        "pan": 0.5
+      },
+      "3": {
+        "vol": -11.0,
+        "mute": false,
+        "pan": 0.099999994
+      },
+      "14": {
+        "vol": -4.8,
+        "mute": false,
+        "pan": 0.5
+      },
+      "15": {
+        "vol": -5.0,
+        "mute": false,
+        "pan": 0.5
+      },
+      "10": {
+        "vol": -14.0,
+        "mute": true,
+        "pan": 1.0
+      },
+      "20": {
+        "vol": -3.0,
+        "mute": true,
+        "pan": 0.51
+      },
+      "24": {
+        "vol": 12.0,
+        "mute": true,
+        "pan": 0.5
+      },
+      "19": {
+        "vol": -13.6,
+        "mute": false,
+        "pan": 0.5
+      },
+      "44": {
+        "vol": -14.4,
+        "mute": true,
+        "pan": 0.5
       }
     },
     "created_at": 1786639394,
