@@ -31,44 +31,86 @@ const REAPER = process.env.REAPER_URL || "http://iem.lan:8080";
 /** REAPER meter silence floor (dB×10). A track at exactly this value carries no signal. */
 const SILENCE_FLOOR = -1500;
 
+const SIGNAL_THRESHOLD = SILENCE_FLOOR + 400; // -1100: clears the floor, well below the ~-224 tone level
+
+/** Highest ENGINEER inear track meter peak (dB×10); silence floor when the tone FX is absent. */
+async function readEngineerInearPeak(
+  request: import("@playwright/test").APIRequestContext,
+): Promise<number> {
+  let best = SILENCE_FLOOR;
+  try {
+    const r = await request.get(`${REAPER}/_/NTRACK;TRACK`);
+    const text = await r.text();
+    for (const line of text.split("\n")) {
+      const p = line.split("\t");
+      if (p[0] !== "TRACK") continue;
+      const name = (p[2] || "").toLowerCase();
+      // The tone lives on the ENGINEER inear track (see tone_generator.lua).
+      if (name.includes("engineer") && name.includes("inear")) {
+        const peak = parseInt(p[6] ?? String(SILENCE_FLOOR), 10);
+        if (!Number.isNaN(peak) && peak > best) best = peak;
+      }
+    }
+  } catch {
+    // transient REAPER read error — caller keeps sampling
+  }
+  return best;
+}
+
 /**
- * #207 — deterministic precondition for meter tests: the post-deploy tone
- * generator inserts a 440 Hz tone on the ENGINEER inear track, whose meter peak
- * reads the silence floor (-1500) when the tone FX is absent and ~-224 when it
- * is active (the MASTER peak barely moves — residual room mics ~-410 — so it is
- * NOT a usable indicator; the engineer inear track is). If the tone has died by
- * the time these tests run ~20 min into the suite, assert fast (~1.5s) with a
- * named message instead of letting the meter assertion time out at 30s.
- * Reusable by any future audio-dependent E2E.
+ * (Re)activate the tone generator on the ENGINEER inear track. tone_generator.lua
+ * is idempotent start/stop, so firing "start" only re-inserts/re-asserts the
+ * 440 Hz FX — never toggles it off. Uses the dynamically-registered action id
+ * (`action_tone_generator` EXTSTATE) exactly like CI's activation + the #145
+ * pre-flight — never a hardcoded id.
+ */
+async function activateTone(
+  request: import("@playwright/test").APIRequestContext,
+): Promise<void> {
+  try {
+    await request.get(`${REAPER}/_/SET/EXTSTATE/reaperiem/tone_gen_action/start`);
+    const idResp = await request.get(
+      `${REAPER}/_/GET/EXTSTATE/reaperiem/action_tone_generator`,
+    );
+    const actionId = (await idResp.text()).trim().split("\t").pop()?.trim();
+    if (!actionId) return; // not registered — the assertion below will fail with the named message
+    await request.get(`${REAPER}/_/${actionId}`);
+  } catch {
+    // network/REAPER error — the re-read + assertion below reports it
+  }
+}
+
+/**
+ * #207 — deterministic, self-healing precondition for meter tests. The post-deploy
+ * tone generator inserts a 440 Hz tone on the ENGINEER inear track, whose meter
+ * peak reads the silence floor (-1500) when the FX is absent and ~-224 when active
+ * (the MASTER peak barely moves — residual room mics ~-410 — so it is NOT usable).
+ * The tone FX is removed DURING the ~22-min live suite (a project-restore spec runs
+ * before these tests, ~20 min in), so a CI-side pre-flight alone is not enough:
+ * if the signal is silent here, re-activate the idempotent tone AT THE POINT OF USE
+ * and re-read, then assert. Fails fast (~1.5s live, ~5s after a re-activation
+ * attempt) with a named message if signal cannot be restored — never a 30s timeout.
  */
 async function expectSignalPresent(
   request: import("@playwright/test").APIRequestContext,
 ): Promise<void> {
-  const threshold = SILENCE_FLOOR + 400; // -1100: clears the floor, well below the ~-224 tone level
   let best = SILENCE_FLOOR;
-  for (let i = 0; i < 8 && best <= threshold; i++) {
-    try {
-      const r = await request.get(`${REAPER}/_/NTRACK;TRACK`);
-      const text = await r.text();
-      for (const line of text.split("\n")) {
-        const p = line.split("\t");
-        if (p[0] !== "TRACK") continue;
-        const name = (p[2] || "").toLowerCase();
-        // The tone lives on the ENGINEER inear track (see tone_generator.lua).
-        if (name.includes("engineer") && name.includes("inear")) {
-          const peak = parseInt(p[6] ?? String(SILENCE_FLOOR), 10);
-          if (!Number.isNaN(peak) && peak > best) best = peak;
-        }
-      }
-    } catch {
-      // transient REAPER read error — keep sampling
+  for (let i = 0; i < 8 && best <= SIGNAL_THRESHOLD; i++) {
+    best = Math.max(best, await readEngineerInearPeak(request));
+    if (best <= SIGNAL_THRESHOLD) await new Promise((res) => setTimeout(res, 200));
+  }
+  // Self-heal: the tone died during the suite — re-activate and re-read.
+  if (best <= SIGNAL_THRESHOLD) {
+    await activateTone(request);
+    for (let i = 0; i < 12 && best <= SIGNAL_THRESHOLD; i++) {
+      await new Promise((res) => setTimeout(res, 250));
+      best = Math.max(best, await readEngineerInearPeak(request));
     }
-    if (best <= threshold) await new Promise((res) => setTimeout(res, 200));
   }
   expect(
     best,
-    "precondition: tone generator not active on the ENGINEER inear track (peak at silence floor) — not a meter bug (#207)",
-  ).toBeGreaterThan(threshold);
+    "precondition: tone generator not active on the ENGINEER inear track and re-activation failed (peak at silence floor) — not a meter bug (#207)",
+  ).toBeGreaterThan(SIGNAL_THRESHOLD);
 }
 
 test.describe("Branding", () => {
