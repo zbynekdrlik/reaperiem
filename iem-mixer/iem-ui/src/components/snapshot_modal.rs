@@ -280,6 +280,10 @@ pub fn SnapshotModal(
         }
     };
 
+    // Named closure — the `>=` comparison must not sit inline in a view! `when=`
+    // attribute, where the macro mis-tokenizes `>` as a tag boundary.
+    let at_snapshot_limit = move || snapshots.get().len() >= iem_core::MAX_SNAPSHOTS;
+
     view! {
         <>
         <div
@@ -304,10 +308,7 @@ pub fn SnapshotModal(
                     </div>
                 </Show>
 
-                <Show
-                    when=move || snapshots.get().len() >= iem_core::MAX_SNAPSHOTS
-                    fallback=|| ()
-                >
+                <Show when=at_snapshot_limit fallback=|| ()>
                     <div class="snapshot-limit-notice">
                         {move || format!(
                             "História je plná ({} z {}). Staré nepripnuté snapshoty sa prepisujú — dôležité si pripni.",
